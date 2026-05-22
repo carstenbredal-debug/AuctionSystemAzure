@@ -1,0 +1,76 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using AuctionSystem.Domain.Data;
+using AuctionSystem.Domain.Entities;
+using AuctionSystem.Domain.Services;
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.Azure.Functions.Worker.Http;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+
+namespace AuctionSystem.Functions.Functions;
+
+public class SellerFunctions
+{
+    private readonly AuctionDbContext _db;
+    private readonly AuctionService _auctionService;
+    private readonly ILogger<SellerFunctions> _logger;
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        ReferenceHandler = ReferenceHandler.IgnoreCycles,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
+
+    public SellerFunctions(AuctionDbContext db, AuctionService auctionService, ILogger<SellerFunctions> logger)
+    {
+        _db = db;
+        _auctionService = auctionService;
+        _logger = logger;
+    }
+
+    [Function("GetSellers")]
+    public async Task<HttpResponseData> GetAll(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "sellers")] HttpRequestData req)
+    {
+        var sellers = await _db.Sellers.ToListAsync();
+        return await CreateJsonResponse(req, sellers);
+    }
+
+    [Function("GetSeller")]
+    public async Task<HttpResponseData> Get(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "sellers/{id:int}")] HttpRequestData req, int id)
+    {
+        var seller = await _db.Sellers.FirstOrDefaultAsync(s => s.Id == id);
+        if (seller == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+        return await CreateJsonResponse(req, seller);
+    }
+
+    [Function("CreateSeller")]
+    public async Task<HttpResponseData> Create(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "sellers")] HttpRequestData req)
+    {
+        var seller = await req.ReadFromJsonAsync<Seller>();
+        if (seller == null) return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+        _db.Sellers.Add(seller);
+        await _db.SaveChangesAsync();
+        return await CreateJsonResponse(req, seller, System.Net.HttpStatusCode.Created);
+    }
+
+    [Function("GetLotsBySeller")]
+    public async Task<HttpResponseData> GetLots(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "sellers/{sellerId:int}/lots")] HttpRequestData req, int sellerId)
+    {
+        var lots = await _auctionService.GetLotsBySellerAsync(sellerId);
+        return await CreateJsonResponse(req, lots);
+    }
+
+    private static async Task<HttpResponseData> CreateJsonResponse<T>(
+        HttpRequestData req, T data, System.Net.HttpStatusCode status = System.Net.HttpStatusCode.OK)
+    {
+        var response = req.CreateResponse(status);
+        response.Headers.Add("Content-Type", "application/json; charset=utf-8");
+        await response.WriteStringAsync(JsonSerializer.Serialize(data, JsonOptions));
+        return response;
+    }
+}
