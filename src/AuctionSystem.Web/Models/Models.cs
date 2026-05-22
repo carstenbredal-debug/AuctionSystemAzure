@@ -55,10 +55,28 @@ public class BrokerDto
     public int Id { get; set; }
     public string BrokerNumber { get; set; } = "";
     public string CompanyName { get; set; } = "";
+    public string CompanyName2 { get; set; } = "";
+    public string ErpAccountNumber { get; set; } = "";
+    public string SearchName { get; set; } = "";
     public string ContactPerson { get; set; } = "";
-    public string ContactEmail { get; set; } = "";
+    public string AddressLine1 { get; set; } = "";
+    public string AddressLine2 { get; set; } = "";
+    public string Country { get; set; } = "";
+    public string PostalCode { get; set; } = "";
+    public string City { get; set; } = "";
     public string ContactPhone { get; set; } = "";
-    public string Address { get; set; } = "";
+    public string MobilePhone { get; set; } = "";
+    public string ContactEmail { get; set; } = "";
+    public string HomePage { get; set; } = "";
+    public string VatRegistrationNo { get; set; } = "";
+    public string RegistrationNo { get; set; } = "";
+    public string CustomerGroup { get; set; } = "";
+    public string SalesPerson { get; set; } = "";
+    public string PaymentTerm { get; set; } = "";
+    public string PaymentMethod { get; set; } = "";
+    public string Currency { get; set; } = "";
+    public string Language { get; set; } = "";
+    public bool IsActive { get; set; } = true;
 }
 
 public class BuyerDto

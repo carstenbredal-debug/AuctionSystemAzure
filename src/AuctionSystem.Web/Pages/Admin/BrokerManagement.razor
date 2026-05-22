@@ -28,38 +28,165 @@ else
     @if (_showForm)
     {
         <div class="card mb-4 border-primary">
-            <div class="card-header bg-primary text-white">
-                <strong>@(_editing?.Id > 0 ? "Edit Broker" : "Add New Broker")</strong>
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <strong>@(_editing?.Id > 0 ? "Edit Broker" : "Add Broker")</strong>
+                <button type="button" class="btn-close btn-close-white" @onclick="Cancel"></button>
             </div>
             <div class="card-body">
                 <div class="row g-3">
-                    <div class="col-md-4">
-                        <label class="form-label">Broker Number <span class="text-danger">*</span></label>
-                        <input class="form-control" @bind="_editing!.BrokerNumber" placeholder="B001" />
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Company Name <span class="text-danger">*</span></label>
+                    <div class="col-md-8">
+                        <label class="form-label">Broker Name <span class="text-danger">*</span></label>
                         <input class="form-control" @bind="_editing!.CompanyName" />
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label">Contact Person</label>
+                        <label class="form-label">Broker Name 2</label>
+                        <input class="form-control" @bind="_editing!.CompanyName2" />
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label">Broker Number <span class="text-danger">*</span></label>
+                        <input class="form-control" @bind="_editing!.BrokerNumber" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">ERP Account Number <span class="text-danger">*</span></label>
+                        <input class="form-control" @bind="_editing!.ErpAccountNumber" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Search Name</label>
+                        <input class="form-control" @bind="_editing!.SearchName" />
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label">Contact Name</label>
                         <input class="form-control" @bind="_editing!.ContactPerson" />
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label">Address Line 1</label>
+                        <input class="form-control" @bind="_editing!.AddressLine1" />
+                    </div>
+
+                    <div class="col-md-8">
+                        <label class="form-label">Address Line 2</label>
+                        <input class="form-control" @bind="_editing!.AddressLine2" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Country <span class="text-danger">*</span></label>
+                        <select class="form-select" @bind="_editing!.Country">
+                            <option value="">Select Country...</option>
+                            <option value="DK">Denmark</option>
+                            <option value="SE">Sweden</option>
+                            <option value="NO">Norway</option>
+                            <option value="FI">Finland</option>
+                            <option value="DE">Germany</option>
+                            <option value="GB">United Kingdom</option>
+                            <option value="NL">Netherlands</option>
+                            <option value="US">United States</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label">Postal Code <span class="text-danger">*</span></label>
+                        <input class="form-control" @bind="_editing!.PostalCode" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">City <span class="text-danger">*</span></label>
+                        <input class="form-control" @bind="_editing!.City" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Phone No</label>
+                        <input class="form-control" @bind="_editing!.ContactPhone" />
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label">Mobile Phone No</label>
+                        <input class="form-control" @bind="_editing!.MobilePhone" />
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Email</label>
                         <input class="form-control" type="email" @bind="_editing!.ContactEmail" />
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label">Phone</label>
-                        <input class="form-control" @bind="_editing!.ContactPhone" />
+                        <label class="form-label">Home Page</label>
+                        <input class="form-control" @bind="_editing!.HomePage" placeholder="https://" />
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label">VAT Registration No</label>
+                        <input class="form-control" @bind="_editing!.VatRegistrationNo" />
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label">Address</label>
-                        <input class="form-control" @bind="_editing!.Address" />
+                        <label class="form-label">Registration No</label>
+                        <input class="form-control" @bind="_editing!.RegistrationNo" />
                     </div>
-                    <div class="col-12 mt-3">
-                        <button class="btn btn-success me-2" @onclick="Save">@(_editing?.Id > 0 ? "Update" : "Create")</button>
-                        <button class="btn btn-secondary" @onclick="Cancel">Cancel</button>
+                    <div class="col-md-4">
+                        <label class="form-label">Customer Group <span class="text-danger">*</span></label>
+                        <select class="form-select" @bind="_editing!.CustomerGroup">
+                            <option value="">Select Customer Group</option>
+                            <option value="Domestic">Domestic</option>
+                            <option value="EU">EU</option>
+                            <option value="International">International</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label">Sales Person</label>
+                        <select class="form-select" @bind="_editing!.SalesPerson">
+                            <option value="">Select Sales Person</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Payment Term</label>
+                        <select class="form-select" @bind="_editing!.PaymentTerm">
+                            <option value="">Select Payment Term</option>
+                            <option value="Net7">Net 7</option>
+                            <option value="Net14">Net 14</option>
+                            <option value="Net30">Net 30</option>
+                            <option value="Prepaid">Prepaid</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Payment Method</label>
+                        <select class="form-select" @bind="_editing!.PaymentMethod">
+                            <option value="">Select Payment Method</option>
+                            <option value="BankTransfer">Bank Transfer</option>
+                            <option value="Invoice">Invoice</option>
+                            <option value="CreditCard">Credit Card</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label">Currency</label>
+                        <select class="form-select" @bind="_editing!.Currency">
+                            <option value="">Select Currency</option>
+                            <option value="DKK">DKK</option>
+                            <option value="SEK">SEK</option>
+                            <option value="NOK">NOK</option>
+                            <option value="EUR">EUR</option>
+                            <option value="GBP">GBP</option>
+                            <option value="USD">USD</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Language</label>
+                        <select class="form-select" @bind="_editing!.Language">
+                            <option value="">Select Language</option>
+                            <option value="DA">Danish</option>
+                            <option value="SV">Swedish</option>
+                            <option value="NO">Norwegian</option>
+                            <option value="EN">English</option>
+                            <option value="DE">German</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" @bind="_editing!.IsActive" id="isActiveSwitch" />
+                            <label class="form-check-label" for="isActiveSwitch">Is Active</label>
+                        </div>
+                    </div>
+
+                    <div class="col-12 mt-3 text-end">
+                        <button class="btn btn-primary me-2" @onclick="Save">Save</button>
+                        <button class="btn btn-outline-secondary" @onclick="Cancel">Cancel</button>
                     </div>
                 </div>
             </div>
@@ -76,25 +203,36 @@ else
                     <tr>
                         <th>Number</th>
                         <th>Company Name</th>
-                        <th>Contact Person</th>
+                        <th>ERP Account</th>
+                        <th>Contact</th>
+                        <th>City</th>
+                        <th>Country</th>
                         <th>Email</th>
-                        <th>Phone</th>
+                        <th>Active</th>
                         <th style="width: 150px;">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     @if (_items.Count == 0)
                     {
-                        <tr><td colspan="6" class="text-center text-muted py-4">No brokers registered.</td></tr>
+                        <tr><td colspan="9" class="text-center text-muted py-4">No brokers registered.</td></tr>
                     }
                     @foreach (var item in _items)
                     {
                         <tr>
                             <td><strong>@item.BrokerNumber</strong></td>
                             <td>@item.CompanyName</td>
+                            <td>@item.ErpAccountNumber</td>
                             <td>@item.ContactPerson</td>
+                            <td>@item.City</td>
+                            <td>@item.Country</td>
                             <td>@item.ContactEmail</td>
-                            <td>@item.ContactPhone</td>
+                            <td>
+                                @if (item.IsActive)
+                                { <span class="badge bg-success">Active</span> }
+                                else
+                                { <span class="badge bg-secondary">Inactive</span> }
+                            </td>
                             <td>
                                 <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => Edit(item)">Edit</button>
                                 <button class="btn btn-sm btn-outline-danger" @onclick="() => Delete(item)">Delete</button>
@@ -121,7 +259,7 @@ else
         _loading = false;
     }
 
-    private void ShowAddForm() { _editing = new BrokerDto(); _showForm = true; _message = null; }
+    private void ShowAddForm() { _editing = new BrokerDto { IsActive = true }; _showForm = true; _message = null; }
     private void Cancel() { _editing = null; _showForm = false; }
 
     private void Edit(BrokerDto item)
@@ -129,8 +267,16 @@ else
         _editing = new BrokerDto
         {
             Id = item.Id, BrokerNumber = item.BrokerNumber, CompanyName = item.CompanyName,
-            ContactPerson = item.ContactPerson, ContactEmail = item.ContactEmail,
-            ContactPhone = item.ContactPhone, Address = item.Address
+            CompanyName2 = item.CompanyName2, ErpAccountNumber = item.ErpAccountNumber,
+            SearchName = item.SearchName, ContactPerson = item.ContactPerson,
+            AddressLine1 = item.AddressLine1, AddressLine2 = item.AddressLine2,
+            Country = item.Country, PostalCode = item.PostalCode, City = item.City,
+            ContactPhone = item.ContactPhone, MobilePhone = item.MobilePhone,
+            ContactEmail = item.ContactEmail, HomePage = item.HomePage,
+            VatRegistrationNo = item.VatRegistrationNo, RegistrationNo = item.RegistrationNo,
+            CustomerGroup = item.CustomerGroup, SalesPerson = item.SalesPerson,
+            PaymentTerm = item.PaymentTerm, PaymentMethod = item.PaymentMethod,
+            Currency = item.Currency, Language = item.Language, IsActive = item.IsActive
         };
         _showForm = true; _message = null;
     }
@@ -138,8 +284,8 @@ else
     private async Task Save()
     {
         if (_editing == null) return;
-        if (string.IsNullOrWhiteSpace(_editing.BrokerNumber) || string.IsNullOrWhiteSpace(_editing.CompanyName))
-        { _message = "Broker Number and Company Name are required."; _messageIsError = true; return; }
+        if (string.IsNullOrWhiteSpace(_editing.CompanyName) || string.IsNullOrWhiteSpace(_editing.BrokerNumber) || string.IsNullOrWhiteSpace(_editing.ErpAccountNumber))
+        { _message = "Broker Name, Broker Number, and ERP Account Number are required."; _messageIsError = true; return; }
 
         if (_editing.Id > 0)
             await Api.UpdateBrokerAsync(_editing.Id, _editing);
