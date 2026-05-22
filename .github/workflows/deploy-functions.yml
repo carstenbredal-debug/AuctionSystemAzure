@@ -11,6 +11,8 @@ on:
   workflow_dispatch:
 
 env:
+  AZURE_FUNCTIONAPP_NAME: 'Auctionsystemazure'
+  AZURE_FUNCTIONAPP_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
   DOTNET_VERSION: '8.0.x'
 
 jobs:
@@ -36,39 +38,17 @@ jobs:
       - name: Create deployment package
         run: cd publish && zip -r ../deploy.zip .
 
+      - name: Azure Login
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
       - name: Deploy to Azure Functions
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-        shell: bash
-        env:
-          PUBLISH_PROFILE: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
         run: |
-          # Extract credentials from publish profile
-          USERNAME=$(echo "$PUBLISH_PROFILE" | grep -oP 'userName="\K[^"]+' | head -1)
-          PASSWORD=$(echo "$PUBLISH_PROFILE" | grep -oP 'userPWD="\K[^"]+' | head -1)
-          PUBLISH_URL=$(echo "$PUBLISH_PROFILE" | grep -oP 'publishUrl="\K[^"]+' | head -1)
-
-          echo "Deploying to: $PUBLISH_URL"
-
-          # Deploy using Kudu ZipDeploy REST API directly
-          RESPONSE=$(curl -s -w "\n%{http_code}" \
-            -X POST \
-            -u "$USERNAME:$PASSWORD" \
-            --data-binary @deploy.zip \
-            -H "Content-Type: application/zip" \
-            "https://$PUBLISH_URL/api/zipdeploy?isAsync=true")
-
-          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-          BODY=$(echo "$RESPONSE" | head -n -1)
-
-          echo "HTTP Status: $HTTP_CODE"
-          echo "Response: $BODY"
-
-          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
-            echo "Deployment initiated successfully!"
-            # Wait for deployment to complete
-            sleep 30
-            echo "Deployment complete."
-          else
-            echo "::error::Deployment failed with HTTP $HTTP_CODE"
-            exit 1
-          fi
+          az functionapp deployment source config-zip \
+            --name ${{ env.AZURE_FUNCTIONAPP_NAME }} \
+            --resource-group ${{ env.AZURE_FUNCTIONAPP_RESOURCE_GROUP }} \
+            --src deploy.zip \
+            --build-remote false
