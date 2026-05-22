@@ -11,31 +11,36 @@ on:
 
 env:
   AZURE_FUNCTIONAPP_PACKAGE_PATH: 'src/AuctionSystem.Functions'
-  DOTNET_VERSION: '8.0' # set this to the dotnet version to use
+  DOTNET_VERSION: '8.0'
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write #This is required for requesting the JWT
-      contents: read #This is required for actions/checkout
+      id-token: write
+      contents: read
 
     steps:
       - name: 'Checkout GitHub Action'
         uses: actions/checkout@v4
 
       - name: Setup DotNet ${{ env.DOTNET_VERSION }} Environment
-        uses: actions/setup-dotnet@v1
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: 'Resolve Project Dependencies Using Dotnet'
+      - name: 'Publish project'
         shell: bash
         run: |
           pushd './${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}'
           dotnet publish --configuration Release --output ./output
           popd
-      
+
+      - name: 'Create deployment package'
+        run: |
+          cd ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/output
+          zip -r ${{ github.workspace }}/deploy.zip .
+
       - name: Login to Azure
         uses: azure/login@v2
         with:
@@ -43,11 +48,10 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_286EA316E3A844B58BDF711457511A4F }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_4DB58356E71E4A159489E77853B52456 }}
 
-      - name: 'Run Azure Functions Action'
-        uses: Azure/functions-action@v1
-        id: fa
-        with:
-          app-name: 'Auctionsystemazure'
-          slot-name: 'Production'
-          package: '${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/output'
-          
+      - name: 'Deploy to Azure Functions'
+        run: |
+          az functionapp deployment source config-zip \
+            --name Auctionsystemazure \
+            --resource-group ITTEST \
+            --src ${{ github.workspace }}/deploy.zip \
+            --build-remote false
