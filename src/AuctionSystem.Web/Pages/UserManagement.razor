@@ -2,9 +2,10 @@
 @attribute [Authorize(Roles = "Admin")]
 @inject AuctionApiClient Api
 
-<PageTitle>User Management</PageTitle>
+<PageTitle>Users & Roles - Admin</PageTitle>
 
-<h1>User Management</h1>
+<h1>Users & Roles</h1>
+<p class="text-muted">Manage user access. Each user needs an Azure AD account and a role assignment to access the system.</p>
 
 @if (_loading)
 {
@@ -12,60 +13,93 @@
 }
 else
 {
+    @if (!string.IsNullOrEmpty(_message))
+    {
+        <div class="alert @(_messageIsError ? "alert-danger" : "alert-success") alert-dismissible fade show">
+            @_message
+            <button type="button" class="btn-close" @onclick="() => _message = null"></button>
+        </div>
+    }
+
     <div class="mb-3">
-        <button class="btn btn-primary" @onclick="ShowAddForm">Add User</button>
+        <button class="btn btn-primary" @onclick="ShowAddForm">
+            <i class="bi bi-plus-circle"></i> Add User
+        </button>
     </div>
 
     @if (_showForm)
     {
-        <div class="card mb-4">
+        <div class="card mb-4 border-primary">
+            <div class="card-header bg-primary text-white">
+                <strong>@(_editingUser?.Id > 0 ? "Edit User" : "Add New User")</strong>
+            </div>
             <div class="card-body">
-                <h5 class="card-title">@(_editingUser?.Id > 0 ? "Edit User" : "Add User")</h5>
                 <div class="row g-3">
-                    <div class="col-md-4">
-                        <label class="form-label">Azure AD Object ID</label>
-                        <input class="form-control" @bind="_editingUser!.AzureAdObjectId" />
+                    <div class="col-md-6">
+                        <label class="form-label">Azure AD Object ID <span class="text-danger">*</span></label>
+                        <input class="form-control" @bind="_editingUser!.AzureAdObjectId"
+                               placeholder="e.g. 18a768cd-1d23-4942-92ca-2e1cc0d0955e" />
+                        <small class="form-text text-muted">
+                            Find in Entra ID → Users → select user → Object ID
+                        </small>
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Email</label>
-                        <input class="form-control" type="email" @bind="_editingUser!.Email" />
+                    <div class="col-md-6">
+                        <label class="form-label">Email <span class="text-danger">*</span></label>
+                        <input class="form-control" type="email" @bind="_editingUser!.Email"
+                               placeholder="user@infra-tech.dk" />
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Display Name</label>
-                        <input class="form-control" @bind="_editingUser!.DisplayName" />
+                    <div class="col-md-6">
+                        <label class="form-label">Display Name <span class="text-danger">*</span></label>
+                        <input class="form-control" @bind="_editingUser!.DisplayName"
+                               placeholder="Full name" />
                     </div>
-                    <div class="col-md-3">
-                        <label class="form-label">Role</label>
+                    <div class="col-md-6">
+                        <label class="form-label">Role <span class="text-danger">*</span></label>
                         <select class="form-select" @bind="_editingUser!.Role">
-                            <option value="">Select Role</option>
-                            <option value="Admin">Admin</option>
-                            <option value="Broker">Broker</option>
-                            <option value="Seller">Seller</option>
-                            <option value="Buyer">Buyer</option>
+                            <option value="">— Select Role —</option>
+                            <option value="Admin">Admin — Full system access</option>
+                            <option value="Broker">Broker — Bidding, allocations, customers</option>
+                            <option value="Seller">Seller — Lot tracking, settlements</option>
+                            <option value="Buyer">Buyer — Purchase history, allocations</option>
                         </select>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-4">
                         <label class="form-label">Linked Broker</label>
                         <select class="form-select" @bind="_editingUser!.BrokerId">
-                            <option value="">None</option>
+                            <option value="">— None —</option>
                             @foreach (var b in _brokers)
                             {
-                                <option value="@b.Id">@b.CompanyName</option>
+                                <option value="@b.Id">@b.CompanyName (@b.BrokerNumber)</option>
                             }
                         </select>
+                        <small class="form-text text-muted">Required for Broker role</small>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-4">
                         <label class="form-label">Linked Seller</label>
                         <select class="form-select" @bind="_editingUser!.SellerId">
-                            <option value="">None</option>
+                            <option value="">— None —</option>
                             @foreach (var s in _sellers)
                             {
-                                <option value="@s.Id">@s.Name</option>
+                                <option value="@s.Id">@s.Name (@s.SellerNumber)</option>
                             }
                         </select>
+                        <small class="form-text text-muted">Required for Seller role</small>
                     </div>
-                    <div class="col-12">
-                        <button class="btn btn-success me-2" @onclick="SaveUser">Save</button>
+                    <div class="col-md-4">
+                        <label class="form-label">Linked Buyer</label>
+                        <select class="form-select" @bind="_editingUser!.BuyerId">
+                            <option value="">— None —</option>
+                            @foreach (var buyer in _buyers)
+                            {
+                                <option value="@buyer.Id">@buyer.Name (@buyer.BuyerNumber)</option>
+                            }
+                        </select>
+                        <small class="form-text text-muted">Required for Buyer role</small>
+                    </div>
+                    <div class="col-12 mt-3">
+                        <button class="btn btn-success me-2" @onclick="SaveUser">
+                            @(_editingUser?.Id > 0 ? "Update User" : "Create User")
+                        </button>
                         <button class="btn btn-secondary" @onclick="CancelForm">Cancel</button>
                     </div>
                 </div>
@@ -73,43 +107,66 @@ else
         </div>
     }
 
-    <table class="table table-striped">
-        <thead>
-            <tr>
-                <th>Display Name</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Linked Entity</th>
-                <th>Active</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var user in _users)
-            {
-                <tr>
-                    <td>@user.DisplayName</td>
-                    <td>@user.Email</td>
-                    <td><span class="badge bg-@GetRoleBadgeColor(user.Role)">@user.Role</span></td>
-                    <td>@GetLinkedEntity(user)</td>
-                    <td>@(user.IsActive ? "Yes" : "No")</td>
-                    <td>
-                        <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => EditUser(user)">Edit</button>
-                        <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteUser(user)">Delete</button>
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
+    <div class="card">
+        <div class="card-header">
+            <strong>Registered Users</strong> <span class="badge bg-secondary">@_users.Count</span>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-striped table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Display Name</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Linked Entity</th>
+                        <th>Active</th>
+                        <th style="width: 150px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_users.Count == 0)
+                    {
+                        <tr><td colspan="6" class="text-center text-muted py-4">No users registered. Click "Add User" to create the first user.</td></tr>
+                    }
+                    @foreach (var user in _users)
+                    {
+                        <tr>
+                            <td><strong>@user.DisplayName</strong></td>
+                            <td>@user.Email</td>
+                            <td><span class="badge bg-@GetRoleBadgeColor(user.Role)">@user.Role</span></td>
+                            <td>@GetLinkedEntity(user)</td>
+                            <td>
+                                @if (user.IsActive)
+                                {
+                                    <span class="badge bg-success">Active</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">Inactive</span>
+                                }
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => EditUser(user)">Edit</button>
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteUser(user)">Delete</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
 }
 
 @code {
     private List<AppUserDto> _users = new();
     private List<BrokerDto> _brokers = new();
     private List<SellerDto> _sellers = new();
+    private List<BuyerDto> _buyers = new();
     private AppUserDto? _editingUser;
     private bool _loading = true;
     private bool _showForm;
+    private string? _message;
+    private bool _messageIsError;
 
     protected override async Task OnInitializedAsync()
     {
@@ -122,12 +179,14 @@ else
         _users = await Api.GetAllUsersAsync();
         _brokers = await Api.GetBrokersAsync();
         _sellers = await Api.GetSellersAsync();
+        _buyers = await Api.GetAllBuyersAsync();
     }
 
     private void ShowAddForm()
     {
-        _editingUser = new AppUserDto();
+        _editingUser = new AppUserDto { IsActive = true };
         _showForm = true;
+        _message = null;
     }
 
     private void EditUser(AppUserDto user)
@@ -145,15 +204,54 @@ else
             IsActive = user.IsActive
         };
         _showForm = true;
+        _message = null;
     }
 
     private async Task SaveUser()
     {
         if (_editingUser == null) return;
+
+        if (string.IsNullOrWhiteSpace(_editingUser.AzureAdObjectId) ||
+            string.IsNullOrWhiteSpace(_editingUser.Email) ||
+            string.IsNullOrWhiteSpace(_editingUser.DisplayName) ||
+            string.IsNullOrWhiteSpace(_editingUser.Role))
+        {
+            _message = "Please fill in all required fields (Azure AD Object ID, Email, Display Name, Role).";
+            _messageIsError = true;
+            return;
+        }
+
         if (_editingUser.Id > 0)
-            await Api.UpdateUserAsync(_editingUser.Id, _editingUser);
+        {
+            var result = await Api.UpdateUserAsync(_editingUser.Id, _editingUser);
+            if (result != null)
+            {
+                _message = $"User '{_editingUser.DisplayName}' updated successfully.";
+                _messageIsError = false;
+            }
+            else
+            {
+                _message = "Failed to update user. Please check the details and try again.";
+                _messageIsError = true;
+                return;
+            }
+        }
         else
-            await Api.CreateUserAsync(_editingUser);
+        {
+            var result = await Api.CreateUserAsync(_editingUser);
+            if (result != null)
+            {
+                _message = $"User '{_editingUser.DisplayName}' created with role '{_editingUser.Role}'.";
+                _messageIsError = false;
+            }
+            else
+            {
+                _message = "Failed to create user. The Azure AD Object ID may already be in use.";
+                _messageIsError = true;
+                return;
+            }
+        }
+
         _showForm = false;
         _editingUser = null;
         await LoadData();
@@ -168,6 +266,8 @@ else
     private async Task DeleteUser(AppUserDto user)
     {
         await Api.DeleteUserAsync(user.Id);
+        _message = $"User '{user.DisplayName}' deleted.";
+        _messageIsError = false;
         await LoadData();
     }
 
@@ -187,7 +287,7 @@ else
         if (user.SellerId.HasValue)
             return _sellers.FirstOrDefault(s => s.Id == user.SellerId.Value)?.Name ?? $"Seller #{user.SellerId}";
         if (user.BuyerId.HasValue)
-            return $"Buyer #{user.BuyerId}";
-        return "-";
+            return _buyers.FirstOrDefault(b => b.Id == user.BuyerId.Value)?.Name ?? $"Buyer #{user.BuyerId}";
+        return "—";
     }
 }

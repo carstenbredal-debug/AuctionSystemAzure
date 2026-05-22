@@ -54,6 +54,35 @@ public class BrokerFunctions
         return await CreateJsonResponse(req, broker, System.Net.HttpStatusCode.Created);
     }
 
+    [Function("UpdateBroker")]
+    public async Task<HttpResponseData> Update(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "brokers/{id:int}")] HttpRequestData req, int id)
+    {
+        var dto = await req.ReadFromJsonAsync<Broker>();
+        if (dto == null) return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+        var broker = await _db.Brokers.FindAsync(id);
+        if (broker == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+        broker.BrokerNumber = dto.BrokerNumber;
+        broker.CompanyName = dto.CompanyName;
+        broker.ContactPerson = dto.ContactPerson;
+        broker.ContactEmail = dto.ContactEmail;
+        broker.ContactPhone = dto.ContactPhone;
+        broker.Address = dto.Address;
+        await _db.SaveChangesAsync();
+        return await CreateJsonResponse(req, broker);
+    }
+
+    [Function("DeleteBroker")]
+    public async Task<HttpResponseData> Delete(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "brokers/{id:int}")] HttpRequestData req, int id)
+    {
+        var broker = await _db.Brokers.FindAsync(id);
+        if (broker == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+        _db.Brokers.Remove(broker);
+        await _db.SaveChangesAsync();
+        return req.CreateResponse(System.Net.HttpStatusCode.NoContent);
+    }
+
     [Function("GetBuyersByBroker")]
     public async Task<HttpResponseData> GetBuyers(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "brokers/{brokerId:int}/buyers")] HttpRequestData req, int brokerId)
@@ -72,6 +101,43 @@ public class BrokerFunctions
         _db.Buyers.Add(buyer);
         await _db.SaveChangesAsync();
         return await CreateJsonResponse(req, buyer, System.Net.HttpStatusCode.Created);
+    }
+
+    [Function("GetAllBuyers")]
+    public async Task<HttpResponseData> GetAllBuyers(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "buyers")] HttpRequestData req)
+    {
+        var buyers = await _db.Buyers.Include(b => b.Broker).OrderBy(b => b.Name).ToListAsync();
+        return await CreateJsonResponse(req, buyers);
+    }
+
+    [Function("UpdateBuyer")]
+    public async Task<HttpResponseData> UpdateBuyer(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "buyers/{id:int}")] HttpRequestData req, int id)
+    {
+        var dto = await req.ReadFromJsonAsync<Buyer>();
+        if (dto == null) return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+        var buyer = await _db.Buyers.FindAsync(id);
+        if (buyer == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+        buyer.BuyerNumber = dto.BuyerNumber;
+        buyer.Name = dto.Name;
+        buyer.ContactEmail = dto.ContactEmail;
+        buyer.ContactPhone = dto.ContactPhone;
+        buyer.Address = dto.Address;
+        buyer.BrokerId = dto.BrokerId;
+        await _db.SaveChangesAsync();
+        return await CreateJsonResponse(req, buyer);
+    }
+
+    [Function("DeleteBuyer")]
+    public async Task<HttpResponseData> DeleteBuyer(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "buyers/{id:int}")] HttpRequestData req, int id)
+    {
+        var buyer = await _db.Buyers.FindAsync(id);
+        if (buyer == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+        _db.Buyers.Remove(buyer);
+        await _db.SaveChangesAsync();
+        return req.CreateResponse(System.Net.HttpStatusCode.NoContent);
     }
 
     private static async Task<HttpResponseData> CreateJsonResponse<T>(

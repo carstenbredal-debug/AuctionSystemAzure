@@ -57,6 +57,34 @@ public class SellerFunctions
         return await CreateJsonResponse(req, seller, System.Net.HttpStatusCode.Created);
     }
 
+    [Function("UpdateSeller")]
+    public async Task<HttpResponseData> Update(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "sellers/{id:int}")] HttpRequestData req, int id)
+    {
+        var dto = await req.ReadFromJsonAsync<Seller>();
+        if (dto == null) return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+        var seller = await _db.Sellers.FindAsync(id);
+        if (seller == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+        seller.SellerNumber = dto.SellerNumber;
+        seller.Name = dto.Name;
+        seller.ContactEmail = dto.ContactEmail;
+        seller.ContactPhone = dto.ContactPhone;
+        seller.Address = dto.Address;
+        await _db.SaveChangesAsync();
+        return await CreateJsonResponse(req, seller);
+    }
+
+    [Function("DeleteSeller")]
+    public async Task<HttpResponseData> Delete(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "sellers/{id:int}")] HttpRequestData req, int id)
+    {
+        var seller = await _db.Sellers.FindAsync(id);
+        if (seller == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+        _db.Sellers.Remove(seller);
+        await _db.SaveChangesAsync();
+        return req.CreateResponse(System.Net.HttpStatusCode.NoContent);
+    }
+
     [Function("GetLotsBySeller")]
     public async Task<HttpResponseData> GetLots(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "sellers/{sellerId:int}/lots")] HttpRequestData req, int sellerId)
