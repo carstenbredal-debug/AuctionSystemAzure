@@ -100,4 +100,37 @@ public class AuctionApiClient
     // Seed
     public async Task SeedDatabaseAsync()
         => await _http.PostAsync("api/seed", null);
+
+    // Auth / Users
+    public async Task<AppUserDto?> GetCurrentUserAsync(string azureAdObjectId)
+    {
+        try
+        {
+            return await _http.GetFromJsonAsync<AppUserDto>($"api/users/me/{azureAdObjectId}");
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public async Task<List<AppUserDto>> GetAllUsersAsync()
+        => await _http.GetFromJsonAsync<List<AppUserDto>>("api/users") ?? new();
+
+    public async Task<AppUserDto?> CreateUserAsync(AppUserDto user)
+    {
+        var resp = await _http.PostAsJsonAsync("api/users", user);
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<AppUserDto>();
+    }
+
+    public async Task<AppUserDto?> UpdateUserAsync(int id, AppUserDto user)
+    {
+        var resp = await _http.PutAsJsonAsync($"api/users/{id}", user);
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<AppUserDto>();
+    }
+
+    public async Task DeleteUserAsync(int id)
+        => await _http.DeleteAsync($"api/users/{id}");
 }

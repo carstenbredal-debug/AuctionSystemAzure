@@ -1,4 +1,5 @@
 @page "/buyer"
+@attribute [Authorize(Roles = "Admin,Buyer")]
 @inject AuctionApiClient Api
 
 <PageTitle>Buyer Portal - Auction System</PageTitle>

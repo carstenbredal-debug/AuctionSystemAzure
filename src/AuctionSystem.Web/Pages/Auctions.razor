@@ -1,5 +1,6 @@
 @page "/auctions"
 @page "/auctions/{Id:int}"
+@attribute [Authorize(Roles = "Admin")]
 @inject AuctionApiClient Api
 @inject NavigationManager Nav
 
