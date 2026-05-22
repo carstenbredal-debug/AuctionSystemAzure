@@ -27,7 +27,7 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
           app_location: "src/AuctionSystem.Web"
-          api_location: ""
+          api_location: "src/AuctionSystem.Functions"
           output_location: "wwwroot"
 
   close_pull_request_job:
