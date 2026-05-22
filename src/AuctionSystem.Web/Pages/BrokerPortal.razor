@@ -1,0 +1,188 @@
+@page "/broker"
+@inject AuctionApiClient Api
+
+<PageTitle>Broker Portal - Auction System</PageTitle>
+
+<h1>Broker Portal</h1>
+
+<div class="mb-3">
+    <label class="form-label"><strong>Select Broker</strong></label>
+    <select class="form-select w-auto" @bind="selectedBrokerId" @bind:after="LoadBrokerData">
+        <option value="0">Choose...</option>
+        @foreach (var b in brokers)
+        {
+            <option value="@b.Id">@b.CompanyName (@b.BrokerNumber)</option>
+        }
+    </select>
+</div>
+
+@if (selectedBrokerId > 0)
+{
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item"><a class="nav-link @(tab == "bids" ? "active" : "")" href="#" @onclick='() => tab = "bids"' @onclick:preventDefault>Bids</a></li>
+        <li class="nav-item"><a class="nav-link @(tab == "allocations" ? "active" : "")" href="#" @onclick='() => tab = "allocations"' @onclick:preventDefault>Allocations</a></li>
+        <li class="nav-item"><a class="nav-link @(tab == "customers" ? "active" : "")" href="#" @onclick='() => tab = "customers"' @onclick:preventDefault>Customers</a></li>
+    </ul>
+
+    @if (tab == "bids")
+    {
+        <h4>Bid History</h4>
+        <table class="table table-sm">
+            <thead><tr><th>Lot</th><th>Amount</th><th>Status</th><th>Placed</th></tr></thead>
+            <tbody>
+                @foreach (var bid in bids)
+                {
+                    <tr>
+                        <td>@(bid.Lot != null ? $"Lot #{bid.Lot.LotNumber} — {bid.Lot.Description}" : $"Lot {bid.LotId}")</td>
+                        <td>@bid.Amount.ToString("N2")</td>
+                        <td><span class="badge bg-@GetBidColor(bid.Status)">@bid.Status</span></td>
+                        <td>@bid.PlacedAt.ToString("g")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <div class="card mt-3">
+            <div class="card-header">Place Bid</div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Lot ID</label>
+                        <input type="number" class="form-control" @bind="bidLotId" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Amount</label>
+                        <input type="number" class="form-control" @bind="bidAmount" step="0.01" />
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <button class="btn btn-primary" @onclick="PlaceBid">Place Bid</button>
+                    </div>
+                </div>
+                @if (!string.IsNullOrEmpty(bidMessage))
+                {
+                    <div class="alert alert-info mt-2">@bidMessage</div>
+                }
+            </div>
+        </div>
+    }
+
+    @if (tab == "allocations")
+    {
+        <h4>Lot Allocations</h4>
+        <table class="table table-sm">
+            <thead><tr><th>Lot</th><th>Buyer</th><th>Qty</th><th>Price/Unit</th><th>Total</th><th>Status</th></tr></thead>
+            <tbody>
+                @foreach (var a in allocations)
+                {
+                    <tr>
+                        <td>@(a.Lot != null ? $"Lot #{a.Lot.LotNumber} — {a.Lot.Description}" : $"Lot {a.LotId}")</td>
+                        <td>@(a.Buyer?.Name ?? $"Buyer {a.BuyerId}")</td>
+                        <td>@a.Quantity</td>
+                        <td>@a.PricePerUnit.ToString("N2")</td>
+                        <td>@a.TotalPrice.ToString("N2")</td>
+                        <td><span class="badge bg-info">@a.Status</span></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <div class="card mt-3">
+            <div class="card-header">Allocate Lot to Buyer</div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-2">
+                        <label class="form-label">Lot ID</label>
+                        <input type="number" class="form-control" @bind="allocLotId" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Buyer</label>
+                        <select class="form-select" @bind="allocBuyerId">
+                            <option value="0">Select...</option>
+                            @foreach (var buyer in buyers)
+                            {
+                                <option value="@buyer.Id">@buyer.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Quantity</label>
+                        <input type="number" class="form-control" @bind="allocQty" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Price/Unit</label>
+                        <input type="number" class="form-control" @bind="allocPrice" step="0.01" />
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button class="btn btn-success" @onclick="AllocateLot">Allocate</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (tab == "customers")
+    {
+        <h4>Customers (Buyers)</h4>
+        <table class="table table-sm">
+            <thead><tr><th>Number</th><th>Name</th><th>Email</th><th>Phone</th></tr></thead>
+            <tbody>
+                @foreach (var buyer in buyers)
+                {
+                    <tr>
+                        <td>@buyer.BuyerNumber</td>
+                        <td>@buyer.Name</td>
+                        <td>@buyer.ContactEmail</td>
+                        <td>@buyer.ContactPhone</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    private List<BrokerDto> brokers = new();
+    private int selectedBrokerId;
+    private string tab = "bids";
+
+    private List<BidDto> bids = new();
+    private List<LotAllocationDto> allocations = new();
+    private List<BuyerDto> buyers = new();
+
+    private int bidLotId; private decimal bidAmount; private string? bidMessage;
+    private int allocLotId, allocBuyerId, allocQty; private decimal allocPrice;
+
+    protected override async Task OnInitializedAsync()
+    {
+        brokers = await Api.GetBrokersAsync();
+    }
+
+    private async Task LoadBrokerData()
+    {
+        if (selectedBrokerId <= 0) return;
+        bids = await Api.GetBidsByBrokerAsync(selectedBrokerId);
+        allocations = await Api.GetAllocationsByBrokerAsync(selectedBrokerId);
+        buyers = await Api.GetBuyersByBrokerAsync(selectedBrokerId);
+    }
+
+    private async Task PlaceBid()
+    {
+        var bid = await Api.PlaceBidAsync(bidLotId, selectedBrokerId, bidAmount);
+        bidMessage = bid != null ? $"Bid placed: {bid.Amount:N2}" : "Failed — lot not active or auction not in progress";
+        await LoadBrokerData();
+    }
+
+    private async Task AllocateLot()
+    {
+        await Api.AllocateLotAsync(allocLotId, selectedBrokerId, allocBuyerId, allocQty, allocPrice);
+        await LoadBrokerData();
+    }
+
+    private string GetBidColor(BidStatus s) => s switch
+    {
+        BidStatus.Winning => "success",
+        BidStatus.Won => "primary",
+        BidStatus.Outbid => "warning",
+        _ => "secondary"
+    };
+}

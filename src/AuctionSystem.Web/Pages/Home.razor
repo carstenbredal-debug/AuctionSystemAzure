@@ -1,0 +1,107 @@
+@page "/"
+@inject AuctionApiClient Api
+
+<PageTitle>Dashboard - Auction System</PageTitle>
+
+<h1>Auction System Dashboard</h1>
+<p class="text-muted">Connected to Azure SQL Server</p>
+
+@if (loading)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <div class="row mt-4">
+        <div class="col-md-3">
+            <div class="card text-bg-primary mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">Auctions</h5>
+                    <p class="card-text display-6">@stats.TotalAuctions</p>
+                    <small>@stats.ActiveAuctions active</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-bg-success mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">Lots</h5>
+                    <p class="card-text display-6">@stats.TotalLots</p>
+                    <small>@stats.SoldLots sold</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-bg-info mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">Brokers</h5>
+                    <p class="card-text display-6">@stats.TotalBrokers</p>
+                    <small>@stats.TotalBuyers buyers</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-bg-warning mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">Sellers</h5>
+                    <p class="card-text display-6">@stats.TotalSellers</p>
+                    <small>@stats.PendingSettlements pending settlements</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-3">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header"><strong>Recent Auctions</strong></div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <thead><tr><th>Number</th><th>Title</th><th>Date</th><th>Status</th></tr></thead>
+                        <tbody>
+                            @foreach (var a in stats.RecentAuctions)
+                            {
+                                <tr>
+                                    <td>@a.AuctionNumber</td>
+                                    <td>@a.Title</td>
+                                    <td>@a.ScheduledDate.ToString("yyyy-MM-dd")</td>
+                                    <td><span class="badge bg-@GetStatusColor(a.Status)">@a.Status</span></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header"><strong>Bid Activity</strong></div>
+                <div class="card-body">
+                    <p>Total bids: <strong>@stats.TotalBids</strong></p>
+                    <p>Pending invoices: <strong>@stats.PendingInvoices</strong></p>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool loading = true;
+    private DashboardStats stats = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        stats = await Api.GetDashboardAsync();
+        loading = false;
+    }
+
+    private string GetStatusColor(AuctionStatus status) => status switch
+    {
+        AuctionStatus.Draft => "secondary",
+        AuctionStatus.Scheduled => "info",
+        AuctionStatus.InProgress => "success",
+        AuctionStatus.Completed => "primary",
+        AuctionStatus.Cancelled => "danger",
+        _ => "secondary"
+    };
+}

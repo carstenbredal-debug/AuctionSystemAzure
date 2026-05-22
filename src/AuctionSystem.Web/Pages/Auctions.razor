@@ -1,0 +1,159 @@
+@page "/auctions"
+@page "/auctions/{Id:int}"
+@inject AuctionApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>Auctions - Auction System</PageTitle>
+
+<h1>Auction Management</h1>
+
+@if (Id.HasValue)
+{
+    @if (selectedAuction != null)
+    {
+        <nav><a href="/auctions">&larr; Back to Auctions</a></nav>
+        <h2 class="mt-3">@selectedAuction.Title</h2>
+        <p><strong>Number:</strong> @selectedAuction.AuctionNumber | <strong>Status:</strong> <span class="badge bg-info">@selectedAuction.Status</span> | <strong>Date:</strong> @selectedAuction.ScheduledDate.ToString("yyyy-MM-dd")</p>
+
+        <div class="btn-group mb-3">
+            @if (selectedAuction.Status == AuctionStatus.Scheduled)
+            {
+                <button class="btn btn-success" @onclick="() => UpdateStatus(AuctionStatus.InProgress)">Start Auction</button>
+            }
+            @if (selectedAuction.Status == AuctionStatus.InProgress)
+            {
+                <button class="btn btn-primary" @onclick="() => UpdateStatus(AuctionStatus.Completed)">Complete Auction</button>
+            }
+        </div>
+
+        <h4>Lots (@lots.Count)</h4>
+        <table class="table table-striped">
+            <thead>
+                <tr><th>#</th><th>Description</th><th>Category</th><th>Qty</th><th>Starting</th><th>Hammer</th><th>Status</th><th>Actions</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var lot in lots)
+                {
+                    <tr>
+                        <td>@lot.LotNumber</td>
+                        <td>@lot.Description</td>
+                        <td>@lot.Category</td>
+                        <td>@lot.Quantity @lot.Unit</td>
+                        <td>@lot.StartingPrice.ToString("N2")</td>
+                        <td>@(lot.HammerPrice?.ToString("N2") ?? "-")</td>
+                        <td><span class="badge bg-@GetLotColor(lot.Status)">@lot.Status</span></td>
+                        <td>
+                            @if (lot.Status == LotStatus.Active || lot.Status == LotStatus.Pending)
+                            {
+                                <button class="btn btn-sm btn-outline-success" @onclick="() => ShowHammerDialog(lot)">Record Hammer</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        @if (showHammer && hammerLot != null)
+        {
+            <div class="card mt-3 border-success">
+                <div class="card-header bg-success text-white">Record Hammer Price — Lot #@hammerLot.LotNumber</div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Hammer Price</label>
+                            <input type="number" class="form-control" @bind="hammerPrice" step="0.01" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Winning Broker ID</label>
+                            <input type="number" class="form-control" @bind="winningBrokerId" />
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <button class="btn btn-success me-2" @onclick="RecordHammer">Confirm</button>
+                            <button class="btn btn-secondary" @onclick="() => showHammer = false">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+}
+else
+{
+    <table class="table table-hover">
+        <thead><tr><th>Number</th><th>Title</th><th>Location</th><th>Date</th><th>Status</th><th>Lots</th></tr></thead>
+        <tbody>
+            @foreach (var a in auctions)
+            {
+                <tr @onclick="() => NavigateTo(a.Id)" style="cursor:pointer">
+                    <td>@a.AuctionNumber</td>
+                    <td>@a.Title</td>
+                    <td>@a.Location</td>
+                    <td>@a.ScheduledDate.ToString("yyyy-MM-dd")</td>
+                    <td><span class="badge bg-info">@a.Status</span></td>
+                    <td>@a.Lots.Count</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    [Parameter] public int? Id { get; set; }
+
+    private List<AuctionDto> auctions = new();
+    private AuctionDto? selectedAuction;
+    private List<LotDto> lots = new();
+    private bool showHammer;
+    private LotDto? hammerLot;
+    private decimal hammerPrice;
+    private int winningBrokerId;
+
+    private void NavigateTo(int id) => Nav.NavigateTo($"/auctions/{id}");
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Id.HasValue)
+        {
+            selectedAuction = await Api.GetAuctionAsync(Id.Value);
+            lots = await Api.GetLotsByAuctionAsync(Id.Value);
+        }
+        else
+        {
+            auctions = await Api.GetAuctionsAsync();
+        }
+    }
+
+    private async Task UpdateStatus(AuctionStatus status)
+    {
+        await Api.UpdateAuctionStatusAsync(Id!.Value, status);
+        selectedAuction = await Api.GetAuctionAsync(Id.Value);
+        lots = await Api.GetLotsByAuctionAsync(Id.Value);
+    }
+
+    private void ShowHammerDialog(LotDto lot)
+    {
+        hammerLot = lot;
+        hammerPrice = lot.StartingPrice;
+        winningBrokerId = 0;
+        showHammer = true;
+    }
+
+    private async Task RecordHammer()
+    {
+        if (hammerLot != null && winningBrokerId > 0)
+        {
+            await Api.RecordHammerPriceAsync(hammerLot.Id, hammerPrice, winningBrokerId);
+            lots = await Api.GetLotsByAuctionAsync(Id!.Value);
+            showHammer = false;
+        }
+    }
+
+    private string GetLotColor(LotStatus s) => s switch
+    {
+        LotStatus.Pending => "secondary",
+        LotStatus.Active => "warning",
+        LotStatus.Sold => "success",
+        LotStatus.Unsold => "danger",
+        _ => "secondary"
+    };
+}

@@ -1,0 +1,49 @@
+<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">Auction System</a>
+        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+    </div>
+</div>
+
+<div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
+    <nav class="flex-column">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Dashboard
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="auctions">
+                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Auctions
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="broker">
+                <span class="bi bi-people-fill-nav-menu" aria-hidden="true"></span> Broker Portal
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="buyer">
+                <span class="bi bi-cart-fill-nav-menu" aria-hidden="true"></span> Buyer Portal
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="seller">
+                <span class="bi bi-shop-nav-menu" aria-hidden="true"></span> Seller Portal
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="settlements">
+                <span class="bi bi-cash-stack-nav-menu" aria-hidden="true"></span> Settlements
+            </NavLink>
+        </div>
+    </nav>
+</div>
+
+@code {
+    private bool collapseNavMenu = true;
+    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+    private void ToggleNavMenu() => collapseNavMenu = !collapseNavMenu;
+}

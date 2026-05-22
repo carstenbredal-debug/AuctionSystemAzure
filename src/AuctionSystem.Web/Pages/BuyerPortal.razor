@@ -1,0 +1,71 @@
+@page "/buyer"
+@inject AuctionApiClient Api
+
+<PageTitle>Buyer Portal - Auction System</PageTitle>
+
+<h1>Buyer Portal</h1>
+
+<div class="mb-3">
+    <label class="form-label"><strong>Select Buyer</strong></label>
+    <select class="form-select w-auto" @bind="selectedBuyerId" @bind:after="LoadBuyerData">
+        <option value="0">Choose...</option>
+        @foreach (var b in allBuyers)
+        {
+            <option value="@b.Id">@b.Name (@b.BuyerNumber)</option>
+        }
+    </select>
+</div>
+
+@if (selectedBuyerId > 0)
+{
+    <h4>My Purchases (Allocations)</h4>
+    @if (!allocations.Any())
+    {
+        <p class="text-muted">No allocations yet.</p>
+    }
+    else
+    {
+        <table class="table table-striped">
+            <thead><tr><th>Lot</th><th>Broker</th><th>Qty</th><th>Price/Unit</th><th>Total</th><th>Status</th><th>Date</th></tr></thead>
+            <tbody>
+                @foreach (var a in allocations)
+                {
+                    <tr>
+                        <td>@(a.Lot != null ? $"Lot #{a.Lot.LotNumber} — {a.Lot.Description}" : $"Lot {a.LotId}")</td>
+                        <td>@(a.Broker?.CompanyName ?? $"Broker {a.BrokerId}")</td>
+                        <td>@a.Quantity</td>
+                        <td>@a.PricePerUnit.ToString("N2")</td>
+                        <td>@a.TotalPrice.ToString("N2")</td>
+                        <td><span class="badge bg-info">@a.Status</span></td>
+                        <td>@a.AllocatedAt.ToString("g")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <div class="alert alert-light">
+            <strong>Total purchases:</strong> @allocations.Sum(a => a.TotalPrice).ToString("N2")
+        </div>
+    }
+}
+
+@code {
+    private List<BuyerDto> allBuyers = new();
+    private int selectedBuyerId;
+    private List<LotAllocationDto> allocations = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var brokers = await Api.GetBrokersAsync();
+        foreach (var broker in brokers)
+        {
+            var buyers = await Api.GetBuyersByBrokerAsync(broker.Id);
+            allBuyers.AddRange(buyers);
+        }
+    }
+
+    private async Task LoadBuyerData()
+    {
+        if (selectedBuyerId <= 0) return;
+        allocations = await Api.GetAllocationsByBuyerAsync(selectedBuyerId);
+    }
+}

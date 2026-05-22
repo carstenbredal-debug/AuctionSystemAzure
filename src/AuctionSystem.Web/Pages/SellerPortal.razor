@@ -1,0 +1,113 @@
+@page "/seller"
+@inject AuctionApiClient Api
+
+<PageTitle>Seller Portal - Auction System</PageTitle>
+
+<h1>Seller Portal</h1>
+
+<div class="mb-3">
+    <label class="form-label"><strong>Select Seller</strong></label>
+    <select class="form-select w-auto" @bind="selectedSellerId" @bind:after="LoadSellerData">
+        <option value="0">Choose...</option>
+        @foreach (var s in sellers)
+        {
+            <option value="@s.Id">@s.Name (@s.SellerNumber)</option>
+        }
+    </select>
+</div>
+
+@if (selectedSellerId > 0)
+{
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item"><a class="nav-link @(tab == "lots" ? "active" : "")" href="#" @onclick='() => tab = "lots"' @onclick:preventDefault>My Lots</a></li>
+        <li class="nav-item"><a class="nav-link @(tab == "settlements" ? "active" : "")" href="#" @onclick='() => tab = "settlements"' @onclick:preventDefault>Settlements</a></li>
+    </ul>
+
+    @if (tab == "lots")
+    {
+        <h4>My Lots</h4>
+        <table class="table table-striped">
+            <thead><tr><th>#</th><th>Description</th><th>Auction</th><th>Qty</th><th>Starting</th><th>Hammer</th><th>Status</th></tr></thead>
+            <tbody>
+                @foreach (var lot in lots)
+                {
+                    <tr>
+                        <td>@lot.LotNumber</td>
+                        <td>@lot.Description</td>
+                        <td>@(lot.Auction?.Title ?? $"Auction {lot.AuctionId}")</td>
+                        <td>@lot.Quantity</td>
+                        <td>@lot.StartingPrice.ToString("N2")</td>
+                        <td>@(lot.HammerPrice?.ToString("N2") ?? "-")</td>
+                        <td><span class="badge bg-@GetLotColor(lot.Status)">@lot.Status</span></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @if (tab == "settlements")
+    {
+        <h4>Settlements</h4>
+        @if (!settlements.Any())
+        {
+            <p class="text-muted">No settlements yet.</p>
+        }
+        else
+        {
+            <table class="table table-striped">
+                <thead><tr><th>Number</th><th>Lot</th><th>Gross</th><th>Commission (10%)</th><th>Fees (2%)</th><th>Net</th><th>Status</th></tr></thead>
+                <tbody>
+                    @foreach (var s in settlements)
+                    {
+                        <tr>
+                            <td>@s.SettlementNumber</td>
+                            <td>@(s.Lot != null ? $"Lot #{s.Lot.LotNumber} — {s.Lot.Description}" : $"Lot {s.LotId}")</td>
+                            <td>@s.GrossAmount.ToString("N2")</td>
+                            <td>@s.Commission.ToString("N2")</td>
+                            <td>@s.Fees.ToString("N2")</td>
+                            <td><strong>@s.NetAmount.ToString("N2")</strong></td>
+                            <td><span class="badge bg-@GetSettlementColor(s.Status)">@s.Status</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <div class="alert alert-light">
+                <strong>Total net payout:</strong> @settlements.Sum(s => s.NetAmount).ToString("N2")
+            </div>
+        }
+    }
+}
+
+@code {
+    private List<SellerDto> sellers = new();
+    private int selectedSellerId;
+    private string tab = "lots";
+    private List<LotDto> lots = new();
+    private List<SettlementDto> settlements = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        sellers = await Api.GetSellersAsync();
+    }
+
+    private async Task LoadSellerData()
+    {
+        if (selectedSellerId <= 0) return;
+        lots = await Api.GetLotsBySellerAsync(selectedSellerId);
+        settlements = await Api.GetSettlementsBySellerAsync(selectedSellerId);
+    }
+
+    private string GetLotColor(LotStatus s) => s switch
+    {
+        LotStatus.Sold => "success",
+        LotStatus.Active => "warning",
+        _ => "secondary"
+    };
+
+    private string GetSettlementColor(SettlementStatus s) => s switch
+    {
+        SettlementStatus.Completed => "success",
+        SettlementStatus.Pending => "warning",
+        _ => "info"
+    };
+}
