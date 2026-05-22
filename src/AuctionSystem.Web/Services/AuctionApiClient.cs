@@ -33,16 +33,70 @@ public class AuctionApiClient
     public async Task<List<BrokerDto>> GetBrokersAsync()
         => await _http.GetFromJsonAsync<List<BrokerDto>>("api/brokers") ?? new();
 
+    public async Task<BrokerDto?> CreateBrokerAsync(BrokerDto broker)
+    {
+        var resp = await _http.PostAsJsonAsync("api/brokers", broker);
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<BrokerDto>();
+    }
+
+    public async Task<BrokerDto?> UpdateBrokerAsync(int id, BrokerDto broker)
+    {
+        var resp = await _http.PutAsJsonAsync($"api/brokers/{id}", broker);
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<BrokerDto>();
+    }
+
+    public async Task DeleteBrokerAsync(int id)
+        => await _http.DeleteAsync($"api/brokers/{id}");
+
     // Sellers
     public async Task<List<SellerDto>> GetSellersAsync()
         => await _http.GetFromJsonAsync<List<SellerDto>>("api/sellers") ?? new();
+
+    public async Task<SellerDto?> CreateSellerAsync(SellerDto seller)
+    {
+        var resp = await _http.PostAsJsonAsync("api/sellers", seller);
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<SellerDto>();
+    }
+
+    public async Task<SellerDto?> UpdateSellerAsync(int id, SellerDto seller)
+    {
+        var resp = await _http.PutAsJsonAsync($"api/sellers/{id}", seller);
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<SellerDto>();
+    }
+
+    public async Task DeleteSellerAsync(int id)
+        => await _http.DeleteAsync($"api/sellers/{id}");
 
     public async Task<List<LotDto>> GetLotsBySellerAsync(int sellerId)
         => await _http.GetFromJsonAsync<List<LotDto>>($"api/sellers/{sellerId}/lots") ?? new();
 
     // Buyers
+    public async Task<List<BuyerDto>> GetAllBuyersAsync()
+        => await _http.GetFromJsonAsync<List<BuyerDto>>("api/buyers") ?? new();
+
     public async Task<List<BuyerDto>> GetBuyersByBrokerAsync(int brokerId)
         => await _http.GetFromJsonAsync<List<BuyerDto>>($"api/brokers/{brokerId}/buyers") ?? new();
+
+    public async Task<BuyerDto?> CreateBuyerAsync(int brokerId, BuyerDto buyer)
+    {
+        var resp = await _http.PostAsJsonAsync($"api/brokers/{brokerId}/buyers/add", buyer);
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<BuyerDto>();
+    }
+
+    public async Task<BuyerDto?> UpdateBuyerAsync(int id, BuyerDto buyer)
+    {
+        var resp = await _http.PutAsJsonAsync($"api/buyers/{id}", buyer);
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<BuyerDto>();
+    }
+
+    public async Task DeleteBuyerAsync(int id)
+        => await _http.DeleteAsync($"api/buyers/{id}");
 
     // Bids
     public async Task<BidDto?> PlaceBidAsync(int lotId, int brokerId, decimal amount)

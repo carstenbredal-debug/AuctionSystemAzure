@@ -1,0 +1,168 @@
+@page "/admin/buyers"
+@attribute [Authorize(Roles = "Admin")]
+@inject AuctionApiClient Api
+
+<PageTitle>Buyers - Admin</PageTitle>
+
+<h1>Buyers</h1>
+<p class="text-muted">Manage buyers (customers) and their broker associations.</p>
+
+@if (_loading)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    @if (!string.IsNullOrEmpty(_message))
+    {
+        <div class="alert @(_messageIsError ? "alert-danger" : "alert-success") alert-dismissible fade show">
+            @_message
+            <button type="button" class="btn-close" @onclick="() => _message = null"></button>
+        </div>
+    }
+
+    <div class="mb-3">
+        <button class="btn btn-primary" @onclick="ShowAddForm">Add Buyer</button>
+    </div>
+
+    @if (_showForm)
+    {
+        <div class="card mb-4 border-primary">
+            <div class="card-header bg-primary text-white">
+                <strong>@(_editing?.Id > 0 ? "Edit Buyer" : "Add New Buyer")</strong>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Buyer Number <span class="text-danger">*</span></label>
+                        <input class="form-control" @bind="_editing!.BuyerNumber" placeholder="C001" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Name <span class="text-danger">*</span></label>
+                        <input class="form-control" @bind="_editing!.Name" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Broker <span class="text-danger">*</span></label>
+                        <select class="form-select" @bind="_editing!.BrokerId">
+                            <option value="0">— Select Broker —</option>
+                            @foreach (var b in _brokers)
+                            {
+                                <option value="@b.Id">@b.CompanyName (@b.BrokerNumber)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Email</label>
+                        <input class="form-control" type="email" @bind="_editing!.ContactEmail" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Phone</label>
+                        <input class="form-control" @bind="_editing!.ContactPhone" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Address</label>
+                        <input class="form-control" @bind="_editing!.Address" />
+                    </div>
+                    <div class="col-12 mt-3">
+                        <button class="btn btn-success me-2" @onclick="Save">@(_editing?.Id > 0 ? "Update" : "Create")</button>
+                        <button class="btn btn-secondary" @onclick="Cancel">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <div class="card">
+        <div class="card-header">
+            <strong>Registered Buyers</strong> <span class="badge bg-secondary">@_items.Count</span>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-striped table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Number</th>
+                        <th>Name</th>
+                        <th>Broker</th>
+                        <th>Email</th>
+                        <th>Phone</th>
+                        <th style="width: 150px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_items.Count == 0)
+                    {
+                        <tr><td colspan="6" class="text-center text-muted py-4">No buyers registered.</td></tr>
+                    }
+                    @foreach (var item in _items)
+                    {
+                        <tr>
+                            <td><strong>@item.BuyerNumber</strong></td>
+                            <td>@item.Name</td>
+                            <td>@(_brokers.FirstOrDefault(b => b.Id == item.BrokerId)?.CompanyName ?? $"#{item.BrokerId}")</td>
+                            <td>@item.ContactEmail</td>
+                            <td>@item.ContactPhone</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => Edit(item)">Edit</button>
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => Delete(item)">Delete</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private List<BuyerDto> _items = new();
+    private List<BrokerDto> _brokers = new();
+    private BuyerDto? _editing;
+    private bool _loading = true;
+    private bool _showForm;
+    private string? _message;
+    private bool _messageIsError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _brokers = await Api.GetBrokersAsync();
+        _items = await Api.GetAllBuyersAsync();
+        _loading = false;
+    }
+
+    private void ShowAddForm() { _editing = new BuyerDto(); _showForm = true; _message = null; }
+    private void Cancel() { _editing = null; _showForm = false; }
+
+    private void Edit(BuyerDto item)
+    {
+        _editing = new BuyerDto
+        {
+            Id = item.Id, BuyerNumber = item.BuyerNumber, Name = item.Name,
+            ContactEmail = item.ContactEmail, ContactPhone = item.ContactPhone,
+            Address = item.Address, BrokerId = item.BrokerId
+        };
+        _showForm = true; _message = null;
+    }
+
+    private async Task Save()
+    {
+        if (_editing == null) return;
+        if (string.IsNullOrWhiteSpace(_editing.BuyerNumber) || string.IsNullOrWhiteSpace(_editing.Name) || _editing.BrokerId == 0)
+        { _message = "Buyer Number, Name, and Broker are required."; _messageIsError = true; return; }
+
+        if (_editing.Id > 0)
+            await Api.UpdateBuyerAsync(_editing.Id, _editing);
+        else
+            await Api.CreateBuyerAsync(_editing.BrokerId, _editing);
+
+        _message = $"Buyer '{_editing.Name}' saved."; _messageIsError = false;
+        _showForm = false; _editing = null;
+        _items = await Api.GetAllBuyersAsync();
+    }
+
+    private async Task Delete(BuyerDto item)
+    {
+        await Api.DeleteBuyerAsync(item.Id);
+        _message = $"Buyer '{item.Name}' deleted."; _messageIsError = false;
+        _items = await Api.GetAllBuyersAsync();
+    }
+}
