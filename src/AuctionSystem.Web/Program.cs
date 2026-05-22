@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using AuctionSystem.Web;
@@ -10,5 +11,8 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 var apiBase = builder.Configuration["ApiBaseUrl"] ?? builder.HostEnvironment.BaseAddress;
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(apiBase) });
 builder.Services.AddScoped<AuctionApiClient>();
+builder.Services.AddScoped<SwaAuthStateProvider>();
+builder.Services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredService<SwaAuthStateProvider>());
+builder.Services.AddAuthorizationCore();
 
 await builder.Build().RunAsync();

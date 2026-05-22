@@ -17,6 +17,7 @@ public class AuctionDbContext : DbContext
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<InvoiceLine> InvoiceLines => Set<InvoiceLine>();
     public DbSet<Settlement> Settlements => Set<Settlement>();
+    public DbSet<AppUser> AppUsers => Set<AppUser>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -113,6 +114,20 @@ public class AuctionDbContext : DbContext
             e.Property(s => s.Commission).HasColumnType("decimal(18,2)");
             e.Property(s => s.Fees).HasColumnType("decimal(18,2)");
             e.Property(s => s.NetAmount).HasColumnType("decimal(18,2)");
+        });
+
+        modelBuilder.Entity<AppUser>(e =>
+        {
+            e.HasKey(u => u.Id);
+            e.HasIndex(u => u.AzureAdObjectId).IsUnique();
+            e.HasIndex(u => u.Email);
+            e.Property(u => u.AzureAdObjectId).HasMaxLength(100).IsRequired();
+            e.Property(u => u.Email).HasMaxLength(200).IsRequired();
+            e.Property(u => u.DisplayName).HasMaxLength(200).IsRequired();
+            e.Property(u => u.Role).HasMaxLength(50).IsRequired();
+            e.HasOne(u => u.Broker).WithMany().HasForeignKey(u => u.BrokerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(u => u.Seller).WithMany().HasForeignKey(u => u.SellerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(u => u.Buyer).WithMany().HasForeignKey(u => u.BuyerId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

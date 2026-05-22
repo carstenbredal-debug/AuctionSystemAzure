@@ -1,0 +1,193 @@
+@page "/admin/users"
+@attribute [Authorize(Roles = "Admin")]
+@inject AuctionApiClient Api
+
+<PageTitle>User Management</PageTitle>
+
+<h1>User Management</h1>
+
+@if (_loading)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <div class="mb-3">
+        <button class="btn btn-primary" @onclick="ShowAddForm">Add User</button>
+    </div>
+
+    @if (_showForm)
+    {
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">@(_editingUser?.Id > 0 ? "Edit User" : "Add User")</h5>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Azure AD Object ID</label>
+                        <input class="form-control" @bind="_editingUser!.AzureAdObjectId" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Email</label>
+                        <input class="form-control" type="email" @bind="_editingUser!.Email" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Display Name</label>
+                        <input class="form-control" @bind="_editingUser!.DisplayName" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Role</label>
+                        <select class="form-select" @bind="_editingUser!.Role">
+                            <option value="">Select Role</option>
+                            <option value="Admin">Admin</option>
+                            <option value="Broker">Broker</option>
+                            <option value="Seller">Seller</option>
+                            <option value="Buyer">Buyer</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Linked Broker</label>
+                        <select class="form-select" @bind="_editingUser!.BrokerId">
+                            <option value="">None</option>
+                            @foreach (var b in _brokers)
+                            {
+                                <option value="@b.Id">@b.CompanyName</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Linked Seller</label>
+                        <select class="form-select" @bind="_editingUser!.SellerId">
+                            <option value="">None</option>
+                            @foreach (var s in _sellers)
+                            {
+                                <option value="@s.Id">@s.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <button class="btn btn-success me-2" @onclick="SaveUser">Save</button>
+                        <button class="btn btn-secondary" @onclick="CancelForm">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Display Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Linked Entity</th>
+                <th>Active</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var user in _users)
+            {
+                <tr>
+                    <td>@user.DisplayName</td>
+                    <td>@user.Email</td>
+                    <td><span class="badge bg-@GetRoleBadgeColor(user.Role)">@user.Role</span></td>
+                    <td>@GetLinkedEntity(user)</td>
+                    <td>@(user.IsActive ? "Yes" : "No")</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => EditUser(user)">Edit</button>
+                        <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteUser(user)">Delete</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<AppUserDto> _users = new();
+    private List<BrokerDto> _brokers = new();
+    private List<SellerDto> _sellers = new();
+    private AppUserDto? _editingUser;
+    private bool _loading = true;
+    private bool _showForm;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+        _loading = false;
+    }
+
+    private async Task LoadData()
+    {
+        _users = await Api.GetAllUsersAsync();
+        _brokers = await Api.GetBrokersAsync();
+        _sellers = await Api.GetSellersAsync();
+    }
+
+    private void ShowAddForm()
+    {
+        _editingUser = new AppUserDto();
+        _showForm = true;
+    }
+
+    private void EditUser(AppUserDto user)
+    {
+        _editingUser = new AppUserDto
+        {
+            Id = user.Id,
+            AzureAdObjectId = user.AzureAdObjectId,
+            Email = user.Email,
+            DisplayName = user.DisplayName,
+            Role = user.Role,
+            BrokerId = user.BrokerId,
+            SellerId = user.SellerId,
+            BuyerId = user.BuyerId,
+            IsActive = user.IsActive
+        };
+        _showForm = true;
+    }
+
+    private async Task SaveUser()
+    {
+        if (_editingUser == null) return;
+        if (_editingUser.Id > 0)
+            await Api.UpdateUserAsync(_editingUser.Id, _editingUser);
+        else
+            await Api.CreateUserAsync(_editingUser);
+        _showForm = false;
+        _editingUser = null;
+        await LoadData();
+    }
+
+    private void CancelForm()
+    {
+        _showForm = false;
+        _editingUser = null;
+    }
+
+    private async Task DeleteUser(AppUserDto user)
+    {
+        await Api.DeleteUserAsync(user.Id);
+        await LoadData();
+    }
+
+    private string GetRoleBadgeColor(string role) => role switch
+    {
+        "Admin" => "danger",
+        "Broker" => "primary",
+        "Seller" => "success",
+        "Buyer" => "info",
+        _ => "secondary"
+    };
+
+    private string GetLinkedEntity(AppUserDto user)
+    {
+        if (user.BrokerId.HasValue)
+            return _brokers.FirstOrDefault(b => b.Id == user.BrokerId.Value)?.CompanyName ?? $"Broker #{user.BrokerId}";
+        if (user.SellerId.HasValue)
+            return _sellers.FirstOrDefault(s => s.Id == user.SellerId.Value)?.Name ?? $"Seller #{user.SellerId}";
+        if (user.BuyerId.HasValue)
+            return $"Buyer #{user.BuyerId}";
+        return "-";
+    }
+}

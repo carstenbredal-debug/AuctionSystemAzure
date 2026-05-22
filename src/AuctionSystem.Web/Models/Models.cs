@@ -147,6 +147,19 @@ public class SettlementDto
     public SellerDto? Seller { get; set; }
 }
 
+public class AppUserDto
+{
+    public int Id { get; set; }
+    public string AzureAdObjectId { get; set; } = "";
+    public string Email { get; set; } = "";
+    public string DisplayName { get; set; } = "";
+    public string Role { get; set; } = "";
+    public int? BrokerId { get; set; }
+    public int? SellerId { get; set; }
+    public int? BuyerId { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+
 public class DashboardStats
 {
     public int TotalAuctions { get; set; }
