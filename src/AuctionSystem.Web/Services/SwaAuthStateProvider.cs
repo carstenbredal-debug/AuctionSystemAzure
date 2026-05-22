@@ -1,17 +1,18 @@
 using System.Net.Http.Json;
 using System.Security.Claims;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 
 namespace AuctionSystem.Web.Services;
 
 public class SwaAuthStateProvider : AuthenticationStateProvider
 {
-    private readonly HttpClient _http;
+    private readonly IHttpClientFactory _httpFactory;
     private readonly AuctionApiClient _apiClient;
 
-    public SwaAuthStateProvider(HttpClient http, AuctionApiClient apiClient)
+    public SwaAuthStateProvider(IHttpClientFactory httpFactory, AuctionApiClient apiClient)
     {
-        _http = http;
+        _httpFactory = httpFactory;
         _apiClient = apiClient;
     }
 
@@ -19,7 +20,8 @@ public class SwaAuthStateProvider : AuthenticationStateProvider
     {
         try
         {
-            var authData = await _http.GetFromJsonAsync<SwaAuthData>("/.auth/me");
+            var http = _httpFactory.CreateClient("SwaAuth");
+            var authData = await http.GetFromJsonAsync<SwaAuthData>("/.auth/me");
             var principal = authData?.ClientPrincipal;
 
             if (principal == null || string.IsNullOrEmpty(principal.UserId))
@@ -32,7 +34,6 @@ public class SwaAuthStateProvider : AuthenticationStateProvider
                 new("idp", principal.IdentityProvider ?? "aad")
             };
 
-            // Get the user's role from our backend
             var userInfo = await _apiClient.GetCurrentUserAsync(principal.UserId);
             if (userInfo != null)
             {

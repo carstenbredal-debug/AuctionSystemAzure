@@ -9,6 +9,9 @@ builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
 var apiBase = builder.Configuration["ApiBaseUrl"] ?? builder.HostEnvironment.BaseAddress;
+var swaBase = builder.HostEnvironment.BaseAddress;
+
+builder.Services.AddHttpClient("SwaAuth", client => client.BaseAddress = new Uri(swaBase));
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(apiBase) });
 builder.Services.AddScoped<AuctionApiClient>();
 builder.Services.AddScoped<SwaAuthStateProvider>();
