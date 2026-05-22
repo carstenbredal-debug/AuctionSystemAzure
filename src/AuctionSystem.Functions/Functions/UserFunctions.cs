@@ -84,6 +84,52 @@ public class UserFunctions
             IsActive = true
         };
 
+        // Auto-create the linked entity if not already specified
+        if (dto.Role == AppRole.Broker && dto.BrokerId == null)
+        {
+            var broker = new Broker
+            {
+                BrokerNumber = $"B{DateTime.UtcNow:yyyyMMddHHmmss}",
+                CompanyName = dto.DisplayName,
+                ContactPerson = dto.DisplayName,
+                ContactEmail = dto.Email,
+            };
+            _db.Brokers.Add(broker);
+            await _db.SaveChangesAsync();
+            user.BrokerId = broker.Id;
+        }
+        else if (dto.Role == AppRole.Seller && dto.SellerId == null)
+        {
+            var seller = new Seller
+            {
+                SellerNumber = $"S{DateTime.UtcNow:yyyyMMddHHmmss}",
+                Name = dto.DisplayName,
+                ContactEmail = dto.Email,
+            };
+            _db.Sellers.Add(seller);
+            await _db.SaveChangesAsync();
+            user.SellerId = seller.Id;
+        }
+        else if (dto.Role == AppRole.Buyer && dto.BuyerId == null)
+        {
+            if (dto.BrokerId == null)
+            {
+                var errorResp = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+                await errorResp.WriteStringAsync("Buyer role requires a linked Broker. Select a broker or create one first.");
+                return errorResp;
+            }
+            var buyer = new Buyer
+            {
+                BuyerNumber = $"C{DateTime.UtcNow:yyyyMMddHHmmss}",
+                Name = dto.DisplayName,
+                ContactEmail = dto.Email,
+                BrokerId = dto.BrokerId.Value,
+            };
+            _db.Buyers.Add(buyer);
+            await _db.SaveChangesAsync();
+            user.BuyerId = buyer.Id;
+        }
+
         _db.AppUsers.Add(user);
         await _db.SaveChangesAsync();
         return await CreateJsonResponse(req, user, System.Net.HttpStatusCode.Created);
