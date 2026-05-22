@@ -1,6 +1,5 @@
 @page "/"
-@rendermode InteractiveServer
-@inject AuctionDbContext Db
+@inject AuctionApiClient Api
 
 <PageTitle>Dashboard - Auction System</PageTitle>
 
@@ -18,8 +17,8 @@ else
             <div class="card text-bg-primary mb-3">
                 <div class="card-body">
                     <h5 class="card-title">Auctions</h5>
-                    <p class="card-text display-6">@totalAuctions</p>
-                    <small>@activeAuctions active</small>
+                    <p class="card-text display-6">@stats.TotalAuctions</p>
+                    <small>@stats.ActiveAuctions active</small>
                 </div>
             </div>
         </div>
@@ -27,8 +26,8 @@ else
             <div class="card text-bg-success mb-3">
                 <div class="card-body">
                     <h5 class="card-title">Lots</h5>
-                    <p class="card-text display-6">@totalLots</p>
-                    <small>@soldLots sold</small>
+                    <p class="card-text display-6">@stats.TotalLots</p>
+                    <small>@stats.SoldLots sold</small>
                 </div>
             </div>
         </div>
@@ -36,8 +35,8 @@ else
             <div class="card text-bg-info mb-3">
                 <div class="card-body">
                     <h5 class="card-title">Brokers</h5>
-                    <p class="card-text display-6">@totalBrokers</p>
-                    <small>@totalBuyers buyers</small>
+                    <p class="card-text display-6">@stats.TotalBrokers</p>
+                    <small>@stats.TotalBuyers buyers</small>
                 </div>
             </div>
         </div>
@@ -45,8 +44,8 @@ else
             <div class="card text-bg-warning mb-3">
                 <div class="card-body">
                     <h5 class="card-title">Sellers</h5>
-                    <p class="card-text display-6">@totalSellers</p>
-                    <small>@pendingSettlements pending settlements</small>
+                    <p class="card-text display-6">@stats.TotalSellers</p>
+                    <small>@stats.PendingSettlements pending settlements</small>
                 </div>
             </div>
         </div>
@@ -60,7 +59,7 @@ else
                     <table class="table table-sm">
                         <thead><tr><th>Number</th><th>Title</th><th>Date</th><th>Status</th></tr></thead>
                         <tbody>
-                            @foreach (var a in recentAuctions)
+                            @foreach (var a in stats.RecentAuctions)
                             {
                                 <tr>
                                     <td>@a.AuctionNumber</td>
@@ -78,8 +77,8 @@ else
             <div class="card">
                 <div class="card-header"><strong>Bid Activity</strong></div>
                 <div class="card-body">
-                    <p>Total bids: <strong>@totalBids</strong></p>
-                    <p>Pending invoices: <strong>@pendingInvoices</strong></p>
+                    <p>Total bids: <strong>@stats.TotalBids</strong></p>
+                    <p>Pending invoices: <strong>@stats.PendingInvoices</strong></p>
                 </div>
             </div>
         </div>
@@ -88,24 +87,11 @@ else
 
 @code {
     private bool loading = true;
-    private int totalAuctions, activeAuctions, totalLots, soldLots;
-    private int totalBrokers, totalBuyers, totalSellers;
-    private int totalBids, pendingInvoices, pendingSettlements;
-    private List<Auction> recentAuctions = new();
+    private DashboardStats stats = new();
 
     protected override async Task OnInitializedAsync()
     {
-        totalAuctions = await Db.Auctions.CountAsync();
-        activeAuctions = await Db.Auctions.CountAsync(a => a.Status == AuctionStatus.InProgress);
-        totalLots = await Db.Lots.CountAsync();
-        soldLots = await Db.Lots.CountAsync(l => l.Status == LotStatus.Sold);
-        totalBrokers = await Db.Brokers.CountAsync();
-        totalBuyers = await Db.Buyers.CountAsync();
-        totalSellers = await Db.Sellers.CountAsync();
-        totalBids = await Db.Bids.CountAsync();
-        pendingInvoices = await Db.Invoices.CountAsync(i => i.Status == InvoiceStatus.Issued);
-        pendingSettlements = await Db.Settlements.CountAsync(s => s.Status == SettlementStatus.Pending);
-        recentAuctions = await Db.Auctions.OrderByDescending(a => a.ScheduledDate).Take(5).ToListAsync();
+        stats = await Api.GetDashboardAsync();
         loading = false;
     }
 

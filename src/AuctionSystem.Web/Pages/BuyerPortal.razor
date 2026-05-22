@@ -1,7 +1,5 @@
 @page "/buyer"
-@rendermode InteractiveServer
-@inject AuctionDbContext Db
-@inject BidService BidSvc
+@inject AuctionApiClient Api
 
 <PageTitle>Buyer Portal - Auction System</PageTitle>
 
@@ -11,7 +9,7 @@
     <label class="form-label"><strong>Select Buyer</strong></label>
     <select class="form-select w-auto" @bind="selectedBuyerId" @bind:after="LoadBuyerData">
         <option value="0">Choose...</option>
-        @foreach (var b in buyers)
+        @foreach (var b in allBuyers)
         {
             <option value="@b.Id">@b.Name (@b.BuyerNumber)</option>
         }
@@ -28,14 +26,13 @@
     else
     {
         <table class="table table-striped">
-            <thead><tr><th>Lot</th><th>Auction</th><th>Broker</th><th>Qty</th><th>Price/Unit</th><th>Total</th><th>Status</th><th>Date</th></tr></thead>
+            <thead><tr><th>Lot</th><th>Broker</th><th>Qty</th><th>Price/Unit</th><th>Total</th><th>Status</th><th>Date</th></tr></thead>
             <tbody>
                 @foreach (var a in allocations)
                 {
                     <tr>
-                        <td>Lot #@a.Lot.LotNumber — @a.Lot.Description</td>
-                        <td>@a.Lot.Auction.Title</td>
-                        <td>@a.Broker.CompanyName</td>
+                        <td>@(a.Lot != null ? $"Lot #{a.Lot.LotNumber} — {a.Lot.Description}" : $"Lot {a.LotId}")</td>
+                        <td>@(a.Broker?.CompanyName ?? $"Broker {a.BrokerId}")</td>
                         <td>@a.Quantity</td>
                         <td>@a.PricePerUnit.ToString("N2")</td>
                         <td>@a.TotalPrice.ToString("N2")</td>
@@ -52,18 +49,23 @@
 }
 
 @code {
-    private List<Buyer> buyers = new();
+    private List<BuyerDto> allBuyers = new();
     private int selectedBuyerId;
-    private List<LotAllocation> allocations = new();
+    private List<LotAllocationDto> allocations = new();
 
     protected override async Task OnInitializedAsync()
     {
-        buyers = await Db.Buyers.Include(b => b.Broker).OrderBy(b => b.Name).ToListAsync();
+        var brokers = await Api.GetBrokersAsync();
+        foreach (var broker in brokers)
+        {
+            var buyers = await Api.GetBuyersByBrokerAsync(broker.Id);
+            allBuyers.AddRange(buyers);
+        }
     }
 
     private async Task LoadBuyerData()
     {
         if (selectedBuyerId <= 0) return;
-        allocations = await BidSvc.GetAllocationsByBuyerAsync(selectedBuyerId);
+        allocations = await Api.GetAllocationsByBuyerAsync(selectedBuyerId);
     }
 }

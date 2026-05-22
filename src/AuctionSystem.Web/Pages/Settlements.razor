@@ -1,7 +1,5 @@
 @page "/settlements"
-@rendermode InteractiveServer
-@inject AuctionDbContext Db
-@inject SettlementService SettlementSvc
+@inject AuctionApiClient Api
 
 <PageTitle>Settlements - Auction System</PageTitle>
 
@@ -23,8 +21,8 @@
             {
                 <tr>
                     <td>@inv.InvoiceNumber</td>
-                    <td>@inv.Broker.CompanyName</td>
-                    <td>@inv.Auction.Title</td>
+                    <td>@(inv.Broker?.CompanyName ?? "")</td>
+                    <td>@(inv.Auction?.Title ?? "")</td>
                     <td>@inv.SubTotal.ToString("N2")</td>
                     <td>@inv.Commission.ToString("N2")</td>
                     <td>@inv.Tax.ToString("N2")</td>
@@ -52,8 +50,8 @@
             {
                 <tr>
                     <td>@s.SettlementNumber</td>
-                    <td>@s.Seller.Name</td>
-                    <td>Lot #@s.Lot.LotNumber</td>
+                    <td>@(s.Seller?.Name ?? "")</td>
+                    <td>@(s.Lot != null ? $"Lot #{s.Lot.LotNumber}" : "")</td>
                     <td>@s.GrossAmount.ToString("N2")</td>
                     <td>@s.Commission.ToString("N2")</td>
                     <td>@s.Fees.ToString("N2")</td>
@@ -124,10 +122,10 @@
 
 @code {
     private string tab = "invoices";
-    private List<Invoice> invoices = new();
-    private List<Settlement> allSettlements = new();
-    private List<Auction> auctions = new();
-    private List<Broker> brokers = new();
+    private List<InvoiceDto> invoices = new();
+    private List<SettlementDto> allSettlements = new();
+    private List<AuctionDto> auctions = new();
+    private List<BrokerDto> brokers = new();
     private int genAuctionId, genBrokerId, genLotId;
     private string? genMessage;
 
@@ -135,18 +133,16 @@
 
     private async Task LoadAll()
     {
-        invoices = await Db.Invoices.Include(i => i.Broker).Include(i => i.Auction).Include(i => i.Lines)
-            .OrderByDescending(i => i.IssuedDate).ToListAsync();
-        allSettlements = await Db.Settlements.Include(s => s.Seller).Include(s => s.Lot)
-            .OrderByDescending(s => s.CreatedAt).ToListAsync();
-        auctions = await Db.Auctions.ToListAsync();
-        brokers = await Db.Brokers.ToListAsync();
+        invoices = await Api.GetAllInvoicesAsync();
+        allSettlements = await Api.GetAllSettlementsAsync();
+        auctions = await Api.GetAuctionsAsync();
+        brokers = await Api.GetBrokersAsync();
     }
 
     private async Task GenerateInvoice()
     {
         if (genAuctionId <= 0 || genBrokerId <= 0) return;
-        var inv = await SettlementSvc.GenerateInvoiceAsync(genAuctionId, genBrokerId);
+        var inv = await Api.GenerateInvoiceAsync(genAuctionId, genBrokerId);
         genMessage = inv != null ? $"Invoice {inv.InvoiceNumber} generated: {inv.TotalAmount:N2}" : "No won lots found";
         await LoadAll();
     }
@@ -154,20 +150,20 @@
     private async Task CreateSettlement()
     {
         if (genLotId <= 0) return;
-        var s = await SettlementSvc.CreateSettlementAsync(genLotId);
+        var s = await Api.CreateSettlementAsync(genLotId);
         genMessage = s != null ? $"Settlement {s.SettlementNumber} created: Net {s.NetAmount:N2}" : "Lot not eligible";
         await LoadAll();
     }
 
     private async Task MarkPaid(int id)
     {
-        await SettlementSvc.MarkInvoicePaidAsync(id);
+        await Api.MarkInvoicePaidAsync(id);
         await LoadAll();
     }
 
     private async Task MarkComplete(int id)
     {
-        await SettlementSvc.MarkSettlementCompletedAsync(id);
+        await Api.MarkSettlementCompleteAsync(id);
         await LoadAll();
     }
 

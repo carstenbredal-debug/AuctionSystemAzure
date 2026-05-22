@@ -1,8 +1,5 @@
 @page "/seller"
-@rendermode InteractiveServer
-@inject AuctionDbContext Db
-@inject AuctionService AuctionSvc
-@inject SettlementService SettlementSvc
+@inject AuctionApiClient Api
 
 <PageTitle>Seller Portal - Auction System</PageTitle>
 
@@ -37,7 +34,7 @@
                     <tr>
                         <td>@lot.LotNumber</td>
                         <td>@lot.Description</td>
-                        <td>@lot.Auction.Title</td>
+                        <td>@(lot.Auction?.Title ?? $"Auction {lot.AuctionId}")</td>
                         <td>@lot.Quantity</td>
                         <td>@lot.StartingPrice.ToString("N2")</td>
                         <td>@(lot.HammerPrice?.ToString("N2") ?? "-")</td>
@@ -64,7 +61,7 @@
                     {
                         <tr>
                             <td>@s.SettlementNumber</td>
-                            <td>Lot #@s.Lot.LotNumber — @s.Lot.Description</td>
+                            <td>@(s.Lot != null ? $"Lot #{s.Lot.LotNumber} — {s.Lot.Description}" : $"Lot {s.LotId}")</td>
                             <td>@s.GrossAmount.ToString("N2")</td>
                             <td>@s.Commission.ToString("N2")</td>
                             <td>@s.Fees.ToString("N2")</td>
@@ -82,22 +79,22 @@
 }
 
 @code {
-    private List<Seller> sellers = new();
+    private List<SellerDto> sellers = new();
     private int selectedSellerId;
     private string tab = "lots";
-    private List<Lot> lots = new();
-    private List<Settlement> settlements = new();
+    private List<LotDto> lots = new();
+    private List<SettlementDto> settlements = new();
 
     protected override async Task OnInitializedAsync()
     {
-        sellers = await Db.Sellers.OrderBy(s => s.Name).ToListAsync();
+        sellers = await Api.GetSellersAsync();
     }
 
     private async Task LoadSellerData()
     {
         if (selectedSellerId <= 0) return;
-        lots = await AuctionSvc.GetLotsBySellerAsync(selectedSellerId);
-        settlements = await SettlementSvc.GetSettlementsBySellerAsync(selectedSellerId);
+        lots = await Api.GetLotsBySellerAsync(selectedSellerId);
+        settlements = await Api.GetSettlementsBySellerAsync(selectedSellerId);
     }
 
     private string GetLotColor(LotStatus s) => s switch

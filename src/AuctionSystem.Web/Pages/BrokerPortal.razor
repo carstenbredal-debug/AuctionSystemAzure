@@ -1,7 +1,5 @@
 @page "/broker"
-@rendermode InteractiveServer
-@inject AuctionDbContext Db
-@inject BidService BidSvc
+@inject AuctionApiClient Api
 
 <PageTitle>Broker Portal - Auction System</PageTitle>
 
@@ -30,13 +28,12 @@
     {
         <h4>Bid History</h4>
         <table class="table table-sm">
-            <thead><tr><th>Lot</th><th>Auction</th><th>Amount</th><th>Status</th><th>Placed</th></tr></thead>
+            <thead><tr><th>Lot</th><th>Amount</th><th>Status</th><th>Placed</th></tr></thead>
             <tbody>
                 @foreach (var bid in bids)
                 {
                     <tr>
-                        <td>Lot #@bid.Lot.LotNumber — @bid.Lot.Description</td>
-                        <td>@bid.Lot.Auction.Title</td>
+                        <td>@(bid.Lot != null ? $"Lot #{bid.Lot.LotNumber} — {bid.Lot.Description}" : $"Lot {bid.LotId}")</td>
                         <td>@bid.Amount.ToString("N2")</td>
                         <td><span class="badge bg-@GetBidColor(bid.Status)">@bid.Status</span></td>
                         <td>@bid.PlacedAt.ToString("g")</td>
@@ -78,8 +75,8 @@
                 @foreach (var a in allocations)
                 {
                     <tr>
-                        <td>Lot #@a.Lot.LotNumber — @a.Lot.Description</td>
-                        <td>@a.Buyer.Name</td>
+                        <td>@(a.Lot != null ? $"Lot #{a.Lot.LotNumber} — {a.Lot.Description}" : $"Lot {a.LotId}")</td>
+                        <td>@(a.Buyer?.Name ?? $"Buyer {a.BuyerId}")</td>
                         <td>@a.Quantity</td>
                         <td>@a.PricePerUnit.ToString("N2")</td>
                         <td>@a.TotalPrice.ToString("N2")</td>
@@ -144,40 +141,40 @@
 }
 
 @code {
-    private List<Broker> brokers = new();
+    private List<BrokerDto> brokers = new();
     private int selectedBrokerId;
     private string tab = "bids";
 
-    private List<Bid> bids = new();
-    private List<LotAllocation> allocations = new();
-    private List<Buyer> buyers = new();
+    private List<BidDto> bids = new();
+    private List<LotAllocationDto> allocations = new();
+    private List<BuyerDto> buyers = new();
 
     private int bidLotId; private decimal bidAmount; private string? bidMessage;
     private int allocLotId, allocBuyerId, allocQty; private decimal allocPrice;
 
     protected override async Task OnInitializedAsync()
     {
-        brokers = await Db.Brokers.OrderBy(b => b.CompanyName).ToListAsync();
+        brokers = await Api.GetBrokersAsync();
     }
 
     private async Task LoadBrokerData()
     {
         if (selectedBrokerId <= 0) return;
-        bids = await BidSvc.GetBidsByBrokerAsync(selectedBrokerId);
-        allocations = await BidSvc.GetAllocationsByBrokerAsync(selectedBrokerId);
-        buyers = await Db.Buyers.Where(b => b.BrokerId == selectedBrokerId).ToListAsync();
+        bids = await Api.GetBidsByBrokerAsync(selectedBrokerId);
+        allocations = await Api.GetAllocationsByBrokerAsync(selectedBrokerId);
+        buyers = await Api.GetBuyersByBrokerAsync(selectedBrokerId);
     }
 
     private async Task PlaceBid()
     {
-        var bid = await BidSvc.PlaceBidAsync(bidLotId, selectedBrokerId, bidAmount);
+        var bid = await Api.PlaceBidAsync(bidLotId, selectedBrokerId, bidAmount);
         bidMessage = bid != null ? $"Bid placed: {bid.Amount:N2}" : "Failed — lot not active or auction not in progress";
         await LoadBrokerData();
     }
 
     private async Task AllocateLot()
     {
-        await BidSvc.AllocateLotAsync(allocLotId, selectedBrokerId, allocBuyerId, allocQty, allocPrice);
+        await Api.AllocateLotAsync(allocLotId, selectedBrokerId, allocBuyerId, allocQty, allocPrice);
         await LoadBrokerData();
     }
 

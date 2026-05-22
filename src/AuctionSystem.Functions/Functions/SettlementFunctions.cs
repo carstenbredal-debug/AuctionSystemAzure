@@ -1,7 +1,9 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using AuctionSystem.Domain.Data;
 using AuctionSystem.Domain.Entities;
 using AuctionSystem.Domain.Services;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Logging;
@@ -10,6 +12,7 @@ namespace AuctionSystem.Functions.Functions;
 
 public class SettlementFunctions
 {
+    private readonly AuctionDbContext _db;
     private readonly SettlementService _service;
     private readonly ILogger<SettlementFunctions> _logger;
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -19,8 +22,9 @@ public class SettlementFunctions
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public SettlementFunctions(SettlementService service, ILogger<SettlementFunctions> logger)
+    public SettlementFunctions(AuctionDbContext db, SettlementService service, ILogger<SettlementFunctions> logger)
     {
+        _db = db;
         _service = service;
         _logger = logger;
     }
@@ -79,6 +83,24 @@ public class SettlementFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements/seller/{sellerId:int}")] HttpRequestData req, int sellerId)
     {
         var settlements = await _service.GetSettlementsBySellerAsync(sellerId);
+        return await CreateJsonResponse(req, settlements);
+    }
+
+    [Function("GetAllInvoices")]
+    public async Task<HttpResponseData> GetAllInvoices(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements/invoices")] HttpRequestData req)
+    {
+        var invoices = await _db.Invoices.Include(i => i.Broker).Include(i => i.Auction).Include(i => i.Lines)
+            .OrderByDescending(i => i.IssuedDate).ToListAsync();
+        return await CreateJsonResponse(req, invoices);
+    }
+
+    [Function("GetAllSettlements")]
+    public async Task<HttpResponseData> GetAllSettlements(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements")] HttpRequestData req)
+    {
+        var settlements = await _db.Settlements.Include(s => s.Seller).Include(s => s.Lot)
+            .OrderByDescending(s => s.CreatedAt).ToListAsync();
         return await CreateJsonResponse(req, settlements);
     }
 

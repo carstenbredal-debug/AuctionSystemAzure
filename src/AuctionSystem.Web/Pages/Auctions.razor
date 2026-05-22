@@ -1,7 +1,7 @@
 @page "/auctions"
 @page "/auctions/{Id:int}"
-@rendermode InteractiveServer
-@inject AuctionService AuctionSvc
+@inject AuctionApiClient Api
+@inject NavigationManager Nav
 
 <PageTitle>Auctions - Auction System</PageTitle>
 
@@ -53,10 +53,10 @@
             </tbody>
         </table>
 
-        @if (showHammer)
+        @if (showHammer && hammerLot != null)
         {
             <div class="card mt-3 border-success">
-                <div class="card-header bg-success text-white">Record Hammer Price — Lot #@hammerLot!.LotNumber</div>
+                <div class="card-header bg-success text-white">Record Hammer Price — Lot #@hammerLot.LotNumber</div>
                 <div class="card-body">
                     <div class="row g-3">
                         <div class="col-md-4">
@@ -64,14 +64,8 @@
                             <input type="number" class="form-control" @bind="hammerPrice" step="0.01" />
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Winning Broker</label>
-                            <select class="form-select" @bind="winningBrokerId">
-                                <option value="0">Select broker...</option>
-                                @foreach (var bid in hammerLot.Bids.Select(b => b.Broker).Distinct())
-                                {
-                                    <option value="@bid.Id">@bid.CompanyName</option>
-                                }
-                            </select>
+                            <label class="form-label">Winning Broker ID</label>
+                            <input type="number" class="form-control" @bind="winningBrokerId" />
                         </div>
                         <div class="col-md-4 d-flex align-items-end">
                             <button class="btn btn-success me-2" @onclick="RecordHammer">Confirm</button>
@@ -103,42 +97,40 @@ else
     </table>
 }
 
-@inject NavigationManager Nav
-
 @code {
     [Parameter] public int? Id { get; set; }
 
-    private List<Auction> auctions = new();
-    private Auction? selectedAuction;
-    private List<Lot> lots = new();
+    private List<AuctionDto> auctions = new();
+    private AuctionDto? selectedAuction;
+    private List<LotDto> lots = new();
     private bool showHammer;
-    private Lot? hammerLot;
+    private LotDto? hammerLot;
     private decimal hammerPrice;
     private int winningBrokerId;
+
+    private void NavigateTo(int id) => Nav.NavigateTo($"/auctions/{id}");
 
     protected override async Task OnParametersSetAsync()
     {
         if (Id.HasValue)
         {
-            selectedAuction = await AuctionSvc.GetAuctionAsync(Id.Value);
-            lots = await AuctionSvc.GetLotsByAuctionAsync(Id.Value);
+            selectedAuction = await Api.GetAuctionAsync(Id.Value);
+            lots = await Api.GetLotsByAuctionAsync(Id.Value);
         }
         else
         {
-            auctions = await AuctionSvc.GetAllAuctionsAsync();
+            auctions = await Api.GetAuctionsAsync();
         }
     }
 
-    private void NavigateTo(int id) => Nav.NavigateTo($"/auctions/{id}");
-
     private async Task UpdateStatus(AuctionStatus status)
     {
-        await AuctionSvc.UpdateStatusAsync(Id!.Value, status);
-        selectedAuction = await AuctionSvc.GetAuctionAsync(Id.Value);
-        lots = await AuctionSvc.GetLotsByAuctionAsync(Id.Value);
+        await Api.UpdateAuctionStatusAsync(Id!.Value, status);
+        selectedAuction = await Api.GetAuctionAsync(Id.Value);
+        lots = await Api.GetLotsByAuctionAsync(Id.Value);
     }
 
-    private void ShowHammerDialog(Lot lot)
+    private void ShowHammerDialog(LotDto lot)
     {
         hammerLot = lot;
         hammerPrice = lot.StartingPrice;
@@ -150,8 +142,8 @@ else
     {
         if (hammerLot != null && winningBrokerId > 0)
         {
-            await AuctionSvc.RecordHammerPriceAsync(hammerLot.Id, hammerPrice, winningBrokerId);
-            lots = await AuctionSvc.GetLotsByAuctionAsync(Id!.Value);
+            await Api.RecordHammerPriceAsync(hammerLot.Id, hammerPrice, winningBrokerId);
+            lots = await Api.GetLotsByAuctionAsync(Id!.Value);
             showHammer = false;
         }
     }

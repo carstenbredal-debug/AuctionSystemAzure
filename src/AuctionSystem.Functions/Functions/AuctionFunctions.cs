@@ -117,6 +117,7 @@ public class AuctionFunctions
     public async Task<HttpResponseData> GetStats(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "dashboard")] HttpRequestData req)
     {
+        var recentAuctions = await _db.Auctions.OrderByDescending(a => a.ScheduledDate).Take(5).ToListAsync();
         var stats = new
         {
             totalAuctions = await _db.Auctions.CountAsync(),
@@ -128,7 +129,8 @@ public class AuctionFunctions
             totalBuyers = await _db.Buyers.CountAsync(),
             totalBids = await _db.Bids.CountAsync(),
             pendingInvoices = await _db.Invoices.CountAsync(i => i.Status == InvoiceStatus.Issued),
-            pendingSettlements = await _db.Settlements.CountAsync(s => s.Status == SettlementStatus.Pending)
+            pendingSettlements = await _db.Settlements.CountAsync(s => s.Status == SettlementStatus.Pending),
+            recentAuctions
         };
         return await CreateJsonResponse(req, stats);
     }

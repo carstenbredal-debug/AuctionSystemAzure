@@ -54,9 +54,17 @@ public class BrokerFunctions
         return await CreateJsonResponse(req, broker, System.Net.HttpStatusCode.Created);
     }
 
+    [Function("GetBuyersByBroker")]
+    public async Task<HttpResponseData> GetBuyers(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "brokers/{brokerId:int}/buyers")] HttpRequestData req, int brokerId)
+    {
+        var buyers = await _db.Buyers.Where(b => b.BrokerId == brokerId).ToListAsync();
+        return await CreateJsonResponse(req, buyers);
+    }
+
     [Function("AddBuyerToBroker")]
     public async Task<HttpResponseData> AddBuyer(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "brokers/{brokerId:int}/buyers")] HttpRequestData req, int brokerId)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "brokers/{brokerId:int}/buyers/add")] HttpRequestData req, int brokerId)
     {
         var buyer = await req.ReadFromJsonAsync<Buyer>();
         if (buyer == null) return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);

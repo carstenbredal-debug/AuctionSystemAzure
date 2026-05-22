@@ -1,44 +1,14 @@
-using AuctionSystem.Domain.Data;
-using AuctionSystem.Domain.Services;
-using AuctionSystem.Web.Components;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Components.Web;
+using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
+using AuctionSystem.Web;
+using AuctionSystem.Web.Services;
 
-var builder = WebApplication.CreateBuilder(args);
+var builder = WebAssemblyHostBuilder.CreateDefault(args);
+builder.RootComponents.Add<App>("#app");
+builder.RootComponents.Add<HeadOutlet>("head::after");
 
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? builder.Configuration["SqlConnectionString"]
-    ?? throw new InvalidOperationException("Connection string not configured");
+var apiBase = builder.Configuration["ApiBaseUrl"] ?? builder.HostEnvironment.BaseAddress;
+builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(apiBase) });
+builder.Services.AddScoped<AuctionApiClient>();
 
-builder.Services.AddDbContext<AuctionDbContext>(options =>
-    options.UseSqlServer(connectionString));
-
-builder.Services.AddScoped<AuctionService>();
-builder.Services.AddScoped<BidService>();
-builder.Services.AddScoped<SettlementService>();
-
-builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents();
-
-var app = builder.Build();
-
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<AuctionDbContext>();
-    db.Database.Migrate();
-    SeedData.Initialize(db);
-}
-
-if (!app.Environment.IsDevelopment())
-{
-    app.UseExceptionHandler("/Error", createScopeForErrors: true);
-    app.UseHsts();
-}
-
-app.UseHttpsRedirection();
-app.UseStaticFiles();
-app.UseAntiforgery();
-
-app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
-
-app.Run();
+await builder.Build().RunAsync();

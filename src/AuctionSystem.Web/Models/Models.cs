@@ -1,0 +1,163 @@
+namespace AuctionSystem.Web.Models;
+
+public enum AuctionStatus { Draft, Scheduled, InProgress, Completed, Cancelled }
+public enum LotStatus { Pending, Active, Sold, Unsold, Withdrawn }
+public enum BidStatus { Active, Outbid, Winning, Won, Cancelled }
+public enum AllocationStatus { Pending, Allocated, Delivered, Cancelled }
+public enum InvoiceStatus { Draft, Issued, Sent, Paid, Overdue, Cancelled }
+public enum SettlementStatus { Pending, InvoiceGenerated, PaymentReceived, SettledWithSeller, Completed, Disputed }
+
+public class AuctionDto
+{
+    public int Id { get; set; }
+    public string AuctionNumber { get; set; } = "";
+    public string Title { get; set; } = "";
+    public string? Description { get; set; }
+    public string Location { get; set; } = "";
+    public DateTime ScheduledDate { get; set; }
+    public DateTime? StartedAt { get; set; }
+    public DateTime? CompletedAt { get; set; }
+    public AuctionStatus Status { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public List<LotDto> Lots { get; set; } = new();
+}
+
+public class LotDto
+{
+    public int Id { get; set; }
+    public string LotNumber { get; set; } = "";
+    public string Description { get; set; } = "";
+    public string Category { get; set; } = "";
+    public int Quantity { get; set; }
+    public string Unit { get; set; } = "";
+    public decimal StartingPrice { get; set; }
+    public decimal? HammerPrice { get; set; }
+    public LotStatus Status { get; set; }
+    public int AuctionId { get; set; }
+    public AuctionDto? Auction { get; set; }
+    public int SellerId { get; set; }
+    public SellerDto? Seller { get; set; }
+    public List<BidDto> Bids { get; set; } = new();
+}
+
+public class SellerDto
+{
+    public int Id { get; set; }
+    public string SellerNumber { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string ContactEmail { get; set; } = "";
+    public string ContactPhone { get; set; } = "";
+    public string Address { get; set; } = "";
+}
+
+public class BrokerDto
+{
+    public int Id { get; set; }
+    public string BrokerNumber { get; set; } = "";
+    public string CompanyName { get; set; } = "";
+    public string ContactPerson { get; set; } = "";
+    public string ContactEmail { get; set; } = "";
+    public string ContactPhone { get; set; } = "";
+    public string Address { get; set; } = "";
+}
+
+public class BuyerDto
+{
+    public int Id { get; set; }
+    public string BuyerNumber { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string ContactEmail { get; set; } = "";
+    public string ContactPhone { get; set; } = "";
+    public string Address { get; set; } = "";
+    public int BrokerId { get; set; }
+    public BrokerDto? Broker { get; set; }
+}
+
+public class BidDto
+{
+    public int Id { get; set; }
+    public decimal Amount { get; set; }
+    public BidStatus Status { get; set; }
+    public DateTime PlacedAt { get; set; }
+    public int LotId { get; set; }
+    public LotDto? Lot { get; set; }
+    public int BrokerId { get; set; }
+    public BrokerDto? Broker { get; set; }
+}
+
+public class LotAllocationDto
+{
+    public int Id { get; set; }
+    public int Quantity { get; set; }
+    public decimal PricePerUnit { get; set; }
+    public decimal TotalPrice { get; set; }
+    public AllocationStatus Status { get; set; }
+    public DateTime AllocatedAt { get; set; }
+    public int LotId { get; set; }
+    public LotDto? Lot { get; set; }
+    public int BrokerId { get; set; }
+    public BrokerDto? Broker { get; set; }
+    public int BuyerId { get; set; }
+    public BuyerDto? Buyer { get; set; }
+}
+
+public class InvoiceDto
+{
+    public int Id { get; set; }
+    public string InvoiceNumber { get; set; } = "";
+    public decimal SubTotal { get; set; }
+    public decimal Commission { get; set; }
+    public decimal Tax { get; set; }
+    public decimal TotalAmount { get; set; }
+    public InvoiceStatus Status { get; set; }
+    public DateTime IssuedDate { get; set; }
+    public DateTime DueDate { get; set; }
+    public DateTime? PaidDate { get; set; }
+    public int BrokerId { get; set; }
+    public BrokerDto? Broker { get; set; }
+    public int AuctionId { get; set; }
+    public AuctionDto? Auction { get; set; }
+    public List<InvoiceLineDto> Lines { get; set; } = new();
+}
+
+public class InvoiceLineDto
+{
+    public int Id { get; set; }
+    public int Quantity { get; set; }
+    public decimal UnitPrice { get; set; }
+    public decimal LineTotal { get; set; }
+    public int InvoiceId { get; set; }
+    public int LotId { get; set; }
+    public LotDto? Lot { get; set; }
+}
+
+public class SettlementDto
+{
+    public int Id { get; set; }
+    public string SettlementNumber { get; set; } = "";
+    public decimal GrossAmount { get; set; }
+    public decimal Commission { get; set; }
+    public decimal Fees { get; set; }
+    public decimal NetAmount { get; set; }
+    public SettlementStatus Status { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public int LotId { get; set; }
+    public LotDto? Lot { get; set; }
+    public int SellerId { get; set; }
+    public SellerDto? Seller { get; set; }
+}
+
+public class DashboardStats
+{
+    public int TotalAuctions { get; set; }
+    public int ActiveAuctions { get; set; }
+    public int TotalLots { get; set; }
+    public int SoldLots { get; set; }
+    public int TotalBrokers { get; set; }
+    public int TotalBuyers { get; set; }
+    public int TotalSellers { get; set; }
+    public int TotalBids { get; set; }
+    public int PendingInvoices { get; set; }
+    public int PendingSettlements { get; set; }
+    public List<AuctionDto> RecentAuctions { get; set; } = new();
+}
