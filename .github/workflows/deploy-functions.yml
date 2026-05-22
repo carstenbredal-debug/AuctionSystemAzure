@@ -1,0 +1,48 @@
+name: Deploy Azure Functions
+
+on:
+  push:
+    branches:
+      - base-init
+    paths:
+      - 'src/AuctionSystem.Functions/**'
+      - 'src/AuctionSystem.Domain/**'
+  pull_request:
+    branches:
+      - base-init
+    paths:
+      - 'src/AuctionSystem.Functions/**'
+      - 'src/AuctionSystem.Domain/**'
+  workflow_dispatch:
+
+env:
+  AZURE_FUNCTIONAPP_NAME: 'Auctionsystemazure'
+  DOTNET_VERSION: '8.0.x'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore src/AuctionSystem.Functions
+
+      - name: Build
+        run: dotnet build src/AuctionSystem.Functions --configuration Release --no-restore
+
+      - name: Publish
+        run: dotnet publish src/AuctionSystem.Functions --configuration Release --output ./publish
+
+      - name: Deploy to Azure Functions
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        uses: Azure/functions-action@v1
+        with:
+          app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
+          package: ./publish
+          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
