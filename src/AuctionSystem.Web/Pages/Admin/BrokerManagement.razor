@@ -21,15 +21,13 @@ else
         </div>
     }
 
-    <div class="mb-3">
-        <button class="btn btn-primary" @onclick="ShowAddForm">Add Broker</button>
-    </div>
+    <p class="small text-muted mb-3">To add a new broker, go to <a href="admin/users">Users & Roles</a> and create a user with the Broker role.</p>
 
     @if (_showForm)
     {
         <div class="card mb-4 border-primary">
             <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                <strong>@(_editing?.Id > 0 ? "Edit Broker" : "Add Broker")</strong>
+                <strong>Edit Broker</strong>
                 <button type="button" class="btn-close btn-close-white" @onclick="Cancel"></button>
             </div>
             <div class="card-body">
@@ -259,7 +257,7 @@ else
         _loading = false;
     }
 
-    private void ShowAddForm() { _editing = new BrokerDto { IsActive = true }; _showForm = true; _message = null; }
+    private void ShowAddForm() { _editing = new BrokerDto { IsActive = true }; _showForm = true; _message = null; } // kept for future use
     private void Cancel() { _editing = null; _showForm = false; }
 
     private void Edit(BrokerDto item)
