@@ -30,8 +30,9 @@ else
     @if (_showForm)
     {
         <div class="card mb-4 border-primary">
-            <div class="card-header bg-primary text-white">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                 <strong>@(_editingUser?.Id > 0 ? "Edit User" : "Add New User")</strong>
+                <button type="button" class="btn-close btn-close-white" @onclick="CancelForm"></button>
             </div>
             <div class="card-body">
                 <div class="row g-3">
@@ -55,7 +56,7 @@ else
                     </div>
                     <div class="col-md-6">
                         <label class="form-label">Role <span class="text-danger">*</span></label>
-                        <select class="form-select" @bind="_editingUser!.Role">
+                        <select class="form-select" @bind="SelectedRole">
                             <option value="">— Select Role —</option>
                             <option value="Admin">Admin — Full system access</option>
                             <option value="Broker">Broker — Bidding, allocations, customers</option>
@@ -63,45 +64,226 @@ else
                             <option value="Buyer">Buyer — Purchase history, allocations</option>
                         </select>
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Linked Broker</label>
-                        <select class="form-select" @bind="_editingUser!.BrokerId">
-                            <option value="">— None —</option>
-                            @foreach (var b in _brokers)
-                            {
-                                <option value="@b.Id">@b.CompanyName (@b.BrokerNumber)</option>
-                            }
-                        </select>
-                        <small class="form-text text-muted">Required for Broker role</small>
+                </div>
+
+                @if (_editingUser?.Role == "Broker")
+                {
+                    <hr class="my-4" />
+                    <h5 class="mb-3">Broker Details</h5>
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <label class="form-label">Broker Name <span class="text-danger">*</span></label>
+                            <input class="form-control" @bind="_brokerForm.CompanyName" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Broker Name 2</label>
+                            <input class="form-control" @bind="_brokerForm.CompanyName2" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Broker Number <span class="text-danger">*</span></label>
+                            <input class="form-control" @bind="_brokerForm.BrokerNumber" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">ERP Account Number <span class="text-danger">*</span></label>
+                            <input class="form-control" @bind="_brokerForm.ErpAccountNumber" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Search Name</label>
+                            <input class="form-control" @bind="_brokerForm.SearchName" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Contact Name</label>
+                            <input class="form-control" @bind="_brokerForm.ContactPerson" />
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label">Address Line 1</label>
+                            <input class="form-control" @bind="_brokerForm.AddressLine1" />
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label">Address Line 2</label>
+                            <input class="form-control" @bind="_brokerForm.AddressLine2" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Country <span class="text-danger">*</span></label>
+                            <select class="form-select" @bind="_brokerForm.Country">
+                                <option value="">Select Country...</option>
+                                <option value="DK">Denmark</option>
+                                <option value="SE">Sweden</option>
+                                <option value="NO">Norway</option>
+                                <option value="FI">Finland</option>
+                                <option value="DE">Germany</option>
+                                <option value="GB">United Kingdom</option>
+                                <option value="NL">Netherlands</option>
+                                <option value="US">United States</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Postal Code <span class="text-danger">*</span></label>
+                            <input class="form-control" @bind="_brokerForm.PostalCode" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">City <span class="text-danger">*</span></label>
+                            <input class="form-control" @bind="_brokerForm.City" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Phone No</label>
+                            <input class="form-control" @bind="_brokerForm.ContactPhone" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Mobile Phone No</label>
+                            <input class="form-control" @bind="_brokerForm.MobilePhone" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Email</label>
+                            <input class="form-control" type="email" @bind="_brokerForm.ContactEmail" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Home Page</label>
+                            <input class="form-control" @bind="_brokerForm.HomePage" placeholder="https://" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">VAT Registration No</label>
+                            <input class="form-control" @bind="_brokerForm.VatRegistrationNo" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Registration No</label>
+                            <input class="form-control" @bind="_brokerForm.RegistrationNo" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Customer Group <span class="text-danger">*</span></label>
+                            <select class="form-select" @bind="_brokerForm.CustomerGroup">
+                                <option value="">Select Customer Group</option>
+                                <option value="Domestic">Domestic</option>
+                                <option value="EU">EU</option>
+                                <option value="International">International</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Sales Person</label>
+                            <select class="form-select" @bind="_brokerForm.SalesPerson">
+                                <option value="">Select Sales Person</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Payment Term</label>
+                            <select class="form-select" @bind="_brokerForm.PaymentTerm">
+                                <option value="">Select Payment Term</option>
+                                <option value="Net7">Net 7</option>
+                                <option value="Net14">Net 14</option>
+                                <option value="Net30">Net 30</option>
+                                <option value="Prepaid">Prepaid</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Payment Method</label>
+                            <select class="form-select" @bind="_brokerForm.PaymentMethod">
+                                <option value="">Select Payment Method</option>
+                                <option value="BankTransfer">Bank Transfer</option>
+                                <option value="Invoice">Invoice</option>
+                                <option value="CreditCard">Credit Card</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Currency</label>
+                            <select class="form-select" @bind="_brokerForm.Currency">
+                                <option value="">Select Currency</option>
+                                <option value="DKK">DKK</option>
+                                <option value="SEK">SEK</option>
+                                <option value="NOK">NOK</option>
+                                <option value="EUR">EUR</option>
+                                <option value="GBP">GBP</option>
+                                <option value="USD">USD</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Language</label>
+                            <select class="form-select" @bind="_brokerForm.Language">
+                                <option value="">Select Language</option>
+                                <option value="DA">Danish</option>
+                                <option value="SV">Swedish</option>
+                                <option value="NO">Norwegian</option>
+                                <option value="EN">English</option>
+                                <option value="DE">German</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" @bind="_brokerForm.IsActive" />
+                                <label class="form-check-label">Is Active</label>
+                            </div>
+                        </div>
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Linked Seller</label>
-                        <select class="form-select" @bind="_editingUser!.SellerId">
-                            <option value="">— None —</option>
-                            @foreach (var s in _sellers)
-                            {
-                                <option value="@s.Id">@s.Name (@s.SellerNumber)</option>
-                            }
-                        </select>
-                        <small class="form-text text-muted">Required for Seller role</small>
+                }
+                else if (_editingUser?.Role == "Seller")
+                {
+                    <hr class="my-4" />
+                    <h5 class="mb-3">Seller Details</h5>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Seller Number <span class="text-danger">*</span></label>
+                            <input class="form-control" @bind="_sellerForm.SellerNumber" placeholder="S001" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Name <span class="text-danger">*</span></label>
+                            <input class="form-control" @bind="_sellerForm.Name" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Email</label>
+                            <input class="form-control" type="email" @bind="_sellerForm.ContactEmail" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Phone</label>
+                            <input class="form-control" @bind="_sellerForm.ContactPhone" />
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label">Address</label>
+                            <input class="form-control" @bind="_sellerForm.Address" />
+                        </div>
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Linked Buyer</label>
-                        <select class="form-select" @bind="_editingUser!.BuyerId">
-                            <option value="">— None —</option>
-                            @foreach (var buyer in _buyers)
-                            {
-                                <option value="@buyer.Id">@buyer.Name (@buyer.BuyerNumber)</option>
-                            }
-                        </select>
-                        <small class="form-text text-muted">Required for Buyer role</small>
+                }
+                else if (_editingUser?.Role == "Buyer")
+                {
+                    <hr class="my-4" />
+                    <h5 class="mb-3">Buyer Details</h5>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Buyer Number <span class="text-danger">*</span></label>
+                            <input class="form-control" @bind="_buyerForm.BuyerNumber" placeholder="C001" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Name <span class="text-danger">*</span></label>
+                            <input class="form-control" @bind="_buyerForm.Name" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Broker <span class="text-danger">*</span></label>
+                            <select class="form-select" @bind="_buyerForm.BrokerId">
+                                <option value="0">— Select Broker —</option>
+                                @foreach (var b in _brokers)
+                                {
+                                    <option value="@b.Id">@b.CompanyName (@b.BrokerNumber)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Email</label>
+                            <input class="form-control" type="email" @bind="_buyerForm.ContactEmail" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Phone</label>
+                            <input class="form-control" @bind="_buyerForm.ContactPhone" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Address</label>
+                            <input class="form-control" @bind="_buyerForm.Address" />
+                        </div>
                     </div>
-                    <div class="col-12 mt-3">
-                        <button class="btn btn-success me-2" @onclick="SaveUser">
-                            @(_editingUser?.Id > 0 ? "Update User" : "Create User")
-                        </button>
-                        <button class="btn btn-secondary" @onclick="CancelForm">Cancel</button>
-                    </div>
+                }
+
+                <div class="mt-4 text-end">
+                    <button class="btn btn-primary me-2" @onclick="SaveUser">
+                        @(_editingUser?.Id > 0 ? "Update User" : "Create User")
+                    </button>
+                    <button class="btn btn-outline-secondary" @onclick="CancelForm">Cancel</button>
                 </div>
             </div>
         </div>
@@ -137,13 +319,9 @@ else
                             <td>@GetLinkedEntity(user)</td>
                             <td>
                                 @if (user.IsActive)
-                                {
-                                    <span class="badge bg-success">Active</span>
-                                }
+                                { <span class="badge bg-success">Active</span> }
                                 else
-                                {
-                                    <span class="badge bg-secondary">Inactive</span>
-                                }
+                                { <span class="badge bg-secondary">Inactive</span> }
                             </td>
                             <td>
                                 <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => EditUser(user)">Edit</button>
@@ -163,10 +341,43 @@ else
     private List<SellerDto> _sellers = new();
     private List<BuyerDto> _buyers = new();
     private AppUserDto? _editingUser;
+    private BrokerDto _brokerForm = new() { IsActive = true };
+    private SellerDto _sellerForm = new();
+    private BuyerDto _buyerForm = new();
     private bool _loading = true;
     private bool _showForm;
     private string? _message;
     private bool _messageIsError;
+
+    private string SelectedRole
+    {
+        get => _editingUser?.Role ?? "";
+        set
+        {
+            if (_editingUser == null) return;
+            _editingUser.Role = value;
+            _editingUser.BrokerId = null;
+            _editingUser.SellerId = null;
+            _editingUser.BuyerId = null;
+            _brokerForm = new BrokerDto
+            {
+                IsActive = true,
+                ContactEmail = _editingUser.Email,
+                ContactPerson = _editingUser.DisplayName,
+                CompanyName = _editingUser.DisplayName
+            };
+            _sellerForm = new SellerDto
+            {
+                ContactEmail = _editingUser.Email,
+                Name = _editingUser.DisplayName
+            };
+            _buyerForm = new BuyerDto
+            {
+                ContactEmail = _editingUser.Email,
+                Name = _editingUser.DisplayName
+            };
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -185,6 +396,9 @@ else
     private void ShowAddForm()
     {
         _editingUser = new AppUserDto { IsActive = true };
+        _brokerForm = new BrokerDto { IsActive = true };
+        _sellerForm = new SellerDto();
+        _buyerForm = new BuyerDto();
         _showForm = true;
         _message = null;
     }
@@ -203,6 +417,9 @@ else
             BuyerId = user.BuyerId,
             IsActive = user.IsActive
         };
+        _brokerForm = new BrokerDto { IsActive = true };
+        _sellerForm = new SellerDto();
+        _buyerForm = new BuyerDto();
         _showForm = true;
         _message = null;
     }
@@ -219,6 +436,62 @@ else
             _message = "Please fill in all required fields (Azure AD Object ID, Email, Display Name, Role).";
             _messageIsError = true;
             return;
+        }
+
+        // For new users, create the linked entity first
+        if (_editingUser.Id == 0)
+        {
+            if (_editingUser.Role == "Broker")
+            {
+                if (string.IsNullOrWhiteSpace(_brokerForm.CompanyName) || string.IsNullOrWhiteSpace(_brokerForm.BrokerNumber) || string.IsNullOrWhiteSpace(_brokerForm.ErpAccountNumber))
+                {
+                    _message = "Broker Name, Broker Number, and ERP Account Number are required.";
+                    _messageIsError = true;
+                    return;
+                }
+                var broker = await Api.CreateBrokerAsync(_brokerForm);
+                if (broker == null)
+                {
+                    _message = "Failed to create broker.";
+                    _messageIsError = true;
+                    return;
+                }
+                _editingUser.BrokerId = broker.Id;
+            }
+            else if (_editingUser.Role == "Seller")
+            {
+                if (string.IsNullOrWhiteSpace(_sellerForm.SellerNumber) || string.IsNullOrWhiteSpace(_sellerForm.Name))
+                {
+                    _message = "Seller Number and Name are required.";
+                    _messageIsError = true;
+                    return;
+                }
+                var seller = await Api.CreateSellerAsync(_sellerForm);
+                if (seller == null)
+                {
+                    _message = "Failed to create seller.";
+                    _messageIsError = true;
+                    return;
+                }
+                _editingUser.SellerId = seller.Id;
+            }
+            else if (_editingUser.Role == "Buyer")
+            {
+                if (string.IsNullOrWhiteSpace(_buyerForm.BuyerNumber) || string.IsNullOrWhiteSpace(_buyerForm.Name) || _buyerForm.BrokerId == 0)
+                {
+                    _message = "Buyer Number, Name, and Broker are required.";
+                    _messageIsError = true;
+                    return;
+                }
+                var buyer = await Api.CreateBuyerAsync(_buyerForm.BrokerId, _buyerForm);
+                if (buyer == null)
+                {
+                    _message = "Failed to create buyer.";
+                    _messageIsError = true;
+                    return;
+                }
+                _editingUser.BuyerId = buyer.Id;
+            }
         }
 
         if (_editingUser.Id > 0)
