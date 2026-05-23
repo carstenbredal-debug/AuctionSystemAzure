@@ -1,0 +1,27 @@
+@page "/login"
+@using Microsoft.AspNetCore.Authorization
+@attribute [AllowAnonymous]
+@inject NavigationManager Navigation
+
+<PageTitle>Login - Auction System</PageTitle>
+
+<div class="d-flex justify-content-center align-items-center" style="min-height: 60vh;">
+    <div class="card shadow" style="max-width: 480px; width: 100%;">
+        <div class="card-header bg-primary text-white text-center py-3">
+            <h4 class="mb-0">Auction System</h4>
+            <small>Choose how to sign in</small>
+        </div>
+        <div class="card-body p-4">
+            <div class="d-grid gap-3">
+                <a class="btn btn-outline-primary btn-lg" href="/.auth/login/aad?post_login_redirect_uri=/">
+                    <i class="bi bi-shield-lock"></i> Admin Login
+                    <br /><small class="text-muted">Internal Azure AD (Infra Tech)</small>
+                </a>
+                <a class="btn btn-primary btn-lg" href="/.auth/login/externalid?post_login_redirect_uri=/">
+                    <i class="bi bi-person-badge"></i> Broker / Seller / Buyer Login
+                    <br /><small class="text-white-50">External ID (Partners & Customers)</small>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>

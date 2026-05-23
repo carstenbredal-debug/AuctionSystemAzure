@@ -34,7 +34,12 @@ public class SwaAuthStateProvider : AuthenticationStateProvider
                 new("idp", principal.IdentityProvider ?? "aad")
             };
 
-            var userInfo = await _apiClient.GetCurrentUserAsync(principal.UserId);
+            // Extract object ID from claims (works for both AAD and External ID)
+            var objectId = principal.Claims?
+                .FirstOrDefault(c => c.Typ == "http://schemas.microsoft.com/identity/claims/objectidentifier")?.Val
+                ?? principal.UserId;
+
+            var userInfo = await _apiClient.GetCurrentUserAsync(objectId);
             if (userInfo != null)
             {
                 claims.Add(new Claim(ClaimTypes.Role, userInfo.Role));
