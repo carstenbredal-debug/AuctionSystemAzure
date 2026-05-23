@@ -21,15 +21,13 @@ else
         </div>
     }
 
-    <div class="mb-3">
-        <button class="btn btn-primary" @onclick="ShowAddForm">Add Buyer</button>
-    </div>
+    <p class="small text-muted mb-3">To add a new buyer, go to <a href="admin/users">Users & Roles</a> and create a user with the Buyer role.</p>
 
     @if (_showForm)
     {
         <div class="card mb-4 border-primary">
             <div class="card-header bg-primary text-white">
-                <strong>@(_editing?.Id > 0 ? "Edit Buyer" : "Add New Buyer")</strong>
+                <strong>Edit Buyer</strong>
             </div>
             <div class="card-body">
                 <div class="row g-3">
