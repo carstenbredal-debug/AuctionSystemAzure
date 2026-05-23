@@ -7,6 +7,24 @@
           "clientIdSettingName": "AAD_CLIENT_ID",
           "clientSecretSettingName": "AAD_CLIENT_SECRET"
         }
+      },
+      "customOpenIdConnectProviders": {
+        "externalid": {
+          "registration": {
+            "clientIdSettingName": "EXTERNAL_AAD_CLIENT_ID",
+            "clientCredential": {
+              "clientSecretSettingName": "EXTERNAL_AAD_CLIENT_SECRET"
+            },
+            "openIdConnectConfiguration": {
+              "wellKnownOpenIdConfiguration": "https://6999099c-c27e-449c-a369-fd0e2e4af001.ciamlogin.com/6999099c-c27e-449c-a369-fd0e2e4af001/v2.0/.well-known/openid-configuration"
+            }
+          },
+          "login": {
+            "nameClaimType": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name",
+            "scopes": ["openid", "profile", "email"],
+            "loginParameterNames": []
+          }
+        }
       }
     }
   },
