@@ -18,6 +18,7 @@ public class AuctionDbContext : DbContext
     public DbSet<InvoiceLine> InvoiceLines => Set<InvoiceLine>();
     public DbSet<Settlement> Settlements => Set<Settlement>();
     public DbSet<AppUser> AppUsers => Set<AppUser>();
+    public DbSet<BrokerCustomerRequest> BrokerCustomerRequests => Set<BrokerCustomerRequest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -128,6 +129,14 @@ public class AuctionDbContext : DbContext
             e.HasOne(u => u.Broker).WithMany().HasForeignKey(u => u.BrokerId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(u => u.Seller).WithMany().HasForeignKey(u => u.SellerId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(u => u.Buyer).WithMany().HasForeignKey(u => u.BuyerId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<BrokerCustomerRequest>(e =>
+        {
+            e.HasKey(r => r.Id);
+            e.HasIndex(r => new { r.BrokerId, r.BuyerId }).IsUnique();
+            e.HasOne(r => r.Broker).WithMany().HasForeignKey(r => r.BrokerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(r => r.Buyer).WithMany().HasForeignKey(r => r.BuyerId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }
