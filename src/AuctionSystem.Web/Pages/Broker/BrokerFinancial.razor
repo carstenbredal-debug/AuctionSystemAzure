@@ -1,0 +1,131 @@
+@page "/broker/financial"
+@attribute [Authorize(Roles = "Broker")]
+@inject AuctionApiClient Api
+@inject AuthenticationStateProvider AuthState
+
+<PageTitle>Financial - Broker Portal</PageTitle>
+
+<h1>Financial</h1>
+<p class="text-muted">View your invoices, allocations, and financial overview.</p>
+
+@if (_loading)
+{
+    <p><em>Loading...</em></p>
+}
+else if (_brokerId == 0)
+{
+    <div class="alert alert-warning">Your account is not linked to a broker profile. Please contact an administrator.</div>
+}
+else
+{
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">Total Invoices</h5>
+                    <h2>@_invoices.Count</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">Outstanding</h5>
+                    <h2 class="text-warning">@_invoices.Count(i => i.Status != InvoiceStatus.Paid)</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">Paid</h5>
+                    <h2 class="text-success">@_invoices.Count(i => i.Status == InvoiceStatus.Paid)</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">Total Amount</h5>
+                    <h2>@_invoices.Sum(i => i.TotalAmount).ToString("N2")</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <strong>Invoices</strong> <span class="badge bg-secondary">@_invoices.Count</span>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-striped table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Invoice #</th>
+                        <th>Auction</th>
+                        <th>Subtotal</th>
+                        <th>Commission</th>
+                        <th>Tax</th>
+                        <th>Total</th>
+                        <th>Status</th>
+                        <th>Issued</th>
+                        <th>Due</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_invoices.Count == 0)
+                    {
+                        <tr><td colspan="9" class="text-center text-muted py-4">No invoices yet.</td></tr>
+                    }
+                    @foreach (var inv in _invoices)
+                    {
+                        <tr>
+                            <td><strong>@inv.InvoiceNumber</strong></td>
+                            <td>@(inv.Auction?.Title ?? $"Auction {inv.AuctionId}")</td>
+                            <td>@inv.SubTotal.ToString("N2")</td>
+                            <td>@inv.Commission.ToString("N2")</td>
+                            <td>@inv.Tax.ToString("N2")</td>
+                            <td><strong>@inv.TotalAmount.ToString("N2")</strong></td>
+                            <td><span class="badge bg-@GetInvoiceStatusColor(inv.Status)">@inv.Status</span></td>
+                            <td>@inv.IssuedDate.ToString("d")</td>
+                            <td>@inv.DueDate.ToString("d")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private int _brokerId;
+    private bool _loading = true;
+    private List<InvoiceDto> _invoices = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _brokerId = await ResolveBrokerId();
+        if (_brokerId > 0)
+            _invoices = await Api.GetInvoicesByBrokerAsync(_brokerId);
+        _loading = false;
+    }
+
+    private async Task<int> ResolveBrokerId()
+    {
+        var auth = await AuthState.GetAuthenticationStateAsync();
+        var oid = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(oid)) return 0;
+        var user = await Api.GetCurrentUserAsync(oid);
+        return user?.BrokerId ?? 0;
+    }
+
+    private string GetInvoiceStatusColor(InvoiceStatus status) => status switch
+    {
+        InvoiceStatus.Paid => "success",
+        InvoiceStatus.Issued or InvoiceStatus.Sent => "primary",
+        InvoiceStatus.Overdue => "danger",
+        InvoiceStatus.Draft => "secondary",
+        InvoiceStatus.Cancelled => "dark",
+        _ => "warning"
+    };
+}

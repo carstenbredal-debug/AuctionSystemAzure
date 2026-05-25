@@ -1,6 +1,13 @@
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
-        <a class="navbar-brand" href="">Auction System</a>
+        <AuthorizeView Roles="Broker">
+            <Authorized>
+                <a class="navbar-brand" href="">Broker Portal</a>
+            </Authorized>
+            <NotAuthorized>
+                <a class="navbar-brand" href="">Auction System</a>
+            </NotAuthorized>
+        </AuthorizeView>
         <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
             <span class="navbar-toggler-icon"></span>
         </button>
@@ -58,12 +65,24 @@
                 </AuthorizeView>
 
                 <AuthorizeView Roles="Broker">
-                    <div class="nav-item px-3 mt-2">
-                        <span class="nav-link text-muted"><small><strong>BROKER</strong></small></span>
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="broker/customers">
+                            <span class="bi bi-people-fill-nav-menu" aria-hidden="true"></span> Customers
+                        </NavLink>
                     </div>
                     <div class="nav-item px-3">
-                        <NavLink class="nav-link" href="broker">
-                            <span class="bi bi-people-fill-nav-menu" aria-hidden="true"></span> Broker Portal
+                        <NavLink class="nav-link" href="broker/lots">
+                            <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Lots
+                        </NavLink>
+                    </div>
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="broker/auction">
+                            <span class="bi bi-hammer-nav-menu" aria-hidden="true"></span> Auction
+                        </NavLink>
+                    </div>
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="broker/financial">
+                            <span class="bi bi-cash-stack-nav-menu" aria-hidden="true"></span> Financial
                         </NavLink>
                     </div>
                 </AuthorizeView>
