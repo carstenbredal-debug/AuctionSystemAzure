@@ -63,7 +63,7 @@ public class AuctionDbContext : DbContext
             e.HasKey(b => b.Id);
             e.HasIndex(b => b.BuyerNumber).IsUnique();
             e.Property(b => b.BuyerNumber).HasMaxLength(50).IsRequired();
-            e.HasOne(b => b.Broker).WithMany(br => br.Buyers).HasForeignKey(b => b.BrokerId);
+            e.HasOne(b => b.Broker).WithMany(br => br.Buyers).HasForeignKey(b => b.BrokerId).IsRequired(false);
         });
 
         modelBuilder.Entity<Bid>(e =>

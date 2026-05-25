@@ -8,8 +8,8 @@ public class Buyer
     public string ContactEmail { get; set; } = string.Empty;
     public string ContactPhone { get; set; } = string.Empty;
     public string Address { get; set; } = string.Empty;
-    public int BrokerId { get; set; }
-    public Broker Broker { get; set; } = null!;
+    public int? BrokerId { get; set; }
+    public Broker? Broker { get; set; }
     public string? BcCustomerId { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

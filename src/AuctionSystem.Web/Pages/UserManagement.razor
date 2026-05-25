@@ -255,16 +255,6 @@ else
                             <input class="form-control" @bind="_buyerForm.Name" />
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Broker <span class="text-danger">*</span></label>
-                            <select class="form-select" @bind="_buyerForm.BrokerId">
-                                <option value="0">— Select Broker —</option>
-                                @foreach (var b in _brokers)
-                                {
-                                    <option value="@b.Id">@b.CompanyName (@b.BrokerNumber)</option>
-                                }
-                            </select>
-                        </div>
-                        <div class="col-md-4">
                             <label class="form-label">Email</label>
                             <input class="form-control" type="email" @bind="_buyerForm.ContactEmail" />
                         </div>
@@ -477,13 +467,13 @@ else
             }
             else if (_editingUser.Role == "Buyer")
             {
-                if (string.IsNullOrWhiteSpace(_buyerForm.BuyerNumber) || string.IsNullOrWhiteSpace(_buyerForm.Name) || _buyerForm.BrokerId == 0)
+                if (string.IsNullOrWhiteSpace(_buyerForm.BuyerNumber) || string.IsNullOrWhiteSpace(_buyerForm.Name))
                 {
-                    _message = "Buyer Number, Name, and Broker are required.";
+                    _message = "Buyer Number and Name are required.";
                     _messageIsError = true;
                     return;
                 }
-                var buyer = await Api.CreateBuyerAsync(_buyerForm.BrokerId, _buyerForm);
+                var buyer = await Api.CreateBuyerAsync(0, _buyerForm);
                 if (buyer == null)
                 {
                     _message = "Failed to create buyer.";
