@@ -1,0 +1,206 @@
+@page "/broker/customers"
+@attribute [Authorize(Roles = "Broker")]
+@inject AuctionApiClient Api
+@inject AuthenticationStateProvider AuthState
+
+<PageTitle>Customers - Broker Portal</PageTitle>
+
+<h1>Customers</h1>
+<p class="text-muted">Manage your buyers and customers.</p>
+
+@if (_loading)
+{
+    <p><em>Loading...</em></p>
+}
+else if (_brokerId == 0)
+{
+    <div class="alert alert-warning">Your account is not linked to a broker profile. Please contact an administrator.</div>
+}
+else
+{
+    @if (!string.IsNullOrEmpty(_message))
+    {
+        <div class="alert @(_messageIsError ? "alert-danger" : "alert-success") alert-dismissible fade show">
+            @_message
+            <button type="button" class="btn-close" @onclick="() => _message = null"></button>
+        </div>
+    }
+
+    <div class="mb-3">
+        <button class="btn btn-primary" @onclick="ShowAddForm">
+            <i class="bi bi-plus-circle"></i> Add Customer
+        </button>
+    </div>
+
+    @if (_showForm)
+    {
+        <div class="card mb-4 border-primary">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <strong>@(_editing?.Id > 0 ? "Edit Customer" : "Add New Customer")</strong>
+                <button type="button" class="btn-close btn-close-white" @onclick="CancelForm"></button>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Customer Number <span class="text-danger">*</span></label>
+                        <input class="form-control" @bind="_editing!.BuyerNumber" placeholder="C001" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Name <span class="text-danger">*</span></label>
+                        <input class="form-control" @bind="_editing!.Name" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Email</label>
+                        <input class="form-control" type="email" @bind="_editing!.ContactEmail" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Phone</label>
+                        <input class="form-control" @bind="_editing!.ContactPhone" />
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label">Address</label>
+                        <input class="form-control" @bind="_editing!.Address" />
+                    </div>
+                    <div class="col-12 mt-3">
+                        <button class="btn btn-primary me-2" @onclick="SaveCustomer">
+                            @(_editing?.Id > 0 ? "Update" : "Create")
+                        </button>
+                        <button class="btn btn-outline-secondary" @onclick="CancelForm">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <div class="card">
+        <div class="card-header">
+            <strong>Your Customers</strong> <span class="badge bg-secondary">@_buyers.Count</span>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-striped table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Number</th>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Phone</th>
+                        <th>Address</th>
+                        <th style="width: 150px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_buyers.Count == 0)
+                    {
+                        <tr><td colspan="6" class="text-center text-muted py-4">No customers yet. Click "Add Customer" to create your first customer.</td></tr>
+                    }
+                    @foreach (var buyer in _buyers)
+                    {
+                        <tr>
+                            <td>@buyer.BuyerNumber</td>
+                            <td><strong>@buyer.Name</strong></td>
+                            <td>@buyer.ContactEmail</td>
+                            <td>@buyer.ContactPhone</td>
+                            <td>@buyer.Address</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => EditCustomer(buyer)">Edit</button>
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteCustomer(buyer)">Delete</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private List<BuyerDto> _buyers = new();
+    private BuyerDto? _editing;
+    private int _brokerId;
+    private bool _loading = true;
+    private bool _showForm;
+    private string? _message;
+    private bool _messageIsError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _brokerId = await ResolveBrokerId();
+        if (_brokerId > 0)
+            _buyers = await Api.GetBuyersByBrokerAsync(_brokerId);
+        _loading = false;
+    }
+
+    private async Task<int> ResolveBrokerId()
+    {
+        var auth = await AuthState.GetAuthenticationStateAsync();
+        var oid = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(oid)) return 0;
+        var user = await Api.GetCurrentUserAsync(oid);
+        return user?.BrokerId ?? 0;
+    }
+
+    private void ShowAddForm()
+    {
+        _editing = new BuyerDto { BrokerId = _brokerId };
+        _showForm = true;
+        _message = null;
+    }
+
+    private void EditCustomer(BuyerDto buyer)
+    {
+        _editing = new BuyerDto
+        {
+            Id = buyer.Id,
+            BuyerNumber = buyer.BuyerNumber,
+            Name = buyer.Name,
+            ContactEmail = buyer.ContactEmail,
+            ContactPhone = buyer.ContactPhone,
+            Address = buyer.Address,
+            BrokerId = _brokerId
+        };
+        _showForm = true;
+        _message = null;
+    }
+
+    private async Task SaveCustomer()
+    {
+        if (_editing == null) return;
+        if (string.IsNullOrWhiteSpace(_editing.BuyerNumber) || string.IsNullOrWhiteSpace(_editing.Name))
+        {
+            _message = "Customer Number and Name are required.";
+            _messageIsError = true;
+            return;
+        }
+
+        if (_editing.Id > 0)
+        {
+            var result = await Api.UpdateBuyerAsync(_editing.Id, _editing);
+            _message = result != null ? $"Customer '{_editing.Name}' updated." : "Failed to update customer.";
+            _messageIsError = result == null;
+        }
+        else
+        {
+            var result = await Api.CreateBuyerAsync(_brokerId, _editing);
+            _message = result != null ? $"Customer '{_editing.Name}' created." : "Failed to create customer.";
+            _messageIsError = result == null;
+        }
+
+        _showForm = false;
+        _editing = null;
+        _buyers = await Api.GetBuyersByBrokerAsync(_brokerId);
+    }
+
+    private void CancelForm()
+    {
+        _showForm = false;
+        _editing = null;
+    }
+
+    private async Task DeleteCustomer(BuyerDto buyer)
+    {
+        await Api.DeleteBuyerAsync(buyer.Id);
+        _message = $"Customer '{buyer.Name}' deleted.";
+        _messageIsError = false;
+        _buyers = await Api.GetBuyersByBrokerAsync(_brokerId);
+    }
+}

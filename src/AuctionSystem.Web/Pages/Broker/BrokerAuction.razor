@@ -1,0 +1,230 @@
+@page "/broker/auction"
+@attribute [Authorize(Roles = "Broker")]
+@inject AuctionApiClient Api
+@inject AuthenticationStateProvider AuthState
+
+<PageTitle>Auction - Broker Portal</PageTitle>
+
+<h1>Auction</h1>
+<p class="text-muted">View active auctions, place bids, and allocate lots to your customers.</p>
+
+@if (_loading)
+{
+    <p><em>Loading...</em></p>
+}
+else if (_brokerId == 0)
+{
+    <div class="alert alert-warning">Your account is not linked to a broker profile. Please contact an administrator.</div>
+}
+else
+{
+    @if (!string.IsNullOrEmpty(_message))
+    {
+        <div class="alert @(_messageIsError ? "alert-danger" : "alert-success") alert-dismissible fade show">
+            @_message
+            <button type="button" class="btn-close" @onclick="() => _message = null"></button>
+        </div>
+    }
+
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+            <a class="nav-link @(_tab == "bids" ? "active" : "")" href="#" @onclick='() => _tab = "bids"' @onclick:preventDefault>Bids</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(_tab == "allocations" ? "active" : "")" href="#" @onclick='() => _tab = "allocations"' @onclick:preventDefault>Allocations</a>
+        </li>
+    </ul>
+
+    @if (_tab == "bids")
+    {
+        <div class="card mb-4">
+            <div class="card-header">Place Bid</div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Lot ID</label>
+                        <input type="number" class="form-control" @bind="_bidLotId" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Amount</label>
+                        <input type="number" class="form-control" @bind="_bidAmount" step="0.01" />
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <button class="btn btn-primary" @onclick="PlaceBid">Place Bid</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <strong>Bid History</strong> <span class="badge bg-secondary">@_bids.Count</span>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-striped table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Lot</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                            <th>Placed</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (_bids.Count == 0)
+                        {
+                            <tr><td colspan="4" class="text-center text-muted py-4">No bids placed yet.</td></tr>
+                        }
+                        @foreach (var bid in _bids)
+                        {
+                            <tr>
+                                <td>@(bid.Lot != null ? $"Lot #{bid.Lot.LotNumber} — {bid.Lot.Description}" : $"Lot {bid.LotId}")</td>
+                                <td>@bid.Amount.ToString("N2")</td>
+                                <td><span class="badge bg-@GetBidColor(bid.Status)">@bid.Status</span></td>
+                                <td>@bid.PlacedAt.ToString("g")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    @if (_tab == "allocations")
+    {
+        <div class="card mb-4">
+            <div class="card-header">Allocate Lot to Customer</div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-2">
+                        <label class="form-label">Lot ID</label>
+                        <input type="number" class="form-control" @bind="_allocLotId" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Customer</label>
+                        <select class="form-select" @bind="_allocBuyerId">
+                            <option value="0">Select...</option>
+                            @foreach (var buyer in _buyers)
+                            {
+                                <option value="@buyer.Id">@buyer.Name (@buyer.BuyerNumber)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Quantity</label>
+                        <input type="number" class="form-control" @bind="_allocQty" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Price/Unit</label>
+                        <input type="number" class="form-control" @bind="_allocPrice" step="0.01" />
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button class="btn btn-success" @onclick="AllocateLot">Allocate</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <strong>Lot Allocations</strong> <span class="badge bg-secondary">@_allocations.Count</span>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-striped table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Lot</th>
+                            <th>Customer</th>
+                            <th>Qty</th>
+                            <th>Price/Unit</th>
+                            <th>Total</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (_allocations.Count == 0)
+                        {
+                            <tr><td colspan="6" class="text-center text-muted py-4">No allocations yet.</td></tr>
+                        }
+                        @foreach (var a in _allocations)
+                        {
+                            <tr>
+                                <td>@(a.Lot != null ? $"Lot #{a.Lot.LotNumber} — {a.Lot.Description}" : $"Lot {a.LotId}")</td>
+                                <td>@(a.Buyer?.Name ?? $"Customer {a.BuyerId}")</td>
+                                <td>@a.Quantity</td>
+                                <td>@a.PricePerUnit.ToString("N2")</td>
+                                <td>@a.TotalPrice.ToString("N2")</td>
+                                <td><span class="badge bg-info">@a.Status</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private int _brokerId;
+    private bool _loading = true;
+    private string _tab = "bids";
+    private string? _message;
+    private bool _messageIsError;
+
+    private List<BidDto> _bids = new();
+    private List<LotAllocationDto> _allocations = new();
+    private List<BuyerDto> _buyers = new();
+
+    private int _bidLotId;
+    private decimal _bidAmount;
+    private int _allocLotId, _allocBuyerId, _allocQty;
+    private decimal _allocPrice;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _brokerId = await ResolveBrokerId();
+        if (_brokerId > 0)
+            await LoadData();
+        _loading = false;
+    }
+
+    private async Task<int> ResolveBrokerId()
+    {
+        var auth = await AuthState.GetAuthenticationStateAsync();
+        var oid = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(oid)) return 0;
+        var user = await Api.GetCurrentUserAsync(oid);
+        return user?.BrokerId ?? 0;
+    }
+
+    private async Task LoadData()
+    {
+        _bids = await Api.GetBidsByBrokerAsync(_brokerId);
+        _allocations = await Api.GetAllocationsByBrokerAsync(_brokerId);
+        _buyers = await Api.GetBuyersByBrokerAsync(_brokerId);
+    }
+
+    private async Task PlaceBid()
+    {
+        var bid = await Api.PlaceBidAsync(_bidLotId, _brokerId, _bidAmount);
+        _message = bid != null ? $"Bid placed: {bid.Amount:N2}" : "Failed — lot not active or auction not in progress.";
+        _messageIsError = bid == null;
+        await LoadData();
+    }
+
+    private async Task AllocateLot()
+    {
+        await Api.AllocateLotAsync(_allocLotId, _brokerId, _allocBuyerId, _allocQty, _allocPrice);
+        _message = "Lot allocated successfully.";
+        _messageIsError = false;
+        await LoadData();
+    }
+
+    private string GetBidColor(BidStatus s) => s switch
+    {
+        BidStatus.Winning => "success",
+        BidStatus.Won => "primary",
+        BidStatus.Outbid => "warning",
+        _ => "secondary"
+    };
+}
