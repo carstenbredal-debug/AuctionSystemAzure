@@ -165,6 +165,28 @@ public class UserFunctions
         var user = await _db.AppUsers.FindAsync(id);
         if (user == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
 
+        // Clean up linked entities
+        if (user.BuyerId.HasValue)
+        {
+            var buyer = await _db.Buyers.FindAsync(user.BuyerId.Value);
+            if (buyer != null)
+            {
+                var requests = await _db.BrokerCustomerRequests.Where(r => r.BuyerId == buyer.Id).ToListAsync();
+                _db.BrokerCustomerRequests.RemoveRange(requests);
+                _db.Buyers.Remove(buyer);
+            }
+        }
+        if (user.BrokerId.HasValue)
+        {
+            var broker = await _db.Brokers.FindAsync(user.BrokerId.Value);
+            if (broker != null) _db.Brokers.Remove(broker);
+        }
+        if (user.SellerId.HasValue)
+        {
+            var seller = await _db.Sellers.FindAsync(user.SellerId.Value);
+            if (seller != null) _db.Sellers.Remove(seller);
+        }
+
         _db.AppUsers.Remove(user);
         await _db.SaveChangesAsync();
         return req.CreateResponse(System.Net.HttpStatusCode.NoContent);
