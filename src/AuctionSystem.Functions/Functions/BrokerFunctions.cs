@@ -115,7 +115,7 @@ public class BrokerFunctions
     {
         var buyer = await req.ReadFromJsonAsync<Buyer>();
         if (buyer == null) return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
-        buyer.BrokerId = brokerId;
+        buyer.BrokerId = brokerId > 0 ? brokerId : null;
         _db.Buyers.Add(buyer);
         await _db.SaveChangesAsync();
         return await CreateJsonResponse(req, buyer, System.Net.HttpStatusCode.Created);

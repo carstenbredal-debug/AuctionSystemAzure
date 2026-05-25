@@ -112,18 +112,12 @@ public class UserFunctions
         }
         else if (dto.Role == AppRole.Buyer && dto.BuyerId == null)
         {
-            if (dto.BrokerId == null)
-            {
-                var errorResp = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
-                await errorResp.WriteStringAsync("Buyer role requires a linked Broker. Select a broker or create one first.");
-                return errorResp;
-            }
             var buyer = new Buyer
             {
                 BuyerNumber = $"C{DateTime.UtcNow:yyyyMMddHHmmss}",
                 Name = dto.DisplayName,
                 ContactEmail = dto.Email,
-                BrokerId = dto.BrokerId.Value,
+                BrokerId = dto.BrokerId,
             };
             _db.Buyers.Add(buyer);
             await _db.SaveChangesAsync();
