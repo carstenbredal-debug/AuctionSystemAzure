@@ -1,72 +1,158 @@
 @page "/buyer"
 @attribute [Authorize(Roles = "Admin,Buyer")]
 @inject AuctionApiClient Api
+@inject AuthenticationStateProvider AuthState
 
 <PageTitle>Buyer Portal - Auction System</PageTitle>
 
 <h1>Buyer Portal</h1>
 
-<div class="mb-3">
-    <label class="form-label"><strong>Select Buyer</strong></label>
-    <select class="form-select w-auto" @bind="selectedBuyerId" @bind:after="LoadBuyerData">
-        <option value="0">Choose...</option>
-        @foreach (var b in allBuyers)
-        {
-            <option value="@b.Id">@b.Name (@b.BuyerNumber)</option>
-        }
-    </select>
-</div>
-
-@if (selectedBuyerId > 0)
+@if (_loading)
 {
-    <h4>My Purchases (Allocations)</h4>
-    @if (!allocations.Any())
+    <p><em>Loading...</em></p>
+}
+else if (_buyerId == 0)
+{
+    <div class="alert alert-warning">Your account is not linked to a buyer profile. Please contact an administrator.</div>
+}
+else
+{
+    @if (!string.IsNullOrEmpty(_message))
     {
-        <p class="text-muted">No allocations yet.</p>
-    }
-    else
-    {
-        <table class="table table-striped">
-            <thead><tr><th>Lot</th><th>Broker</th><th>Qty</th><th>Price/Unit</th><th>Total</th><th>Status</th><th>Date</th></tr></thead>
-            <tbody>
-                @foreach (var a in allocations)
-                {
-                    <tr>
-                        <td>@(a.Lot != null ? $"Lot #{a.Lot.LotNumber} — {a.Lot.Description}" : $"Lot {a.LotId}")</td>
-                        <td>@(a.Broker?.CompanyName ?? $"Broker {a.BrokerId}")</td>
-                        <td>@a.Quantity</td>
-                        <td>@a.PricePerUnit.ToString("N2")</td>
-                        <td>@a.TotalPrice.ToString("N2")</td>
-                        <td><span class="badge bg-info">@a.Status</span></td>
-                        <td>@a.AllocatedAt.ToString("g")</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-        <div class="alert alert-light">
-            <strong>Total purchases:</strong> @allocations.Sum(a => a.TotalPrice).ToString("N2")
+        <div class="alert @(_messageIsError ? "alert-danger" : "alert-success") alert-dismissible fade show">
+            @_message
+            <button type="button" class="btn-close" @onclick="() => _message = null"></button>
         </div>
     }
+
+    @if (_pendingRequests.Any())
+    {
+        <div class="card mb-4 border-warning">
+            <div class="card-header bg-warning text-dark">
+                <strong>Pending Broker Invitations</strong> <span class="badge bg-dark">@_pendingRequests.Count</span>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Broker</th>
+                            <th>Requested</th>
+                            <th style="width: 200px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var req in _pendingRequests)
+                        {
+                            <tr>
+                                <td><strong>@(req.Broker?.CompanyName ?? $"Broker {req.BrokerId}")</strong></td>
+                                <td>@req.RequestedAt.ToString("g")</td>
+                                <td>
+                                    <button class="btn btn-sm btn-success me-1" @onclick="() => RespondToRequest(req, true)">Accept</button>
+                                    <button class="btn btn-sm btn-danger" @onclick="() => RespondToRequest(req, false)">Decline</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    <div class="card">
+        <div class="card-header">
+            <strong>My Purchases (Allocations)</strong> <span class="badge bg-secondary">@_allocations.Count</span>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-striped table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Lot</th>
+                        <th>Broker</th>
+                        <th>Qty</th>
+                        <th>Price/Unit</th>
+                        <th>Total</th>
+                        <th>Status</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (!_allocations.Any())
+                    {
+                        <tr><td colspan="7" class="text-center text-muted py-4">No allocations yet.</td></tr>
+                    }
+                    @foreach (var a in _allocations)
+                    {
+                        <tr>
+                            <td>@(a.Lot != null ? $"Lot #{a.Lot.LotNumber} — {a.Lot.Description}" : $"Lot {a.LotId}")</td>
+                            <td>@(a.Broker?.CompanyName ?? $"Broker {a.BrokerId}")</td>
+                            <td>@a.Quantity</td>
+                            <td>@a.PricePerUnit.ToString("N2")</td>
+                            <td>@a.TotalPrice.ToString("N2")</td>
+                            <td><span class="badge bg-info">@a.Status</span></td>
+                            <td>@a.AllocatedAt.ToString("g")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_allocations.Any())
+        {
+            <div class="card-footer">
+                <strong>Total purchases:</strong> @_allocations.Sum(a => a.TotalPrice).ToString("N2")
+            </div>
+        }
+    </div>
 }
 
 @code {
-    private List<BuyerDto> allBuyers = new();
-    private int selectedBuyerId;
-    private List<LotAllocationDto> allocations = new();
+    private int _buyerId;
+    private bool _loading = true;
+    private string? _message;
+    private bool _messageIsError;
+
+    private List<BrokerCustomerRequestDto> _pendingRequests = new();
+    private List<LotAllocationDto> _allocations = new();
 
     protected override async Task OnInitializedAsync()
     {
-        var brokers = await Api.GetBrokersAsync();
-        foreach (var broker in brokers)
-        {
-            var buyers = await Api.GetBuyersByBrokerAsync(broker.Id);
-            allBuyers.AddRange(buyers);
-        }
+        _buyerId = await ResolveBuyerId();
+        if (_buyerId > 0)
+            await LoadData();
+        _loading = false;
     }
 
-    private async Task LoadBuyerData()
+    private async Task<int> ResolveBuyerId()
     {
-        if (selectedBuyerId <= 0) return;
-        allocations = await Api.GetAllocationsByBuyerAsync(selectedBuyerId);
+        var auth = await AuthState.GetAuthenticationStateAsync();
+        var oid = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(oid)) return 0;
+        var user = await Api.GetCurrentUserAsync(oid);
+        return user?.BuyerId ?? 0;
+    }
+
+    private async Task LoadData()
+    {
+        var allRequests = await Api.GetCustomerRequestsByBuyerAsync(_buyerId);
+        _pendingRequests = allRequests.Where(r => r.Status == CustomerRequestStatus.Pending).ToList();
+        _allocations = await Api.GetAllocationsByBuyerAsync(_buyerId);
+    }
+
+    private async Task RespondToRequest(BrokerCustomerRequestDto req, bool approve)
+    {
+        var result = await Api.RespondToCustomerRequestAsync(req.Id, approve);
+        var brokerName = req.Broker?.CompanyName ?? $"Broker {req.BrokerId}";
+        if (result != null)
+        {
+            _message = approve
+                ? $"You accepted the invitation from '{brokerName}'. You are now their customer."
+                : $"You declined the invitation from '{brokerName}'.";
+            _messageIsError = false;
+        }
+        else
+        {
+            _message = "Failed to respond to the invitation.";
+            _messageIsError = true;
+        }
+        await LoadData();
     }
 }

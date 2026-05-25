@@ -178,6 +178,20 @@ public class AppUserDto
     public bool IsActive { get; set; } = true;
 }
 
+public enum CustomerRequestStatus { Pending, Approved, Declined }
+
+public class BrokerCustomerRequestDto
+{
+    public int Id { get; set; }
+    public int BrokerId { get; set; }
+    public BrokerDto? Broker { get; set; }
+    public int BuyerId { get; set; }
+    public BuyerDto? Buyer { get; set; }
+    public CustomerRequestStatus Status { get; set; }
+    public DateTime RequestedAt { get; set; }
+    public DateTime? RespondedAt { get; set; }
+}
+
 public class DashboardStats
 {
     public int TotalAuctions { get; set; }

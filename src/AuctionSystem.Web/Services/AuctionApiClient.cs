@@ -151,6 +151,30 @@ public class AuctionApiClient
     public async Task<List<SettlementDto>> GetAllSettlementsAsync()
         => await _http.GetFromJsonAsync<List<SettlementDto>>("api/settlements") ?? new();
 
+    // Customer Requests
+    public async Task<List<BrokerCustomerRequestDto>> GetCustomerRequestsByBrokerAsync(int brokerId)
+        => await _http.GetFromJsonAsync<List<BrokerCustomerRequestDto>>($"api/brokers/{brokerId}/customer-requests") ?? new();
+
+    public async Task<List<BrokerCustomerRequestDto>> GetCustomerRequestsByBuyerAsync(int buyerId)
+        => await _http.GetFromJsonAsync<List<BrokerCustomerRequestDto>>($"api/buyers/{buyerId}/customer-requests") ?? new();
+
+    public async Task<BrokerCustomerRequestDto?> CreateCustomerRequestAsync(int brokerId, int buyerId)
+    {
+        var resp = await _http.PostAsJsonAsync($"api/brokers/{brokerId}/customer-requests", new { buyerId });
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<BrokerCustomerRequestDto>();
+    }
+
+    public async Task<BrokerCustomerRequestDto?> RespondToCustomerRequestAsync(int requestId, bool approve)
+    {
+        var resp = await _http.PutAsJsonAsync($"api/customer-requests/{requestId}/respond", new { approve });
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<BrokerCustomerRequestDto>();
+    }
+
+    public async Task DeleteCustomerRequestAsync(int requestId)
+        => await _http.DeleteAsync($"api/customer-requests/{requestId}");
+
     // Seed
     public async Task SeedDatabaseAsync()
         => await _http.PostAsync("api/seed", null);
