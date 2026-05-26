@@ -14,7 +14,7 @@
 else
 {
     <div class="row mb-3">
-        <div class="col-md-3">
+        <div class="col">
             <label class="form-label">Filter by Type</label>
             <select class="form-select" @bind="_filterType" @bind:after="ApplyFilters">
                 <option value="">All Types</option>
@@ -24,7 +24,7 @@ else
                 }
             </select>
         </div>
-        <div class="col-md-3">
+        <div class="col">
             <label class="form-label">Filter by Gender</label>
             <select class="form-select" @bind="_filterGender" @bind:after="ApplyFilters">
                 <option value="">All Genders</option>
@@ -34,7 +34,17 @@ else
                 }
             </select>
         </div>
-        <div class="col-md-3">
+        <div class="col">
+            <label class="form-label">Filter by Group</label>
+            <select class="form-select" @bind="_filterGroup" @bind:after="ApplyFilters">
+                <option value="">All Groups</option>
+                @foreach (var g in _groups)
+                {
+                    <option value="@g">@g</option>
+                }
+            </select>
+        </div>
+        <div class="col">
             <label class="form-label">Filter by Color</label>
             <select class="form-select" @bind="_filterColor" @bind:after="ApplyFilters">
                 <option value="">All Colors</option>
@@ -44,7 +54,7 @@ else
                 }
             </select>
         </div>
-        <div class="col-md-3 d-flex align-items-end">
+        <div class="col d-flex align-items-end">
             <button class="btn btn-outline-secondary" @onclick="ResetFilters">Reset Filters</button>
         </div>
     </div>
@@ -104,9 +114,11 @@ else
     private bool _loading = true;
     private string _filterType = "";
     private string _filterGender = "";
+    private string _filterGroup = "";
     private string _filterColor = "";
     private List<string> _salesTypes = new();
     private List<string> _genders = new();
+    private List<string> _groups = new();
     private List<string> _colors = new();
 
     protected override async Task OnInitializedAsync()
@@ -114,6 +126,7 @@ else
         _all = await Api.GetCatalogLotsAsync();
         _salesTypes = _all.Where(c => c.SalesType != null).Select(c => c.SalesType!).Distinct().OrderBy(x => x).ToList();
         _genders = _all.Where(c => c.Gender != null).Select(c => c.Gender!).Distinct().OrderBy(x => x).ToList();
+        _groups = _all.Where(c => c.Group != null).Select(c => c.Group!).Distinct().OrderBy(x => x).ToList();
         _colors = _all.Where(c => c.Color != null).Select(c => c.Color!).Distinct().OrderBy(x => x).ToList();
         _filtered = _all;
         _loading = false;
@@ -126,6 +139,8 @@ else
             _filtered = _filtered.Where(c => c.SalesType == _filterType).ToList();
         if (!string.IsNullOrEmpty(_filterGender))
             _filtered = _filtered.Where(c => c.Gender == _filterGender).ToList();
+        if (!string.IsNullOrEmpty(_filterGroup))
+            _filtered = _filtered.Where(c => c.Group == _filterGroup).ToList();
         if (!string.IsNullOrEmpty(_filterColor))
             _filtered = _filtered.Where(c => c.Color == _filterColor).ToList();
     }
@@ -134,6 +149,7 @@ else
     {
         _filterType = "";
         _filterGender = "";
+        _filterGroup = "";
         _filterColor = "";
         _filtered = _all;
     }
