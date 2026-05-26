@@ -149,7 +149,7 @@ public class CustomerRequestFunctions
 
     [Function("AdminCreateCustomerLink")]
     public async Task<HttpResponseData> AdminLink(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "admin/customer-links")] HttpRequestData req)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "management/customer-links")] HttpRequestData req)
     {
         var dto = await req.ReadFromJsonAsync<AdminLinkDto>();
         if (dto == null) return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
@@ -189,7 +189,7 @@ public class CustomerRequestFunctions
 
     [Function("GetAllCustomerRequests")]
     public async Task<HttpResponseData> GetAll(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "admin/customer-links")] HttpRequestData req)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "management/customer-links")] HttpRequestData req)
     {
         var requests = await _db.BrokerCustomerRequests
             .Include(r => r.Broker)
