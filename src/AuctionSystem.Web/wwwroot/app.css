@@ -1,27 +1,129 @@
 html, body {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    background-color: #fafafa;
+    color: #333;
 }
 
 a, .btn-link {
-    color: #006bb7;
+    color: #2D1B4E;
 }
 
 .btn-primary {
     color: #fff;
-    background-color: #1b6ec2;
-    border-color: #1861ac;
+    background-color: #2D1B4E;
+    border-color: #2D1B4E;
+}
+
+.btn-primary:hover {
+    background-color: #3d2766;
+    border-color: #3d2766;
+}
+
+.btn-outline-primary {
+    color: #2D1B4E;
+    border-color: #2D1B4E;
+}
+
+.btn-outline-primary:hover {
+    background-color: #2D1B4E;
+    border-color: #2D1B4E;
+    color: #fff;
 }
 
 .btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+    box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem rgba(45, 27, 78, 0.4);
 }
 
 .content {
     padding-top: 1.1rem;
 }
 
+h1 {
+    font-weight: 600;
+    font-size: 1.5rem;
+    color: #2D1B4E;
+    margin-bottom: 0.25rem;
+}
+
 h1:focus {
     outline: none;
+}
+
+/* Table styling to match Figma design */
+.table-dark {
+    --bs-table-bg: #6B5F5B;
+    --bs-table-border-color: #5a4f4c;
+    --bs-table-striped-bg: #625753;
+    --bs-table-hover-bg: #59504c;
+}
+
+.table-dark th {
+    font-weight: 600;
+    font-size: 0.8rem;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    padding: 0.75rem 1rem;
+    border-bottom: none;
+}
+
+.table th, .table td {
+    vertical-align: middle;
+    padding: 0.6rem 1rem;
+}
+
+.table-striped > tbody > tr:nth-of-type(odd) > * {
+    --bs-table-bg-type: rgba(0, 0, 0, 0.02);
+}
+
+.table-hover > tbody > tr:hover > * {
+    --bs-table-bg-state: rgba(45, 27, 78, 0.04);
+}
+
+/* Card styling */
+.card {
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.card-header {
+    background-color: #f8f8f8;
+    border-bottom: 1px solid #e0e0e0;
+    font-size: 0.95rem;
+}
+
+/* Badge overrides */
+.badge.bg-secondary {
+    background-color: #6B5F5B !important;
+}
+
+.badge.bg-info {
+    background-color: #2D1B4E !important;
+}
+
+/* Alert styling */
+.alert-success {
+    background-color: #e8f5e9;
+    border-color: #c8e6c9;
+    color: #2e7d32;
+}
+
+.alert-danger {
+    background-color: #ffebee;
+    border-color: #ffcdd2;
+    color: #c62828;
+}
+
+/* Form controls */
+.form-control:focus, .form-select:focus {
+    border-color: #2D1B4E;
+    box-shadow: 0 0 0 0.2rem rgba(45, 27, 78, 0.15);
+}
+
+.form-label {
+    font-weight: 500;
+    font-size: 0.875rem;
+    color: #555;
 }
 
 .valid.modified:not([type=checkbox]) {
@@ -48,4 +150,28 @@ h1:focus {
 
 .darker-border-checkbox.form-check-input {
     border-color: #929292;
+}
+
+/* Tab styling */
+.nav-tabs .nav-link {
+    color: #6B5F5B;
+}
+
+.nav-tabs .nav-link.active {
+    color: #2D1B4E;
+    font-weight: 600;
+    border-bottom-color: #2D1B4E;
+}
+
+.nav-tabs .nav-link:hover {
+    color: #2D1B4E;
+}
+
+/* Text utilities */
+.text-muted {
+    color: #888 !important;
+}
+
+p.text-muted {
+    font-size: 0.9rem;
 }
