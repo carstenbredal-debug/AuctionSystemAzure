@@ -249,4 +249,11 @@ public class AuctionApiClient
 
     public async Task DeleteParameterAsync(int id)
         => await _http.DeleteAsync($"api/parameters/{id}");
+
+    // Catalog Lots
+    public async Task<List<CatalogLotDto>> GetCatalogLotsAsync()
+        => await _http.GetFromJsonAsync<List<CatalogLotDto>>("api/catalog-lots") ?? new();
+
+    public async Task<HttpResponseMessage> ImportCatalogLotsToAuctionAsync(int auctionId, ImportCatalogLotsRequest request)
+        => await _http.PostAsJsonAsync($"api/auctions/{auctionId}/import-catalog-lots", request);
 }

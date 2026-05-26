@@ -1,0 +1,112 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using AuctionSystem.Domain.Data;
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.Azure.Functions.Worker.Http;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+
+namespace AuctionSystem.Functions.Functions;
+
+public class CatalogLotFunctions
+{
+    private readonly CatalogDbContext _catalogDb;
+    private readonly AuctionDbContext _auctionDb;
+    private readonly ILogger<CatalogLotFunctions> _logger;
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        ReferenceHandler = ReferenceHandler.IgnoreCycles,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
+
+    public CatalogLotFunctions(CatalogDbContext catalogDb, AuctionDbContext auctionDb, ILogger<CatalogLotFunctions> logger)
+    {
+        _catalogDb = catalogDb;
+        _auctionDb = auctionDb;
+        _logger = logger;
+    }
+
+    [Function("GetCatalogLots")]
+    public async Task<HttpResponseData> GetAll(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "catalog-lots")] HttpRequestData req)
+    {
+        var lots = await _catalogDb.CatalogLots
+            .OrderBy(l => l.CatalogSortOrder)
+            .ToListAsync();
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(lots, JsonOptions));
+        return response;
+    }
+
+    [Function("GetCatalogLot")]
+    public async Task<HttpResponseData> Get(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "catalog-lots/{id:int}")] HttpRequestData req, int id)
+    {
+        var lot = await _catalogDb.CatalogLots.FindAsync(id);
+        if (lot == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(lot, JsonOptions));
+        return response;
+    }
+
+    [Function("ImportCatalogLotsToAuction")]
+    public async Task<HttpResponseData> ImportToAuction(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auctions/{auctionId:int}/import-catalog-lots")] HttpRequestData req, int auctionId)
+    {
+        var auction = await _auctionDb.Auctions.FindAsync(auctionId);
+        if (auction == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        var body = await req.ReadFromJsonAsync<ImportCatalogLotsRequest>();
+        if (body == null || body.CatalogLotIds == null || body.CatalogLotIds.Count == 0)
+            return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+
+        var catalogLots = await _catalogDb.CatalogLots
+            .Where(c => body.CatalogLotIds.Contains(c.CatalogLotID))
+            .ToListAsync();
+
+        var existingLotNumbers = await _auctionDb.Lots
+            .Where(l => l.AuctionId == auctionId)
+            .Select(l => l.LotNumber)
+            .ToListAsync();
+
+        var imported = new List<object>();
+        foreach (var cl in catalogLots)
+        {
+            if (existingLotNumbers.Contains(cl.LotNumber))
+                continue;
+
+            var lot = new Domain.Entities.Lot
+            {
+                AuctionId = auctionId,
+                LotNumber = cl.LotNumber,
+                Description = $"{cl.SalesType} {cl.Gender} {cl.Color} {cl.Quality}".Trim(),
+                Category = cl.Group,
+                Quantity = cl.TotalSkins,
+                Unit = "skins",
+                StartingPrice = 0,
+                Status = Domain.Enums.LotStatus.Pending,
+                SellerId = body.SellerId
+            };
+            _auctionDb.Lots.Add(lot);
+            imported.Add(new { cl.CatalogLotID, cl.LotNumber, lot.Description, lot.Quantity });
+        }
+
+        await _auctionDb.SaveChangesAsync();
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(new { importedCount = imported.Count, lots = imported }, JsonOptions));
+        return response;
+    }
+}
+
+public class ImportCatalogLotsRequest
+{
+    public List<int> CatalogLotIds { get; set; } = new();
+    public int SellerId { get; set; }
+}

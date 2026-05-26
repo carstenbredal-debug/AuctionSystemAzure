@@ -1,0 +1,140 @@
+@page "/admin/catalog-lots"
+@attribute [Authorize(Roles = "Admin")]
+@inject AuctionApiClient Api
+
+<PageTitle>Catalog Lots</PageTitle>
+
+<h1>Catalog Lots</h1>
+<p class="text-muted">Lots from the catalog database (dbo.cataloglots). These can be imported into auctions.</p>
+
+@if (_loading)
+{
+    <p><em>Loading catalog lots...</em></p>
+}
+else
+{
+    <div class="row mb-3">
+        <div class="col-md-3">
+            <label class="form-label">Filter by Type</label>
+            <select class="form-select" @bind="_filterType" @bind:after="ApplyFilters">
+                <option value="">All Types</option>
+                @foreach (var t in _salesTypes)
+                {
+                    <option value="@t">@t</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Filter by Gender</label>
+            <select class="form-select" @bind="_filterGender" @bind:after="ApplyFilters">
+                <option value="">All Genders</option>
+                @foreach (var g in _genders)
+                {
+                    <option value="@g">@g</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Filter by Color</label>
+            <select class="form-select" @bind="_filterColor" @bind:after="ApplyFilters">
+                <option value="">All Colors</option>
+                @foreach (var c in _colors)
+                {
+                    <option value="@c">@c</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+            <button class="btn btn-outline-secondary" @onclick="ResetFilters">Reset Filters</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <strong>Catalog</strong> <span class="badge bg-secondary">@_filtered.Count lots</span>
+            <span class="badge bg-info ms-1">@_filtered.Sum(l => l.TotalSkins) total skins</span>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-striped table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Lot #</th>
+                        <th>String #</th>
+                        <th>Type</th>
+                        <th>Gender</th>
+                        <th>Group</th>
+                        <th>Color</th>
+                        <th>Quality</th>
+                        <th>Size</th>
+                        <th>Clarity</th>
+                        <th>Skins</th>
+                        <th>Boxes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_filtered.Count == 0)
+                    {
+                        <tr><td colspan="11" class="text-center text-muted py-4">No catalog lots found.</td></tr>
+                    }
+                    @foreach (var lot in _filtered)
+                    {
+                        <tr>
+                            <td><strong>@lot.LotNumber</strong></td>
+                            <td>@lot.StringNumber</td>
+                            <td>@lot.SalesType</td>
+                            <td>@lot.Gender</td>
+                            <td>@lot.Group</td>
+                            <td>@lot.Color</td>
+                            <td>@lot.Quality</td>
+                            <td>@lot.Size</td>
+                            <td>@lot.Clarity</td>
+                            <td>@lot.TotalSkins</td>
+                            <td>@lot.BoxCount</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private List<CatalogLotDto> _all = new();
+    private List<CatalogLotDto> _filtered = new();
+    private bool _loading = true;
+    private string _filterType = "";
+    private string _filterGender = "";
+    private string _filterColor = "";
+    private List<string> _salesTypes = new();
+    private List<string> _genders = new();
+    private List<string> _colors = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _all = await Api.GetCatalogLotsAsync();
+        _salesTypes = _all.Where(c => c.SalesType != null).Select(c => c.SalesType!).Distinct().OrderBy(x => x).ToList();
+        _genders = _all.Where(c => c.Gender != null).Select(c => c.Gender!).Distinct().OrderBy(x => x).ToList();
+        _colors = _all.Where(c => c.Color != null).Select(c => c.Color!).Distinct().OrderBy(x => x).ToList();
+        _filtered = _all;
+        _loading = false;
+    }
+
+    private void ApplyFilters()
+    {
+        _filtered = _all;
+        if (!string.IsNullOrEmpty(_filterType))
+            _filtered = _filtered.Where(c => c.SalesType == _filterType).ToList();
+        if (!string.IsNullOrEmpty(_filterGender))
+            _filtered = _filtered.Where(c => c.Gender == _filterGender).ToList();
+        if (!string.IsNullOrEmpty(_filterColor))
+            _filtered = _filtered.Where(c => c.Color == _filterColor).ToList();
+    }
+
+    private void ResetFilters()
+    {
+        _filterType = "";
+        _filterGender = "";
+        _filterColor = "";
+        _filtered = _all;
+    }
+}

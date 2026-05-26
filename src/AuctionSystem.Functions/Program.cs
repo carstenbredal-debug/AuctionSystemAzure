@@ -17,6 +17,9 @@ var host = new HostBuilder()
         services.AddDbContext<AuctionDbContext>(options =>
             options.UseSqlServer(connectionString));
 
+        services.AddDbContext<CatalogDbContext>(options =>
+            options.UseSqlServer(connectionString));
+
         services.AddScoped<AuctionService>();
         services.AddScoped<BidService>();
         services.AddScoped<SettlementService>();
