@@ -393,7 +393,7 @@ else
                         @foreach (var alloc in _allocations)
                         {
                             <tr>
-                                <td><strong>@(alloc.Lot?.LotNumber ?? $"Lot {alloc.LotId}")</strong></td>
+                                <td><strong>@(alloc.Lot != null ? alloc.Lot.LotNumber.ToString() : $"Lot {alloc.LotId}")</strong></td>
                                 <td>@alloc.Quantity</td>
                                 <td>@alloc.PricePerUnit.ToString("C")</td>
                                 <td><strong>@alloc.TotalPrice.ToString("C")</strong></td>
