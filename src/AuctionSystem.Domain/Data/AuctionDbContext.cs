@@ -19,6 +19,7 @@ public class AuctionDbContext : DbContext
     public DbSet<Settlement> Settlements => Set<Settlement>();
     public DbSet<AppUser> AppUsers => Set<AppUser>();
     public DbSet<BrokerCustomerRequest> BrokerCustomerRequests => Set<BrokerCustomerRequest>();
+    public DbSet<SystemParameter> SystemParameters => Set<SystemParameter>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -137,6 +138,16 @@ public class AuctionDbContext : DbContext
             e.HasIndex(r => new { r.BrokerId, r.BuyerId }).IsUnique();
             e.HasOne(r => r.Broker).WithMany().HasForeignKey(r => r.BrokerId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(r => r.Buyer).WithMany().HasForeignKey(r => r.BuyerId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<SystemParameter>(e =>
+        {
+            e.HasKey(p => p.Id);
+            e.HasIndex(p => p.Key).IsUnique();
+            e.Property(p => p.Key).HasMaxLength(100).IsRequired();
+            e.Property(p => p.Value).HasMaxLength(500).IsRequired();
+            e.Property(p => p.Description).HasMaxLength(500);
+            e.Property(p => p.DataType).HasMaxLength(50);
         });
     }
 }
