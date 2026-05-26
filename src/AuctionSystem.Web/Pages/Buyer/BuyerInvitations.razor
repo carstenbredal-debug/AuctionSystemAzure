@@ -6,7 +6,7 @@
 <PageTitle>Invitations - Buyer Portal</PageTitle>
 
 <h1>Invitations</h1>
-<p class="text-muted">View and respond to broker partnership invitations.</p>
+<p class="text-muted">View and respond to broker partnership invitations, or request a connection to a broker.</p>
 
 @if (_loading)
 {
@@ -25,6 +25,31 @@ else
             <button type="button" class="btn-close" @onclick="() => _message = null"></button>
         </div>
     }
+
+    <div class="card mb-4 border-primary">
+        <div class="card-header bg-primary text-white">
+            <strong>Request Connection to Broker</strong>
+        </div>
+        <div class="card-body">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-6">
+                    <label class="form-label">Select Broker</label>
+                    <select class="form-select" @bind="_selectedBrokerId">
+                        <option value="0">— Select Broker —</option>
+                        @foreach (var b in _availableBrokers)
+                        {
+                            <option value="@b.Id">@b.CompanyName (@b.BrokerNumber)</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <button class="btn btn-primary" @onclick="SendRequest" disabled="@(_selectedBrokerId == 0)">
+                        Send Connection Request
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     @if (_pendingRequests.Any())
     {
@@ -99,9 +124,11 @@ else
     private bool _loading = true;
     private string? _message;
     private bool _messageIsError;
+    private int _selectedBrokerId;
 
     private List<BrokerCustomerRequestDto> _pendingRequests = new();
     private List<BrokerCustomerRequestDto> _approvedRequests = new();
+    private List<BrokerDto> _availableBrokers = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -125,6 +152,33 @@ else
         var allRequests = await Api.GetCustomerRequestsByBuyerAsync(_buyerId);
         _pendingRequests = allRequests.Where(r => r.Status == CustomerRequestStatus.Pending).ToList();
         _approvedRequests = allRequests.Where(r => r.Status == CustomerRequestStatus.Approved).ToList();
+
+        var allBrokers = await Api.GetBrokersAsync();
+        var linkedBrokerIds = allRequests
+            .Where(r => r.Status == CustomerRequestStatus.Pending || r.Status == CustomerRequestStatus.Approved)
+            .Select(r => r.BrokerId)
+            .ToHashSet();
+        _availableBrokers = allBrokers.Where(b => !linkedBrokerIds.Contains(b.Id)).OrderBy(b => b.CompanyName).ToList();
+    }
+
+    private async Task SendRequest()
+    {
+        if (_selectedBrokerId == 0) return;
+
+        var result = await Api.CreateCustomerRequestByBuyerAsync(_buyerId, _selectedBrokerId);
+        if (result != null)
+        {
+            var brokerName = _availableBrokers.FirstOrDefault(b => b.Id == _selectedBrokerId)?.CompanyName ?? "Broker";
+            _message = $"Connection request sent to '{brokerName}'. Awaiting their approval.";
+            _messageIsError = false;
+            _selectedBrokerId = 0;
+        }
+        else
+        {
+            _message = "Failed to send request. A connection may already exist.";
+            _messageIsError = true;
+        }
+        await LoadData();
     }
 
     private async Task RespondToRequest(BrokerCustomerRequestDto req, bool approve)
