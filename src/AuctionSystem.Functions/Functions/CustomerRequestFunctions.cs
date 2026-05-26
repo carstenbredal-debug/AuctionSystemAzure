@@ -114,6 +114,91 @@ public class CustomerRequestFunctions
         return await CreateJsonResponse(req, request);
     }
 
+    [Function("CreateCustomerRequestByBuyer")]
+    public async Task<HttpResponseData> CreateByBuyer(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "buyers/{buyerId:int}/customer-requests")] HttpRequestData req, int buyerId)
+    {
+        var dto = await req.ReadFromJsonAsync<BuyerRequestDto>();
+        if (dto == null) return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+
+        var existing = await _db.BrokerCustomerRequests
+            .FirstOrDefaultAsync(r => r.BrokerId == dto.BrokerId && r.BuyerId == buyerId);
+        if (existing != null)
+        {
+            var errorResp = req.CreateResponse(System.Net.HttpStatusCode.Conflict);
+            await errorResp.WriteStringAsync("A request for this broker already exists.");
+            return errorResp;
+        }
+
+        var request = new BrokerCustomerRequest
+        {
+            BrokerId = dto.BrokerId,
+            BuyerId = buyerId,
+            Status = CustomerRequestStatus.Pending
+        };
+
+        _db.BrokerCustomerRequests.Add(request);
+        await _db.SaveChangesAsync();
+
+        var saved = await _db.BrokerCustomerRequests
+            .Include(r => r.Broker)
+            .FirstAsync(r => r.Id == request.Id);
+
+        return await CreateJsonResponse(req, saved, System.Net.HttpStatusCode.Created);
+    }
+
+    [Function("AdminCreateCustomerLink")]
+    public async Task<HttpResponseData> AdminLink(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "admin/customer-links")] HttpRequestData req)
+    {
+        var dto = await req.ReadFromJsonAsync<AdminLinkDto>();
+        if (dto == null) return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+
+        var existing = await _db.BrokerCustomerRequests
+            .FirstOrDefaultAsync(r => r.BrokerId == dto.BrokerId && r.BuyerId == dto.BuyerId);
+        if (existing != null)
+        {
+            existing.Status = CustomerRequestStatus.Approved;
+            existing.RespondedAt = DateTime.UtcNow;
+        }
+        else
+        {
+            existing = new BrokerCustomerRequest
+            {
+                BrokerId = dto.BrokerId,
+                BuyerId = dto.BuyerId,
+                Status = CustomerRequestStatus.Approved,
+                RespondedAt = DateTime.UtcNow
+            };
+            _db.BrokerCustomerRequests.Add(existing);
+        }
+
+        var buyer = await _db.Buyers.FindAsync(dto.BuyerId);
+        if (buyer != null)
+            buyer.BrokerId = dto.BrokerId;
+
+        await _db.SaveChangesAsync();
+
+        var saved = await _db.BrokerCustomerRequests
+            .Include(r => r.Broker)
+            .Include(r => r.Buyer)
+            .FirstAsync(r => r.Id == existing.Id);
+
+        return await CreateJsonResponse(req, saved, System.Net.HttpStatusCode.Created);
+    }
+
+    [Function("GetAllCustomerRequests")]
+    public async Task<HttpResponseData> GetAll(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "admin/customer-links")] HttpRequestData req)
+    {
+        var requests = await _db.BrokerCustomerRequests
+            .Include(r => r.Broker)
+            .Include(r => r.Buyer)
+            .OrderByDescending(r => r.RequestedAt)
+            .ToListAsync();
+        return await CreateJsonResponse(req, requests);
+    }
+
     [Function("DeleteCustomerRequest")]
     public async Task<HttpResponseData> Delete(
         [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "customer-requests/{id:int}")] HttpRequestData req, int id)
@@ -137,6 +222,17 @@ public class CustomerRequestFunctions
 
 public class CustomerRequestDto
 {
+    public int BuyerId { get; set; }
+}
+
+public class BuyerRequestDto
+{
+    public int BrokerId { get; set; }
+}
+
+public class AdminLinkDto
+{
+    public int BrokerId { get; set; }
     public int BuyerId { get; set; }
 }
 

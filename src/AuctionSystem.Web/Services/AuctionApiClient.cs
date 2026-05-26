@@ -175,6 +175,23 @@ public class AuctionApiClient
     public async Task DeleteCustomerRequestAsync(int requestId)
         => await _http.DeleteAsync($"api/customer-requests/{requestId}");
 
+    public async Task<BrokerCustomerRequestDto?> CreateCustomerRequestByBuyerAsync(int buyerId, int brokerId)
+    {
+        var resp = await _http.PostAsJsonAsync($"api/buyers/{buyerId}/customer-requests", new { brokerId });
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<BrokerCustomerRequestDto>();
+    }
+
+    public async Task<BrokerCustomerRequestDto?> AdminCreateCustomerLinkAsync(int brokerId, int buyerId)
+    {
+        var resp = await _http.PostAsJsonAsync("api/admin/customer-links", new { brokerId, buyerId });
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<BrokerCustomerRequestDto>();
+    }
+
+    public async Task<List<BrokerCustomerRequestDto>> GetAllCustomerRequestsAsync()
+        => await _http.GetFromJsonAsync<List<BrokerCustomerRequestDto>>("api/admin/customer-links") ?? new();
+
     // Seed
     public async Task SeedDatabaseAsync()
         => await _http.PostAsync("api/seed", null);
