@@ -25,7 +25,7 @@ public class AuctionDto
 public class LotDto
 {
     public int Id { get; set; }
-    public string LotNumber { get; set; } = "";
+    public int LotNumber { get; set; }
     public string Description { get; set; } = "";
     public string Category { get; set; } = "";
     public int Quantity { get; set; }
