@@ -228,4 +228,25 @@ public class AuctionApiClient
 
     public async Task DeleteUserAsync(int id)
         => await _http.DeleteAsync($"api/users/{id}");
+
+    // Parameters
+    public async Task<List<SystemParameterDto>> GetParametersAsync()
+        => await _http.GetFromJsonAsync<List<SystemParameterDto>>("api/parameters") ?? new();
+
+    public async Task<SystemParameterDto?> CreateParameterAsync(SystemParameterDto param)
+    {
+        var resp = await _http.PostAsJsonAsync("api/parameters", param);
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<SystemParameterDto>();
+    }
+
+    public async Task<SystemParameterDto?> UpdateParameterAsync(int id, SystemParameterDto param)
+    {
+        var resp = await _http.PutAsJsonAsync($"api/parameters/{id}", param);
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<SystemParameterDto>();
+    }
+
+    public async Task DeleteParameterAsync(int id)
+        => await _http.DeleteAsync($"api/parameters/{id}");
 }

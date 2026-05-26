@@ -246,6 +246,16 @@ public class BrokerCustomerRequestDto
     public DateTime? RespondedAt { get; set; }
 }
 
+public class SystemParameterDto
+{
+    public int Id { get; set; }
+    public string Key { get; set; } = "";
+    public string Value { get; set; } = "";
+    public string Description { get; set; } = "";
+    public string DataType { get; set; } = "string";
+    public DateTime UpdatedAt { get; set; }
+}
+
 public class DashboardStats
 {
     public int TotalAuctions { get; set; }
