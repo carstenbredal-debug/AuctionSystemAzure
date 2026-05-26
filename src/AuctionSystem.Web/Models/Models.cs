@@ -84,8 +84,35 @@ public class BuyerDto
     public int Id { get; set; }
     public string BuyerNumber { get; set; } = "";
     public string Name { get; set; } = "";
-    public string ContactEmail { get; set; } = "";
+    public string Name2 { get; set; } = "";
+    public string ErpAccountNumber { get; set; } = "";
+    public string SearchName { get; set; } = "";
+    public string ContactName { get; set; } = "";
+    public string AddressLine1 { get; set; } = "";
+    public string AddressLine2 { get; set; } = "";
+    public string Country { get; set; } = "";
+    public string PostalCode { get; set; } = "";
+    public string City { get; set; } = "";
     public string ContactPhone { get; set; } = "";
+    public string MobilePhone { get; set; } = "";
+    public string ContactEmail { get; set; } = "";
+    public string HomePage { get; set; } = "";
+    public string VatRegistrationNo { get; set; } = "";
+    public string RegistrationNo { get; set; } = "";
+    public string CustomerGroup { get; set; } = "";
+    public string SalesPerson { get; set; } = "";
+    public string PaymentTerm { get; set; } = "";
+    public string PaymentMethod { get; set; } = "";
+    public string Currency { get; set; } = "";
+    public string Language { get; set; } = "";
+    public string BankName { get; set; } = "";
+    public string BankAddress { get; set; } = "";
+    public string BankIbanNumber { get; set; } = "";
+    public string SwiftCode { get; set; } = "";
+    public string BankCountry { get; set; } = "";
+    public string Assignee { get; set; } = "";
+    public bool AssignmentOfReceivable { get; set; }
+    public bool IsActive { get; set; } = true;
     public string Address { get; set; } = "";
     public int BrokerId { get; set; }
     public BrokerDto? Broker { get; set; }
