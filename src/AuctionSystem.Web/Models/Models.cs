@@ -256,6 +256,34 @@ public class SystemParameterDto
     public DateTime UpdatedAt { get; set; }
 }
 
+public class CatalogLotDto
+{
+    public int CatalogLotID { get; set; }
+    public Guid LotUniqueID { get; set; }
+    public int StringNumber { get; set; }
+    public int LotNumber { get; set; }
+    public int CatalogSortOrder { get; set; }
+    public string IsShow { get; set; } = "";
+    public string? SalesType { get; set; }
+    public string? Gender { get; set; }
+    public string? Group { get; set; }
+    public string? HairLength { get; set; }
+    public string? Size { get; set; }
+    public string? Quality { get; set; }
+    public string? Color { get; set; }
+    public string? Clarity { get; set; }
+    public string? Damages { get; set; }
+    public string? IncludedBoxNumbers { get; set; }
+    public int BoxCount { get; set; }
+    public int TotalSkins { get; set; }
+}
+
+public class ImportCatalogLotsRequest
+{
+    public List<int> CatalogLotIds { get; set; } = new();
+    public int SellerId { get; set; }
+}
+
 public class DashboardStats
 {
     public int TotalAuctions { get; set; }
