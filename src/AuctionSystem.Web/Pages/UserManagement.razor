@@ -228,16 +228,124 @@ else
                             <input class="form-control" @bind="_sellerForm.Name" />
                         </div>
                         <div class="col-md-4">
+                            <label class="form-label">Name 2</label>
+                            <input class="form-control" @bind="_sellerForm.Name2" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">ERP Account Number</label>
+                            <input class="form-control" @bind="_sellerForm.ErpAccountNumber" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Search Name</label>
+                            <input class="form-control" @bind="_sellerForm.SearchName" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Contact Name</label>
+                            <input class="form-control" @bind="_sellerForm.ContactName" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Address Line 1</label>
+                            <input class="form-control" @bind="_sellerForm.AddressLine1" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Address Line 2</label>
+                            <input class="form-control" @bind="_sellerForm.AddressLine2" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Country</label>
+                            <input class="form-control" @bind="_sellerForm.Country" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Postal Code</label>
+                            <input class="form-control" @bind="_sellerForm.PostalCode" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">City</label>
+                            <input class="form-control" @bind="_sellerForm.City" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Phone No</label>
+                            <input class="form-control" @bind="_sellerForm.ContactPhone" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Mobile Phone No</label>
+                            <input class="form-control" @bind="_sellerForm.MobilePhone" />
+                        </div>
+                        <div class="col-md-4">
                             <label class="form-label">Email</label>
                             <input class="form-control" type="email" @bind="_sellerForm.ContactEmail" />
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Phone</label>
-                            <input class="form-control" @bind="_sellerForm.ContactPhone" />
+                            <label class="form-label">Home Page</label>
+                            <input class="form-control" @bind="_sellerForm.HomePage" />
                         </div>
-                        <div class="col-md-8">
-                            <label class="form-label">Address</label>
-                            <input class="form-control" @bind="_sellerForm.Address" />
+                        <div class="col-md-4">
+                            <label class="form-label">VAT Registration No</label>
+                            <input class="form-control" @bind="_sellerForm.VatRegistrationNo" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Registration No</label>
+                            <input class="form-control" @bind="_sellerForm.RegistrationNo" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Customer Group</label>
+                            <input class="form-control" @bind="_sellerForm.CustomerGroup" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Sales Person</label>
+                            <input class="form-control" @bind="_sellerForm.SalesPerson" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Payment Term</label>
+                            <input class="form-control" @bind="_sellerForm.PaymentTerm" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Payment Method</label>
+                            <input class="form-control" @bind="_sellerForm.PaymentMethod" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Currency</label>
+                            <input class="form-control" @bind="_sellerForm.Currency" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Language</label>
+                            <input class="form-control" @bind="_sellerForm.Language" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Bank Name</label>
+                            <input class="form-control" @bind="_sellerForm.BankName" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Bank Address</label>
+                            <input class="form-control" @bind="_sellerForm.BankAddress" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Bank IBAN Number</label>
+                            <input class="form-control" @bind="_sellerForm.BankIbanNumber" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">SWIFT Code</label>
+                            <input class="form-control" @bind="_sellerForm.SwiftCode" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Bank Country</label>
+                            <input class="form-control" @bind="_sellerForm.BankCountry" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Assignee</label>
+                            <input class="form-control" @bind="_sellerForm.Assignee" />
+                        </div>
+                        <div class="col-md-4 d-flex align-items-center pt-4">
+                            <div class="form-check form-switch me-4">
+                                <input class="form-check-input" type="checkbox" @bind="_sellerForm.AssignmentOfReceivable" />
+                                <label class="form-check-label">Assignment of Receivable</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-center pt-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" @bind="_sellerForm.IsActive" />
+                                <label class="form-check-label">Is Active</label>
+                            </div>
                         </div>
                     </div>
                 }
