@@ -1,0 +1,449 @@
+@page "/admin/sellers/{SellerId:int}"
+@attribute [Authorize(Roles = "Admin")]
+@inject AuctionApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>Seller Details - Admin</PageTitle>
+
+@if (_loading)
+{
+    <p><em>Loading...</em></p>
+}
+else if (_seller == null)
+{
+    <div class="alert alert-warning">Seller not found.</div>
+    <a href="admin/sellers" class="btn btn-secondary">Back to Sellers</a>
+}
+else
+{
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h1>@_seller.Name</h1>
+            <p class="text-muted mb-0">Seller #@_seller.SellerNumber</p>
+        </div>
+        <a href="admin/sellers" class="btn btn-outline-secondary">Back to Sellers</a>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_message))
+    {
+        <div class="alert @(_messageIsError ? "alert-danger" : "alert-success") alert-dismissible fade show">
+            @_message
+            <button type="button" class="btn-close" @onclick="() => _message = null"></button>
+        </div>
+    }
+
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+            <button class="nav-link @(_activeTab == "info" ? "active" : "")" @onclick='() => _activeTab = "info"'>Information</button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link @(_activeTab == "lots" ? "active" : "")" @onclick='() => _activeTab = "lots"'>
+                Lots <span class="badge bg-secondary ms-1">@_lots.Count</span>
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link @(_activeTab == "settlements" ? "active" : "")" @onclick='() => _activeTab = "settlements"'>
+                Settlements
+            </button>
+        </li>
+    </ul>
+
+    @if (_activeTab == "info")
+    {
+        <div class="card">
+            <div class="card-header">
+                <strong>Seller Information</strong>
+                @if (!_editing)
+                {
+                    <button class="btn btn-sm btn-outline-primary float-end" @onclick="StartEdit">Edit</button>
+                }
+            </div>
+            <div class="card-body">
+                @if (_editing)
+                {
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Seller Number <span class="text-danger">*</span></label>
+                            <input class="form-control" @bind="_editDto!.SellerNumber" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Name <span class="text-danger">*</span></label>
+                            <input class="form-control" @bind="_editDto!.Name" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Name 2</label>
+                            <input class="form-control" @bind="_editDto!.Name2" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">ERP Account Number</label>
+                            <input class="form-control" @bind="_editDto!.ErpAccountNumber" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Search Name</label>
+                            <input class="form-control" @bind="_editDto!.SearchName" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Contact Name</label>
+                            <input class="form-control" @bind="_editDto!.ContactName" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Address Line 1</label>
+                            <input class="form-control" @bind="_editDto!.AddressLine1" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Address Line 2</label>
+                            <input class="form-control" @bind="_editDto!.AddressLine2" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Country</label>
+                            <input class="form-control" @bind="_editDto!.Country" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Postal Code</label>
+                            <input class="form-control" @bind="_editDto!.PostalCode" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">City</label>
+                            <input class="form-control" @bind="_editDto!.City" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Phone No</label>
+                            <input class="form-control" @bind="_editDto!.ContactPhone" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Mobile Phone No</label>
+                            <input class="form-control" @bind="_editDto!.MobilePhone" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Email</label>
+                            <input class="form-control" type="email" @bind="_editDto!.ContactEmail" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Home Page</label>
+                            <input class="form-control" @bind="_editDto!.HomePage" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">VAT Registration No</label>
+                            <input class="form-control" @bind="_editDto!.VatRegistrationNo" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Registration No</label>
+                            <input class="form-control" @bind="_editDto!.RegistrationNo" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Customer Group</label>
+                            <input class="form-control" @bind="_editDto!.CustomerGroup" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Sales Person</label>
+                            <input class="form-control" @bind="_editDto!.SalesPerson" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Payment Term</label>
+                            <input class="form-control" @bind="_editDto!.PaymentTerm" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Payment Method</label>
+                            <input class="form-control" @bind="_editDto!.PaymentMethod" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Currency</label>
+                            <input class="form-control" @bind="_editDto!.Currency" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Language</label>
+                            <input class="form-control" @bind="_editDto!.Language" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Bank Name</label>
+                            <input class="form-control" @bind="_editDto!.BankName" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Bank Address</label>
+                            <input class="form-control" @bind="_editDto!.BankAddress" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Bank IBAN Number</label>
+                            <input class="form-control" @bind="_editDto!.BankIbanNumber" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">SWIFT Code</label>
+                            <input class="form-control" @bind="_editDto!.SwiftCode" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Bank Country</label>
+                            <input class="form-control" @bind="_editDto!.BankCountry" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Assignee</label>
+                            <input class="form-control" @bind="_editDto!.Assignee" />
+                        </div>
+                        <div class="col-md-4 d-flex align-items-center pt-4">
+                            <div class="form-check form-switch me-4">
+                                <input class="form-check-input" type="checkbox" @bind="_editDto!.AssignmentOfReceivable" />
+                                <label class="form-check-label">Assignment of Receivable</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-center pt-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" @bind="_editDto!.IsActive" />
+                                <label class="form-check-label">Is Active</label>
+                            </div>
+                        </div>
+                        <div class="col-12 mt-3">
+                            <button class="btn btn-success me-2" @onclick="SaveEdit">Save</button>
+                            <button class="btn btn-secondary" @onclick="CancelEdit">Cancel</button>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <small class="text-muted d-block">Seller Number</small>
+                            <strong>@_seller.SellerNumber</strong>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <small class="text-muted d-block">Name</small>
+                            <strong>@_seller.Name</strong>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <small class="text-muted d-block">Name 2</small>
+                            <strong>@(string.IsNullOrEmpty(_seller.Name2) ? "—" : _seller.Name2)</strong>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <small class="text-muted d-block">ERP Account Number</small>
+                            <strong>@(string.IsNullOrEmpty(_seller.ErpAccountNumber) ? "—" : _seller.ErpAccountNumber)</strong>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <small class="text-muted d-block">Search Name</small>
+                            <strong>@(string.IsNullOrEmpty(_seller.SearchName) ? "—" : _seller.SearchName)</strong>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <small class="text-muted d-block">Contact Name</small>
+                            <strong>@(string.IsNullOrEmpty(_seller.ContactName) ? "—" : _seller.ContactName)</strong>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <small class="text-muted d-block">Address Line 1</small>
+                            <strong>@(string.IsNullOrEmpty(_seller.AddressLine1) ? "—" : _seller.AddressLine1)</strong>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <small class="text-muted d-block">Address Line 2</small>
+                            <strong>@(string.IsNullOrEmpty(_seller.AddressLine2) ? "—" : _seller.AddressLine2)</strong>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <small class="text-muted d-block">Country</small>
+                            <strong>@(string.IsNullOrEmpty(_seller.Country) ? "—" : _seller.Country)</strong>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <small class="text-muted d-block">Postal Code</small>
+                            <strong>@(string.IsNullOrEmpty(_seller.PostalCode) ? "—" : _seller.PostalCode)</strong>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <small class="text-muted d-block">City</small>
+                            <strong>@(string.IsNullOrEmpty(_seller.City) ? "—" : _seller.City)</strong>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <small class="text-muted d-block">Phone No</small>
+                            <strong>@(string.IsNullOrEmpty(_seller.ContactPhone) ? "—" : _seller.ContactPhone)</strong>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <small class="text-muted d-block">Mobile Phone No</small>
+                            <strong>@(string.IsNullOrEmpty(_seller.MobilePhone) ? "—" : _seller.MobilePhone)</strong>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <small class="text-muted d-block">Email</small>
+                            <strong>@(string.IsNullOrEmpty(_seller.ContactEmail) ? "—" : _seller.ContactEmail)</strong>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <small class="text-muted d-block">Home Page</small>
+                            <strong>@(string.IsNullOrEmpty(_seller.HomePage) ? "—" : _seller.HomePage)</strong>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <small class="text-muted d-block">VAT Registration No</small>
+                            <strong>@(string.IsNullOrEmpty(_seller.VatRegistrationNo) ? "—" : _seller.VatRegistrationNo)</strong>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <small class="text-muted d-block">Registration No</small>
+                            <strong>@(string.IsNullOrEmpty(_seller.RegistrationNo) ? "—" : _seller.RegistrationNo)</strong>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <small class="text-muted d-block">Customer Group</small>
+                            <strong>@(string.IsNullOrEmpty(_seller.CustomerGroup) ? "—" : _seller.CustomerGroup)</strong>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <small class="text-muted d-block">Sales Person</small>
+                            <strong>@(string.IsNullOrEmpty(_seller.SalesPerson) ? "—" : _seller.SalesPerson)</strong>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <small class="text-muted d-block">Payment Term</small>
+                            <strong>@(string.IsNullOrEmpty(_seller.PaymentTerm) ? "—" : _seller.PaymentTerm)</strong>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <small class="text-muted d-block">Payment Method</small>
+                            <strong>@(string.IsNullOrEmpty(_seller.PaymentMethod) ? "—" : _seller.PaymentMethod)</strong>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <small class="text-muted d-block">Currency</small>
+                            <strong>@(string.IsNullOrEmpty(_seller.Currency) ? "—" : _seller.Currency)</strong>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <small class="text-muted d-block">Language</small>
+                            <strong>@(string.IsNullOrEmpty(_seller.Language) ? "—" : _seller.Language)</strong>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <small class="text-muted d-block">Bank Name</small>
+                            <strong>@(string.IsNullOrEmpty(_seller.BankName) ? "—" : _seller.BankName)</strong>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <small class="text-muted d-block">Bank Address</small>
+                            <strong>@(string.IsNullOrEmpty(_seller.BankAddress) ? "—" : _seller.BankAddress)</strong>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <small class="text-muted d-block">Bank IBAN Number</small>
+                            <strong>@(string.IsNullOrEmpty(_seller.BankIbanNumber) ? "—" : _seller.BankIbanNumber)</strong>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <small class="text-muted d-block">SWIFT Code</small>
+                            <strong>@(string.IsNullOrEmpty(_seller.SwiftCode) ? "—" : _seller.SwiftCode)</strong>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <small class="text-muted d-block">Bank Country</small>
+                            <strong>@(string.IsNullOrEmpty(_seller.BankCountry) ? "—" : _seller.BankCountry)</strong>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <small class="text-muted d-block">Assignee</small>
+                            <strong>@(string.IsNullOrEmpty(_seller.Assignee) ? "—" : _seller.Assignee)</strong>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <small class="text-muted d-block">Assignment of Receivable</small>
+                            <strong>@(_seller.AssignmentOfReceivable ? "Yes" : "No")</strong>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <small class="text-muted d-block">Is Active</small>
+                            <span class="badge bg-@(_seller.IsActive ? "success" : "secondary")">@(_seller.IsActive ? "Active" : "Inactive")</span>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    @if (_activeTab == "lots")
+    {
+        <div class="card">
+            <div class="card-header">
+                <strong>Lots</strong>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-striped table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Lot Number</th>
+                            <th>Description</th>
+                            <th>Quantity</th>
+                            <th>Starting Price</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (_lots.Count == 0)
+                        {
+                            <tr><td colspan="5" class="text-center text-muted py-4">No lots consigned.</td></tr>
+                        }
+                        @foreach (var lot in _lots)
+                        {
+                            <tr>
+                                <td><strong>@lot.LotNumber</strong></td>
+                                <td>@lot.Description</td>
+                                <td>@lot.Quantity</td>
+                                <td>@lot.StartingPrice.ToString("C")</td>
+                                <td>
+                                    <span class="badge bg-secondary">@lot.Status</span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    @if (_activeTab == "settlements")
+    {
+        <div class="card">
+            <div class="card-header">
+                <strong>Settlements</strong>
+            </div>
+            <div class="card-body text-center text-muted py-4">
+                <p>Settlement information will be available here.</p>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public int SellerId { get; set; }
+
+    private SellerDto? _seller;
+    private List<LotDto> _lots = new();
+    private bool _loading = true;
+    private bool _editing;
+    private SellerDto? _editDto;
+    private string? _message;
+    private bool _messageIsError;
+    private string _activeTab = "info";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+        _loading = false;
+    }
+
+    private async Task LoadData()
+    {
+        var allSellers = await Api.GetSellersAsync();
+        _seller = allSellers.FirstOrDefault(s => s.Id == SellerId);
+        if (_seller != null)
+            _lots = await Api.GetLotsBySellerAsync(SellerId);
+    }
+
+    private void StartEdit()
+    {
+        _editDto = new SellerDto
+        {
+            Id = _seller!.Id, SellerNumber = _seller.SellerNumber, Name = _seller.Name,
+            Name2 = _seller.Name2, ErpAccountNumber = _seller.ErpAccountNumber,
+            SearchName = _seller.SearchName, ContactName = _seller.ContactName,
+            AddressLine1 = _seller.AddressLine1, AddressLine2 = _seller.AddressLine2,
+            Country = _seller.Country, PostalCode = _seller.PostalCode, City = _seller.City,
+            ContactPhone = _seller.ContactPhone, MobilePhone = _seller.MobilePhone,
+            ContactEmail = _seller.ContactEmail, HomePage = _seller.HomePage,
+            VatRegistrationNo = _seller.VatRegistrationNo, RegistrationNo = _seller.RegistrationNo,
+            CustomerGroup = _seller.CustomerGroup, SalesPerson = _seller.SalesPerson,
+            PaymentTerm = _seller.PaymentTerm, PaymentMethod = _seller.PaymentMethod,
+            Currency = _seller.Currency, Language = _seller.Language,
+            BankName = _seller.BankName, BankAddress = _seller.BankAddress,
+            BankIbanNumber = _seller.BankIbanNumber, SwiftCode = _seller.SwiftCode,
+            BankCountry = _seller.BankCountry, Assignee = _seller.Assignee,
+            AssignmentOfReceivable = _seller.AssignmentOfReceivable, IsActive = _seller.IsActive,
+            Address = _seller.Address
+        };
+        _editing = true;
+        _message = null;
+    }
+
+    private void CancelEdit() { _editing = false; _editDto = null; }
+
+    private async Task SaveEdit()
+    {
+        if (_editDto == null) return;
+        if (string.IsNullOrWhiteSpace(_editDto.SellerNumber) || string.IsNullOrWhiteSpace(_editDto.Name))
+        { _message = "Seller Number and Name are required."; _messageIsError = true; return; }
+
+        await Api.UpdateSellerAsync(_editDto.Id, _editDto);
+        _message = "Seller updated."; _messageIsError = false;
+        _editing = false; _editDto = null;
+        await LoadData();
+    }
+}
