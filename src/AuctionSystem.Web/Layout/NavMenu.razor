@@ -2,17 +2,53 @@
     <div class="container-fluid">
         <AuthorizeView Roles="Broker">
             <Authorized>
-                <a class="navbar-brand" href="">Broker Portal</a>
+                <a class="navbar-brand" href="">
+                    <div class="brand-logo">
+                        <svg width="32" height="32" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="50" cy="50" r="45" stroke="white" stroke-width="3" fill="none"/>
+                            <path d="M50 15 C35 15, 25 30, 25 45 C25 60, 35 75, 50 85 C65 75, 75 60, 75 45 C75 30, 65 15, 50 15 Z" stroke="white" stroke-width="2.5" fill="none"/>
+                            <line x1="50" y1="15" x2="50" y2="85" stroke="white" stroke-width="2"/>
+                        </svg>
+                    </div>
+                    <div class="brand-text">
+                        <span class="brand-name">KOPENHAGEN</span>
+                        <span class="brand-name">FUR</span>
+                    </div>
+                </a>
             </Authorized>
         </AuthorizeView>
         <AuthorizeView Roles="Buyer">
             <Authorized>
-                <a class="navbar-brand" href="">Buyer Portal</a>
+                <a class="navbar-brand" href="">
+                    <div class="brand-logo">
+                        <svg width="32" height="32" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="50" cy="50" r="45" stroke="white" stroke-width="3" fill="none"/>
+                            <path d="M50 15 C35 15, 25 30, 25 45 C25 60, 35 75, 50 85 C65 75, 75 60, 75 45 C75 30, 65 15, 50 15 Z" stroke="white" stroke-width="2.5" fill="none"/>
+                            <line x1="50" y1="15" x2="50" y2="85" stroke="white" stroke-width="2"/>
+                        </svg>
+                    </div>
+                    <div class="brand-text">
+                        <span class="brand-name">KOPENHAGEN</span>
+                        <span class="brand-name">FUR</span>
+                    </div>
+                </a>
             </Authorized>
         </AuthorizeView>
         <AuthorizeView Roles="Admin,Seller">
             <Authorized>
-                <a class="navbar-brand" href="">Auction System</a>
+                <a class="navbar-brand" href="">
+                    <div class="brand-logo">
+                        <svg width="32" height="32" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="50" cy="50" r="45" stroke="white" stroke-width="3" fill="none"/>
+                            <path d="M50 15 C35 15, 25 30, 25 45 C25 60, 35 75, 50 85 C65 75, 75 60, 75 45 C75 30, 65 15, 50 15 Z" stroke="white" stroke-width="2.5" fill="none"/>
+                            <line x1="50" y1="15" x2="50" y2="85" stroke="white" stroke-width="2"/>
+                        </svg>
+                    </div>
+                    <div class="brand-text">
+                        <span class="brand-name">KOPENHAGEN</span>
+                        <span class="brand-name">FUR</span>
+                    </div>
+                </a>
             </Authorized>
         </AuthorizeView>
         <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
@@ -27,56 +63,56 @@
             <Authorized Context="authState">
                 <div class="nav-item px-3">
                     <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                        <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Dashboard
+                        Dashboard
                     </NavLink>
                 </div>
 
                 <AuthorizeView Roles="Admin">
                     <div class="nav-item px-3 mt-2">
-                        <span class="nav-link text-muted"><small><strong>ADMIN</strong></small></span>
+                        <span class="nav-link section-label"><small><strong>ADMIN</strong></small></span>
                     </div>
                     <div class="nav-item px-3">
                         <NavLink class="nav-link" href="admin/users">
-                            <span class="bi bi-people-fill-nav-menu" aria-hidden="true"></span> Users & Roles
+                            Users & Roles
                         </NavLink>
                     </div>
                     <div class="nav-item px-3">
                         <NavLink class="nav-link" href="admin/brokers">
-                            <span class="bi bi-people-fill-nav-menu" aria-hidden="true"></span> Brokers
+                            Brokers
                         </NavLink>
                     </div>
                     <div class="nav-item px-3">
                         <NavLink class="nav-link" href="admin/sellers">
-                            <span class="bi bi-shop-nav-menu" aria-hidden="true"></span> Sellers
+                            Sellers
                         </NavLink>
                     </div>
                     <div class="nav-item px-3">
                         <NavLink class="nav-link" href="admin/buyers">
-                            <span class="bi bi-cart-fill-nav-menu" aria-hidden="true"></span> Buyers
+                            Buyers
                         </NavLink>
                     </div>
                     <div class="nav-item px-3">
                         <NavLink class="nav-link" href="admin/customer-links">
-                            <span class="bi bi-link-nav-menu" aria-hidden="true"></span> Link Customer to Broker
+                            Link Customer to Broker
                         </NavLink>
                     </div>
                     <div class="nav-item px-3">
                         <NavLink class="nav-link" href="admin/parameters">
-                            <span class="bi bi-gear-fill-nav-menu" aria-hidden="true"></span> Parameters
+                            Parameters
                         </NavLink>
                     </div>
 
                     <div class="nav-item px-3 mt-2">
-                        <span class="nav-link text-muted"><small><strong>AUCTION</strong></small></span>
+                        <span class="nav-link section-label"><small><strong>AUCTION</strong></small></span>
                     </div>
                     <div class="nav-item px-3">
                         <NavLink class="nav-link" href="auctions">
-                            <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Auctions
+                            Auctions
                         </NavLink>
                     </div>
                     <div class="nav-item px-3">
                         <NavLink class="nav-link" href="settlements">
-                            <span class="bi bi-cash-stack-nav-menu" aria-hidden="true"></span> Settlements
+                            Settlements
                         </NavLink>
                     </div>
                 </AuthorizeView>
@@ -84,22 +120,22 @@
                 <AuthorizeView Roles="Broker">
                     <div class="nav-item px-3">
                         <NavLink class="nav-link" href="broker/customers">
-                            <span class="bi bi-people-fill-nav-menu" aria-hidden="true"></span> Customers
+                            Customers
                         </NavLink>
                     </div>
                     <div class="nav-item px-3">
                         <NavLink class="nav-link" href="broker/lots">
-                            <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Lots
+                            Lots
                         </NavLink>
                     </div>
                     <div class="nav-item px-3">
                         <NavLink class="nav-link" href="broker/auction">
-                            <span class="bi bi-hammer-nav-menu" aria-hidden="true"></span> Auction
+                            Auction
                         </NavLink>
                     </div>
                     <div class="nav-item px-3">
                         <NavLink class="nav-link" href="broker/financial">
-                            <span class="bi bi-cash-stack-nav-menu" aria-hidden="true"></span> Financial
+                            Financial
                         </NavLink>
                     </div>
                 </AuthorizeView>
@@ -107,28 +143,28 @@
                 <AuthorizeView Roles="Buyer">
                     <div class="nav-item px-3">
                         <NavLink class="nav-link" href="buyer/invitations">
-                            <span class="bi bi-envelope-fill-nav-menu" aria-hidden="true"></span> Invitations
+                            Invitations
                         </NavLink>
                     </div>
                     <div class="nav-item px-3">
                         <NavLink class="nav-link" href="buyer/purchases">
-                            <span class="bi bi-cart-fill-nav-menu" aria-hidden="true"></span> Purchases
+                            Purchases
                         </NavLink>
                     </div>
                     <div class="nav-item px-3">
                         <NavLink class="nav-link" href="buyer/financial">
-                            <span class="bi bi-cash-stack-nav-menu" aria-hidden="true"></span> Financial
+                            Financial
                         </NavLink>
                     </div>
                 </AuthorizeView>
 
                 <AuthorizeView Roles="Seller">
                     <div class="nav-item px-3 mt-2">
-                        <span class="nav-link text-muted"><small><strong>SELLER</strong></small></span>
+                        <span class="nav-link section-label"><small><strong>SELLER</strong></small></span>
                     </div>
                     <div class="nav-item px-3">
                         <NavLink class="nav-link" href="seller">
-                            <span class="bi bi-shop-nav-menu" aria-hidden="true"></span> Seller Portal
+                            Seller Portal
                         </NavLink>
                     </div>
                 </AuthorizeView>
