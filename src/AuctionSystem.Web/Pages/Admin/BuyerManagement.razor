@@ -1,11 +1,12 @@
 @page "/admin/buyers"
 @attribute [Authorize(Roles = "Admin")]
 @inject AuctionApiClient Api
+@inject NavigationManager Nav
 
 <PageTitle>Buyers - Admin</PageTitle>
 
 <h1>Buyers</h1>
-<p class="text-muted">Manage buyers (customers) and their broker associations.</p>
+<p class="text-muted">Click on a buyer to view details and broker relationships.</p>
 
 @if (_loading)
 {
@@ -23,44 +24,7 @@ else
 
     <p class="small text-muted mb-3">To add a new buyer, go to <a href="admin/users">Users & Roles</a> and create a user with the Buyer role.</p>
 
-    @if (_showForm)
-    {
-        <div class="card mb-4 border-primary">
-            <div class="card-header bg-primary text-white">
-                <strong>Edit Buyer</strong>
-            </div>
-            <div class="card-body">
-                <div class="row g-3">
-                    <div class="col-md-4">
-                        <label class="form-label">Buyer Number <span class="text-danger">*</span></label>
-                        <input class="form-control" @bind="_editing!.BuyerNumber" placeholder="C001" />
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Name <span class="text-danger">*</span></label>
-                        <input class="form-control" @bind="_editing!.Name" />
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Email</label>
-                        <input class="form-control" type="email" @bind="_editing!.ContactEmail" />
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Phone</label>
-                        <input class="form-control" @bind="_editing!.ContactPhone" />
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Address</label>
-                        <input class="form-control" @bind="_editing!.Address" />
-                    </div>
-                    <div class="col-12 mt-3">
-                        <button class="btn btn-success me-2" @onclick="Save">@(_editing?.Id > 0 ? "Update" : "Create")</button>
-                        <button class="btn btn-secondary" @onclick="Cancel">Cancel</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    }
-
-    <div class="card mb-4">
+    <div class="card">
         <div class="card-header">
             <strong>Registered Buyers</strong> <span class="badge bg-secondary">@_items.Count</span>
         </div>
@@ -72,7 +36,7 @@ else
                         <th>Name</th>
                         <th>Email</th>
                         <th>Phone</th>
-                        <th style="width: 150px;">Actions</th>
+                        <th>Address</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -82,92 +46,12 @@ else
                     }
                     @foreach (var item in _items)
                     {
-                        <tr>
+                        <tr style="cursor: pointer;" @onclick="() => ViewBuyer(item.Id)">
                             <td><strong>@item.BuyerNumber</strong></td>
                             <td>@item.Name</td>
                             <td>@item.ContactEmail</td>
                             <td>@item.ContactPhone</td>
-                            <td>
-                                <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => Edit(item)">Edit</button>
-                                <button class="btn btn-sm btn-outline-danger" @onclick="() => Delete(item)">Delete</button>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <div class="card mb-4 border-info">
-        <div class="card-header bg-info text-white">
-            <strong>Link Customer to Broker</strong>
-        </div>
-        <div class="card-body">
-            <p class="text-muted small">Directly connect a buyer to a broker (bypasses the invitation/approval flow).</p>
-            <div class="row g-3 align-items-end">
-                <div class="col-md-4">
-                    <label class="form-label">Buyer</label>
-                    <select class="form-select" @bind="_linkBuyerId">
-                        <option value="0">— Select Buyer —</option>
-                        @foreach (var b in _items)
-                        {
-                            <option value="@b.Id">@b.Name (@b.BuyerNumber)</option>
-                        }
-                    </select>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">Broker</label>
-                    <select class="form-select" @bind="_linkBrokerId">
-                        <option value="0">— Select Broker —</option>
-                        @foreach (var b in _brokers)
-                        {
-                            <option value="@b.Id">@b.CompanyName (@b.BrokerNumber)</option>
-                        }
-                    </select>
-                </div>
-                <div class="col-md-4">
-                    <button class="btn btn-info text-white" @onclick="AdminLink" disabled="@(_linkBuyerId == 0 || _linkBrokerId == 0)">
-                        Link Customer to Broker
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="card">
-        <div class="card-header">
-            <strong>Broker-Customer Relationships</strong> <span class="badge bg-secondary">@_links.Count</span>
-        </div>
-        <div class="card-body p-0">
-            <table class="table table-striped table-hover mb-0">
-                <thead class="table-dark">
-                    <tr>
-                        <th>Buyer</th>
-                        <th>Broker</th>
-                        <th>Status</th>
-                        <th>Requested</th>
-                        <th>Responded</th>
-                        <th style="width: 100px;">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (_links.Count == 0)
-                    {
-                        <tr><td colspan="6" class="text-center text-muted py-4">No broker-customer relationships.</td></tr>
-                    }
-                    @foreach (var link in _links)
-                    {
-                        <tr>
-                            <td><strong>@(link.Buyer?.Name ?? $"Buyer {link.BuyerId}")</strong></td>
-                            <td>@(link.Broker?.CompanyName ?? $"Broker {link.BrokerId}")</td>
-                            <td>
-                                <span class="badge bg-@GetStatusColor(link.Status)">@GetStatusText(link.Status)</span>
-                            </td>
-                            <td>@link.RequestedAt.ToString("g")</td>
-                            <td>@(link.RespondedAt?.ToString("g") ?? "—")</td>
-                            <td>
-                                <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveLink(link)">Remove</button>
-                            </td>
+                            <td>@item.Address</td>
                         </tr>
                     }
                 </tbody>
@@ -178,107 +62,15 @@ else
 
 @code {
     private List<BuyerDto> _items = new();
-    private List<BrokerDto> _brokers = new();
-    private List<BrokerCustomerRequestDto> _links = new();
-    private BuyerDto? _editing;
     private bool _loading = true;
-    private bool _showForm;
     private string? _message;
     private bool _messageIsError;
-    private int _linkBuyerId;
-    private int _linkBrokerId;
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadData();
+        _items = await Api.GetAllBuyersAsync();
         _loading = false;
     }
 
-    private async Task LoadData()
-    {
-        _brokers = await Api.GetBrokersAsync();
-        _items = await Api.GetAllBuyersAsync();
-        _links = await Api.GetAllCustomerRequestsAsync();
-    }
-
-    private void Cancel() { _editing = null; _showForm = false; }
-
-    private void Edit(BuyerDto item)
-    {
-        _editing = new BuyerDto
-        {
-            Id = item.Id, BuyerNumber = item.BuyerNumber, Name = item.Name,
-            ContactEmail = item.ContactEmail, ContactPhone = item.ContactPhone,
-            Address = item.Address, BrokerId = item.BrokerId
-        };
-        _showForm = true; _message = null;
-    }
-
-    private async Task Save()
-    {
-        if (_editing == null) return;
-        if (string.IsNullOrWhiteSpace(_editing.BuyerNumber) || string.IsNullOrWhiteSpace(_editing.Name))
-        { _message = "Buyer Number and Name are required."; _messageIsError = true; return; }
-
-        if (_editing.Id > 0)
-            await Api.UpdateBuyerAsync(_editing.Id, _editing);
-        else
-            await Api.CreateBuyerAsync(0, _editing);
-
-        _message = $"Buyer '{_editing.Name}' saved."; _messageIsError = false;
-        _showForm = false; _editing = null;
-        await LoadData();
-    }
-
-    private async Task Delete(BuyerDto item)
-    {
-        await Api.DeleteBuyerAsync(item.Id);
-        _message = $"Buyer '{item.Name}' deleted."; _messageIsError = false;
-        await LoadData();
-    }
-
-    private async Task AdminLink()
-    {
-        if (_linkBuyerId == 0 || _linkBrokerId == 0) return;
-
-        var result = await Api.AdminCreateCustomerLinkAsync(_linkBrokerId, _linkBuyerId);
-        if (result != null)
-        {
-            var buyerName = _items.FirstOrDefault(b => b.Id == _linkBuyerId)?.Name ?? "Buyer";
-            var brokerName = _brokers.FirstOrDefault(b => b.Id == _linkBrokerId)?.CompanyName ?? "Broker";
-            _message = $"'{buyerName}' linked to '{brokerName}' successfully.";
-            _messageIsError = false;
-            _linkBuyerId = 0;
-            _linkBrokerId = 0;
-        }
-        else
-        {
-            _message = "Failed to create link. The relationship may already exist.";
-            _messageIsError = true;
-        }
-        await LoadData();
-    }
-
-    private async Task RemoveLink(BrokerCustomerRequestDto link)
-    {
-        await Api.DeleteCustomerRequestAsync(link.Id);
-        _message = "Relationship removed."; _messageIsError = false;
-        await LoadData();
-    }
-
-    private string GetStatusColor(CustomerRequestStatus status) => status switch
-    {
-        CustomerRequestStatus.Approved => "success",
-        CustomerRequestStatus.Pending => "warning",
-        CustomerRequestStatus.Declined => "danger",
-        _ => "secondary"
-    };
-
-    private string GetStatusText(CustomerRequestStatus status) => status switch
-    {
-        CustomerRequestStatus.Approved => "Approved",
-        CustomerRequestStatus.Pending => "Awaiting Approval",
-        CustomerRequestStatus.Declined => "Declined",
-        _ => "Unknown"
-    };
+    private void ViewBuyer(int id) => Nav.NavigateTo($"admin/buyers/{id}");
 }
