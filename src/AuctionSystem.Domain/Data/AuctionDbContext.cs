@@ -20,6 +20,7 @@ public class AuctionDbContext : DbContext
     public DbSet<AppUser> AppUsers => Set<AppUser>();
     public DbSet<BrokerCustomerRequest> BrokerCustomerRequests => Set<BrokerCustomerRequest>();
     public DbSet<SystemParameter> SystemParameters => Set<SystemParameter>();
+    public DbSet<AuctionResult> AuctionResults => Set<AuctionResult>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -148,6 +149,21 @@ public class AuctionDbContext : DbContext
             e.Property(p => p.Value).HasMaxLength(500).IsRequired();
             e.Property(p => p.Description).HasMaxLength(500);
             e.Property(p => p.DataType).HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<AuctionResult>(e =>
+        {
+            e.HasKey(r => r.Id);
+            e.HasOne(r => r.Broker).WithMany().HasForeignKey(r => r.BrokerId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(r => r.PriceEur).HasColumnType("decimal(18,2)");
+            e.Property(r => r.SalesType).HasMaxLength(50);
+            e.Property(r => r.Gender).HasMaxLength(50);
+            e.Property(r => r.Group).HasMaxLength(50);
+            e.Property(r => r.Color).HasMaxLength(50);
+            e.Property(r => r.Quality).HasMaxLength(50);
+            e.Property(r => r.Size).HasMaxLength(50);
+            e.Property(r => r.Clarity).HasMaxLength(50);
+            e.Property(r => r.HairLength).HasMaxLength(50);
         });
     }
 }

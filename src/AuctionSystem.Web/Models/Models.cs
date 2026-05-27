@@ -284,6 +284,29 @@ public class ImportCatalogLotsRequest
     public int SellerId { get; set; }
 }
 
+public class AuctionResultDto
+{
+    public int Id { get; set; }
+    public int LotNumber { get; set; }
+    public int BrokerId { get; set; }
+    public string BrokerName { get; set; } = "";
+    public string BrokerNumber { get; set; } = "";
+    public decimal PriceEur { get; set; }
+    public string? SalesType { get; set; }
+    public string? Gender { get; set; }
+    public string? Group { get; set; }
+    public string? Color { get; set; }
+    public string? Quality { get; set; }
+    public string? Size { get; set; }
+    public string? Clarity { get; set; }
+    public string? HairLength { get; set; }
+    public int TotalSkins { get; set; }
+    public int BoxCount { get; set; }
+    public bool Processed { get; set; }
+    public DateTime ReceivedAt { get; set; }
+    public DateTime? ProcessedAt { get; set; }
+}
+
 public class DashboardStats
 {
     public int TotalAuctions { get; set; }
