@@ -39,7 +39,7 @@ else
             <div class="card text-center">
                 <div class="card-body">
                     <h5 class="card-title text-muted">Total Value</h5>
-                    <h2>€@_purchases.Sum(p => p.PriceEur).ToString("N2")</h2>
+                    <h2>€@_purchases.Sum(p => p.TotalSkins * p.PriceEur).ToString("N2")</h2>
                 </div>
             </div>
         </div>
