@@ -139,6 +139,15 @@ public class BrokerFunctions
         return await CreateJsonResponse(req, buyers);
     }
 
+    [Function("GetBuyerById")]
+    public async Task<HttpResponseData> GetBuyerById(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "buyers/{id:int}")] HttpRequestData req, int id)
+    {
+        var buyer = await _db.Buyers.Include(b => b.Broker).FirstOrDefaultAsync(b => b.Id == id);
+        if (buyer == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+        return await CreateJsonResponse(req, buyer);
+    }
+
     [Function("UpdateBuyer")]
     public async Task<HttpResponseData> UpdateBuyer(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "buyers/{id:int}")] HttpRequestData req, int id)
