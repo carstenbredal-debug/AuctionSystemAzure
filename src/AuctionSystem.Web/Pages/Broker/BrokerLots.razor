@@ -1,6 +1,7 @@
 @page "/broker/lots"
 @attribute [Authorize(Roles = "Broker")]
 @inject AuctionApiClient Api
+@inject AuthenticationStateProvider AuthState
 
 <PageTitle>Lots - Broker Portal</PageTitle>
 
@@ -75,25 +76,16 @@ else
     private List<AuctionResultDto> _auctionResults = new();
     private bool _loading = true;
 
-    [CascadingParameter]
-    private Task<AuthenticationState>? AuthStateTask { get; set; }
-
     protected override async Task OnInitializedAsync()
     {
-        if (AuthStateTask != null)
+        var auth = await AuthState.GetAuthenticationStateAsync();
+        var oid = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (oid != null)
         {
-            var authState = await AuthStateTask;
-            var objectId = authState.User.FindFirst("http://schemas.microsoft.com/identity/claims/objectidentifier")?.Value
-                ?? authState.User.FindFirst("oid")?.Value
-                ?? authState.User.FindFirst("sub")?.Value;
-
-            if (objectId != null)
+            var user = await Api.GetCurrentUserAsync(oid);
+            if (user?.BrokerId != null)
             {
-                var currentUser = await Api.GetCurrentUserAsync(objectId);
-                if (currentUser?.BrokerId != null)
-                {
-                    _auctionResults = await Api.GetAuctionResultsByBrokerAsync(currentUser.BrokerId.Value);
-                }
+                _auctionResults = await Api.GetAuctionResultsByBrokerAsync(user.BrokerId.Value);
             }
         }
 
