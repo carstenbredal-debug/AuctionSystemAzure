@@ -155,6 +155,7 @@ public class AuctionDbContext : DbContext
         {
             e.HasKey(r => r.Id);
             e.HasOne(r => r.Broker).WithMany().HasForeignKey(r => r.BrokerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(r => r.SoldToBuyer).WithMany().HasForeignKey(r => r.SoldToBuyerId).OnDelete(DeleteBehavior.Restrict);
             e.Property(r => r.PriceEur).HasColumnType("decimal(18,2)");
             e.Property(r => r.SalesType).HasMaxLength(50);
             e.Property(r => r.Gender).HasMaxLength(50);
