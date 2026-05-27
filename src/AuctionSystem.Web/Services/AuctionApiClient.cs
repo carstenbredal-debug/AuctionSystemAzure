@@ -275,4 +275,14 @@ public class AuctionApiClient
 
     public async Task<List<AuctionResultDto>> GetAuctionResultsByBuyerAsync(int buyerId)
         => await _http.GetFromJsonAsync<List<AuctionResultDto>>($"api/auction-results/buyer/{buyerId}") ?? new();
+
+    // Takeback Requests
+    public async Task<HttpResponseMessage> RequestTakebackAsync(List<int> auctionResultIds)
+        => await _http.PostAsJsonAsync("api/takeback-requests", new { auctionResultIds });
+
+    public async Task<List<TakebackRequestDto>> GetTakebackRequestsByBuyerAsync(int buyerId)
+        => await _http.GetFromJsonAsync<List<TakebackRequestDto>>($"api/takeback-requests/buyer/{buyerId}") ?? new();
+
+    public async Task<HttpResponseMessage> RespondTakebackAsync(int requestId, bool approve)
+        => await _http.PutAsJsonAsync($"api/takeback-requests/{requestId}", new { approve });
 }

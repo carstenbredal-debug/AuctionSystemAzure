@@ -21,6 +21,7 @@ public class AuctionDbContext : DbContext
     public DbSet<BrokerCustomerRequest> BrokerCustomerRequests => Set<BrokerCustomerRequest>();
     public DbSet<SystemParameter> SystemParameters => Set<SystemParameter>();
     public DbSet<AuctionResult> AuctionResults => Set<AuctionResult>();
+    public DbSet<TakebackRequest> TakebackRequests => Set<TakebackRequest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -165,6 +166,14 @@ public class AuctionDbContext : DbContext
             e.Property(r => r.Size).HasMaxLength(50);
             e.Property(r => r.Clarity).HasMaxLength(50);
             e.Property(r => r.HairLength).HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<TakebackRequest>(e =>
+        {
+            e.HasKey(r => r.Id);
+            e.HasOne(r => r.AuctionResult).WithMany().HasForeignKey(r => r.AuctionResultId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(r => r.Broker).WithMany().HasForeignKey(r => r.BrokerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(r => r.Buyer).WithMany().HasForeignKey(r => r.BuyerId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }
