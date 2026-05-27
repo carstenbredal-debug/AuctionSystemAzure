@@ -355,10 +355,6 @@ else if (_activeTab == "takeback")
                                     <button class="btn btn-sm btn-success me-1" @onclick="() => RespondBrokerTakeback(t.Id, true)">Approve</button>
                                     <button class="btn btn-sm btn-outline-danger" @onclick="() => RespondBrokerTakeback(t.Id, false)">Decline</button>
                                 }
-                                else if (t.Status == CustomerRequestStatus.Pending && t.InitiatedBy == "Broker")
-                                {
-                                    <small class="text-muted">Awaiting buyer</small>
-                                }
                                 else
                                 {
                                     <small class="text-muted">@(t.RespondedAt?.ToString("g") ?? "")</small>
@@ -488,9 +484,11 @@ else if (_activeTab == "takeback")
             var resp = await Api.RequestTakebackAsync(_selectedSoldIds.ToList());
             if (resp.IsSuccessStatusCode)
             {
-                _takebackMessage = $"Takeback requested for {_selectedSoldIds.Count} lot(s). Awaiting buyer approval.";
+                _takebackMessage = $"{_selectedSoldIds.Count} lot(s) taken back. Lots moved to unsold.";
                 _takebackMessageIsError = false;
                 _selectedSoldIds.Clear();
+                _allResults = await Api.GetAuctionResultsByBrokerAsync(_brokerId);
+                _pendingTakebacks = await Api.GetTakebackRequestsByBrokerAsync(_brokerId);
             }
             else
             {
