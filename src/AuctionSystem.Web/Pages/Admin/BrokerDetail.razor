@@ -42,8 +42,23 @@ else
             </button>
         </li>
         <li class="nav-item">
-            <button class="nav-link @(_activeTab == "allocations" ? "active" : "")" @onclick='() => _activeTab = "allocations"'>
-                Allocations
+            <button class="nav-link @(_activeTab == "purchased" ? "active" : "")" @onclick='() => _activeTab = "purchased"'>
+                Purchased Lots <span class="badge bg-secondary ms-1">@_allResults.Count</span>
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link @(_activeTab == "sold" ? "active" : "")" @onclick='() => _activeTab = "sold"'>
+                Sold Lots <span class="badge bg-secondary ms-1">@_soldLots.Count</span>
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link @(_activeTab == "unsold" ? "active" : "")" @onclick='() => _activeTab = "unsold"'>
+                Unsold Lots <span class="badge bg-secondary ms-1">@_unsoldLots.Count</span>
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link @(_activeTab == "takeback" ? "active" : "")" @onclick='() => _activeTab = "takeback"'>
+                Takeback <span class="badge bg-@(_takebackRequests.Count(t => t.Status == CustomerRequestStatus.Pending) > 0 ? "warning" : "secondary") ms-1">@_takebackRequests.Count</span>
             </button>
         </li>
     </ul>
@@ -309,14 +324,176 @@ else
         </div>
     }
 
-    @if (_activeTab == "allocations")
+    @if (_activeTab == "purchased")
+    {
+        <div class="row mb-3">
+            <div class="col-md-4">
+                <div class="card text-center"><div class="card-body">
+                    <h5 class="card-title text-muted">Total Purchase</h5>
+                    <h2>€@_allResults.Sum(r => r.TotalSkins * r.PriceEur).ToString("N2")</h2>
+                </div></div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-center"><div class="card-body">
+                    <h5 class="card-title text-muted">Sold</h5>
+                    <h2>€@_soldLots.Sum(r => r.TotalSkins * r.PriceEur).ToString("N2")</h2>
+                </div></div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-center"><div class="card-body">
+                    <h5 class="card-title text-muted">Unsold</h5>
+                    <h2>€@_unsoldLots.Sum(r => r.TotalSkins * r.PriceEur).ToString("N2")</h2>
+                </div></div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-body p-0">
+                <table class="table table-striped table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Lot #</th><th>Type</th><th>Gender</th><th>Color</th><th>Quality</th><th>Skins</th><th>Price (EUR)</th><th>Hammer Price</th><th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (_allResults.Count == 0)
+                        { <tr><td colspan="9" class="text-center text-muted py-4">No lots.</td></tr> }
+                        @foreach (var r in _allResults)
+                        {
+                            <tr>
+                                <td><strong>@r.LotNumber</strong></td>
+                                <td>@(r.SalesType ?? "—")</td><td>@(r.Gender ?? "—")</td><td>@(r.Color ?? "—")</td><td>@(r.Quality ?? "—")</td>
+                                <td>@r.TotalSkins</td><td>€@r.PriceEur.ToString("N2")</td><td>€@((r.TotalSkins * r.PriceEur).ToString("N2"))</td>
+                                <td><span class="badge bg-@(r.SoldToBuyerId != null ? "success" : "secondary")">@(r.SoldToBuyerId != null ? "Sold" : "Unsold")</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    @if (_activeTab == "sold")
+    {
+        @if (!string.IsNullOrEmpty(_takebackMessage))
+        {
+            <div class="alert @(_takebackMessageIsError ? "alert-danger" : "alert-success") alert-dismissible">
+                @_takebackMessage
+                <button type="button" class="btn-close" @onclick="() => _takebackMessage = null"></button>
+            </div>
+        }
+        @if (_soldLots.Count > 0)
+        {
+            <div class="card mb-3">
+                <div class="card-body d-flex align-items-center gap-3">
+                    <strong>Request Takeback for selected lots:</strong>
+                    <button class="btn btn-warning" @onclick="RequestTakeback" disabled="@(_requestingTakeback || _selectedSoldIds.Count == 0)">
+                        @if (_requestingTakeback) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        Request Takeback (@_selectedSoldIds.Count)
+                    </button>
+                </div>
+            </div>
+        }
+        <div class="card">
+            <div class="card-body p-0">
+                <table class="table table-striped table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th style="width:40px;"><input type="checkbox" @onchange="ToggleAllSold" checked="@_allSoldSelected" /></th>
+                            <th>Lot #</th><th>Type</th><th>Gender</th><th>Color</th><th>Quality</th><th>Skins</th><th>Price (EUR)</th><th>Hammer Price</th><th>Sold To</th><th>Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (_soldLots.Count == 0)
+                        { <tr><td colspan="11" class="text-center text-muted py-4">No sold lots.</td></tr> }
+                        @foreach (var r in _soldLots)
+                        {
+                            <tr>
+                                <td><input type="checkbox" checked="@_selectedSoldIds.Contains(r.Id)" @onchange="() => ToggleSoldSelection(r.Id)" /></td>
+                                <td><strong>@r.LotNumber</strong></td>
+                                <td>@(r.SalesType ?? "—")</td><td>@(r.Gender ?? "—")</td><td>@(r.Color ?? "—")</td><td>@(r.Quality ?? "—")</td>
+                                <td>@r.TotalSkins</td><td>€@r.PriceEur.ToString("N2")</td><td>€@((r.TotalSkins * r.PriceEur).ToString("N2"))</td>
+                                <td>@(r.SoldToBuyerNumber ?? "") — @(r.SoldToBuyerName ?? "")</td>
+                                <td>@(r.SoldAt?.ToString("g") ?? "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    @if (_activeTab == "unsold")
     {
         <div class="card">
-            <div class="card-header">
-                <strong>Allocations</strong>
+            <div class="card-body p-0">
+                <table class="table table-striped table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Lot #</th><th>Type</th><th>Gender</th><th>Color</th><th>Quality</th><th>Skins</th><th>Price (EUR)</th><th>Hammer Price</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (_unsoldLots.Count == 0)
+                        { <tr><td colspan="8" class="text-center text-muted py-4">No unsold lots.</td></tr> }
+                        @foreach (var r in _unsoldLots)
+                        {
+                            <tr>
+                                <td><strong>@r.LotNumber</strong></td>
+                                <td>@(r.SalesType ?? "—")</td><td>@(r.Gender ?? "—")</td><td>@(r.Color ?? "—")</td><td>@(r.Quality ?? "—")</td>
+                                <td>@r.TotalSkins</td><td>€@r.PriceEur.ToString("N2")</td><td>€@((r.TotalSkins * r.PriceEur).ToString("N2"))</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
             </div>
-            <div class="card-body text-center text-muted py-4">
-                <p>Allocation information will be available here.</p>
+        </div>
+    }
+
+    @if (_activeTab == "takeback")
+    {
+        @if (!string.IsNullOrEmpty(_brokerTakebackMessage))
+        {
+            <div class="alert @(_brokerTakebackMessageIsError ? "alert-danger" : "alert-success") alert-dismissible">
+                @_brokerTakebackMessage
+                <button type="button" class="btn-close" @onclick="() => _brokerTakebackMessage = null"></button>
+            </div>
+        }
+        <div class="card">
+            <div class="card-body p-0">
+                <table class="table table-striped table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Lot #</th><th>Type</th><th>Gender</th><th>Color</th><th>Skins</th><th>Price (EUR)</th><th>Hammer Price</th><th>Sold To</th><th>Initiated By</th><th>Requested</th><th>Status</th><th style="width:180px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (_takebackRequests.Count == 0)
+                        { <tr><td colspan="12" class="text-center text-muted py-4">No takeback requests.</td></tr> }
+                        @foreach (var t in _takebackRequests)
+                        {
+                            <tr>
+                                <td><strong>@t.LotNumber</strong></td>
+                                <td>@(t.SalesType ?? "—")</td><td>@(t.Gender ?? "—")</td><td>@(t.Color ?? "—")</td>
+                                <td>@t.TotalSkins</td><td>€@t.PriceEur.ToString("N2")</td><td>€@((t.TotalSkins * t.PriceEur).ToString("N2"))</td>
+                                <td>@(t.BuyerNumber ?? "") — @(t.BuyerName ?? "")</td>
+                                <td><span class="badge bg-info">@t.InitiatedBy</span></td>
+                                <td>@t.RequestedAt.ToString("g")</td>
+                                <td><span class="badge bg-@(t.Status == CustomerRequestStatus.Pending ? "warning" : t.Status == CustomerRequestStatus.Approved ? "success" : "danger")">@t.Status</span></td>
+                                <td>
+                                    @if (t.Status == CustomerRequestStatus.Pending)
+                                    {
+                                        <button class="btn btn-sm btn-success me-1" @onclick="() => RespondTakeback(t.Id, true)">Approve</button>
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => RespondTakeback(t.Id, false)">Decline</button>
+                                    }
+                                    else
+                                    {
+                                        <small class="text-muted">@(t.RespondedAt?.ToString("g") ?? "")</small>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
             </div>
         </div>
     }
@@ -327,6 +504,17 @@ else
 
     private BrokerDto? _broker;
     private List<BrokerCustomerRequestDto> _customerRequests = new();
+    private List<AuctionResultDto> _allResults = new();
+    private List<AuctionResultDto> _soldLots => _allResults.Where(r => r.SoldToBuyerId != null).ToList();
+    private List<AuctionResultDto> _unsoldLots => _allResults.Where(r => r.SoldToBuyerId == null).ToList();
+    private List<TakebackRequestDto> _takebackRequests = new();
+    private HashSet<int> _selectedSoldIds = new();
+    private bool _allSoldSelected => _soldLots.Count > 0 && _soldLots.All(r => _selectedSoldIds.Contains(r.Id));
+    private bool _requestingTakeback;
+    private string? _takebackMessage;
+    private bool _takebackMessageIsError;
+    private string? _brokerTakebackMessage;
+    private bool _brokerTakebackMessageIsError;
     private bool _loading = true;
     private bool _editing;
     private BrokerDto? _editDto;
@@ -345,7 +533,78 @@ else
         var allBrokers = await Api.GetBrokersAsync();
         _broker = allBrokers.FirstOrDefault(b => b.Id == BrokerId);
         if (_broker != null)
+        {
             _customerRequests = await Api.GetCustomerRequestsByBrokerAsync(BrokerId);
+            _allResults = await Api.GetAuctionResultsByBrokerAsync(BrokerId);
+            _takebackRequests = await Api.GetTakebackRequestsByBrokerAsync(BrokerId);
+        }
+    }
+
+    private void ToggleSoldSelection(int id)
+    {
+        if (!_selectedSoldIds.Remove(id)) _selectedSoldIds.Add(id);
+    }
+
+    private void ToggleAllSold(ChangeEventArgs e)
+    {
+        if ((bool)(e.Value ?? false))
+            _selectedSoldIds = _soldLots.Select(r => r.Id).ToHashSet();
+        else
+            _selectedSoldIds.Clear();
+    }
+
+    private async Task RequestTakeback()
+    {
+        _takebackMessage = null;
+        if (_selectedSoldIds.Count == 0) return;
+        _requestingTakeback = true;
+        try
+        {
+            var resp = await Api.RequestTakebackAsync(_selectedSoldIds.ToList());
+            if (resp.IsSuccessStatusCode)
+            {
+                _takebackMessage = $"Takeback requested for {_selectedSoldIds.Count} lot(s). Awaiting buyer approval.";
+                _takebackMessageIsError = false;
+                _selectedSoldIds.Clear();
+                await LoadData();
+            }
+            else
+            {
+                _takebackMessage = "Failed to request takeback. Please try again.";
+                _takebackMessageIsError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            _takebackMessage = $"Error: {ex.Message}";
+            _takebackMessageIsError = true;
+        }
+        finally { _requestingTakeback = false; }
+    }
+
+    private async Task RespondTakeback(int requestId, bool approve)
+    {
+        _brokerTakebackMessage = null;
+        try
+        {
+            var resp = await Api.RespondTakebackAsync(requestId, approve);
+            if (resp.IsSuccessStatusCode)
+            {
+                _brokerTakebackMessage = approve ? "Takeback approved. Lot moved back to unsold." : "Takeback declined.";
+                _brokerTakebackMessageIsError = false;
+                await LoadData();
+            }
+            else
+            {
+                _brokerTakebackMessage = "Failed to respond. Please try again.";
+                _brokerTakebackMessageIsError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            _brokerTakebackMessage = $"Error: {ex.Message}";
+            _brokerTakebackMessageIsError = true;
+        }
     }
 
     private void StartEdit()
