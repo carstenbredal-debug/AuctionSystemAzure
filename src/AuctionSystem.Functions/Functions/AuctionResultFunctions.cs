@@ -333,6 +333,47 @@ public class AuctionResultFunctions
                 AuctionResultId = result.Id,
                 BrokerId = result.BrokerId,
                 BuyerId = result.SoldToBuyerId!.Value,
+                InitiatedBy = "Broker",
+                Status = CustomerRequestStatus.Pending,
+                RequestedAt = DateTime.UtcNow
+            };
+            _db.TakebackRequests.Add(takebackReq);
+            created.Add(takebackReq);
+        }
+
+        await _db.SaveChangesAsync();
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(new { requestCount = created.Count }, JsonOptions));
+        return response;
+    }
+
+    [Function("RequestTakebackByBuyer")]
+    public async Task<HttpResponseData> RequestTakebackByBuyer(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "takeback-requests/buyer-initiated")] HttpRequestData req)
+    {
+        var body = await req.ReadFromJsonAsync<TakebackRequestBody>();
+        if (body == null || body.AuctionResultIds == null || body.AuctionResultIds.Count == 0)
+            return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+
+        var results = await _db.AuctionResults
+            .Where(r => body.AuctionResultIds.Contains(r.Id) && r.SoldToBuyerId != null)
+            .ToListAsync();
+
+        var created = new List<TakebackRequest>();
+        foreach (var result in results)
+        {
+            var existing = await _db.TakebackRequests
+                .FirstOrDefaultAsync(t => t.AuctionResultId == result.Id && t.Status == CustomerRequestStatus.Pending);
+            if (existing != null) continue;
+
+            var takebackReq = new TakebackRequest
+            {
+                AuctionResultId = result.Id,
+                BrokerId = result.BrokerId,
+                BuyerId = result.SoldToBuyerId!.Value,
+                InitiatedBy = "Buyer",
                 Status = CustomerRequestStatus.Pending,
                 RequestedAt = DateTime.UtcNow
             };
@@ -373,6 +414,7 @@ public class AuctionResultFunctions
             priceEur = t.AuctionResult.PriceEur,
             brokerName = t.Broker.CompanyName,
             brokerNumber = t.Broker.BrokerNumber,
+            t.InitiatedBy,
             t.Status,
             t.RequestedAt,
             t.RespondedAt
@@ -407,6 +449,7 @@ public class AuctionResultFunctions
             priceEur = t.AuctionResult.PriceEur,
             buyerName = t.Buyer.Name,
             buyerNumber = t.Buyer.BuyerNumber,
+            t.InitiatedBy,
             t.Status,
             t.RequestedAt,
             t.RespondedAt

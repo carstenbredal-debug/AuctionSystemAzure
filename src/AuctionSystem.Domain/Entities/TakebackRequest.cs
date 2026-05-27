@@ -11,6 +11,7 @@ public class TakebackRequest
     public Broker Broker { get; set; } = null!;
     public int BuyerId { get; set; }
     public Buyer Buyer { get; set; } = null!;
+    public string InitiatedBy { get; set; } = "Broker";
     public CustomerRequestStatus Status { get; set; } = CustomerRequestStatus.Pending;
     public DateTime RequestedAt { get; set; } = DateTime.UtcNow;
     public DateTime? RespondedAt { get; set; }

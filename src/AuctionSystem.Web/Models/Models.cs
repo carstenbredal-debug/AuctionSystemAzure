@@ -341,6 +341,7 @@ public class TakebackRequestDto
     public string? BrokerNumber { get; set; }
     public string? BuyerName { get; set; }
     public string? BuyerNumber { get; set; }
+    public string InitiatedBy { get; set; } = "Broker";
     public CustomerRequestStatus Status { get; set; }
     public DateTime RequestedAt { get; set; }
     public DateTime? RespondedAt { get; set; }
