@@ -19,7 +19,7 @@ else if (_buyerId == 0)
 else
 {
     <div class="row mb-4">
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card text-center">
                 <div class="card-body">
                     <h5 class="card-title text-muted">Total Lots</h5>
@@ -27,7 +27,7 @@ else
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card text-center">
                 <div class="card-body">
                     <h5 class="card-title text-muted">Total Skins</h5>
@@ -35,11 +35,19 @@ else
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card text-center">
                 <div class="card-body">
                     <h5 class="card-title text-muted">Total Value</h5>
                     <h2>€@_purchases.Sum(p => p.TotalSkins * p.PriceEur).ToString("N2")</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">Total Auction Fees</h5>
+                    <h2>€@_purchases.Sum(p => CalcAuctionFee(p.TotalSkins, p.PriceEur)).ToString("N2")</h2>
                 </div>
             </div>
         </div>
@@ -158,6 +166,7 @@ else
                         <th>Boxes</th>
                         <th>Price (EUR)</th>
                         <th>Hammer Price</th>
+                        <th>Auction Fee</th>
                         <th>Broker</th>
                         <th>Date</th>
                     </tr>
@@ -165,7 +174,7 @@ else
                 <tbody>
                     @if (!_purchases.Any())
                     {
-                        <tr><td colspan="14" class="text-center text-muted py-4">No purchases yet.</td></tr>
+                        <tr><td colspan="15" class="text-center text-muted py-4">No purchases yet.</td></tr>
                     }
                     @foreach (var p in _purchases)
                     {
@@ -184,6 +193,7 @@ else
                             <td>@p.BoxCount</td>
                             <td>€@p.PriceEur.ToString("N2")</td>
                             <td>€@((p.TotalSkins * p.PriceEur).ToString("N2"))</td>
+                            <td>€@CalcAuctionFee(p.TotalSkins, p.PriceEur).ToString("N2")</td>
                             <td>@(p.BrokerNumber ?? "") — @(p.BrokerName ?? "")</td>
                             <td>@(p.SoldAt?.ToString("g") ?? "—")</td>
                         </tr>
@@ -199,6 +209,8 @@ else
     private bool _loading = true;
     private List<AuctionResultDto> _purchases = new();
     private List<TakebackRequestDto> _pendingTakebacks = new();
+    private decimal _auctionFeePercent;
+    private decimal _handlingFeePerSkin;
     private HashSet<int> _selectedPurchaseIds = new();
     private bool _requestingReturn;
     private string? _takebackMessage;
@@ -219,6 +231,23 @@ else
     {
         _purchases = await Api.GetAuctionResultsByBuyerAsync(_buyerId);
         _pendingTakebacks = await Api.GetTakebackRequestsByBuyerAsync(_buyerId);
+        await LoadFeeParameters();
+    }
+
+    private async Task LoadFeeParameters()
+    {
+        var parameters = await Api.GetParametersAsync();
+        var auctionFee = parameters.FirstOrDefault(p => p.Key == "AuctionFee");
+        var handlingFee = parameters.FirstOrDefault(p => p.Key == "HandlingFee");
+        if (auctionFee != null) decimal.TryParse(auctionFee.Value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _auctionFeePercent);
+        if (handlingFee != null) decimal.TryParse(handlingFee.Value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _handlingFeePerSkin);
+    }
+
+    private decimal CalcAuctionFee(int skins, decimal priceEur)
+    {
+        var hammerPrice = skins * priceEur;
+        var handlingFee = skins * _handlingFeePerSkin;
+        return (hammerPrice + handlingFee) * _auctionFeePercent / 100m;
     }
 
     private async Task<int> ResolveBuyerId()
