@@ -309,6 +309,116 @@ public class AuctionResultFunctions
         await response.WriteStringAsync(JsonSerializer.Serialize(results.Select(ProjectResult), JsonOptions));
         return response;
     }
+    [Function("RequestTakeback")]
+    public async Task<HttpResponseData> RequestTakeback(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "takeback-requests")] HttpRequestData req)
+    {
+        var body = await req.ReadFromJsonAsync<TakebackRequestBody>();
+        if (body == null || body.AuctionResultIds == null || body.AuctionResultIds.Count == 0)
+            return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+
+        var results = await _db.AuctionResults
+            .Where(r => body.AuctionResultIds.Contains(r.Id) && r.SoldToBuyerId != null)
+            .ToListAsync();
+
+        var created = new List<TakebackRequest>();
+        foreach (var result in results)
+        {
+            var existing = await _db.TakebackRequests
+                .FirstOrDefaultAsync(t => t.AuctionResultId == result.Id && t.Status == CustomerRequestStatus.Pending);
+            if (existing != null) continue;
+
+            var takebackReq = new TakebackRequest
+            {
+                AuctionResultId = result.Id,
+                BrokerId = result.BrokerId,
+                BuyerId = result.SoldToBuyerId!.Value,
+                Status = CustomerRequestStatus.Pending,
+                RequestedAt = DateTime.UtcNow
+            };
+            _db.TakebackRequests.Add(takebackReq);
+            created.Add(takebackReq);
+        }
+
+        await _db.SaveChangesAsync();
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(new { requestCount = created.Count }, JsonOptions));
+        return response;
+    }
+
+    [Function("GetTakebackRequestsByBuyer")]
+    public async Task<HttpResponseData> GetTakebacksByBuyer(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "takeback-requests/buyer/{buyerId:int}")] HttpRequestData req, int buyerId)
+    {
+        var requests = await _db.TakebackRequests
+            .Include(t => t.AuctionResult)
+            .Include(t => t.Broker)
+            .Include(t => t.Buyer)
+            .Where(t => t.BuyerId == buyerId)
+            .OrderByDescending(t => t.RequestedAt)
+            .ToListAsync();
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(requests.Select(t => new
+        {
+            t.Id,
+            t.AuctionResultId,
+            lotNumber = t.AuctionResult.LotNumber,
+            salesType = t.AuctionResult.SalesType,
+            color = t.AuctionResult.Color,
+            totalSkins = t.AuctionResult.TotalSkins,
+            priceEur = t.AuctionResult.PriceEur,
+            brokerName = t.Broker.CompanyName,
+            brokerNumber = t.Broker.BrokerNumber,
+            t.Status,
+            t.RequestedAt,
+            t.RespondedAt
+        }), JsonOptions));
+        return response;
+    }
+
+    [Function("RespondTakebackRequest")]
+    public async Task<HttpResponseData> RespondTakeback(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "takeback-requests/{id:int}")] HttpRequestData req, int id)
+    {
+        var body = await req.ReadFromJsonAsync<TakebackResponseBody>();
+        if (body == null)
+            return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+
+        var takebackReq = await _db.TakebackRequests
+            .Include(t => t.AuctionResult)
+            .FirstOrDefaultAsync(t => t.Id == id);
+
+        if (takebackReq == null)
+            return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        if (takebackReq.Status != CustomerRequestStatus.Pending)
+        {
+            var resp = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+            resp.Headers.Add("Content-Type", "application/json");
+            await resp.WriteStringAsync(JsonSerializer.Serialize(new { error = "Request already responded to" }, JsonOptions));
+            return resp;
+        }
+
+        takebackReq.Status = body.Approve ? CustomerRequestStatus.Approved : CustomerRequestStatus.Declined;
+        takebackReq.RespondedAt = DateTime.UtcNow;
+
+        if (body.Approve)
+        {
+            takebackReq.AuctionResult.SoldToBuyerId = null;
+            takebackReq.AuctionResult.SoldAt = null;
+        }
+
+        await _db.SaveChangesAsync();
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(new { status = takebackReq.Status.ToString() }, JsonOptions));
+        return response;
+    }
 }
 
 public class SubmitAuctionResultRequest
@@ -322,4 +432,14 @@ public class SellToBuyerRequest
 {
     public List<int> AuctionResultIds { get; set; } = new();
     public int BuyerId { get; set; }
+}
+
+public class TakebackRequestBody
+{
+    public List<int> AuctionResultIds { get; set; } = new();
+}
+
+public class TakebackResponseBody
+{
+    public bool Approve { get; set; }
 }

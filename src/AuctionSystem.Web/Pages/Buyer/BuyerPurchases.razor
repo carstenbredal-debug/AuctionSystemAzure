@@ -6,7 +6,7 @@
 <PageTitle>Purchases - Buyer Portal</PageTitle>
 
 <h1>Purchases</h1>
-<p class="text-muted">View your purchased lots.</p>
+<p class="text-muted">View your purchased lots and respond to takeback requests.</p>
 
 @if (_loading)
 {
@@ -44,6 +44,71 @@ else
             </div>
         </div>
     </div>
+
+    @if (_pendingTakebacks.Any())
+    {
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong>Takeback Requests</strong>
+                <span class="badge bg-warning">@_pendingTakebacks.Count pending</span>
+            </div>
+            <div class="card-body p-0">
+                @if (!string.IsNullOrEmpty(_takebackMessage))
+                {
+                    <div class="alert @(_takebackMessageIsError ? "alert-danger" : "alert-success") m-3">
+                        @_takebackMessage
+                    </div>
+                }
+                <table class="table table-striped table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Lot #</th>
+                            <th>Type</th>
+                            <th>Color</th>
+                            <th>Skins</th>
+                            <th>Price (EUR)</th>
+                            <th>Hammer Price</th>
+                            <th>Broker</th>
+                            <th>Requested</th>
+                            <th>Status</th>
+                            <th style="width: 180px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var t in _pendingTakebacks)
+                        {
+                            <tr>
+                                <td><strong>@t.LotNumber</strong></td>
+                                <td>@(t.SalesType ?? "—")</td>
+                                <td>@(t.Color ?? "—")</td>
+                                <td>@t.TotalSkins</td>
+                                <td>€@t.PriceEur.ToString("N2")</td>
+                                <td>€@((t.TotalSkins * t.PriceEur).ToString("N2"))</td>
+                                <td>@(t.BrokerNumber ?? "") — @(t.BrokerName ?? "")</td>
+                                <td>@t.RequestedAt.ToString("g")</td>
+                                <td>
+                                    <span class="badge bg-@(t.Status == CustomerRequestStatus.Pending ? "warning" : t.Status == CustomerRequestStatus.Approved ? "success" : "danger")">
+                                        @t.Status
+                                    </span>
+                                </td>
+                                <td>
+                                    @if (t.Status == CustomerRequestStatus.Pending)
+                                    {
+                                        <button class="btn btn-sm btn-success me-1" @onclick="() => RespondTakeback(t.Id, true)">Approve</button>
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => RespondTakeback(t.Id, false)">Decline</button>
+                                    }
+                                    else
+                                    {
+                                        <small class="text-muted">@(t.RespondedAt?.ToString("g") ?? "")</small>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
 
     <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
@@ -102,13 +167,22 @@ else
     private int _buyerId;
     private bool _loading = true;
     private List<AuctionResultDto> _purchases = new();
+    private List<TakebackRequestDto> _pendingTakebacks = new();
+    private string? _takebackMessage;
+    private bool _takebackMessageIsError;
 
     protected override async Task OnInitializedAsync()
     {
         _buyerId = await ResolveBuyerId();
         if (_buyerId > 0)
-            _purchases = await Api.GetAuctionResultsByBuyerAsync(_buyerId);
+            await LoadData();
         _loading = false;
+    }
+
+    private async Task LoadData()
+    {
+        _purchases = await Api.GetAuctionResultsByBuyerAsync(_buyerId);
+        _pendingTakebacks = await Api.GetTakebackRequestsByBuyerAsync(_buyerId);
     }
 
     private async Task<int> ResolveBuyerId()
@@ -118,5 +192,30 @@ else
         if (string.IsNullOrEmpty(oid)) return 0;
         var user = await Api.GetCurrentUserAsync(oid);
         return user?.BuyerId ?? 0;
+    }
+
+    private async Task RespondTakeback(int requestId, bool approve)
+    {
+        _takebackMessage = null;
+        try
+        {
+            var resp = await Api.RespondTakebackAsync(requestId, approve);
+            if (resp.IsSuccessStatusCode)
+            {
+                _takebackMessage = approve ? "Takeback approved. Lot returned to broker." : "Takeback declined.";
+                _takebackMessageIsError = false;
+                await LoadData();
+            }
+            else
+            {
+                _takebackMessage = "Failed to respond. Please try again.";
+                _takebackMessageIsError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            _takebackMessage = $"Error: {ex.Message}";
+            _takebackMessageIsError = true;
+        }
     }
 }

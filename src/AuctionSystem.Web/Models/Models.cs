@@ -325,3 +325,19 @@ public class DashboardStats
     public int PendingSettlements { get; set; }
     public List<AuctionDto> RecentAuctions { get; set; } = new();
 }
+
+public class TakebackRequestDto
+{
+    public int Id { get; set; }
+    public int AuctionResultId { get; set; }
+    public int LotNumber { get; set; }
+    public string? SalesType { get; set; }
+    public string? Color { get; set; }
+    public int TotalSkins { get; set; }
+    public decimal PriceEur { get; set; }
+    public string? BrokerName { get; set; }
+    public string? BrokerNumber { get; set; }
+    public CustomerRequestStatus Status { get; set; }
+    public DateTime RequestedAt { get; set; }
+    public DateTime? RespondedAt { get; set; }
+}
