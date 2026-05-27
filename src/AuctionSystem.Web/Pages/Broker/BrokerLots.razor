@@ -11,7 +11,7 @@
 @if (!_loading)
 {
     <div class="row mb-4">
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card text-center">
                 <div class="card-body">
                     <h5 class="card-title text-muted">Total Purchase</h5>
@@ -19,7 +19,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card text-center">
                 <div class="card-body">
                     <h5 class="card-title text-muted">Sold</h5>
@@ -27,11 +27,19 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card text-center">
                 <div class="card-body">
                     <h5 class="card-title text-muted">Unsold</h5>
                     <h2>€@_unsoldLots.Sum(r => r.TotalSkins * r.PriceEur).ToString("N2")</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">Total Auction Fees</h5>
+                    <h2>€@_allResults.Sum(r => CalcAuctionFee(r.TotalSkins, r.PriceEur)).ToString("N2")</h2>
                 </div>
             </div>
         </div>
@@ -87,13 +95,14 @@ else if (_activeTab == "purchased")
                         <th>Boxes</th>
                         <th>Price (EUR)</th>
                         <th>Hammer Price</th>
+                        <th>Auction Fee</th>
                         <th>Status</th>
                     </tr>
                 </thead>
                 <tbody>
                     @if (_allResults.Count == 0)
                     {
-                        <tr><td colspan="12" class="text-center text-muted py-4">No purchased lots yet.</td></tr>
+                        <tr><td colspan="13" class="text-center text-muted py-4">No purchased lots yet.</td></tr>
                     }
                     @foreach (var r in _allResults)
                     {
@@ -109,6 +118,7 @@ else if (_activeTab == "purchased")
                             <td>@r.BoxCount</td>
                             <td>€@r.PriceEur.ToString("N2")</td>
                             <td>€@((r.TotalSkins * r.PriceEur).ToString("N2"))</td>
+                            <td>€@CalcAuctionFee(r.TotalSkins, r.PriceEur).ToString("N2")</td>
                             <td>
                                 @if (r.SoldToBuyerId != null)
                                 {
@@ -172,6 +182,7 @@ else if (_activeTab == "sold")
                         <th>Skins</th>
                         <th>Price (EUR)</th>
                         <th>Hammer Price</th>
+                        <th>Auction Fee</th>
                         <th>Sold To</th>
                         <th>Sold Date</th>
                     </tr>
@@ -179,7 +190,7 @@ else if (_activeTab == "sold")
                 <tbody>
                     @if (_soldLots.Count == 0)
                     {
-                        <tr><td colspan="11" class="text-center text-muted py-4">No lots sold yet.</td></tr>
+                        <tr><td colspan="12" class="text-center text-muted py-4">No lots sold yet.</td></tr>
                     }
                     @foreach (var r in _soldLots)
                     {
@@ -195,6 +206,7 @@ else if (_activeTab == "sold")
                             <td>@r.TotalSkins</td>
                             <td>€@r.PriceEur.ToString("N2")</td>
                             <td>€@((r.TotalSkins * r.PriceEur).ToString("N2"))</td>
+                            <td>€@CalcAuctionFee(r.TotalSkins, r.PriceEur).ToString("N2")</td>
                             <td>@(r.SoldToBuyerNumber ?? "") — @(r.SoldToBuyerName ?? "")</td>
                             <td>@(r.SoldAt?.ToString("g") ?? "—")</td>
                         </tr>
@@ -260,12 +272,13 @@ else if (_activeTab == "unsold")
                         <th>Boxes</th>
                         <th>Price (EUR)</th>
                         <th>Hammer Price</th>
+                        <th>Auction Fee</th>
                     </tr>
                 </thead>
                 <tbody>
                     @if (_unsoldLots.Count == 0)
                     {
-                        <tr><td colspan="12" class="text-center text-muted py-4">All lots have been sold.</td></tr>
+                        <tr><td colspan="13" class="text-center text-muted py-4">All lots have been sold.</td></tr>
                     }
                     @foreach (var r in _unsoldLots)
                     {
@@ -284,6 +297,7 @@ else if (_activeTab == "unsold")
                             <td>@r.BoxCount</td>
                             <td>€@r.PriceEur.ToString("N2")</td>
                             <td>€@((r.TotalSkins * r.PriceEur).ToString("N2"))</td>
+                            <td>€@CalcAuctionFee(r.TotalSkins, r.PriceEur).ToString("N2")</td>
                         </tr>
                     }
                 </tbody>
@@ -374,6 +388,8 @@ else if (_activeTab == "takeback")
     private List<AuctionResultDto> _unsoldLots => _allResults.Where(r => r.SoldToBuyerId == null).ToList();
     private List<BuyerDto> _buyers = new();
     private List<TakebackRequestDto> _pendingTakebacks = new();
+    private decimal _auctionFeePercent;
+    private decimal _handlingFeePerSkin;
     private HashSet<int> _selectedIds = new();
     private HashSet<int> _selectedSoldIds = new();
     private int _selectedBuyerId;
@@ -404,10 +420,27 @@ else if (_activeTab == "takeback")
                 _allResults = await Api.GetAuctionResultsByBrokerAsync(_brokerId);
                 _buyers = await Api.GetAllBuyersAsync();
                 _pendingTakebacks = await Api.GetTakebackRequestsByBrokerAsync(_brokerId);
+                await LoadFeeParameters();
             }
         }
 
         _loading = false;
+    }
+
+    private async Task LoadFeeParameters()
+    {
+        var parameters = await Api.GetParametersAsync();
+        var auctionFee = parameters.FirstOrDefault(p => p.Key == "AuctionFee");
+        var handlingFee = parameters.FirstOrDefault(p => p.Key == "HandlingFee");
+        if (auctionFee != null) decimal.TryParse(auctionFee.Value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _auctionFeePercent);
+        if (handlingFee != null) decimal.TryParse(handlingFee.Value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _handlingFeePerSkin);
+    }
+
+    private decimal CalcAuctionFee(int skins, decimal priceEur)
+    {
+        var hammerPrice = skins * priceEur;
+        var handlingFee = skins * _handlingFeePerSkin;
+        return (hammerPrice + handlingFee) * _auctionFeePercent / 100m;
     }
 
     private void ToggleSelection(int id)

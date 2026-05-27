@@ -375,22 +375,28 @@ else
     @if (_activeTab == "purchases")
     {
         <div class="row mb-3">
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <div class="card text-center"><div class="card-body">
                     <h5 class="card-title text-muted">Total Lots</h5>
                     <h2>@_purchases.Count</h2>
                 </div></div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <div class="card text-center"><div class="card-body">
                     <h5 class="card-title text-muted">Total Skins</h5>
                     <h2>@_purchases.Sum(p => p.TotalSkins).ToString("N0")</h2>
                 </div></div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <div class="card text-center"><div class="card-body">
                     <h5 class="card-title text-muted">Total Value</h5>
                     <h2>€@_purchases.Sum(p => p.TotalSkins * p.PriceEur).ToString("N2")</h2>
+                </div></div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center"><div class="card-body">
+                    <h5 class="card-title text-muted">Total Auction Fees</h5>
+                    <h2>€@_purchases.Sum(p => CalcAuctionFee(p.TotalSkins, p.PriceEur)).ToString("N2")</h2>
                 </div></div>
             </div>
         </div>
@@ -421,19 +427,19 @@ else
                     <thead class="table-dark">
                         <tr>
                             <th style="width:40px;"><input type="checkbox" @onchange="ToggleAllPurchases" checked="@_allPurchasesSelected" /></th>
-                            <th>Lot #</th><th>Type</th><th>Gender</th><th>Color</th><th>Quality</th><th>Skins</th><th>Price (EUR)</th><th>Hammer Price</th><th>Broker</th><th>Date</th>
+                            <th>Lot #</th><th>Type</th><th>Gender</th><th>Color</th><th>Quality</th><th>Skins</th><th>Price (EUR)</th><th>Hammer Price</th><th>Auction Fee</th><th>Broker</th><th>Date</th>
                         </tr>
                     </thead>
                     <tbody>
                         @if (_purchases.Count == 0)
-                        { <tr><td colspan="11" class="text-center text-muted py-4">No purchases yet.</td></tr> }
+                        { <tr><td colspan="12" class="text-center text-muted py-4">No purchases yet.</td></tr> }
                         @foreach (var p in _purchases)
                         {
                             <tr>
                                 <td><input type="checkbox" checked="@_selectedPurchaseIds.Contains(p.Id)" @onchange="() => TogglePurchaseSelection(p.Id)" /></td>
                                 <td><strong>@p.LotNumber</strong></td>
                                 <td>@(p.SalesType ?? "—")</td><td>@(p.Gender ?? "—")</td><td>@(p.Color ?? "—")</td><td>@(p.Quality ?? "—")</td>
-                                <td>@p.TotalSkins</td><td>€@p.PriceEur.ToString("N2")</td><td>€@((p.TotalSkins * p.PriceEur).ToString("N2"))</td>
+                                <td>@p.TotalSkins</td><td>€@p.PriceEur.ToString("N2")</td><td>€@((p.TotalSkins * p.PriceEur).ToString("N2"))</td><td>€@CalcAuctionFee(p.TotalSkins, p.PriceEur).ToString("N2")</td>
                                 <td>@(p.BrokerNumber ?? "") — @(p.BrokerName ?? "")</td>
                                 <td>@(p.SoldAt?.ToString("g") ?? "—")</td>
                             </tr>
@@ -501,6 +507,8 @@ else
     private List<BrokerCustomerRequestDto> _requests = new();
     private List<AuctionResultDto> _purchases = new();
     private List<TakebackRequestDto> _takebackRequests = new();
+    private decimal _auctionFeePercent;
+    private decimal _handlingFeePerSkin;
     private HashSet<int> _selectedPurchaseIds = new();
     private bool _allPurchasesSelected => _purchases.Count > 0 && _purchases.All(p => _selectedPurchaseIds.Contains(p.Id));
     private bool _requestingReturn;
@@ -530,7 +538,24 @@ else
             _requests = await Api.GetCustomerRequestsByBuyerAsync(BuyerId);
             _purchases = await Api.GetAuctionResultsByBuyerAsync(BuyerId);
             _takebackRequests = await Api.GetTakebackRequestsByBuyerAsync(BuyerId);
+            await LoadFeeParameters();
         }
+    }
+
+    private async Task LoadFeeParameters()
+    {
+        var parameters = await Api.GetParametersAsync();
+        var auctionFee = parameters.FirstOrDefault(p => p.Key == "AuctionFee");
+        var handlingFee = parameters.FirstOrDefault(p => p.Key == "HandlingFee");
+        if (auctionFee != null) decimal.TryParse(auctionFee.Value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _auctionFeePercent);
+        if (handlingFee != null) decimal.TryParse(handlingFee.Value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _handlingFeePerSkin);
+    }
+
+    private decimal CalcAuctionFee(int skins, decimal priceEur)
+    {
+        var hammerPrice = skins * priceEur;
+        var handlingFee = skins * _handlingFeePerSkin;
+        return (hammerPrice + handlingFee) * _auctionFeePercent / 100m;
     }
 
     private void TogglePurchaseSelection(int id)
