@@ -2,6 +2,7 @@
 @attribute [Authorize(Roles = "Broker")]
 @inject AuctionApiClient Api
 @inject AuthenticationStateProvider AuthState
+@inject NavigationManager Nav
 
 <PageTitle>Customers - Broker Portal</PageTitle>
 
@@ -75,7 +76,7 @@ else
                     }
                     @foreach (var req in _requests)
                     {
-                        <tr>
+                        <tr style="cursor: pointer;" @onclick="() => GoToCustomerDetail(req)">
                             <td>@(req.Buyer?.BuyerNumber ?? "—")</td>
                             <td><strong>@(req.Buyer?.Name ?? "—")</strong></td>
                             <td>@(req.Buyer?.ContactEmail ?? "—")</td>
@@ -89,7 +90,7 @@ else
                             <td>
                                 @if (req.Status == CustomerRequestStatus.Pending)
                                 {
-                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => CancelRequest(req)">Cancel</button>
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => CancelRequest(req)" @onclick:stopPropagation="true">Cancel</button>
                                 }
                             </td>
                         </tr>
@@ -184,4 +185,10 @@ else
         CustomerRequestStatus.Declined => "Declined",
         _ => "Unknown"
     };
+
+    private void GoToCustomerDetail(BrokerCustomerRequestDto req)
+    {
+        if (req.Buyer != null)
+            Nav.NavigateTo($"/broker/customers/{req.BuyerId}");
+    }
 }
