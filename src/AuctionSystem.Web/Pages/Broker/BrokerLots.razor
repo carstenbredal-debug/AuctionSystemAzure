@@ -293,6 +293,14 @@ else if (_activeTab == "unsold")
 }
 else if (_activeTab == "takeback")
 {
+    @if (!string.IsNullOrEmpty(_brokerTakebackMessage))
+    {
+        <div class="alert @(_brokerTakebackMessageIsError ? "alert-danger" : "alert-success") alert-dismissible">
+            @_brokerTakebackMessage
+            <button type="button" class="btn-close" @onclick="() => _brokerTakebackMessage = null"></button>
+        </div>
+    }
+
     <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
             <strong>Takeback Requests</strong>
@@ -311,14 +319,16 @@ else if (_activeTab == "takeback")
                         <th>Price (EUR)</th>
                         <th>Hammer Price</th>
                         <th>Sold To</th>
+                        <th>Initiated By</th>
                         <th>Requested</th>
                         <th>Status</th>
+                        <th style="width: 180px;">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     @if (_pendingTakebacks.Count == 0)
                     {
-                        <tr><td colspan="11" class="text-center text-muted py-4">No takeback requests.</td></tr>
+                        <tr><td colspan="13" class="text-center text-muted py-4">No takeback requests.</td></tr>
                     }
                     @foreach (var t in _pendingTakebacks)
                     {
@@ -332,11 +342,27 @@ else if (_activeTab == "takeback")
                             <td>€@t.PriceEur.ToString("N2")</td>
                             <td>€@((t.TotalSkins * t.PriceEur).ToString("N2"))</td>
                             <td>@(t.BuyerNumber ?? "") — @(t.BuyerName ?? "")</td>
+                            <td><span class="badge bg-info">@t.InitiatedBy</span></td>
                             <td>@t.RequestedAt.ToString("g")</td>
                             <td>
                                 <span class="badge bg-@(t.Status == CustomerRequestStatus.Pending ? "warning" : t.Status == CustomerRequestStatus.Approved ? "success" : "danger")">
                                     @t.Status
                                 </span>
+                            </td>
+                            <td>
+                                @if (t.Status == CustomerRequestStatus.Pending && t.InitiatedBy == "Buyer")
+                                {
+                                    <button class="btn btn-sm btn-success me-1" @onclick="() => RespondBrokerTakeback(t.Id, true)">Approve</button>
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => RespondBrokerTakeback(t.Id, false)">Decline</button>
+                                }
+                                else if (t.Status == CustomerRequestStatus.Pending && t.InitiatedBy == "Broker")
+                                {
+                                    <small class="text-muted">Awaiting buyer</small>
+                                }
+                                else
+                                {
+                                    <small class="text-muted">@(t.RespondedAt?.ToString("g") ?? "")</small>
+                                }
                             </td>
                         </tr>
                     }
@@ -363,6 +389,8 @@ else if (_activeTab == "takeback")
     private bool _messageIsError;
     private string? _takebackMessage;
     private bool _takebackMessageIsError;
+    private string? _brokerTakebackMessage;
+    private bool _brokerTakebackMessageIsError;
     private bool _allSelected => _unsoldLots.Count > 0 && _unsoldLots.All(r => _selectedIds.Contains(r.Id));
     private bool _allSoldSelected => _soldLots.Count > 0 && _soldLots.All(r => _selectedSoldIds.Contains(r.Id));
     private int _brokerId;
@@ -478,6 +506,32 @@ else if (_activeTab == "takeback")
         finally
         {
             _requestingTakeback = false;
+        }
+    }
+
+    private async Task RespondBrokerTakeback(int requestId, bool approve)
+    {
+        _brokerTakebackMessage = null;
+        try
+        {
+            var resp = await Api.RespondTakebackAsync(requestId, approve);
+            if (resp.IsSuccessStatusCode)
+            {
+                _brokerTakebackMessage = approve ? "Return approved. Lot moved back to unsold." : "Return request declined.";
+                _brokerTakebackMessageIsError = false;
+                _allResults = await Api.GetAuctionResultsByBrokerAsync(_brokerId);
+                _pendingTakebacks = await Api.GetTakebackRequestsByBrokerAsync(_brokerId);
+            }
+            else
+            {
+                _brokerTakebackMessage = "Failed to respond. Please try again.";
+                _brokerTakebackMessageIsError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            _brokerTakebackMessage = $"Error: {ex.Message}";
+            _brokerTakebackMessageIsError = true;
         }
     }
 }
