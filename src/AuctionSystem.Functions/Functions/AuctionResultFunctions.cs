@@ -380,6 +380,40 @@ public class AuctionResultFunctions
         return response;
     }
 
+    [Function("GetTakebackRequestsByBroker")]
+    public async Task<HttpResponseData> GetTakebacksByBroker(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "takeback-requests/broker/{brokerId:int}")] HttpRequestData req, int brokerId)
+    {
+        var requests = await _db.TakebackRequests
+            .Include(t => t.AuctionResult).ThenInclude(a => a.SoldToBuyer)
+            .Include(t => t.Broker)
+            .Include(t => t.Buyer)
+            .Where(t => t.BrokerId == brokerId)
+            .OrderByDescending(t => t.RequestedAt)
+            .ToListAsync();
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(requests.Select(t => new
+        {
+            t.Id,
+            t.AuctionResultId,
+            lotNumber = t.AuctionResult.LotNumber,
+            salesType = t.AuctionResult.SalesType,
+            gender = t.AuctionResult.Gender,
+            color = t.AuctionResult.Color,
+            quality = t.AuctionResult.Quality,
+            totalSkins = t.AuctionResult.TotalSkins,
+            priceEur = t.AuctionResult.PriceEur,
+            buyerName = t.Buyer.Name,
+            buyerNumber = t.Buyer.BuyerNumber,
+            t.Status,
+            t.RequestedAt,
+            t.RespondedAt
+        }), JsonOptions));
+        return response;
+    }
+
     [Function("RespondTakebackRequest")]
     public async Task<HttpResponseData> RespondTakeback(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "takeback-requests/{id:int}")] HttpRequestData req, int id)

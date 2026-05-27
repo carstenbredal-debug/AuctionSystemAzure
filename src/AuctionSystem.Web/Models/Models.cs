@@ -332,11 +332,15 @@ public class TakebackRequestDto
     public int AuctionResultId { get; set; }
     public int LotNumber { get; set; }
     public string? SalesType { get; set; }
+    public string? Gender { get; set; }
     public string? Color { get; set; }
+    public string? Quality { get; set; }
     public int TotalSkins { get; set; }
     public decimal PriceEur { get; set; }
     public string? BrokerName { get; set; }
     public string? BrokerNumber { get; set; }
+    public string? BuyerName { get; set; }
+    public string? BuyerNumber { get; set; }
     public CustomerRequestStatus Status { get; set; }
     public DateTime RequestedAt { get; set; }
     public DateTime? RespondedAt { get; set; }
