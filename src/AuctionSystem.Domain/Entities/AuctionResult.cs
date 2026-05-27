@@ -22,4 +22,8 @@ public class AuctionResult
     public bool Processed { get; set; }
     public DateTime ReceivedAt { get; set; } = DateTime.UtcNow;
     public DateTime? ProcessedAt { get; set; }
+
+    public int? SoldToBuyerId { get; set; }
+    public Buyer? SoldToBuyer { get; set; }
+    public DateTime? SoldAt { get; set; }
 }

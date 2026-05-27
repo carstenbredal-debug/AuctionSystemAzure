@@ -6,7 +6,7 @@
 <PageTitle>Purchases - Buyer Portal</PageTitle>
 
 <h1>Purchases</h1>
-<p class="text-muted">View your lot allocations and purchase history.</p>
+<p class="text-muted">View your purchased lots.</p>
 
 @if (_loading)
 {
@@ -22,16 +22,16 @@ else
         <div class="col-md-4">
             <div class="card text-center">
                 <div class="card-body">
-                    <h5 class="card-title text-muted">Total Purchases</h5>
-                    <h2>@_allocations.Count</h2>
+                    <h5 class="card-title text-muted">Total Lots</h5>
+                    <h2>@_purchases.Count</h2>
                 </div>
             </div>
         </div>
         <div class="col-md-4">
             <div class="card text-center">
                 <div class="card-body">
-                    <h5 class="card-title text-muted">Total Quantity</h5>
-                    <h2>@_allocations.Sum(a => a.Quantity)</h2>
+                    <h5 class="card-title text-muted">Total Skins</h5>
+                    <h2>@_purchases.Sum(p => p.TotalSkins)</h2>
                 </div>
             </div>
         </div>
@@ -39,44 +39,55 @@ else
             <div class="card text-center">
                 <div class="card-body">
                     <h5 class="card-title text-muted">Total Value</h5>
-                    <h2>@_allocations.Sum(a => a.TotalPrice).ToString("N2")</h2>
+                    <h2>€@_purchases.Sum(p => p.PriceEur).ToString("N2")</h2>
                 </div>
             </div>
         </div>
     </div>
 
     <div class="card">
-        <div class="card-header">
-            <strong>Allocations</strong> <span class="badge bg-secondary">@_allocations.Count</span>
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <strong>Purchased Lots</strong>
+            <span class="badge bg-secondary">@_purchases.Count</span>
         </div>
         <div class="card-body p-0">
             <table class="table table-striped table-hover mb-0">
                 <thead class="table-dark">
                     <tr>
-                        <th>Lot</th>
+                        <th>Lot #</th>
+                        <th>Type</th>
+                        <th>Gender</th>
+                        <th>Group</th>
+                        <th>Color</th>
+                        <th>Quality</th>
+                        <th>Size</th>
+                        <th>Skins</th>
+                        <th>Boxes</th>
+                        <th>Price (EUR)</th>
                         <th>Broker</th>
-                        <th>Qty</th>
-                        <th>Price/Unit</th>
-                        <th>Total</th>
-                        <th>Status</th>
                         <th>Date</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @if (!_allocations.Any())
+                    @if (!_purchases.Any())
                     {
-                        <tr><td colspan="7" class="text-center text-muted py-4">No purchases yet.</td></tr>
+                        <tr><td colspan="12" class="text-center text-muted py-4">No purchases yet.</td></tr>
                     }
-                    @foreach (var a in _allocations)
+                    @foreach (var p in _purchases)
                     {
                         <tr>
-                            <td>@(a.Lot != null ? $"Lot #{a.Lot.LotNumber} — {a.Lot.Description}" : $"Lot {a.LotId}")</td>
-                            <td>@(a.Broker?.CompanyName ?? $"Broker {a.BrokerId}")</td>
-                            <td>@a.Quantity</td>
-                            <td>@a.PricePerUnit.ToString("N2")</td>
-                            <td><strong>@a.TotalPrice.ToString("N2")</strong></td>
-                            <td><span class="badge bg-@GetStatusColor(a.Status)">@a.Status</span></td>
-                            <td>@a.AllocatedAt.ToString("g")</td>
+                            <td><strong>@p.LotNumber</strong></td>
+                            <td>@(p.SalesType ?? "—")</td>
+                            <td>@(p.Gender ?? "—")</td>
+                            <td>@(p.Group ?? "—")</td>
+                            <td>@(p.Color ?? "—")</td>
+                            <td>@(p.Quality ?? "—")</td>
+                            <td>@(p.Size ?? "—")</td>
+                            <td>@p.TotalSkins</td>
+                            <td>@p.BoxCount</td>
+                            <td>€@p.PriceEur.ToString("N2")</td>
+                            <td>@(p.BrokerNumber ?? "") — @(p.BrokerName ?? "")</td>
+                            <td>@(p.SoldAt?.ToString("g") ?? "—")</td>
                         </tr>
                     }
                 </tbody>
@@ -88,13 +99,13 @@ else
 @code {
     private int _buyerId;
     private bool _loading = true;
-    private List<LotAllocationDto> _allocations = new();
+    private List<AuctionResultDto> _purchases = new();
 
     protected override async Task OnInitializedAsync()
     {
         _buyerId = await ResolveBuyerId();
         if (_buyerId > 0)
-            _allocations = await Api.GetAllocationsByBuyerAsync(_buyerId);
+            _purchases = await Api.GetAuctionResultsByBuyerAsync(_buyerId);
         _loading = false;
     }
 
@@ -106,12 +117,4 @@ else
         var user = await Api.GetCurrentUserAsync(oid);
         return user?.BuyerId ?? 0;
     }
-
-    private string GetStatusColor(AllocationStatus status) => status switch
-    {
-        AllocationStatus.Allocated => "success",
-        AllocationStatus.Pending => "warning",
-        AllocationStatus.Cancelled => "danger",
-        _ => "info"
-    };
 }

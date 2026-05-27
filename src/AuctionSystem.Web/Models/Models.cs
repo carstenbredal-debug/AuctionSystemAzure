@@ -305,6 +305,10 @@ public class AuctionResultDto
     public bool Processed { get; set; }
     public DateTime ReceivedAt { get; set; }
     public DateTime? ProcessedAt { get; set; }
+    public int? SoldToBuyerId { get; set; }
+    public string? SoldToBuyerName { get; set; }
+    public string? SoldToBuyerNumber { get; set; }
+    public DateTime? SoldAt { get; set; }
 }
 
 public class DashboardStats

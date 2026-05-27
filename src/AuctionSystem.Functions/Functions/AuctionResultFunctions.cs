@@ -198,39 +198,46 @@ public class AuctionResultFunctions
         }
     }
 
+    private static object ProjectResult(AuctionResult r) => new
+    {
+        r.Id,
+        r.LotNumber,
+        r.BrokerId,
+        brokerName = r.Broker?.CompanyName,
+        brokerNumber = r.Broker?.BrokerNumber,
+        r.PriceEur,
+        r.SalesType,
+        r.Gender,
+        r.Group,
+        r.Color,
+        r.Quality,
+        r.Size,
+        r.Clarity,
+        r.HairLength,
+        r.TotalSkins,
+        r.BoxCount,
+        r.Processed,
+        r.ReceivedAt,
+        r.ProcessedAt,
+        r.SoldToBuyerId,
+        soldToBuyerName = r.SoldToBuyer?.Name,
+        soldToBuyerNumber = r.SoldToBuyer?.BuyerNumber,
+        r.SoldAt
+    };
+
     [Function("GetAuctionResults")]
     public async Task<HttpResponseData> GetAll(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "auction-results")] HttpRequestData req)
     {
         var results = await _db.AuctionResults
             .Include(r => r.Broker)
+            .Include(r => r.SoldToBuyer)
             .OrderByDescending(r => r.ReceivedAt)
             .ToListAsync();
 
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
-        await response.WriteStringAsync(JsonSerializer.Serialize(results.Select(r => new
-        {
-            r.Id,
-            r.LotNumber,
-            r.BrokerId,
-            brokerName = r.Broker?.CompanyName,
-            brokerNumber = r.Broker?.BrokerNumber,
-            r.PriceEur,
-            r.SalesType,
-            r.Gender,
-            r.Group,
-            r.Color,
-            r.Quality,
-            r.Size,
-            r.Clarity,
-            r.HairLength,
-            r.TotalSkins,
-            r.BoxCount,
-            r.Processed,
-            r.ReceivedAt,
-            r.ProcessedAt
-        }), JsonOptions));
+        await response.WriteStringAsync(JsonSerializer.Serialize(results.Select(ProjectResult), JsonOptions));
         return response;
     }
 
@@ -240,34 +247,66 @@ public class AuctionResultFunctions
     {
         var results = await _db.AuctionResults
             .Include(r => r.Broker)
+            .Include(r => r.SoldToBuyer)
             .Where(r => r.BrokerId == brokerId)
             .OrderByDescending(r => r.ReceivedAt)
             .ToListAsync();
 
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
-        await response.WriteStringAsync(JsonSerializer.Serialize(results.Select(r => new
+        await response.WriteStringAsync(JsonSerializer.Serialize(results.Select(ProjectResult), JsonOptions));
+        return response;
+    }
+
+    [Function("SellLotsToBuyer")]
+    public async Task<HttpResponseData> SellToBuyer(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auction-results/sell-to-buyer")] HttpRequestData req)
+    {
+        var body = await req.ReadFromJsonAsync<SellToBuyerRequest>();
+        if (body == null || body.AuctionResultIds == null || body.AuctionResultIds.Count == 0 || body.BuyerId <= 0)
+            return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+
+        var buyer = await _db.Buyers.FindAsync(body.BuyerId);
+        if (buyer == null)
         {
-            r.Id,
-            r.LotNumber,
-            r.BrokerId,
-            brokerName = r.Broker?.CompanyName,
-            brokerNumber = r.Broker?.BrokerNumber,
-            r.PriceEur,
-            r.SalesType,
-            r.Gender,
-            r.Group,
-            r.Color,
-            r.Quality,
-            r.Size,
-            r.Clarity,
-            r.HairLength,
-            r.TotalSkins,
-            r.BoxCount,
-            r.Processed,
-            r.ReceivedAt,
-            r.ProcessedAt
-        }), JsonOptions));
+            var resp = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+            resp.Headers.Add("Content-Type", "application/json");
+            await resp.WriteStringAsync(JsonSerializer.Serialize(new { error = "Buyer not found" }, JsonOptions));
+            return resp;
+        }
+
+        var results = await _db.AuctionResults
+            .Where(r => body.AuctionResultIds.Contains(r.Id) && r.SoldToBuyerId == null)
+            .ToListAsync();
+
+        foreach (var result in results)
+        {
+            result.SoldToBuyerId = body.BuyerId;
+            result.SoldAt = DateTime.UtcNow;
+        }
+
+        await _db.SaveChangesAsync();
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(new { soldCount = results.Count }, JsonOptions));
+        return response;
+    }
+
+    [Function("GetAuctionResultsByBuyer")]
+    public async Task<HttpResponseData> GetByBuyer(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "auction-results/buyer/{buyerId:int}")] HttpRequestData req, int buyerId)
+    {
+        var results = await _db.AuctionResults
+            .Include(r => r.Broker)
+            .Include(r => r.SoldToBuyer)
+            .Where(r => r.SoldToBuyerId == buyerId)
+            .OrderByDescending(r => r.SoldAt)
+            .ToListAsync();
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(results.Select(ProjectResult), JsonOptions));
         return response;
     }
 }
@@ -277,4 +316,10 @@ public class SubmitAuctionResultRequest
     public int LotNumber { get; set; }
     public int BrokerId { get; set; }
     public decimal PriceEur { get; set; }
+}
+
+public class SellToBuyerRequest
+{
+    public List<int> AuctionResultIds { get; set; } = new();
+    public int BuyerId { get; set; }
 }
