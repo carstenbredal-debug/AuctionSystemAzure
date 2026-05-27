@@ -51,13 +51,14 @@ else if (_activeTab == "purchased")
                         <th>Skins</th>
                         <th>Boxes</th>
                         <th>Price (EUR)</th>
+                        <th>Hammer Price</th>
                         <th>Status</th>
                     </tr>
                 </thead>
                 <tbody>
                     @if (_allResults.Count == 0)
                     {
-                        <tr><td colspan="11" class="text-center text-muted py-4">No purchased lots yet.</td></tr>
+                        <tr><td colspan="12" class="text-center text-muted py-4">No purchased lots yet.</td></tr>
                     }
                     @foreach (var r in _allResults)
                     {
@@ -72,6 +73,7 @@ else if (_activeTab == "purchased")
                             <td>@r.TotalSkins</td>
                             <td>@r.BoxCount</td>
                             <td>€@r.PriceEur.ToString("N2")</td>
+                            <td>€@((r.TotalSkins * r.PriceEur).ToString("N2"))</td>
                             <td>
                                 @if (r.SoldToBuyerId != null)
                                 {
@@ -107,6 +109,7 @@ else if (_activeTab == "sold")
                         <th>Quality</th>
                         <th>Skins</th>
                         <th>Price (EUR)</th>
+                        <th>Hammer Price</th>
                         <th>Sold To</th>
                         <th>Sold Date</th>
                     </tr>
@@ -114,7 +117,7 @@ else if (_activeTab == "sold")
                 <tbody>
                     @if (_soldLots.Count == 0)
                     {
-                        <tr><td colspan="9" class="text-center text-muted py-4">No lots sold yet.</td></tr>
+                        <tr><td colspan="10" class="text-center text-muted py-4">No lots sold yet.</td></tr>
                     }
                     @foreach (var r in _soldLots)
                     {
@@ -126,6 +129,7 @@ else if (_activeTab == "sold")
                             <td>@(r.Quality ?? "—")</td>
                             <td>@r.TotalSkins</td>
                             <td>€@r.PriceEur.ToString("N2")</td>
+                            <td>€@((r.TotalSkins * r.PriceEur).ToString("N2"))</td>
                             <td>@(r.SoldToBuyerNumber ?? "") — @(r.SoldToBuyerName ?? "")</td>
                             <td>@(r.SoldAt?.ToString("g") ?? "—")</td>
                         </tr>
@@ -190,12 +194,13 @@ else
                         <th>Skins</th>
                         <th>Boxes</th>
                         <th>Price (EUR)</th>
+                        <th>Hammer Price</th>
                     </tr>
                 </thead>
                 <tbody>
                     @if (_unsoldLots.Count == 0)
                     {
-                        <tr><td colspan="11" class="text-center text-muted py-4">All lots have been sold.</td></tr>
+                        <tr><td colspan="12" class="text-center text-muted py-4">All lots have been sold.</td></tr>
                     }
                     @foreach (var r in _unsoldLots)
                     {
@@ -213,6 +218,7 @@ else
                             <td>@r.TotalSkins</td>
                             <td>@r.BoxCount</td>
                             <td>€@r.PriceEur.ToString("N2")</td>
+                            <td>€@((r.TotalSkins * r.PriceEur).ToString("N2"))</td>
                         </tr>
                     }
                 </tbody>

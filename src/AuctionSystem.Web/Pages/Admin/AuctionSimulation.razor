@@ -77,10 +77,11 @@
                             <th>Lot #</th>
                             <th>Broker</th>
                             <th>Price (EUR)</th>
+                            <th>Skins</th>
+                            <th>Hammer Price</th>
                             <th>Type</th>
                             <th>Gender</th>
                             <th>Color</th>
-                            <th>Skins</th>
                             <th>Status</th>
                             <th>Time</th>
                         </tr>
@@ -88,7 +89,7 @@
                     <tbody>
                         @if (_results.Count == 0)
                         {
-                            <tr><td colspan="9" class="text-center text-muted py-4">No results yet. Submit a sale result to get started.</td></tr>
+                            <tr><td colspan="10" class="text-center text-muted py-4">No results yet. Submit a sale result to get started.</td></tr>
                         }
                         @foreach (var r in _results)
                         {
@@ -96,10 +97,11 @@
                                 <td><strong>@r.LotNumber</strong></td>
                                 <td>@r.BrokerNumber — @r.BrokerName</td>
                                 <td>€@r.PriceEur.ToString("N2")</td>
+                                <td>@r.TotalSkins</td>
+                                <td>€@((r.TotalSkins * r.PriceEur).ToString("N2"))</td>
                                 <td>@(r.SalesType ?? "—")</td>
                                 <td>@(r.Gender ?? "—")</td>
                                 <td>@(r.Color ?? "—")</td>
-                                <td>@r.TotalSkins</td>
                                 <td>
                                     @if (r.Processed)
                                     {

@@ -64,6 +64,7 @@ else
                         <th>Skins</th>
                         <th>Boxes</th>
                         <th>Price (EUR)</th>
+                        <th>Hammer Price</th>
                         <th>Broker</th>
                         <th>Date</th>
                     </tr>
@@ -71,7 +72,7 @@ else
                 <tbody>
                     @if (!_purchases.Any())
                     {
-                        <tr><td colspan="12" class="text-center text-muted py-4">No purchases yet.</td></tr>
+                        <tr><td colspan="13" class="text-center text-muted py-4">No purchases yet.</td></tr>
                     }
                     @foreach (var p in _purchases)
                     {
@@ -86,6 +87,7 @@ else
                             <td>@p.TotalSkins</td>
                             <td>@p.BoxCount</td>
                             <td>€@p.PriceEur.ToString("N2")</td>
+                            <td>€@((p.TotalSkins * p.PriceEur).ToString("N2"))</td>
                             <td>@(p.BrokerNumber ?? "") — @(p.BrokerName ?? "")</td>
                             <td>@(p.SoldAt?.ToString("g") ?? "—")</td>
                         </tr>
