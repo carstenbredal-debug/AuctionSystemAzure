@@ -5,11 +5,82 @@
 <PageTitle>Lots - Broker Portal</PageTitle>
 
 <h1>Lots</h1>
-<p class="text-muted">Browse available lots across all auctions.</p>
+<p class="text-muted">Your purchased and allocated lots.</p>
+
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item">
+        <a class="nav-link @(_activeTab == "purchased" ? "active" : "")" href="javascript:void(0)" @onclick='() => _activeTab = "purchased"'>
+            Purchased Lots <span class="badge bg-secondary">@_auctionResults.Count</span>
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(_activeTab == "all" ? "active" : "")" href="javascript:void(0)" @onclick='() => _activeTab = "all"'>
+            All Auction Lots <span class="badge bg-secondary">@_lots.Count</span>
+        </a>
+    </li>
+</ul>
 
 @if (_loading)
 {
     <p><em>Loading...</em></p>
+}
+else if (_activeTab == "purchased")
+{
+    <div class="card">
+        <div class="card-header">
+            <strong>Your Purchased Lots</strong>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-striped table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Lot #</th>
+                        <th>Type</th>
+                        <th>Gender</th>
+                        <th>Group</th>
+                        <th>Color</th>
+                        <th>Quality</th>
+                        <th>Size</th>
+                        <th>Skins</th>
+                        <th>Boxes</th>
+                        <th>Price (EUR)</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_auctionResults.Count == 0)
+                    {
+                        <tr><td colspan="11" class="text-center text-muted py-4">No purchased lots yet.</td></tr>
+                    }
+                    @foreach (var r in _auctionResults)
+                    {
+                        <tr>
+                            <td><strong>@r.LotNumber</strong></td>
+                            <td>@(r.SalesType ?? "—")</td>
+                            <td>@(r.Gender ?? "—")</td>
+                            <td>@(r.Group ?? "—")</td>
+                            <td>@(r.Color ?? "—")</td>
+                            <td>@(r.Quality ?? "—")</td>
+                            <td>@(r.Size ?? "—")</td>
+                            <td>@r.TotalSkins</td>
+                            <td>@r.BoxCount</td>
+                            <td>€@r.PriceEur.ToString("N2")</td>
+                            <td>
+                                @if (r.Processed)
+                                {
+                                    <span class="badge bg-success">Allocated</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-warning">Pending</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
 }
 else
 {
@@ -67,11 +138,35 @@ else
 @code {
     private List<AuctionDto> _auctions = new();
     private List<LotDto> _lots = new();
+    private List<AuctionResultDto> _auctionResults = new();
     private int _selectedAuctionId;
     private bool _loading = true;
+    private string _activeTab = "purchased";
+    private int _brokerId;
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthStateTask { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
+        if (AuthStateTask != null)
+        {
+            var authState = await AuthStateTask;
+            var objectId = authState.User.FindFirst("http://schemas.microsoft.com/identity/claims/objectidentifier")?.Value
+                ?? authState.User.FindFirst("oid")?.Value
+                ?? authState.User.FindFirst("sub")?.Value;
+
+            if (objectId != null)
+            {
+                var currentUser = await Api.GetCurrentUserAsync(objectId);
+                if (currentUser?.BrokerId != null)
+                {
+                    _brokerId = currentUser.BrokerId.Value;
+                    _auctionResults = await Api.GetAuctionResultsByBrokerAsync(_brokerId);
+                }
+            }
+        }
+
         _auctions = await Api.GetAuctionsAsync();
         await LoadLots();
         _loading = false;
