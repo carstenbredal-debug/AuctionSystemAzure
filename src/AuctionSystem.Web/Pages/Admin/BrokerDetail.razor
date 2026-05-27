@@ -357,18 +357,18 @@ else
                 <table class="table table-striped table-hover mb-0">
                     <thead class="table-dark">
                         <tr>
-                            <th>Lot #</th><th>Type</th><th>Gender</th><th>Color</th><th>Quality</th><th>Skins</th><th>Price (EUR)</th><th>Hammer Price</th><th>Auction Fee</th><th>Status</th>
+                            <th>Lot #</th><th>Type</th><th>Gender</th><th>Color</th><th>Quality</th><th>Skins</th><th>Price (EUR)</th><th>Hammer Price</th><th>Auction Fee</th><th>Commission</th><th>Status</th>
                         </tr>
                     </thead>
                     <tbody>
                         @if (_allResults.Count == 0)
-                        { <tr><td colspan="10" class="text-center text-muted py-4">No lots.</td></tr> }
+                        { <tr><td colspan="11" class="text-center text-muted py-4">No lots.</td></tr> }
                         @foreach (var r in _allResults)
                         {
                             <tr>
                                 <td><strong>@r.LotNumber</strong></td>
                                 <td>@(r.SalesType ?? "—")</td><td>@(r.Gender ?? "—")</td><td>@(r.Color ?? "—")</td><td>@(r.Quality ?? "—")</td>
-                                <td>@r.TotalSkins</td><td>€@r.PriceEur.ToString("N2")</td><td>€@((r.TotalSkins * r.PriceEur).ToString("N2"))</td><td>€@CalcAuctionFee(r.TotalSkins, r.PriceEur).ToString("N2")</td>
+                                <td>@r.TotalSkins</td><td>€@r.PriceEur.ToString("N2")</td><td>€@((r.TotalSkins * r.PriceEur).ToString("N2"))</td><td>€@CalcAuctionFee(r.TotalSkins, r.PriceEur).ToString("N2")</td><td>€@((r.CommissionAmount ?? 0).ToString("N2"))</td>
                                 <td><span class="badge bg-@(r.SoldToBuyerId != null ? "success" : "secondary")">@(r.SoldToBuyerId != null ? "Sold" : "Unsold")</span></td>
                             </tr>
                         }
@@ -405,19 +405,19 @@ else
                     <thead class="table-dark">
                         <tr>
                             <th style="width:40px;"><input type="checkbox" @onchange="ToggleAllSold" checked="@_allSoldSelected" /></th>
-                            <th>Lot #</th><th>Type</th><th>Gender</th><th>Color</th><th>Quality</th><th>Skins</th><th>Price (EUR)</th><th>Hammer Price</th><th>Auction Fee</th><th>Sold To</th><th>Date</th>
+                            <th>Lot #</th><th>Type</th><th>Gender</th><th>Color</th><th>Quality</th><th>Skins</th><th>Price (EUR)</th><th>Hammer Price</th><th>Auction Fee</th><th>Commission</th><th>Sold To</th><th>Date</th>
                         </tr>
                     </thead>
                     <tbody>
                         @if (_soldLots.Count == 0)
-                        { <tr><td colspan="12" class="text-center text-muted py-4">No sold lots.</td></tr> }
+                        { <tr><td colspan="13" class="text-center text-muted py-4">No sold lots.</td></tr> }
                         @foreach (var r in _soldLots)
                         {
                             <tr>
                                 <td><input type="checkbox" checked="@_selectedSoldIds.Contains(r.Id)" @onchange="() => ToggleSoldSelection(r.Id)" /></td>
                                 <td><strong>@r.LotNumber</strong></td>
                                 <td>@(r.SalesType ?? "—")</td><td>@(r.Gender ?? "—")</td><td>@(r.Color ?? "—")</td><td>@(r.Quality ?? "—")</td>
-                                <td>@r.TotalSkins</td><td>€@r.PriceEur.ToString("N2")</td><td>€@((r.TotalSkins * r.PriceEur).ToString("N2"))</td><td>€@CalcAuctionFee(r.TotalSkins, r.PriceEur).ToString("N2")</td>
+                                <td>@r.TotalSkins</td><td>€@r.PriceEur.ToString("N2")</td><td>€@((r.TotalSkins * r.PriceEur).ToString("N2"))</td><td>€@CalcAuctionFee(r.TotalSkins, r.PriceEur).ToString("N2")</td><td>€@((r.CommissionAmount ?? 0).ToString("N2"))</td>
                                 <td>@(r.SoldToBuyerNumber ?? "") — @(r.SoldToBuyerName ?? "")</td>
                                 <td>@(r.SoldAt?.ToString("g") ?? "—")</td>
                             </tr>
@@ -435,18 +435,18 @@ else
                 <table class="table table-striped table-hover mb-0">
                     <thead class="table-dark">
                         <tr>
-                            <th>Lot #</th><th>Type</th><th>Gender</th><th>Color</th><th>Quality</th><th>Skins</th><th>Price (EUR)</th><th>Hammer Price</th><th>Auction Fee</th>
+                            <th>Lot #</th><th>Type</th><th>Gender</th><th>Color</th><th>Quality</th><th>Skins</th><th>Price (EUR)</th><th>Hammer Price</th><th>Auction Fee</th><th>Commission</th>
                         </tr>
                     </thead>
                     <tbody>
                         @if (_unsoldLots.Count == 0)
-                        { <tr><td colspan="9" class="text-center text-muted py-4">No unsold lots.</td></tr> }
+                        { <tr><td colspan="10" class="text-center text-muted py-4">No unsold lots.</td></tr> }
                         @foreach (var r in _unsoldLots)
                         {
                             <tr>
                                 <td><strong>@r.LotNumber</strong></td>
                                 <td>@(r.SalesType ?? "—")</td><td>@(r.Gender ?? "—")</td><td>@(r.Color ?? "—")</td><td>@(r.Quality ?? "—")</td>
-                                <td>@r.TotalSkins</td><td>€@r.PriceEur.ToString("N2")</td><td>€@((r.TotalSkins * r.PriceEur).ToString("N2"))</td><td>€@CalcAuctionFee(r.TotalSkins, r.PriceEur).ToString("N2")</td>
+                                <td>@r.TotalSkins</td><td>€@r.PriceEur.ToString("N2")</td><td>€@((r.TotalSkins * r.PriceEur).ToString("N2"))</td><td>€@CalcAuctionFee(r.TotalSkins, r.PriceEur).ToString("N2")</td><td>€@((r.CommissionAmount ?? 0).ToString("N2"))</td>
                             </tr>
                         }
                     </tbody>

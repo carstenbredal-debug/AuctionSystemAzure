@@ -309,6 +309,9 @@ public class AuctionResultDto
     public string? SoldToBuyerName { get; set; }
     public string? SoldToBuyerNumber { get; set; }
     public DateTime? SoldAt { get; set; }
+    public string? CommissionType { get; set; }
+    public decimal? CommissionValue { get; set; }
+    public decimal? CommissionAmount { get; set; }
 }
 
 public class DashboardStats

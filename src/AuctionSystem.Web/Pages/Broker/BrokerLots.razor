@@ -96,13 +96,14 @@ else if (_activeTab == "purchased")
                         <th>Price (EUR)</th>
                         <th>Hammer Price</th>
                         <th>Auction Fee</th>
+                        <th>Commission</th>
                         <th>Status</th>
                     </tr>
                 </thead>
                 <tbody>
                     @if (_allResults.Count == 0)
                     {
-                        <tr><td colspan="13" class="text-center text-muted py-4">No purchased lots yet.</td></tr>
+                        <tr><td colspan="14" class="text-center text-muted py-4">No purchased lots yet.</td></tr>
                     }
                     @foreach (var r in _allResults)
                     {
@@ -119,6 +120,7 @@ else if (_activeTab == "purchased")
                             <td>€@r.PriceEur.ToString("N2")</td>
                             <td>€@((r.TotalSkins * r.PriceEur).ToString("N2"))</td>
                             <td>€@CalcAuctionFee(r.TotalSkins, r.PriceEur).ToString("N2")</td>
+                            <td>€@((r.CommissionAmount ?? 0).ToString("N2"))</td>
                             <td>
                                 @if (r.SoldToBuyerId != null)
                                 {
@@ -183,6 +185,7 @@ else if (_activeTab == "sold")
                         <th>Price (EUR)</th>
                         <th>Hammer Price</th>
                         <th>Auction Fee</th>
+                        <th>Commission</th>
                         <th>Sold To</th>
                         <th>Sold Date</th>
                     </tr>
@@ -190,7 +193,7 @@ else if (_activeTab == "sold")
                 <tbody>
                     @if (_soldLots.Count == 0)
                     {
-                        <tr><td colspan="12" class="text-center text-muted py-4">No lots sold yet.</td></tr>
+                        <tr><td colspan="13" class="text-center text-muted py-4">No lots sold yet.</td></tr>
                     }
                     @foreach (var r in _soldLots)
                     {
@@ -207,6 +210,7 @@ else if (_activeTab == "sold")
                             <td>€@r.PriceEur.ToString("N2")</td>
                             <td>€@((r.TotalSkins * r.PriceEur).ToString("N2"))</td>
                             <td>€@CalcAuctionFee(r.TotalSkins, r.PriceEur).ToString("N2")</td>
+                            <td>€@((r.CommissionAmount ?? 0).ToString("N2"))</td>
                             <td>@(r.SoldToBuyerNumber ?? "") — @(r.SoldToBuyerName ?? "")</td>
                             <td>@(r.SoldAt?.ToString("g") ?? "—")</td>
                         </tr>
@@ -238,11 +242,7 @@ else if (_activeTab == "unsold")
                         <option value="@buyer.Id">@buyer.BuyerNumber — @buyer.Name</option>
                     }
                 </select>
-                <button class="btn btn-primary" @onclick="SellToBuyer" disabled="@(_selling || _selectedIds.Count == 0 || _selectedBuyerId <= 0)">
-                    @if (_selling)
-                    {
-                        <span class="spinner-border spinner-border-sm me-1"></span>
-                    }
+                <button class="btn btn-primary" @onclick="OpenCommissionModal" disabled="@(_selling || _selectedIds.Count == 0 || _selectedBuyerId <= 0)">
                     Sell (@_selectedIds.Count)
                 </button>
             </div>
@@ -382,6 +382,59 @@ else if (_activeTab == "takeback")
     </div>
 }
 
+@if (_showCommissionModal)
+{
+    <div class="modal d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Set Commission</h5>
+                    <button type="button" class="btn-close" @onclick="CloseCommissionModal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Selling <strong>@_selectedIds.Count</strong> lot(s) to <strong>@(_buyers.FirstOrDefault(b => b.Id == _selectedBuyerId)?.Name ?? "")</strong></p>
+                    <div class="mb-3">
+                        <label class="form-label">Commission Type</label>
+                        <select class="form-select" @bind="_commissionType">
+                            <option value="percentage">Percentage (%)</option>
+                            <option value="amount">Fixed Amount (€)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">@(_commissionType == "percentage" ? "Commission (%)" : "Commission Amount (€)")</label>
+                        <input type="number" class="form-control" step="0.01" @bind="_commissionValue" />
+                    </div>
+                    @if (_commissionType == "percentage" && _commissionValue > 0)
+                    {
+                        var selectedLots = _unsoldLots.Where(r => _selectedIds.Contains(r.Id)).ToList();
+                        var totalHammer = selectedLots.Sum(r => (decimal)r.TotalSkins * r.PriceEur);
+                        var totalCommission = totalHammer * _commissionValue / 100m;
+                        <div class="alert alert-info">
+                            <small>Total Hammer Price: <strong>€@totalHammer.ToString("N2")</strong></small><br />
+                            <small>Commission (@_commissionValue%): <strong>€@totalCommission.ToString("N2")</strong></small>
+                        </div>
+                    }
+                    else if (_commissionType == "amount" && _commissionValue > 0)
+                    {
+                        var totalCommission = _commissionValue * _selectedIds.Count;
+                        <div class="alert alert-info">
+                            <small>Commission per lot: <strong>€@_commissionValue.ToString("N2")</strong></small><br />
+                            <small>Total Commission (@_selectedIds.Count lots): <strong>€@totalCommission.ToString("N2")</strong></small>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseCommissionModal">Cancel</button>
+                    <button class="btn btn-primary" @onclick="SellToBuyer" disabled="@_selling">
+                        @if (_selling) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        Confirm Sale
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private List<AuctionResultDto> _allResults = new();
     private List<AuctionResultDto> _soldLots => _allResults.Where(r => r.SoldToBuyerId != null).ToList();
@@ -395,6 +448,9 @@ else if (_activeTab == "takeback")
     private int _selectedBuyerId;
     private bool _loading = true;
     private bool _selling;
+    private bool _showCommissionModal;
+    private string _commissionType = "percentage";
+    private decimal _commissionValue;
     private bool _requestingTakeback;
     private string _activeTab = "purchased";
     private string? _message;
@@ -457,6 +513,18 @@ else if (_activeTab == "takeback")
             _selectedIds.Clear();
     }
 
+    private void OpenCommissionModal()
+    {
+        _commissionType = "percentage";
+        _commissionValue = 0;
+        _showCommissionModal = true;
+    }
+
+    private void CloseCommissionModal()
+    {
+        _showCommissionModal = false;
+    }
+
     private async Task SellToBuyer()
     {
         _message = null;
@@ -465,7 +533,7 @@ else if (_activeTab == "takeback")
         _selling = true;
         try
         {
-            var resp = await Api.SellLotsToBuyerAsync(_selectedIds.ToList(), _selectedBuyerId);
+            var resp = await Api.SellLotsToBuyerAsync(_selectedIds.ToList(), _selectedBuyerId, _commissionType, _commissionValue);
             if (resp.IsSuccessStatusCode)
             {
                 var buyer = _buyers.FirstOrDefault(b => b.Id == _selectedBuyerId);
@@ -473,6 +541,7 @@ else if (_activeTab == "takeback")
                 _messageIsError = false;
                 _selectedIds.Clear();
                 _selectedBuyerId = 0;
+                _showCommissionModal = false;
                 _allResults = await Api.GetAuctionResultsByBrokerAsync(_brokerId);
             }
             else

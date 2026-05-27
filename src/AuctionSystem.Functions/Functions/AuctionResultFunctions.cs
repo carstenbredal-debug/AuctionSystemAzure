@@ -222,7 +222,10 @@ public class AuctionResultFunctions
         r.SoldToBuyerId,
         soldToBuyerName = r.SoldToBuyer?.Name,
         soldToBuyerNumber = r.SoldToBuyer?.BuyerNumber,
-        r.SoldAt
+        r.SoldAt,
+        r.CommissionType,
+        r.CommissionValue,
+        r.CommissionAmount
     };
 
     [Function("GetAuctionResults")]
@@ -283,6 +286,17 @@ public class AuctionResultFunctions
         {
             result.SoldToBuyerId = body.BuyerId;
             result.SoldAt = DateTime.UtcNow;
+            result.CommissionType = body.CommissionType;
+            result.CommissionValue = body.CommissionValue;
+            if (body.CommissionType == "percentage" && body.CommissionValue.HasValue)
+            {
+                var hammerPrice = result.TotalSkins * result.PriceEur;
+                result.CommissionAmount = hammerPrice * body.CommissionValue.Value / 100m;
+            }
+            else if (body.CommissionType == "amount" && body.CommissionValue.HasValue)
+            {
+                result.CommissionAmount = body.CommissionValue.Value;
+            }
         }
 
         await _db.SaveChangesAsync();
@@ -513,6 +527,8 @@ public class SellToBuyerRequest
 {
     public List<int> AuctionResultIds { get; set; } = new();
     public int BuyerId { get; set; }
+    public string? CommissionType { get; set; }
+    public decimal? CommissionValue { get; set; }
 }
 
 public class TakebackRequestBody

@@ -167,6 +167,7 @@ else
                         <th>Price (EUR)</th>
                         <th>Hammer Price</th>
                         <th>Auction Fee</th>
+                        <th>Commission</th>
                         <th>Broker</th>
                         <th>Date</th>
                     </tr>
@@ -174,7 +175,7 @@ else
                 <tbody>
                     @if (!_purchases.Any())
                     {
-                        <tr><td colspan="15" class="text-center text-muted py-4">No purchases yet.</td></tr>
+                        <tr><td colspan="16" class="text-center text-muted py-4">No purchases yet.</td></tr>
                     }
                     @foreach (var p in _purchases)
                     {
@@ -194,6 +195,7 @@ else
                             <td>€@p.PriceEur.ToString("N2")</td>
                             <td>€@((p.TotalSkins * p.PriceEur).ToString("N2"))</td>
                             <td>€@CalcAuctionFee(p.TotalSkins, p.PriceEur).ToString("N2")</td>
+                            <td>€@((p.CommissionAmount ?? 0).ToString("N2"))</td>
                             <td>@(p.BrokerNumber ?? "") — @(p.BrokerName ?? "")</td>
                             <td>@(p.SoldAt?.ToString("g") ?? "—")</td>
                         </tr>
