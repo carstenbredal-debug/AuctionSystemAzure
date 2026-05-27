@@ -8,6 +8,36 @@
 <h1>Lots</h1>
 <p class="text-muted">Manage your purchased lots and sell to buyers.</p>
 
+@if (!_loading)
+{
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">Total Purchase</h5>
+                    <h2>€@_allResults.Sum(r => r.TotalSkins * r.PriceEur).ToString("N2")</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">Sold</h5>
+                    <h2>€@_soldLots.Sum(r => r.TotalSkins * r.PriceEur).ToString("N2")</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">Unsold</h5>
+                    <h2>€@_unsoldLots.Sum(r => r.TotalSkins * r.PriceEur).ToString("N2")</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 <ul class="nav nav-tabs mb-3">
     <li class="nav-item">
         <a class="nav-link @(_activeTab == "purchased" ? "active" : "")" href="javascript:void(0)" @onclick='() => _activeTab = "purchased"'>
