@@ -334,11 +334,15 @@ public class AuctionResultFunctions
                 BrokerId = result.BrokerId,
                 BuyerId = result.SoldToBuyerId!.Value,
                 InitiatedBy = "Broker",
-                Status = CustomerRequestStatus.Pending,
-                RequestedAt = DateTime.UtcNow
+                Status = CustomerRequestStatus.Approved,
+                RequestedAt = DateTime.UtcNow,
+                RespondedAt = DateTime.UtcNow
             };
             _db.TakebackRequests.Add(takebackReq);
             created.Add(takebackReq);
+
+            result.SoldToBuyerId = null;
+            result.SoldAt = null;
         }
 
         await _db.SaveChangesAsync();
