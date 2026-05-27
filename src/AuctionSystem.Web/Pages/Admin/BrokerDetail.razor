@@ -385,10 +385,10 @@ else
         {
             <div class="card mb-3">
                 <div class="card-body d-flex align-items-center gap-3">
-                    <strong>Request Takeback for selected lots:</strong>
+                    <strong>Takeback selected lots:</strong>
                     <button class="btn btn-warning" @onclick="RequestTakeback" disabled="@(_requestingTakeback || _selectedSoldIds.Count == 0)">
                         @if (_requestingTakeback) { <span class="spinner-border spinner-border-sm me-1"></span> }
-                        Request Takeback (@_selectedSoldIds.Count)
+                        Takeback (@_selectedSoldIds.Count)
                     </button>
                 </div>
             </div>
