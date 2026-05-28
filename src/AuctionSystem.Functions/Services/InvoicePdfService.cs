@@ -60,7 +60,8 @@ public static class InvoicePdfService
 
                 row.RelativeItem(4).Column(right =>
                 {
-                    right.Item().AlignRight().Text("INVOICE").Bold().FontSize(14);
+                    var title = invoice.IsCreditNote ? "CREDIT NOTE" : "INVOICE";
+                    right.Item().AlignRight().Text(title).Bold().FontSize(14);
                     right.Item().Height(10);
 
                     void InfoRow(ColumnDescriptor c, string label, string value)
@@ -72,10 +73,13 @@ public static class InvoicePdfService
                         });
                     }
 
-                    InfoRow(right, "Invoice number. . . :", invoice.InvoiceNumber);
+                    var numberLabel = invoice.IsCreditNote ? "Credit note no. . :" : "Invoice number. . . :";
+                    InfoRow(right, numberLabel, invoice.InvoiceNumber);
                     InfoRow(right, "Date . . . . . . . . . . :", invoice.InvoiceDate.ToString("yy-MM-dd"));
                     InfoRow(right, "Account no . . . . :", invoice.Buyer?.ErpAccountNumber ?? "");
                     InfoRow(right, "VAT no. . . . . . . . :", invoice.Buyer?.VatRegistrationNo ?? "");
+                    if (invoice.OriginalInvoice != null)
+                        InfoRow(right, "Ref. invoice . . . :", invoice.OriginalInvoice.InvoiceNumber);
                     if (invoice.PromptDate.HasValue)
                         InfoRow(right, "Prompt date . . . :", invoice.PromptDate.Value.ToString("yy-MM-dd"));
                 });

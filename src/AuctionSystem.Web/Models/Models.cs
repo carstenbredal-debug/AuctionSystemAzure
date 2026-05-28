@@ -364,4 +364,6 @@ public class InvoiceSummaryDto
     public string? BrokerName { get; set; }
     public string? BuyerName { get; set; }
     public int LinesCount { get; set; }
+    public bool IsCreditNote { get; set; }
+    public string? OriginalInvoiceNumber { get; set; }
 }

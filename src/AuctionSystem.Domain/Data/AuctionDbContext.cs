@@ -98,6 +98,7 @@ public class AuctionDbContext : DbContext
             e.Property(i => i.Commission).HasColumnType("decimal(18,2)");
             e.Property(i => i.TotalAmount).HasColumnType("decimal(18,2)");
             e.Property(i => i.Currency).HasMaxLength(10);
+            e.HasOne(i => i.OriginalInvoice).WithMany().HasForeignKey(i => i.OriginalInvoiceId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<InvoiceLine>(e =>

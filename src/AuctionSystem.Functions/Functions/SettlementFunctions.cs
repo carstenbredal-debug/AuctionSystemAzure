@@ -38,7 +38,8 @@ public class SettlementFunctions
         {
             i.Id, i.InvoiceNumber, i.InvoiceDate, i.SubTotal, i.AuctionFee, i.Commission,
             i.TotalAmount, i.Currency, Status = i.Status.ToString(),
-            BuyerName = i.Buyer?.Name, LinesCount = i.Lines.Count
+            BuyerName = i.Buyer?.Name, LinesCount = i.Lines.Count,
+            i.IsCreditNote, OriginalInvoiceNumber = i.OriginalInvoice?.InvoiceNumber
         }));
     }
 
@@ -94,13 +95,14 @@ public class SettlementFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements/invoices/buyer/{buyerId:int}")] HttpRequestData req, int buyerId)
     {
         var invoices = await _db.Invoices.Where(i => i.BuyerId == buyerId)
-            .Include(i => i.Lines).Include(i => i.Broker)
+            .Include(i => i.Lines).Include(i => i.Broker).Include(i => i.OriginalInvoice)
             .OrderByDescending(i => i.InvoiceDate).ToListAsync();
         return await CreateJsonResponse(req, invoices.Select(i => new
         {
             i.Id, i.InvoiceNumber, i.InvoiceDate, i.SubTotal, i.AuctionFee, i.Commission,
             i.TotalAmount, i.Currency, Status = i.Status.ToString(),
-            BrokerName = i.Broker?.CompanyName, Lines = i.Lines.Count
+            BrokerName = i.Broker?.CompanyName, LinesCount = i.Lines.Count,
+            i.IsCreditNote, OriginalInvoiceNumber = i.OriginalInvoice?.InvoiceNumber
         }));
     }
 
@@ -108,13 +110,14 @@ public class SettlementFunctions
     public async Task<HttpResponseData> GetAllInvoices(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements/invoices")] HttpRequestData req)
     {
-        var invoices = await _db.Invoices.Include(i => i.Broker).Include(i => i.Buyer).Include(i => i.Lines)
+        var invoices = await _db.Invoices.Include(i => i.Broker).Include(i => i.Buyer).Include(i => i.Lines).Include(i => i.OriginalInvoice)
             .OrderByDescending(i => i.InvoiceDate).ToListAsync();
         return await CreateJsonResponse(req, invoices.Select(i => new
         {
             i.Id, i.InvoiceNumber, i.InvoiceDate, i.SubTotal, i.AuctionFee, i.Commission,
             i.TotalAmount, i.Currency, Status = i.Status.ToString(),
-            BrokerName = i.Broker?.CompanyName, BuyerName = i.Buyer?.Name, Lines = i.Lines.Count
+            BrokerName = i.Broker?.CompanyName, BuyerName = i.Buyer?.Name, LinesCount = i.Lines.Count,
+            i.IsCreditNote, OriginalInvoiceNumber = i.OriginalInvoice?.InvoiceNumber
         }));
     }
 
