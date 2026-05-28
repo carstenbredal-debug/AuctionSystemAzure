@@ -30,7 +30,7 @@ public class BrokerFunctions
     public async Task<HttpResponseData> GetAll(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "brokers")] HttpRequestData req)
     {
-        var brokers = await _db.Brokers.Include(b => b.Buyers).ToListAsync();
+        var brokers = await _db.Brokers.Include(b => b.BrokerBuyers).ToListAsync();
         brokers = brokers.OrderBy(b => int.TryParse(b.BrokerNumber, out var n) ? n : int.MaxValue).ToList();
         return await CreateJsonResponse(req, brokers);
     }
@@ -39,7 +39,7 @@ public class BrokerFunctions
     public async Task<HttpResponseData> Get(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "brokers/{id:int}")] HttpRequestData req, int id)
     {
-        var broker = await _db.Brokers.Include(b => b.Buyers).FirstOrDefaultAsync(b => b.Id == id);
+        var broker = await _db.Brokers.Include(b => b.BrokerBuyers).ThenInclude(bb => bb.Buyer).FirstOrDefaultAsync(b => b.Id == id);
         if (broker == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
         return await CreateJsonResponse(req, broker);
     }
@@ -106,7 +106,12 @@ public class BrokerFunctions
     public async Task<HttpResponseData> GetBuyers(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "brokers/{brokerId:int}/buyers")] HttpRequestData req, int brokerId)
     {
-        var buyers = await _db.Buyers.Where(b => b.BrokerId == brokerId).ToListAsync();
+        var buyers = await _db.BrokerBuyers
+            .Where(bb => bb.BrokerId == brokerId)
+            .Include(bb => bb.Buyer)
+            .Select(bb => bb.Buyer)
+            .ToListAsync();
+        buyers = buyers.OrderBy(b => int.TryParse(b.BuyerNumber, out var n) ? n : int.MaxValue).ToList();
         return await CreateJsonResponse(req, buyers);
     }
 
@@ -127,19 +132,32 @@ public class BrokerFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "buyers")] HttpRequestData req)
     {
         var buyers = await _db.Buyers
-            .Include(b => b.Broker)
+            .Include(b => b.BrokerBuyers).ThenInclude(bb => bb.Broker)
             .ToListAsync();
 
-        buyers = buyers.OrderBy(b => int.TryParse(b.BuyerNumber, out var n) ? n : int.MaxValue).ToList();
+        var result = buyers
+            .OrderBy(b => int.TryParse(b.BuyerNumber, out var n) ? n : int.MaxValue)
+            .Select(b => new
+            {
+                b.Id, b.BuyerNumber, b.Name, b.Name2, b.ErpAccountNumber, b.SearchName,
+                b.ContactName, b.AddressLine1, b.AddressLine2, b.Country, b.PostalCode, b.City,
+                b.ContactPhone, b.MobilePhone, b.ContactEmail, b.HomePage, b.VatRegistrationNo,
+                b.RegistrationNo, b.CustomerGroup, b.SalesPerson, b.PaymentTerm, b.PaymentMethod,
+                b.Currency, b.Language, b.BankName, b.BankAddress, b.BankIbanNumber, b.SwiftCode,
+                b.BankCountry, b.Assignee, b.AssignmentOfReceivable, b.IsActive, b.Address,
+                b.BrokerId, b.CreatedAt,
+                Brokers = b.BrokerBuyers.Select(bb => new { bb.Broker.Id, bb.Broker.BrokerNumber, bb.Broker.CompanyName }).ToList()
+            })
+            .ToList();
 
-        return await CreateJsonResponse(req, buyers);
+        return await CreateJsonResponse(req, result);
     }
 
     [Function("GetBuyerById")]
     public async Task<HttpResponseData> GetBuyerById(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "buyers/{id:int}")] HttpRequestData req, int id)
     {
-        var buyer = await _db.Buyers.Include(b => b.Broker).FirstOrDefaultAsync(b => b.Id == id);
+        var buyer = await _db.Buyers.Include(b => b.BrokerBuyers).ThenInclude(bb => bb.Broker).FirstOrDefaultAsync(b => b.Id == id);
         if (buyer == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
         return await CreateJsonResponse(req, buyer);
     }

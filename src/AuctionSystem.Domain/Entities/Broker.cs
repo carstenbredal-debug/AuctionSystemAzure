@@ -33,7 +33,7 @@ public class Broker
     public string? BcCustomerId { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-    public ICollection<Buyer> Buyers { get; set; } = new List<Buyer>();
+    public ICollection<BrokerBuyer> BrokerBuyers { get; set; } = new List<BrokerBuyer>();
     public ICollection<Bid> Bids { get; set; } = new List<Bid>();
     public ICollection<LotAllocation> Allocations { get; set; } = new List<LotAllocation>();
     public ICollection<Invoice> Invoices { get; set; } = new List<Invoice>();

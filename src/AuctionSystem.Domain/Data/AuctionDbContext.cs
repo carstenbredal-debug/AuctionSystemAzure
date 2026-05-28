@@ -22,6 +22,7 @@ public class AuctionDbContext : DbContext
     public DbSet<SystemParameter> SystemParameters => Set<SystemParameter>();
     public DbSet<AuctionResult> AuctionResults => Set<AuctionResult>();
     public DbSet<TakebackRequest> TakebackRequests => Set<TakebackRequest>();
+    public DbSet<BrokerBuyer> BrokerBuyers => Set<BrokerBuyer>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -66,7 +67,14 @@ public class AuctionDbContext : DbContext
             e.HasKey(b => b.Id);
             e.HasIndex(b => b.BuyerNumber).IsUnique();
             e.Property(b => b.BuyerNumber).HasMaxLength(50).IsRequired();
-            e.HasOne(b => b.Broker).WithMany(br => br.Buyers).HasForeignKey(b => b.BrokerId).IsRequired(false);
+            e.HasOne(b => b.Broker).WithMany().HasForeignKey(b => b.BrokerId).IsRequired(false);
+        });
+
+        modelBuilder.Entity<BrokerBuyer>(e =>
+        {
+            e.HasKey(bb => new { bb.BrokerId, bb.BuyerId });
+            e.HasOne(bb => bb.Broker).WithMany(b => b.BrokerBuyers).HasForeignKey(bb => bb.BrokerId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(bb => bb.Buyer).WithMany(b => b.BrokerBuyers).HasForeignKey(bb => bb.BuyerId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<Bid>(e =>

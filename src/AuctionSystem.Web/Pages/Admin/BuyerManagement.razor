@@ -49,7 +49,7 @@ else
                         <tr style="cursor: pointer;" @onclick="() => ViewBuyer(item.Id)">
                             <td><strong>@item.BuyerNumber</strong></td>
                             <td>@item.Name</td>
-                            <td>@(item.Broker?.CompanyName ?? "—")</td>
+                            <td>@(item.Brokers.Count > 0 ? string.Join(", ", item.Brokers.Select(b => b.CompanyName)) : "—")</td>
                             <td>@item.ContactEmail</td>
                             <td>@item.ContactPhone</td>
                         </tr>
