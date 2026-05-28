@@ -33,8 +33,8 @@ public class AuctionService
         if (auction == null) return null;
 
         auction.Status = status;
-        if (status == AuctionStatus.InProgress) auction.StartedAt = DateTime.UtcNow;
-        if (status == AuctionStatus.Completed) auction.CompletedAt = DateTime.UtcNow;
+        if (status == AuctionStatus.Active) auction.StartedAt = DateTime.UtcNow;
+        if (status == AuctionStatus.Closed) auction.CompletedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
         return auction;

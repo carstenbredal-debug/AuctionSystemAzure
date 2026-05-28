@@ -106,7 +106,7 @@ public class AuctionResultFunctions
             if (existingLot == null)
             {
                 var activeAuction = await _db.Auctions
-                    .Where(a => a.Status == AuctionStatus.InProgress || a.Status == AuctionStatus.Scheduled)
+                    .Where(a => a.Status == AuctionStatus.Active)
                     .OrderByDescending(a => a.ScheduledDate)
                     .FirstOrDefaultAsync();
 

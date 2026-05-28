@@ -99,10 +99,8 @@ else
     private string GetStatusColor(AuctionStatus status) => status switch
     {
         AuctionStatus.Draft => "secondary",
-        AuctionStatus.Scheduled => "info",
-        AuctionStatus.InProgress => "success",
-        AuctionStatus.Completed => "primary",
-        AuctionStatus.Cancelled => "danger",
+        AuctionStatus.Active => "success",
+        AuctionStatus.Closed => "primary",
         _ => "secondary"
     };
 }

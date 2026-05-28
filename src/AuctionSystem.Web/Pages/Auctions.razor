@@ -20,17 +20,17 @@
     {
         <nav><a href="/auctions">&larr; Back to Auctions</a></nav>
         <h2 class="mt-3">@selectedAuction.Title</h2>
-        <p><strong>Number:</strong> @selectedAuction.AuctionNumber | <strong>Status:</strong> <span class="badge bg-info">@selectedAuction.Status</span> | <strong>Date:</strong> @selectedAuction.ScheduledDate.ToString("yyyy-MM-dd")</p>
-
-        <div class="btn-group mb-3">
-            @if (selectedAuction.Status == AuctionStatus.Scheduled)
-            {
-                <button class="btn btn-success" @onclick="() => UpdateStatus(AuctionStatus.InProgress)">Start Auction</button>
-            }
-            @if (selectedAuction.Status == AuctionStatus.InProgress)
-            {
-                <button class="btn btn-primary" @onclick="() => UpdateStatus(AuctionStatus.Completed)">Complete Auction</button>
-            }
+        <div class="d-flex align-items-center gap-3 mb-3">
+            <p class="mb-0"><strong>Number:</strong> @selectedAuction.AuctionNumber | <strong>Date:</strong> @selectedAuction.ScheduledDate.ToString("yyyy-MM-dd")</p>
+            <div class="d-flex align-items-center gap-2">
+                <strong>Status:</strong>
+                <select class="form-select form-select-sm" style="width: auto;" value="@selectedAuction.Status" @onchange="OnStatusChanged">
+                    @foreach (var status in Enum.GetValues<AuctionStatus>())
+                    {
+                        <option value="@status">@status</option>
+                    }
+                </select>
+            </div>
         </div>
 
         <ul class="nav nav-tabs mb-3">
@@ -456,11 +456,13 @@ else
         importing = false;
     }
 
-    private async Task UpdateStatus(AuctionStatus status)
+    private async Task OnStatusChanged(ChangeEventArgs e)
     {
-        await Api.UpdateAuctionStatusAsync(Id!.Value, status);
-        selectedAuction = await Api.GetAuctionAsync(Id.Value);
-        lots = await Api.GetLotsByAuctionAsync(Id.Value);
+        if (Enum.TryParse<AuctionStatus>(e.Value?.ToString(), out var status))
+        {
+            await Api.UpdateAuctionStatusAsync(Id!.Value, status);
+            selectedAuction = await Api.GetAuctionAsync(Id.Value);
+        }
     }
 
     private string GetLotColor(LotStatus s) => s switch

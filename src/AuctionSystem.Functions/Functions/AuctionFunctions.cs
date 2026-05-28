@@ -121,7 +121,7 @@ public class AuctionFunctions
         var stats = new
         {
             totalAuctions = await _db.Auctions.CountAsync(),
-            activeAuctions = await _db.Auctions.CountAsync(a => a.Status == AuctionStatus.InProgress),
+            activeAuctions = await _db.Auctions.CountAsync(a => a.Status == AuctionStatus.Active),
             totalLots = await _db.Lots.CountAsync(),
             soldLots = await _db.Lots.CountAsync(l => l.Status == LotStatus.Sold),
             totalBrokers = await _db.Brokers.CountAsync(),

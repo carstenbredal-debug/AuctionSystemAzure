@@ -15,7 +15,7 @@ public class BidService
     {
         var lot = await _db.Lots.Include(l => l.Auction).Include(l => l.Bids)
             .FirstOrDefaultAsync(l => l.Id == lotId);
-        if (lot == null || lot.Auction.Status != AuctionStatus.InProgress)
+        if (lot == null || lot.Auction.Status != AuctionStatus.Active)
             return null;
 
         foreach (var existingBid in lot.Bids.Where(b => b.Status == BidStatus.Active || b.Status == BidStatus.Winning))
