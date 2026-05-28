@@ -31,6 +31,7 @@ public class BrokerFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "brokers")] HttpRequestData req)
     {
         var brokers = await _db.Brokers.Include(b => b.Buyers).ToListAsync();
+        brokers = brokers.OrderBy(b => int.TryParse(b.BrokerNumber, out var n) ? n : int.MaxValue).ToList();
         return await CreateJsonResponse(req, brokers);
     }
 
@@ -127,8 +128,9 @@ public class BrokerFunctions
     {
         var buyers = await _db.Buyers
             .Include(b => b.Broker)
-            .OrderBy(b => b.Name)
             .ToListAsync();
+
+        buyers = buyers.OrderBy(b => int.TryParse(b.BuyerNumber, out var n) ? n : int.MaxValue).ToList();
 
         return await CreateJsonResponse(req, buyers);
     }
