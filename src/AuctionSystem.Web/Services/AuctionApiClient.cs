@@ -20,6 +20,9 @@ public class AuctionApiClient
     public async Task<AuctionDto?> GetAuctionAsync(int id)
         => await _http.GetFromJsonAsync<AuctionDto>($"api/auctions/{id}");
 
+    public async Task<HttpResponseMessage> CreateAuctionAsync(object auction)
+        => await _http.PostAsJsonAsync("api/auctions", auction);
+
     public async Task<List<LotDto>> GetLotsByAuctionAsync(int auctionId)
         => await _http.GetFromJsonAsync<List<LotDto>>($"api/auctions/{auctionId}/lots") ?? new();
 
