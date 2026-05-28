@@ -26,4 +26,8 @@ public class AuctionResult
     public int? SoldToBuyerId { get; set; }
     public Buyer? SoldToBuyer { get; set; }
     public DateTime? SoldAt { get; set; }
+
+    public string? CommissionType { get; set; }
+    public decimal? CommissionValue { get; set; }
+    public decimal? CommissionAmount { get; set; }
 }

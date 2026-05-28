@@ -166,6 +166,9 @@ public class AuctionDbContext : DbContext
             e.Property(r => r.Size).HasMaxLength(50);
             e.Property(r => r.Clarity).HasMaxLength(50);
             e.Property(r => r.HairLength).HasMaxLength(50);
+            e.Property(r => r.CommissionType).HasMaxLength(20);
+            e.Property(r => r.CommissionValue).HasColumnType("decimal(18,4)");
+            e.Property(r => r.CommissionAmount).HasColumnType("decimal(18,2)");
         });
 
         modelBuilder.Entity<TakebackRequest>(e =>
