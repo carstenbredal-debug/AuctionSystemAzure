@@ -132,7 +132,7 @@ public class AuctionResultFunctions
                     Unit = "skins",
                     StartingPrice = 0,
                     HammerPrice = result.PriceEur,
-                    Status = LotStatus.Sold
+                    Status = LotStatus.Broker
                 };
                 _db.Lots.Add(existingLot);
                 await _db.SaveChangesAsync();
@@ -140,7 +140,7 @@ public class AuctionResultFunctions
             else
             {
                 existingLot.HammerPrice = result.PriceEur;
-                existingLot.Status = LotStatus.Sold;
+                existingLot.Status = LotStatus.Broker;
                 await _db.SaveChangesAsync();
             }
 
@@ -253,6 +253,29 @@ public class AuctionResultFunctions
         return response;
     }
 
+    [Function("GetNextUnsoldLot")]
+    public async Task<HttpResponseData> GetNextUnsoldLot(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "auction-results/next-unsold-lot")] HttpRequestData req)
+    {
+        var nextLot = await _db.Lots
+            .Where(l => l.Status == LotStatus.Pending || l.Status == LotStatus.Active)
+            .OrderBy(l => l.LotNumber)
+            .Select(l => new
+            {
+                l.LotNumber,
+                l.Description,
+                l.Category,
+                l.Quantity,
+                l.Unit
+            })
+            .FirstOrDefaultAsync();
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(nextLot, JsonOptions));
+        return response;
+    }
+
     [Function("SellLotsToBuyer")]
     public async Task<HttpResponseData> SellToBuyer(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auction-results/sell-to-buyer")] HttpRequestData req)
@@ -289,6 +312,14 @@ public class AuctionResultFunctions
             {
                 result.CommissionAmount = body.CommissionValue.Value;
             }
+        }
+
+        // Update lot status to Sold
+        var lotNumbers = results.Select(r => r.LotNumber).ToList();
+        var lots = await _db.Lots.Where(l => lotNumbers.Contains(l.LotNumber)).ToListAsync();
+        foreach (var lot in lots)
+        {
+            lot.Status = LotStatus.Sold;
         }
 
         await _db.SaveChangesAsync();
@@ -435,6 +466,10 @@ public class AuctionResultFunctions
 
             result.SoldToBuyerId = null;
             result.SoldAt = null;
+
+            // Update lot status back to Broker
+            var lot = await _db.Lots.FirstOrDefaultAsync(l => l.LotNumber == result.LotNumber);
+            if (lot != null) lot.Status = LotStatus.Broker;
         }
 
         await _db.SaveChangesAsync();
@@ -597,6 +632,10 @@ public class AuctionResultFunctions
         {
             takebackReq.AuctionResult.SoldToBuyerId = null;
             takebackReq.AuctionResult.SoldAt = null;
+
+            // Update lot status back to Broker
+            var lot = await _db.Lots.FirstOrDefaultAsync(l => l.LotNumber == takebackReq.AuctionResult.LotNumber);
+            if (lot != null) lot.Status = LotStatus.Broker;
         }
 
         await _db.SaveChangesAsync();

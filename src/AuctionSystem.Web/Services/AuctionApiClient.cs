@@ -266,6 +266,15 @@ public class AuctionApiClient
     public async Task<List<AuctionResultDto>> GetAuctionResultsAsync()
         => await _http.GetFromJsonAsync<List<AuctionResultDto>>("api/auction-results") ?? new();
 
+    public async Task<NextUnsoldLotDto?> GetNextUnsoldLotAsync()
+    {
+        try
+        {
+            return await _http.GetFromJsonAsync<NextUnsoldLotDto>("api/auction-results/next-unsold-lot");
+        }
+        catch { return null; }
+    }
+
     public async Task<List<AuctionResultDto>> GetAuctionResultsByBrokerAsync(int brokerId)
         => await _http.GetFromJsonAsync<List<AuctionResultDto>>($"api/auction-results/broker/{brokerId}") ?? new();
 

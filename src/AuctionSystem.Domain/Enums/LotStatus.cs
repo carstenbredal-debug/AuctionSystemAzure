@@ -6,5 +6,6 @@ public enum LotStatus
     Active,
     Sold,
     Unsold,
-    Withdrawn
+    Withdrawn,
+    Broker
 }
