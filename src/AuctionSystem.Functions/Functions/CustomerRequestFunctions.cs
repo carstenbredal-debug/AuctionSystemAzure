@@ -108,6 +108,18 @@ public class CustomerRequestFunctions
                 buyer.BrokerId = request.BrokerId;
                 _logger.LogInformation("Buyer {BuyerId} approved and linked to Broker {BrokerId}", buyer.Id, request.BrokerId);
             }
+
+            // Also add to junction table
+            var existingLink = await _db.BrokerBuyers
+                .FirstOrDefaultAsync(bb => bb.BrokerId == request.BrokerId && bb.BuyerId == request.BuyerId);
+            if (existingLink == null)
+            {
+                _db.BrokerBuyers.Add(new BrokerBuyer
+                {
+                    BrokerId = request.BrokerId,
+                    BuyerId = request.BuyerId
+                });
+            }
         }
 
         await _db.SaveChangesAsync();
@@ -177,6 +189,18 @@ public class CustomerRequestFunctions
         if (buyer != null)
             buyer.BrokerId = dto.BrokerId;
 
+        // Also add to junction table
+        var existingLink = await _db.BrokerBuyers
+            .FirstOrDefaultAsync(bb => bb.BrokerId == dto.BrokerId && bb.BuyerId == dto.BuyerId);
+        if (existingLink == null)
+        {
+            _db.BrokerBuyers.Add(new BrokerBuyer
+            {
+                BrokerId = dto.BrokerId,
+                BuyerId = dto.BuyerId
+            });
+        }
+
         await _db.SaveChangesAsync();
 
         var saved = await _db.BrokerCustomerRequests
@@ -205,7 +229,32 @@ public class CustomerRequestFunctions
     {
         var request = await _db.BrokerCustomerRequests.FindAsync(id);
         if (request == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        // Also remove from junction table
+        var link = await _db.BrokerBuyers
+            .FirstOrDefaultAsync(bb => bb.BrokerId == request.BrokerId && bb.BuyerId == request.BuyerId);
+        if (link != null)
+            _db.BrokerBuyers.Remove(link);
+
         _db.BrokerCustomerRequests.Remove(request);
+        await _db.SaveChangesAsync();
+        return req.CreateResponse(System.Net.HttpStatusCode.NoContent);
+    }
+
+    [Function("UnlinkBrokerBuyer")]
+    public async Task<HttpResponseData> Unlink(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "brokers/{brokerId:int}/buyers/{buyerId:int}")] HttpRequestData req, int brokerId, int buyerId)
+    {
+        var link = await _db.BrokerBuyers
+            .FirstOrDefaultAsync(bb => bb.BrokerId == brokerId && bb.BuyerId == buyerId);
+        if (link != null)
+            _db.BrokerBuyers.Remove(link);
+
+        var request = await _db.BrokerCustomerRequests
+            .FirstOrDefaultAsync(r => r.BrokerId == brokerId && r.BuyerId == buyerId);
+        if (request != null)
+            _db.BrokerCustomerRequests.Remove(request);
+
         await _db.SaveChangesAsync();
         return req.CreateResponse(System.Net.HttpStatusCode.NoContent);
     }
