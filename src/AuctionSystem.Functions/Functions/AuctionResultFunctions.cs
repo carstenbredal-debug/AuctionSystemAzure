@@ -703,6 +703,10 @@ public class AuctionResultFunctions
 
         var originalInvoice = invoiceLines.First().Invoice;
 
+        // Use auction result's broker to ensure credit note belongs to the correct broker
+        var firstResult = await _db.AuctionResults.FindAsync(invoiceLines.First().AuctionResultId);
+        var brokerId = firstResult?.BrokerId ?? originalInvoice.BrokerId;
+
         var auctionFeeParam = await _db.SystemParameters.FirstOrDefaultAsync(p => p.Key == "AuctionFee");
         var handlingFeeParam = await _db.SystemParameters.FirstOrDefaultAsync(p => p.Key == "HandlingFee");
         var auctionFeePercent = auctionFeeParam != null ? decimal.Parse(auctionFeeParam.Value, CultureInfo.InvariantCulture) : 0m;
@@ -713,7 +717,7 @@ public class AuctionResultFunctions
         {
             InvoiceNumber = $"CN-{DateTime.UtcNow:yyyyMMdd}-{creditNoteCount + 1:D5}",
             InvoiceDate = DateTime.UtcNow,
-            BrokerId = originalInvoice.BrokerId,
+            BrokerId = brokerId,
             BuyerId = originalInvoice.BuyerId,
             IsCreditNote = true,
             OriginalInvoiceId = originalInvoice.Id,
