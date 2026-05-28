@@ -34,9 +34,9 @@ else
                     <tr>
                         <th>Number</th>
                         <th>Name</th>
+                        <th>Broker</th>
                         <th>Email</th>
                         <th>Phone</th>
-                        <th>Address</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -49,9 +49,9 @@ else
                         <tr style="cursor: pointer;" @onclick="() => ViewBuyer(item.Id)">
                             <td><strong>@item.BuyerNumber</strong></td>
                             <td>@item.Name</td>
+                            <td>@(item.Broker?.CompanyName ?? "—")</td>
                             <td>@item.ContactEmail</td>
                             <td>@item.ContactPhone</td>
-                            <td>@item.Address</td>
                         </tr>
                     }
                 </tbody>
