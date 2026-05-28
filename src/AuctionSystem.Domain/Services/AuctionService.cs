@@ -11,13 +11,17 @@ public class AuctionService
 
     public AuctionService(AuctionDbContext db) => _db = db;
 
-    public async Task<List<Auction>> GetAllAuctionsAsync()
-        => await _db.Auctions.Include(a => a.Lots).OrderByDescending(a => a.ScheduledDate).ToListAsync();
+    public async Task<List<object>> GetAllAuctionsAsync()
+        => await _db.Auctions.OrderByDescending(a => a.ScheduledDate)
+            .Select(a => (object)new
+            {
+                a.Id, a.AuctionNumber, a.Title, a.Description, a.Location,
+                a.ScheduledDate, a.StartedAt, a.CompletedAt, a.Status, a.CreatedAt,
+                LotCount = a.Lots.Count
+            }).ToListAsync();
 
     public async Task<Auction?> GetAuctionAsync(int id)
-        => await _db.Auctions.Include(a => a.Lots).ThenInclude(l => l.Seller)
-            .Include(a => a.Lots).ThenInclude(l => l.Bids)
-            .FirstOrDefaultAsync(a => a.Id == id);
+        => await _db.Auctions.FirstOrDefaultAsync(a => a.Id == id);
 
     public async Task<Auction> CreateAuctionAsync(Auction auction)
     {

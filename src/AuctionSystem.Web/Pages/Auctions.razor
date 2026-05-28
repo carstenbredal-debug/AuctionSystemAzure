@@ -10,7 +10,14 @@
 
 @if (Id.HasValue)
 {
-    @if (selectedAuction == null)
+    @if (loadingAuction)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2 text-muted">Loading auction...</p>
+        </div>
+    }
+    else if (selectedAuction == null)
     {
         <div class="alert alert-warning">
             Auction not found. <a href="/auctions">Back to Auctions</a>
@@ -259,7 +266,7 @@ else
                             <td>@a.Location</td>
                             <td>@a.ScheduledDate.ToString("yyyy-MM-dd")</td>
                             <td><span class="badge bg-info">@a.Status</span></td>
-                            <td>@a.Lots.Count</td>
+                            <td>@(a.LotCount > 0 ? a.LotCount : a.Lots.Count)</td>
                         </tr>
                     }
                 </tbody>
@@ -275,6 +282,7 @@ else
     private AuctionDto? selectedAuction;
     private List<LotDto> lots = new();
     private string activeTab = "lots";
+    private bool loadingAuction;
 
     // Import tab state
     private List<CatalogLotDto> catalogLots = new();
@@ -309,15 +317,22 @@ else
     {
         if (Id.HasValue)
         {
+            loadingAuction = true;
             try
             {
-                selectedAuction = await Api.GetAuctionAsync(Id.Value);
-                lots = await Api.GetLotsByAuctionAsync(Id.Value);
+                var auctionTask = Api.GetAuctionAsync(Id.Value);
+                var lotsTask = Api.GetLotsByAuctionAsync(Id.Value);
+                selectedAuction = await auctionTask;
+                lots = await lotsTask;
                 importedLotNumbers = lots.Select(l => l.LotNumber).ToHashSet();
             }
             catch (HttpRequestException)
             {
                 selectedAuction = null;
+            }
+            finally
+            {
+                loadingAuction = false;
             }
         }
         else

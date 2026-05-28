@@ -20,6 +20,7 @@ public class AuctionDto
     public AuctionStatus Status { get; set; }
     public DateTime CreatedAt { get; set; }
     public List<LotDto> Lots { get; set; } = new();
+    public int LotCount { get; set; }
 }
 
 public class LotDto
