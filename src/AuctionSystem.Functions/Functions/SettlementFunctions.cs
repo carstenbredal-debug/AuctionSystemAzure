@@ -129,8 +129,15 @@ public class SettlementFunctions
     public async Task<HttpResponseData> GetInvoiceLinksForResults(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements/invoice-links/broker/{brokerId:int}")] HttpRequestData req, int brokerId)
     {
+        // Get auction result IDs for this broker
+        var brokerResultIds = await _db.AuctionResults
+            .Where(r => r.BrokerId == brokerId)
+            .Select(r => r.Id)
+            .ToListAsync();
+
+        // Get all invoice lines for those results (regardless of invoice broker)
         var lines = await _db.Set<InvoiceLine>()
-            .Where(l => l.Invoice.BrokerId == brokerId)
+            .Where(l => brokerResultIds.Contains(l.AuctionResultId))
             .Select(l => new
             {
                 l.AuctionResultId,
