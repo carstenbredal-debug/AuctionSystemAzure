@@ -380,10 +380,13 @@ public class InvoiceSummaryDto
 
 public class InvoiceLinkDto
 {
-    public int? InvoiceId { get; set; }
-    public string? InvoiceNumber { get; set; }
-    public string? InvoicePdfUrl { get; set; }
-    public int? CreditNoteId { get; set; }
-    public string? CreditNoteNumber { get; set; }
-    public string? CreditNotePdfUrl { get; set; }
+    public List<InvoiceDocDto> Documents { get; set; } = new();
+}
+
+public class InvoiceDocDto
+{
+    public int Id { get; set; }
+    public string Number { get; set; } = "";
+    public string? PdfUrl { get; set; }
+    public bool IsCreditNote { get; set; }
 }

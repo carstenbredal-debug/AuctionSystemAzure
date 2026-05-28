@@ -137,21 +137,10 @@ else if (_activeTab == "purchased")
                             <td>
                                 @if (link != null)
                                 {
-                                    @if (!string.IsNullOrEmpty(link.InvoicePdfUrl))
+                                    @foreach (var doc in link.Documents)
                                     {
-                                        <a href="@link.InvoicePdfUrl" target="_blank" class="btn btn-sm btn-outline-primary me-1" title="@link.InvoiceNumber">📄 Inv</a>
-                                    }
-                                    else if (link.InvoiceId != null)
-                                    {
-                                        <a href="@Api.GetInvoicePdfUrl(link.InvoiceId.Value)" target="_blank" class="btn btn-sm btn-outline-primary me-1" title="@link.InvoiceNumber">📄 Inv</a>
-                                    }
-                                    @if (!string.IsNullOrEmpty(link.CreditNotePdfUrl))
-                                    {
-                                        <a href="@link.CreditNotePdfUrl" target="_blank" class="btn btn-sm btn-outline-warning" title="@link.CreditNoteNumber">📄 CN</a>
-                                    }
-                                    else if (link.CreditNoteId != null)
-                                    {
-                                        <a href="@Api.GetInvoicePdfUrl(link.CreditNoteId.Value)" target="_blank" class="btn btn-sm btn-outline-warning" title="@link.CreditNoteNumber">📄 CN</a>
+                                        var url = !string.IsNullOrEmpty(doc.PdfUrl) ? doc.PdfUrl : Api.GetInvoicePdfUrl(doc.Id);
+                                        <a href="@url" target="_blank" class="btn btn-sm @(doc.IsCreditNote ? "btn-outline-warning" : "btn-outline-primary") me-1" title="@doc.Number">📄 @(doc.IsCreditNote ? "CN" : "Inv")</a>
                                     }
                                 }
                             </td>
@@ -246,21 +235,10 @@ else if (_activeTab == "sold")
                             <td>
                                 @if (link != null)
                                 {
-                                    @if (!string.IsNullOrEmpty(link.InvoicePdfUrl))
+                                    @foreach (var doc in link.Documents)
                                     {
-                                        <a href="@link.InvoicePdfUrl" target="_blank" class="btn btn-sm btn-outline-primary me-1" title="@link.InvoiceNumber">📄 Invoice</a>
-                                    }
-                                    else if (link.InvoiceId != null)
-                                    {
-                                        <a href="@Api.GetInvoicePdfUrl(link.InvoiceId.Value)" target="_blank" class="btn btn-sm btn-outline-primary me-1" title="@link.InvoiceNumber">📄 Invoice</a>
-                                    }
-                                    @if (!string.IsNullOrEmpty(link.CreditNotePdfUrl))
-                                    {
-                                        <a href="@link.CreditNotePdfUrl" target="_blank" class="btn btn-sm btn-outline-warning" title="@link.CreditNoteNumber">📄 Credit Note</a>
-                                    }
-                                    else if (link.CreditNoteId != null)
-                                    {
-                                        <a href="@Api.GetInvoicePdfUrl(link.CreditNoteId.Value)" target="_blank" class="btn btn-sm btn-outline-warning" title="@link.CreditNoteNumber">📄 Credit Note</a>
+                                        var url = !string.IsNullOrEmpty(doc.PdfUrl) ? doc.PdfUrl : Api.GetInvoicePdfUrl(doc.Id);
+                                        <a href="@url" target="_blank" class="btn btn-sm @(doc.IsCreditNote ? "btn-outline-warning" : "btn-outline-primary") me-1" title="@doc.Number">📄 @(doc.IsCreditNote ? "Credit Note" : "Invoice")</a>
                                     }
                                 }
                             </td>
