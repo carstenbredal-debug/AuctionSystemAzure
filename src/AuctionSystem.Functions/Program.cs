@@ -1,5 +1,6 @@
 using AuctionSystem.Domain.Data;
 using AuctionSystem.Domain.Services;
+using AuctionSystem.Functions.Services;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,6 +24,13 @@ var host = new HostBuilder()
         services.AddScoped<AuctionService>();
         services.AddScoped<BidService>();
         services.AddScoped<SettlementService>();
+
+        var storageConnectionString = context.Configuration["AzureWebJobsStorage"]
+            ?? context.Configuration["Values:AzureWebJobsStorage"];
+        if (!string.IsNullOrEmpty(storageConnectionString) && storageConnectionString != "UseDevelopmentStorage=true")
+        {
+            services.AddSingleton(new BlobStorageService(storageConnectionString));
+        }
     })
     .Build();
 

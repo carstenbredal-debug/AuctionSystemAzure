@@ -99,15 +99,17 @@ else if (_activeTab == "purchased")
                         <th>Auction Fee</th>
                         <th>Commission</th>
                         <th>Status</th>
+                        <th>Documents</th>
                     </tr>
                 </thead>
                 <tbody>
                     @if (_allResults.Count == 0)
                     {
-                        <tr><td colspan="14" class="text-center text-muted py-4">No purchased lots yet.</td></tr>
+                        <tr><td colspan="15" class="text-center text-muted py-4">No purchased lots yet.</td></tr>
                     }
                     @foreach (var r in _allResults)
                     {
+                        var link = _invoiceLinks.GetValueOrDefault(r.Id);
                         <tr>
                             <td><strong>@r.LotNumber</strong></td>
                             <td>@(r.SalesType ?? "—")</td>
@@ -130,6 +132,27 @@ else if (_activeTab == "purchased")
                                 else
                                 {
                                     <span class="badge bg-warning">Unsold</span>
+                                }
+                            </td>
+                            <td>
+                                @if (link != null)
+                                {
+                                    @if (!string.IsNullOrEmpty(link.InvoicePdfUrl))
+                                    {
+                                        <a href="@link.InvoicePdfUrl" target="_blank" class="btn btn-sm btn-outline-primary me-1" title="@link.InvoiceNumber">📄 Inv</a>
+                                    }
+                                    else if (link.InvoiceId != null)
+                                    {
+                                        <a href="@Api.GetInvoicePdfUrl(link.InvoiceId.Value)" target="_blank" class="btn btn-sm btn-outline-primary me-1" title="@link.InvoiceNumber">📄 Inv</a>
+                                    }
+                                    @if (!string.IsNullOrEmpty(link.CreditNotePdfUrl))
+                                    {
+                                        <a href="@link.CreditNotePdfUrl" target="_blank" class="btn btn-sm btn-outline-warning" title="@link.CreditNoteNumber">📄 CN</a>
+                                    }
+                                    else if (link.CreditNoteId != null)
+                                    {
+                                        <a href="@Api.GetInvoicePdfUrl(link.CreditNoteId.Value)" target="_blank" class="btn btn-sm btn-outline-warning" title="@link.CreditNoteNumber">📄 CN</a>
+                                    }
                                 }
                             </td>
                         </tr>
@@ -193,15 +216,17 @@ else if (_activeTab == "sold")
                         <th>Commission</th>
                         <th>Sold To</th>
                         <th>Sold Date</th>
+                        <th>Documents</th>
                     </tr>
                 </thead>
                 <tbody>
                     @if (_soldLots.Count == 0)
                     {
-                        <tr><td colspan="13" class="text-center text-muted py-4">No lots sold yet.</td></tr>
+                        <tr><td colspan="14" class="text-center text-muted py-4">No lots sold yet.</td></tr>
                     }
                     @foreach (var r in _soldLots)
                     {
+                        var link = _invoiceLinks.GetValueOrDefault(r.Id);
                         <tr>
                             <td>
                                 <input type="checkbox" checked="@_selectedSoldIds.Contains(r.Id)" @onchange="() => ToggleSoldSelection(r.Id)" />
@@ -218,6 +243,27 @@ else if (_activeTab == "sold")
                             <td>€@((r.CommissionAmount ?? 0).ToString("N2"))</td>
                             <td>@(r.SoldToBuyerNumber ?? "") — @(r.SoldToBuyerName ?? "")</td>
                             <td>@(r.SoldAt?.ToString("g") ?? "—")</td>
+                            <td>
+                                @if (link != null)
+                                {
+                                    @if (!string.IsNullOrEmpty(link.InvoicePdfUrl))
+                                    {
+                                        <a href="@link.InvoicePdfUrl" target="_blank" class="btn btn-sm btn-outline-primary me-1" title="@link.InvoiceNumber">📄 Invoice</a>
+                                    }
+                                    else if (link.InvoiceId != null)
+                                    {
+                                        <a href="@Api.GetInvoicePdfUrl(link.InvoiceId.Value)" target="_blank" class="btn btn-sm btn-outline-primary me-1" title="@link.InvoiceNumber">📄 Invoice</a>
+                                    }
+                                    @if (!string.IsNullOrEmpty(link.CreditNotePdfUrl))
+                                    {
+                                        <a href="@link.CreditNotePdfUrl" target="_blank" class="btn btn-sm btn-outline-warning" title="@link.CreditNoteNumber">📄 Credit Note</a>
+                                    }
+                                    else if (link.CreditNoteId != null)
+                                    {
+                                        <a href="@Api.GetInvoicePdfUrl(link.CreditNoteId.Value)" target="_blank" class="btn btn-sm btn-outline-warning" title="@link.CreditNoteNumber">📄 Credit Note</a>
+                                    }
+                                }
+                            </td>
                         </tr>
                     }
                 </tbody>
@@ -466,6 +512,7 @@ else if (_activeTab == "takeback")
     private bool _messageIsError;
     private int? _lastInvoiceId;
     private int? _lastCreditNoteId;
+    private Dictionary<int, InvoiceLinkDto> _invoiceLinks = new();
     private string? _takebackMessage;
     private bool _takebackMessageIsError;
     private string? _brokerTakebackMessage;
@@ -487,6 +534,7 @@ else if (_activeTab == "takeback")
                 _allResults = await Api.GetAuctionResultsByBrokerAsync(_brokerId);
                 _buyers = await Api.GetAllBuyersAsync();
                 _pendingTakebacks = await Api.GetTakebackRequestsByBrokerAsync(_brokerId);
+                _invoiceLinks = await Api.GetInvoiceLinksForBrokerAsync(_brokerId);
                 await LoadFeeParameters();
             }
         }

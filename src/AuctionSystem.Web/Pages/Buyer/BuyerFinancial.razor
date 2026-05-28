@@ -137,7 +137,16 @@ else
                             <td>€@inv.Commission.ToString("N2")</td>
                             <td><strong>€@inv.TotalAmount.ToString("N2")</strong></td>
                             <td>@inv.InvoiceDate.ToString("d")</td>
-                            <td><a href="@Api.GetInvoicePdfUrl(inv.Id)" target="_blank" class="btn btn-sm btn-outline-primary">📄 PDF</a></td>
+                            <td>
+                                @if (!string.IsNullOrEmpty(inv.PdfUrl))
+                                {
+                                    <a href="@inv.PdfUrl" target="_blank" class="btn btn-sm btn-outline-primary">📄 PDF</a>
+                                }
+                                else
+                                {
+                                    <a href="@Api.GetInvoicePdfUrl(inv.Id)" target="_blank" class="btn btn-sm btn-outline-primary">📄 PDF</a>
+                                }
+                            </td>
                         </tr>
                     }
                 </tbody>
