@@ -159,7 +159,18 @@ public class BrokerFunctions
     {
         var buyer = await _db.Buyers.Include(b => b.BrokerBuyers).ThenInclude(bb => bb.Broker).FirstOrDefaultAsync(b => b.Id == id);
         if (buyer == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
-        return await CreateJsonResponse(req, buyer);
+        var result = new
+        {
+            buyer.Id, buyer.BuyerNumber, buyer.Name, buyer.Name2, buyer.ErpAccountNumber, buyer.SearchName,
+            buyer.ContactName, buyer.AddressLine1, buyer.AddressLine2, buyer.Country, buyer.PostalCode, buyer.City,
+            buyer.ContactPhone, buyer.MobilePhone, buyer.ContactEmail, buyer.HomePage, buyer.VatRegistrationNo,
+            buyer.RegistrationNo, buyer.CustomerGroup, buyer.SalesPerson, buyer.PaymentTerm, buyer.PaymentMethod,
+            buyer.Currency, buyer.Language, buyer.BankName, buyer.BankAddress, buyer.BankIbanNumber, buyer.SwiftCode,
+            buyer.BankCountry, buyer.Assignee, buyer.AssignmentOfReceivable, buyer.IsActive, buyer.Address,
+            buyer.BrokerId, buyer.CreatedAt,
+            Brokers = buyer.BrokerBuyers.Select(bb => new { bb.Broker.Id, bb.Broker.BrokerNumber, bb.Broker.CompanyName, bb.Broker.ContactEmail, bb.Broker.ContactPhone }).ToList()
+        };
+        return await CreateJsonResponse(req, result);
     }
 
     [Function("UpdateBuyer")]
