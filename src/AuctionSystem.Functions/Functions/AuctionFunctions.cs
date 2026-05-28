@@ -75,7 +75,7 @@ public class AuctionFunctions
         var result = lots.Select(l => new
         {
             l.Id, l.LotNumber, l.Description, l.Category, l.Quantity, l.Unit,
-            l.StartingPrice, status = (int)l.Status, l.AuctionId
+            l.StartingPrice, l.HammerPrice, status = (int)l.Status, l.AuctionId
         });
         return await CreateJsonResponse(req, result);
     }
