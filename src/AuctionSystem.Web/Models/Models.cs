@@ -349,3 +349,19 @@ public class TakebackRequestDto
     public DateTime RequestedAt { get; set; }
     public DateTime? RespondedAt { get; set; }
 }
+
+public class InvoiceSummaryDto
+{
+    public int Id { get; set; }
+    public string InvoiceNumber { get; set; } = "";
+    public DateTime InvoiceDate { get; set; }
+    public decimal SubTotal { get; set; }
+    public decimal AuctionFee { get; set; }
+    public decimal Commission { get; set; }
+    public decimal TotalAmount { get; set; }
+    public string Currency { get; set; } = "EUR";
+    public string Status { get; set; } = "";
+    public string? BrokerName { get; set; }
+    public string? BuyerName { get; set; }
+    public int LinesCount { get; set; }
+}

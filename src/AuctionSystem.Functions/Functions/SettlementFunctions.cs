@@ -29,29 +29,17 @@ public class SettlementFunctions
         _logger = logger;
     }
 
-    [Function("GenerateInvoice")]
-    public async Task<HttpResponseData> GenerateInvoice(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "settlements/invoices/generate")] HttpRequestData req)
-    {
-        var request = await req.ReadFromJsonAsync<GenerateInvoiceRequest>();
-        if (request == null) return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
-
-        var invoice = await _service.GenerateInvoiceAsync(request.AuctionId, request.BrokerId);
-        if (invoice == null)
-        {
-            var errorResponse = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
-            await errorResponse.WriteStringAsync("No won lots for this broker in this auction");
-            return errorResponse;
-        }
-        return await CreateJsonResponse(req, invoice);
-    }
-
     [Function("GetInvoicesByBroker")]
     public async Task<HttpResponseData> GetInvoicesByBroker(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements/invoices/broker/{brokerId:int}")] HttpRequestData req, int brokerId)
     {
         var invoices = await _service.GetInvoicesByBrokerAsync(brokerId);
-        return await CreateJsonResponse(req, invoices);
+        return await CreateJsonResponse(req, invoices.Select(i => new
+        {
+            i.Id, i.InvoiceNumber, i.InvoiceDate, i.SubTotal, i.AuctionFee, i.Commission,
+            i.TotalAmount, i.Currency, Status = i.Status.ToString(),
+            BuyerName = i.Buyer?.Name, LinesCount = i.Lines.Count
+        }));
     }
 
     [Function("MarkInvoicePaid")]
@@ -86,13 +74,48 @@ public class SettlementFunctions
         return await CreateJsonResponse(req, settlements);
     }
 
+    [Function("DownloadInvoicePdf")]
+    public async Task<HttpResponseData> DownloadInvoicePdf(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements/invoices/{invoiceId:int}/pdf")] HttpRequestData req, int invoiceId)
+    {
+        var invoice = await _db.Invoices.FindAsync(invoiceId);
+        if (invoice == null || invoice.PdfData == null)
+            return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/pdf");
+        response.Headers.Add("Content-Disposition", $"inline; filename=\"{invoice.InvoiceNumber}.pdf\"");
+        await response.Body.WriteAsync(invoice.PdfData);
+        return response;
+    }
+
+    [Function("GetInvoicesByBuyer")]
+    public async Task<HttpResponseData> GetInvoicesByBuyer(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements/invoices/buyer/{buyerId:int}")] HttpRequestData req, int buyerId)
+    {
+        var invoices = await _db.Invoices.Where(i => i.BuyerId == buyerId)
+            .Include(i => i.Lines).Include(i => i.Broker)
+            .OrderByDescending(i => i.InvoiceDate).ToListAsync();
+        return await CreateJsonResponse(req, invoices.Select(i => new
+        {
+            i.Id, i.InvoiceNumber, i.InvoiceDate, i.SubTotal, i.AuctionFee, i.Commission,
+            i.TotalAmount, i.Currency, Status = i.Status.ToString(),
+            BrokerName = i.Broker?.CompanyName, Lines = i.Lines.Count
+        }));
+    }
+
     [Function("GetAllInvoices")]
     public async Task<HttpResponseData> GetAllInvoices(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements/invoices")] HttpRequestData req)
     {
-        var invoices = await _db.Invoices.Include(i => i.Broker).Include(i => i.Auction).Include(i => i.Lines)
-            .OrderByDescending(i => i.IssuedDate).ToListAsync();
-        return await CreateJsonResponse(req, invoices);
+        var invoices = await _db.Invoices.Include(i => i.Broker).Include(i => i.Buyer).Include(i => i.Lines)
+            .OrderByDescending(i => i.InvoiceDate).ToListAsync();
+        return await CreateJsonResponse(req, invoices.Select(i => new
+        {
+            i.Id, i.InvoiceNumber, i.InvoiceDate, i.SubTotal, i.AuctionFee, i.Commission,
+            i.TotalAmount, i.Currency, Status = i.Status.ToString(),
+            BrokerName = i.Broker?.CompanyName, BuyerName = i.Buyer?.Name, Lines = i.Lines.Count
+        }));
     }
 
     [Function("GetAllSettlements")]
@@ -123,4 +146,4 @@ public class SettlementFunctions
     }
 }
 
-public record GenerateInvoiceRequest(int AuctionId, int BrokerId);
+

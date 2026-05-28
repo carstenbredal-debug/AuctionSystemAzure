@@ -92,20 +92,22 @@ public class AuctionDbContext : DbContext
             e.HasKey(i => i.Id);
             e.HasIndex(i => i.InvoiceNumber).IsUnique();
             e.HasOne(i => i.Broker).WithMany(b => b.Invoices).HasForeignKey(i => i.BrokerId).OnDelete(DeleteBehavior.Restrict);
-            e.HasOne(i => i.Auction).WithMany().HasForeignKey(i => i.AuctionId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(i => i.Buyer).WithMany().HasForeignKey(i => i.BuyerId).OnDelete(DeleteBehavior.Restrict);
             e.Property(i => i.SubTotal).HasColumnType("decimal(18,2)");
+            e.Property(i => i.AuctionFee).HasColumnType("decimal(18,2)");
             e.Property(i => i.Commission).HasColumnType("decimal(18,2)");
-            e.Property(i => i.Tax).HasColumnType("decimal(18,2)");
             e.Property(i => i.TotalAmount).HasColumnType("decimal(18,2)");
+            e.Property(i => i.Currency).HasMaxLength(10);
         });
 
         modelBuilder.Entity<InvoiceLine>(e =>
         {
             e.HasKey(l => l.Id);
             e.HasOne(l => l.Invoice).WithMany(i => i.Lines).HasForeignKey(l => l.InvoiceId).OnDelete(DeleteBehavior.Cascade);
-            e.HasOne(l => l.Lot).WithMany().HasForeignKey(l => l.LotId).OnDelete(DeleteBehavior.Restrict);
-            e.Property(l => l.UnitPrice).HasColumnType("decimal(18,2)");
-            e.Property(l => l.LineTotal).HasColumnType("decimal(18,2)");
+            e.HasOne(l => l.AuctionResult).WithMany().HasForeignKey(l => l.AuctionResultId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(l => l.PricePerSkin).HasColumnType("decimal(18,2)");
+            e.Property(l => l.HammerPrice).HasColumnType("decimal(18,2)");
+            e.Property(l => l.Description).HasMaxLength(500);
         });
 
         modelBuilder.Entity<Settlement>(e =>

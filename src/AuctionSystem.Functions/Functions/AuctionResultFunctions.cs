@@ -1,8 +1,10 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using AuctionSystem.Domain.Data;
 using AuctionSystem.Domain.Entities;
 using AuctionSystem.Domain.Enums;
+using AuctionSystem.Functions.Services;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.EntityFrameworkCore;
@@ -301,9 +303,78 @@ public class AuctionResultFunctions
 
         await _db.SaveChangesAsync();
 
+        // Generate invoice
+        int? invoiceId = null;
+        if (results.Count > 0)
+        {
+            try
+            {
+                var brokerId = results.First().BrokerId;
+                var auctionFeeParam = await _db.SystemParameters.FirstOrDefaultAsync(p => p.Key == "AuctionFee");
+                var handlingFeeParam = await _db.SystemParameters.FirstOrDefaultAsync(p => p.Key == "HandlingFee");
+                var auctionFeePercent = auctionFeeParam != null ? decimal.Parse(auctionFeeParam.Value, CultureInfo.InvariantCulture) : 0m;
+                var handlingFeePerSkin = handlingFeeParam != null ? decimal.Parse(handlingFeeParam.Value, CultureInfo.InvariantCulture) : 0m;
+
+                var invoiceCount = await _db.Invoices.CountAsync();
+                var invoice = new Invoice
+                {
+                    InvoiceNumber = $"INV-{DateTime.UtcNow:yyyyMMdd}-{invoiceCount + 1:D5}",
+                    InvoiceDate = DateTime.UtcNow,
+                    BrokerId = brokerId,
+                    BuyerId = body.BuyerId,
+                    Status = InvoiceStatus.Issued
+                };
+
+                decimal subTotal = 0;
+                decimal totalAuctionFee = 0;
+                decimal totalCommission = 0;
+
+                foreach (var r in results)
+                {
+                    var hammerPrice = r.TotalSkins * r.PriceEur;
+                    var handlingFee = r.TotalSkins * handlingFeePerSkin;
+                    var lotAuctionFee = (hammerPrice + handlingFee) * auctionFeePercent / 100m;
+                    var description = string.Join(", ", new[] { r.SalesType, r.Gender, r.Group, r.Color, r.Quality, r.Size }.Where(s => !string.IsNullOrEmpty(s)));
+
+                    invoice.Lines.Add(new InvoiceLine
+                    {
+                        LotNumber = r.LotNumber,
+                        Description = description,
+                        Skins = r.TotalSkins,
+                        PricePerSkin = r.PriceEur,
+                        HammerPrice = hammerPrice,
+                        AuctionResultId = r.Id
+                    });
+
+                    subTotal += hammerPrice;
+                    totalAuctionFee += lotAuctionFee;
+                    totalCommission += r.CommissionAmount ?? 0;
+                }
+
+                invoice.SubTotal = subTotal;
+                invoice.AuctionFee = totalAuctionFee;
+                invoice.Commission = totalCommission;
+                invoice.TotalAmount = subTotal + totalAuctionFee + totalCommission;
+
+                // Load buyer for PDF
+                await _db.Entry(invoice).Reference(i => i.Buyer).Query().LoadAsync();
+                invoice.Buyer = buyer;
+
+                invoice.PdfData = InvoicePdfService.GeneratePdf(invoice);
+
+                _db.Invoices.Add(invoice);
+                await _db.SaveChangesAsync();
+                invoiceId = invoice.Id;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to generate invoice");
+            }
+        }
+
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
-        await response.WriteStringAsync(JsonSerializer.Serialize(new { soldCount = results.Count }, JsonOptions));
+        await response.WriteStringAsync(JsonSerializer.Serialize(new { soldCount = results.Count, invoiceId }, JsonOptions));
         return response;
     }
 
