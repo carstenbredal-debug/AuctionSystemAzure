@@ -15,7 +15,7 @@ public class SettlementService
 
     public async Task<List<Invoice>> GetInvoicesByBrokerAsync(int brokerId)
         => await _db.Invoices.Where(i => i.BrokerId == brokerId)
-            .Include(i => i.Lines).Include(i => i.Buyer)
+            .Include(i => i.Lines).Include(i => i.Buyer).Include(i => i.OriginalInvoice)
             .OrderByDescending(i => i.InvoiceDate).ToListAsync();
 
     public async Task<List<Settlement>> GetSettlementsBySellerAsync(int sellerId)

@@ -407,6 +407,7 @@ public class AuctionResultFunctions
             .ToListAsync();
 
         var created = new List<TakebackRequest>();
+        var takenBackResultIds = new List<int>();
         foreach (var result in results)
         {
             var existing = await _db.TakebackRequests
@@ -425,6 +426,7 @@ public class AuctionResultFunctions
             };
             _db.TakebackRequests.Add(takebackReq);
             created.Add(takebackReq);
+            takenBackResultIds.Add(result.Id);
 
             result.SoldToBuyerId = null;
             result.SoldAt = null;
@@ -432,9 +434,22 @@ public class AuctionResultFunctions
 
         await _db.SaveChangesAsync();
 
+        int? creditNoteId = null;
+        if (takenBackResultIds.Count > 0)
+        {
+            try
+            {
+                creditNoteId = await GenerateCreditNoteAsync(takenBackResultIds);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to generate credit note");
+            }
+        }
+
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
-        await response.WriteStringAsync(JsonSerializer.Serialize(new { requestCount = created.Count }, JsonOptions));
+        await response.WriteStringAsync(JsonSerializer.Serialize(new { requestCount = created.Count, creditNoteId }, JsonOptions));
         return response;
     }
 
@@ -572,6 +587,7 @@ public class AuctionResultFunctions
         takebackReq.Status = body.Approve ? CustomerRequestStatus.Approved : CustomerRequestStatus.Declined;
         takebackReq.RespondedAt = DateTime.UtcNow;
 
+        int? creditNoteId = null;
         if (body.Approve)
         {
             takebackReq.AuctionResult.SoldToBuyerId = null;
@@ -580,10 +596,92 @@ public class AuctionResultFunctions
 
         await _db.SaveChangesAsync();
 
+        if (body.Approve)
+        {
+            try
+            {
+                creditNoteId = await GenerateCreditNoteAsync(new List<int> { takebackReq.AuctionResultId });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to generate credit note for takeback approval");
+            }
+        }
+
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
-        await response.WriteStringAsync(JsonSerializer.Serialize(new { status = takebackReq.Status.ToString() }, JsonOptions));
+        await response.WriteStringAsync(JsonSerializer.Serialize(new { status = takebackReq.Status.ToString(), creditNoteId }, JsonOptions));
         return response;
+    }
+
+    private async Task<int?> GenerateCreditNoteAsync(List<int> auctionResultIds)
+    {
+        var invoiceLines = await _db.Set<InvoiceLine>()
+            .Include(l => l.Invoice).ThenInclude(i => i.Buyer)
+            .Include(l => l.Invoice).ThenInclude(i => i.Broker)
+            .Where(l => auctionResultIds.Contains(l.AuctionResultId) && !l.Invoice.IsCreditNote)
+            .ToListAsync();
+
+        if (invoiceLines.Count == 0) return null;
+
+        var originalInvoice = invoiceLines.First().Invoice;
+
+        var auctionFeeParam = await _db.SystemParameters.FirstOrDefaultAsync(p => p.Key == "AuctionFee");
+        var handlingFeeParam = await _db.SystemParameters.FirstOrDefaultAsync(p => p.Key == "HandlingFee");
+        var auctionFeePercent = auctionFeeParam != null ? decimal.Parse(auctionFeeParam.Value, CultureInfo.InvariantCulture) : 0m;
+        var handlingFeePerSkin = handlingFeeParam != null ? decimal.Parse(handlingFeeParam.Value, CultureInfo.InvariantCulture) : 0m;
+
+        var creditNoteCount = await _db.Invoices.CountAsync(i => i.IsCreditNote);
+        var creditNote = new Invoice
+        {
+            InvoiceNumber = $"CN-{DateTime.UtcNow:yyyyMMdd}-{creditNoteCount + 1:D5}",
+            InvoiceDate = DateTime.UtcNow,
+            BrokerId = originalInvoice.BrokerId,
+            BuyerId = originalInvoice.BuyerId,
+            IsCreditNote = true,
+            OriginalInvoiceId = originalInvoice.Id,
+            Status = InvoiceStatus.Issued
+        };
+
+        decimal subTotal = 0;
+        decimal totalAuctionFee = 0;
+        decimal totalCommission = 0;
+
+        foreach (var line in invoiceLines)
+        {
+            var handlingFee = line.Skins * handlingFeePerSkin;
+            var lotAuctionFee = (line.HammerPrice + handlingFee) * auctionFeePercent / 100m;
+
+            creditNote.Lines.Add(new InvoiceLine
+            {
+                LotNumber = line.LotNumber,
+                Description = line.Description,
+                Skins = -line.Skins,
+                PricePerSkin = line.PricePerSkin,
+                HammerPrice = -line.HammerPrice,
+                AuctionResultId = line.AuctionResultId
+            });
+
+            subTotal -= line.HammerPrice;
+            totalAuctionFee -= lotAuctionFee;
+
+            var result = await _db.AuctionResults.FindAsync(line.AuctionResultId);
+            totalCommission -= result?.CommissionAmount ?? 0;
+        }
+
+        creditNote.SubTotal = subTotal;
+        creditNote.AuctionFee = totalAuctionFee;
+        creditNote.Commission = totalCommission;
+        creditNote.TotalAmount = subTotal + totalAuctionFee + totalCommission;
+
+        creditNote.Buyer = originalInvoice.Buyer;
+        creditNote.OriginalInvoice = originalInvoice;
+
+        creditNote.PdfData = InvoicePdfService.GeneratePdf(creditNote);
+
+        _db.Invoices.Add(creditNote);
+        await _db.SaveChangesAsync();
+        return creditNote.Id;
     }
 }
 

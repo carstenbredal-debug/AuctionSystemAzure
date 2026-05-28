@@ -24,6 +24,10 @@ public class Invoice
     public InvoiceStatus Status { get; set; } = InvoiceStatus.Draft;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    public bool IsCreditNote { get; set; }
+    public int? OriginalInvoiceId { get; set; }
+    public Invoice? OriginalInvoice { get; set; }
+
     public byte[]? PdfData { get; set; }
 
     public ICollection<InvoiceLine> Lines { get; set; } = new List<InvoiceLine>();

@@ -61,14 +61,14 @@ else
             <table class="table table-striped table-hover mb-0">
                 <thead class="table-dark">
                     <tr>
-                        <th>Invoice #</th>
+                        <th>Type</th>
+                        <th>Number</th>
                         <th>Buyer</th>
                         <th>Lots</th>
                         <th>Subtotal</th>
                         <th>Auction Fee</th>
                         <th>Commission</th>
                         <th>Total</th>
-                        <th>Status</th>
                         <th>Date</th>
                         <th>PDF</th>
                     </tr>
@@ -76,19 +76,34 @@ else
                 <tbody>
                     @if (_invoices.Count == 0)
                     {
-                        <tr><td colspan="10" class="text-center text-muted py-4">No invoices yet.</td></tr>
+                        <tr><td colspan="10" class="text-center text-muted py-4">No invoices or credit notes yet.</td></tr>
                     }
                     @foreach (var inv in _invoices)
                     {
-                        <tr>
-                            <td><strong>@inv.InvoiceNumber</strong></td>
+                        <tr class="@(inv.IsCreditNote ? "table-warning" : "")">
+                            <td>
+                                @if (inv.IsCreditNote)
+                                {
+                                    <span class="badge bg-warning text-dark">Credit Note</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-primary">Invoice</span>
+                                }
+                            </td>
+                            <td>
+                                <strong>@inv.InvoiceNumber</strong>
+                                @if (!string.IsNullOrEmpty(inv.OriginalInvoiceNumber))
+                                {
+                                    <br /><small class="text-muted">Ref: @inv.OriginalInvoiceNumber</small>
+                                }
+                            </td>
                             <td>@(inv.BuyerName ?? "—")</td>
                             <td>@inv.LinesCount</td>
                             <td>€@inv.SubTotal.ToString("N2")</td>
                             <td>€@inv.AuctionFee.ToString("N2")</td>
                             <td>€@inv.Commission.ToString("N2")</td>
                             <td><strong>€@inv.TotalAmount.ToString("N2")</strong></td>
-                            <td><span class="badge bg-@GetStatusColor(inv.Status)">@inv.Status</span></td>
                             <td>@inv.InvoiceDate.ToString("d")</td>
                             <td><a href="@Api.GetInvoicePdfUrl(inv.Id)" target="_blank" class="btn btn-sm btn-outline-primary">📄 PDF</a></td>
                         </tr>

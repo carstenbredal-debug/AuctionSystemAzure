@@ -145,7 +145,11 @@ else if (_activeTab == "sold")
     {
         <div class="alert @(_takebackMessageIsError ? "alert-danger" : "alert-success") alert-dismissible">
             @_takebackMessage
-            <button type="button" class="btn-close" @onclick="() => _takebackMessage = null"></button>
+            @if (_lastCreditNoteId != null)
+            {
+                <a href="@Api.GetInvoicePdfUrl(_lastCreditNoteId.Value)" target="_blank" class="btn btn-sm btn-outline-dark ms-2">📄 Download Credit Note PDF</a>
+            }
+            <button type="button" class="btn-close" @onclick="() => { _takebackMessage = null; _lastCreditNoteId = null; }"></button>
         </div>
     }
 
@@ -461,6 +465,7 @@ else if (_activeTab == "takeback")
     private string? _message;
     private bool _messageIsError;
     private int? _lastInvoiceId;
+    private int? _lastCreditNoteId;
     private string? _takebackMessage;
     private bool _takebackMessageIsError;
     private string? _brokerTakebackMessage;
@@ -598,7 +603,13 @@ else if (_activeTab == "takeback")
             var resp = await Api.RequestTakebackAsync(_selectedSoldIds.ToList());
             if (resp.IsSuccessStatusCode)
             {
+                var json = await resp.Content.ReadFromJsonAsync<TakebackResponse>();
                 _takebackMessage = $"{_selectedSoldIds.Count} lot(s) taken back. Lots moved to unsold.";
+                if (json?.CreditNoteId != null)
+                {
+                    _lastCreditNoteId = json.CreditNoteId;
+                    _takebackMessage += " Credit note generated.";
+                }
                 _takebackMessageIsError = false;
                 _selectedSoldIds.Clear();
                 _allResults = await Api.GetAuctionResultsByBrokerAsync(_brokerId);
@@ -651,5 +662,11 @@ else if (_activeTab == "takeback")
     {
         public int SoldCount { get; set; }
         public int? InvoiceId { get; set; }
+    }
+
+    private class TakebackResponse
+    {
+        public int RequestCount { get; set; }
+        public int? CreditNoteId { get; set; }
     }
 }
