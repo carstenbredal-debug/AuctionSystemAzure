@@ -44,6 +44,8 @@ public class AuctionDbContext : DbContext
             e.Property(l => l.StartingPrice).HasColumnType("decimal(18,2)");
             e.Property(l => l.ReservePrice).HasColumnType("decimal(18,2)");
             e.Property(l => l.HammerPrice).HasColumnType("decimal(18,2)");
+            e.HasIndex(l => l.Status);
+            e.HasIndex(l => new { l.AuctionId, l.LotNumber });
         });
 
         modelBuilder.Entity<Seller>(e =>
@@ -101,6 +103,8 @@ public class AuctionDbContext : DbContext
             e.HasIndex(i => i.InvoiceNumber).IsUnique();
             e.HasOne(i => i.Broker).WithMany(b => b.Invoices).HasForeignKey(i => i.BrokerId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(i => i.Buyer).WithMany().HasForeignKey(i => i.BuyerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(i => i.BrokerId);
+            e.HasIndex(i => i.BuyerId);
             e.Property(i => i.SubTotal).HasColumnType("decimal(18,2)");
             e.Property(i => i.AuctionFee).HasColumnType("decimal(18,2)");
             e.Property(i => i.Commission).HasColumnType("decimal(18,2)");
@@ -114,6 +118,7 @@ public class AuctionDbContext : DbContext
             e.HasKey(l => l.Id);
             e.HasOne(l => l.Invoice).WithMany(i => i.Lines).HasForeignKey(l => l.InvoiceId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(l => l.AuctionResult).WithMany().HasForeignKey(l => l.AuctionResultId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(l => l.AuctionResultId);
             e.Property(l => l.PricePerSkin).HasColumnType("decimal(18,2)");
             e.Property(l => l.HammerPrice).HasColumnType("decimal(18,2)");
             e.Property(l => l.Description).HasMaxLength(500);
@@ -168,6 +173,9 @@ public class AuctionDbContext : DbContext
             e.HasKey(r => r.Id);
             e.HasOne(r => r.Broker).WithMany().HasForeignKey(r => r.BrokerId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(r => r.SoldToBuyer).WithMany().HasForeignKey(r => r.SoldToBuyerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(r => r.BrokerId);
+            e.HasIndex(r => r.SoldToBuyerId);
+            e.HasIndex(r => r.LotNumber);
             e.Property(r => r.PriceEur).HasColumnType("decimal(18,2)");
             e.Property(r => r.SalesType).HasMaxLength(50);
             e.Property(r => r.Gender).HasMaxLength(50);

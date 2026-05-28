@@ -30,9 +30,20 @@ public class BrokerFunctions
     public async Task<HttpResponseData> GetAll(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "brokers")] HttpRequestData req)
     {
-        var brokers = await _db.Brokers.Include(b => b.BrokerBuyers).ToListAsync();
-        brokers = brokers.OrderBy(b => int.TryParse(b.BrokerNumber, out var n) ? n : int.MaxValue).ToList();
-        return await CreateJsonResponse(req, brokers);
+        var brokers = await _db.Brokers
+            .Select(b => new
+            {
+                b.Id, b.BrokerNumber, b.CompanyName, b.CompanyName2, b.ErpAccountNumber,
+                b.SearchName, b.ContactPerson, b.AddressLine1, b.AddressLine2,
+                b.Country, b.PostalCode, b.City, b.ContactPhone, b.MobilePhone,
+                b.ContactEmail, b.HomePage, b.VatRegistrationNo, b.RegistrationNo,
+                b.CustomerGroup, b.SalesPerson, b.PaymentTerm, b.PaymentMethod,
+                b.Currency, b.Language, b.IsActive, b.Address, b.BcCustomerId, b.CreatedAt,
+                BuyerCount = b.BrokerBuyers.Count
+            })
+            .ToListAsync();
+        var sorted = brokers.OrderBy(b => int.TryParse(b.BrokerNumber, out var n) ? n : int.MaxValue).ToList();
+        return await CreateJsonResponse(req, sorted);
     }
 
     [Function("GetBroker")]

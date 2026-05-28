@@ -225,14 +225,25 @@ public class AuctionResultFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "auction-results")] HttpRequestData req)
     {
         var results = await _db.AuctionResults
-            .Include(r => r.Broker)
-            .Include(r => r.SoldToBuyer)
             .OrderByDescending(r => r.ReceivedAt)
+            .Select(r => new
+            {
+                r.Id, r.LotNumber, r.BrokerId,
+                brokerName = r.Broker.CompanyName,
+                brokerNumber = r.Broker.BrokerNumber,
+                r.PriceEur, r.SalesType, r.Gender, r.Group, r.Color, r.Quality,
+                r.Size, r.Clarity, r.HairLength, r.TotalSkins, r.BoxCount,
+                r.Processed, r.ReceivedAt, r.ProcessedAt,
+                r.SoldToBuyerId,
+                soldToBuyerName = r.SoldToBuyer != null ? r.SoldToBuyer.Name : null,
+                soldToBuyerNumber = r.SoldToBuyer != null ? r.SoldToBuyer.BuyerNumber : null,
+                r.SoldAt, r.CommissionType, r.CommissionValue, r.CommissionAmount
+            })
             .ToListAsync();
 
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
-        await response.WriteStringAsync(JsonSerializer.Serialize(results.Select(ProjectResult), JsonOptions));
+        await response.WriteStringAsync(JsonSerializer.Serialize(results, JsonOptions));
         return response;
     }
 
@@ -241,15 +252,26 @@ public class AuctionResultFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "auction-results/broker/{brokerId:int}")] HttpRequestData req, int brokerId)
     {
         var results = await _db.AuctionResults
-            .Include(r => r.Broker)
-            .Include(r => r.SoldToBuyer)
             .Where(r => r.BrokerId == brokerId)
             .OrderByDescending(r => r.ReceivedAt)
+            .Select(r => new
+            {
+                r.Id, r.LotNumber, r.BrokerId,
+                brokerName = r.Broker.CompanyName,
+                brokerNumber = r.Broker.BrokerNumber,
+                r.PriceEur, r.SalesType, r.Gender, r.Group, r.Color, r.Quality,
+                r.Size, r.Clarity, r.HairLength, r.TotalSkins, r.BoxCount,
+                r.Processed, r.ReceivedAt, r.ProcessedAt,
+                r.SoldToBuyerId,
+                soldToBuyerName = r.SoldToBuyer != null ? r.SoldToBuyer.Name : null,
+                soldToBuyerNumber = r.SoldToBuyer != null ? r.SoldToBuyer.BuyerNumber : null,
+                r.SoldAt, r.CommissionType, r.CommissionValue, r.CommissionAmount
+            })
             .ToListAsync();
 
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
-        await response.WriteStringAsync(JsonSerializer.Serialize(results.Select(ProjectResult), JsonOptions));
+        await response.WriteStringAsync(JsonSerializer.Serialize(results, JsonOptions));
         return response;
     }
 
@@ -419,15 +441,26 @@ public class AuctionResultFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "auction-results/buyer/{buyerId:int}")] HttpRequestData req, int buyerId)
     {
         var results = await _db.AuctionResults
-            .Include(r => r.Broker)
-            .Include(r => r.SoldToBuyer)
             .Where(r => r.SoldToBuyerId == buyerId)
             .OrderByDescending(r => r.SoldAt)
+            .Select(r => new
+            {
+                r.Id, r.LotNumber, r.BrokerId,
+                brokerName = r.Broker.CompanyName,
+                brokerNumber = r.Broker.BrokerNumber,
+                r.PriceEur, r.SalesType, r.Gender, r.Group, r.Color, r.Quality,
+                r.Size, r.Clarity, r.HairLength, r.TotalSkins, r.BoxCount,
+                r.Processed, r.ReceivedAt, r.ProcessedAt,
+                r.SoldToBuyerId,
+                soldToBuyerName = r.SoldToBuyer != null ? r.SoldToBuyer.Name : null,
+                soldToBuyerNumber = r.SoldToBuyer != null ? r.SoldToBuyer.BuyerNumber : null,
+                r.SoldAt, r.CommissionType, r.CommissionValue, r.CommissionAmount
+            })
             .ToListAsync();
 
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
-        await response.WriteStringAsync(JsonSerializer.Serialize(results.Select(ProjectResult), JsonOptions));
+        await response.WriteStringAsync(JsonSerializer.Serialize(results, JsonOptions));
         return response;
     }
     [Function("RequestTakeback")]

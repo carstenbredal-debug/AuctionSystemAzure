@@ -96,32 +96,33 @@ public class SettlementFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements/invoices/buyer/{buyerId:int}")] HttpRequestData req, int buyerId)
     {
         var invoices = await _db.Invoices.Where(i => i.BuyerId == buyerId)
-            .Include(i => i.Lines).Include(i => i.Broker).Include(i => i.OriginalInvoice)
-            .OrderByDescending(i => i.InvoiceDate).ToListAsync();
-        return await CreateJsonResponse(req, invoices.Select(i => new
-        {
-            i.Id, i.InvoiceNumber, i.InvoiceDate, i.SubTotal, i.AuctionFee, i.Commission,
-            i.TotalAmount, i.Currency, Status = i.Status.ToString(),
-            BrokerName = i.Broker?.CompanyName, LinesCount = i.Lines.Count,
-            i.IsCreditNote, OriginalInvoiceNumber = i.OriginalInvoice?.InvoiceNumber,
-            i.PdfUrl
-        }));
+            .OrderByDescending(i => i.InvoiceDate)
+            .Select(i => new
+            {
+                i.Id, i.InvoiceNumber, i.InvoiceDate, i.SubTotal, i.AuctionFee, i.Commission,
+                i.TotalAmount, i.Currency, Status = i.Status.ToString(),
+                BrokerName = i.Broker.CompanyName, LinesCount = i.Lines.Count,
+                i.IsCreditNote, OriginalInvoiceNumber = i.OriginalInvoice != null ? i.OriginalInvoice.InvoiceNumber : null,
+                i.PdfUrl
+            }).ToListAsync();
+        return await CreateJsonResponse(req, invoices);
     }
 
     [Function("GetAllInvoices")]
     public async Task<HttpResponseData> GetAllInvoices(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements/invoices")] HttpRequestData req)
     {
-        var invoices = await _db.Invoices.Include(i => i.Broker).Include(i => i.Buyer).Include(i => i.Lines).Include(i => i.OriginalInvoice)
-            .OrderByDescending(i => i.InvoiceDate).ToListAsync();
-        return await CreateJsonResponse(req, invoices.Select(i => new
-        {
-            i.Id, i.InvoiceNumber, i.InvoiceDate, i.SubTotal, i.AuctionFee, i.Commission,
-            i.TotalAmount, i.Currency, Status = i.Status.ToString(),
-            BrokerName = i.Broker?.CompanyName, BuyerName = i.Buyer?.Name, LinesCount = i.Lines.Count,
-            i.IsCreditNote, OriginalInvoiceNumber = i.OriginalInvoice?.InvoiceNumber,
-            i.PdfUrl
-        }));
+        var invoices = await _db.Invoices
+            .OrderByDescending(i => i.InvoiceDate)
+            .Select(i => new
+            {
+                i.Id, i.InvoiceNumber, i.InvoiceDate, i.SubTotal, i.AuctionFee, i.Commission,
+                i.TotalAmount, i.Currency, Status = i.Status.ToString(),
+                BrokerName = i.Broker.CompanyName, BuyerName = i.Buyer.Name, LinesCount = i.Lines.Count,
+                i.IsCreditNote, OriginalInvoiceNumber = i.OriginalInvoice != null ? i.OriginalInvoice.InvoiceNumber : null,
+                i.PdfUrl
+            }).ToListAsync();
+        return await CreateJsonResponse(req, invoices);
     }
 
     [Function("GetInvoiceLinksForResults")]
@@ -129,23 +130,29 @@ public class SettlementFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements/invoice-links/broker/{brokerId:int}")] HttpRequestData req, int brokerId)
     {
         var lines = await _db.Set<InvoiceLine>()
-            .Include(l => l.Invoice)
             .Where(l => l.Invoice.BrokerId == brokerId)
+            .Select(l => new
+            {
+                l.AuctionResultId,
+                InvoiceId = l.Invoice.Id,
+                Number = l.Invoice.InvoiceNumber,
+                PdfUrl = l.Invoice.PdfUrl,
+                l.Invoice.IsCreditNote
+            })
             .ToListAsync();
 
         var resultMap = lines.GroupBy(l => l.AuctionResultId).ToDictionary(
             g => g.Key,
             g => new
             {
-                Documents = g.Select(l => l.Invoice)
-                    .DistinctBy(i => i.Id)
-                    .OrderBy(i => i.Id)
-                    .Select(i => new
+                Documents = g.DistinctBy(l => l.InvoiceId)
+                    .OrderBy(l => l.InvoiceId)
+                    .Select(l => new
                     {
-                        i.Id,
-                        Number = i.InvoiceNumber,
-                        PdfUrl = i.PdfUrl,
-                        i.IsCreditNote
+                        Id = l.InvoiceId,
+                        l.Number,
+                        l.PdfUrl,
+                        l.IsCreditNote
                     })
                     .ToList()
             });
