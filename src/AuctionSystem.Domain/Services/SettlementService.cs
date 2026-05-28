@@ -46,7 +46,7 @@ public class SettlementService
         {
             SettlementNumber = $"SET-{DateTime.UtcNow:yyyyMMdd}-{await _db.Settlements.CountAsync() + 1:D4}",
             LotId = lotId,
-            SellerId = lot.SellerId,
+            SellerId = lot.SellerId ?? 0,
             GrossAmount = lot.HammerPrice!.Value,
             Commission = lot.HammerPrice.Value * CommissionRate,
             Fees = lot.HammerPrice.Value * FeeRate,

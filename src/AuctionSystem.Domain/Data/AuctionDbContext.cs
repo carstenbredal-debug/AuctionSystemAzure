@@ -39,7 +39,7 @@ public class AuctionDbContext : DbContext
         {
             e.HasKey(l => l.Id);
             e.HasOne(l => l.Auction).WithMany(a => a.Lots).HasForeignKey(l => l.AuctionId);
-            e.HasOne(l => l.Seller).WithMany(s => s.Lots).HasForeignKey(l => l.SellerId);
+            e.HasOne(l => l.Seller).WithMany(s => s.Lots).HasForeignKey(l => l.SellerId).IsRequired(false);
             e.Property(l => l.StartingPrice).HasColumnType("decimal(18,2)");
             e.Property(l => l.ReservePrice).HasColumnType("decimal(18,2)");
             e.Property(l => l.HammerPrice).HasColumnType("decimal(18,2)");

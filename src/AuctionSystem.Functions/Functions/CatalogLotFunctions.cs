@@ -90,7 +90,7 @@ public class CatalogLotFunctions
                 Unit = "skins",
                 StartingPrice = 0,
                 Status = Domain.Enums.LotStatus.Pending,
-                SellerId = body.SellerId
+                SellerId = body.SellerId > 0 ? body.SellerId : null
             };
             _auctionDb.Lots.Add(lot);
             imported.Add(new { cl.CatalogLotID, cl.LotNumber, lot.Description, lot.Quantity });

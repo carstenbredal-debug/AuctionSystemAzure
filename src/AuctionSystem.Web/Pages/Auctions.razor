@@ -112,20 +112,10 @@
             }
 
             <div class="card mb-3">
-                <div class="card-header"><strong>Select Seller for Import</strong></div>
+                <div class="card-header"><strong>Filter Catalog Lots</strong></div>
                 <div class="card-body">
                     <div class="row g-3 align-items-end">
-                        <div class="col-md-4">
-                            <label class="form-label">Seller</label>
-                            <select class="form-select" @bind="selectedSellerId">
-                                <option value="0">-- Select Seller --</option>
-                                @foreach (var seller in sellers)
-                                {
-                                    <option value="@seller.Id">@seller.Name (@seller.SellerNumber)</option>
-                                }
-                            </select>
-                        </div>
-                        <div class="col-md-4">
+                        <div class="col-md-6">
                             <label class="form-label">Filter by Type</label>
                             <select class="form-select" @bind="filterSalesType" @bind:after="ApplyFilters">
                                 <option value="">All Types</option>
@@ -135,7 +125,7 @@
                                 }
                             </select>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-6">
                             <label class="form-label">Filter by Gender</label>
                             <select class="form-select" @bind="filterGender" @bind:after="ApplyFilters">
                                 <option value="">All Genders</option>
@@ -158,15 +148,11 @@
                     }
                 </div>
                 <div>
-                    @if (selectedCatalogLotIds.Count > 0 && selectedSellerId > 0)
+                    @if (selectedCatalogLotIds.Count > 0)
                     {
                         <button class="btn btn-primary" @onclick="ImportSelectedLots" disabled="@importing">
                             @(importing ? "Importing..." : $"Import {selectedCatalogLotIds.Count} Lots")
                         </button>
-                    }
-                    else if (selectedCatalogLotIds.Count > 0 && selectedSellerId == 0)
-                    {
-                        <span class="text-danger small">Please select a seller first</span>
                     }
                 </div>
             </div>
@@ -327,10 +313,8 @@ else
     // Import tab state
     private List<CatalogLotDto> catalogLots = new();
     private List<CatalogLotDto> filteredCatalogLots = new();
-    private List<SellerDto> sellers = new();
     private HashSet<int> selectedCatalogLotIds = new();
     private HashSet<int> importedLotNumbers = new();
-    private int selectedSellerId;
     private string filterSalesType = "";
     private string filterGender = "";
     private List<string> salesTypes = new();
@@ -435,7 +419,6 @@ else
         {
             loadingCatalog = true;
             catalogLots = await Api.GetCatalogLotsAsync();
-            sellers = await Api.GetSellersAsync();
             salesTypes = catalogLots.Where(c => c.SalesType != null).Select(c => c.SalesType!).Distinct().OrderBy(x => x).ToList();
             genders = catalogLots.Where(c => c.Gender != null).Select(c => c.Gender!).Distinct().OrderBy(x => x).ToList();
             ApplyFilters();
@@ -474,7 +457,7 @@ else
 
     private async Task ImportSelectedLots()
     {
-        if (selectedSellerId == 0 || selectedCatalogLotIds.Count == 0) return;
+        if (selectedCatalogLotIds.Count == 0) return;
         importing = true;
         importMessage = null;
         try
@@ -482,7 +465,7 @@ else
             var request = new ImportCatalogLotsRequest
             {
                 CatalogLotIds = selectedCatalogLotIds.ToList(),
-                SellerId = selectedSellerId
+                SellerId = 0
             };
             var resp = await Api.ImportCatalogLotsToAuctionAsync(Id!.Value, request);
             if (resp.IsSuccessStatusCode)
