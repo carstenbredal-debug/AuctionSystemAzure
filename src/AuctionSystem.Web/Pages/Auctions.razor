@@ -50,12 +50,12 @@
         {
             <table class="table table-striped table-hover">
                 <thead class="table-dark">
-                    <tr><th>#</th><th>Description</th><th>Category</th><th>Qty</th><th>Starting</th><th>Hammer</th><th>Status</th><th>Actions</th></tr>
+                    <tr><th>#</th><th>Description</th><th>Category</th><th>Qty</th><th>Hammer</th><th>Status</th></tr>
                 </thead>
                 <tbody>
                     @if (lots.Count == 0)
                     {
-                        <tr><td colspan="8" class="text-center text-muted py-4">No lots in this auction. Use the "Import Catalog Lots" tab to add lots.</td></tr>
+                        <tr><td colspan="6" class="text-center text-muted py-4">No lots in this auction. Use the "Import Catalog Lots" tab to add lots.</td></tr>
                     }
                     @foreach (var lot in lots)
                     {
@@ -64,42 +64,12 @@
                             <td>@lot.Description</td>
                             <td>@lot.Category</td>
                             <td>@lot.Quantity @lot.Unit</td>
-                            <td>@lot.StartingPrice.ToString("N2")</td>
                             <td>@(lot.HammerPrice?.ToString("N2") ?? "-")</td>
                             <td><span class="badge bg-@GetLotColor(lot.Status)">@lot.Status</span></td>
-                            <td>
-                                @if (lot.Status == LotStatus.Active || lot.Status == LotStatus.Pending)
-                                {
-                                    <button class="btn btn-sm btn-outline-success" @onclick="() => ShowHammerDialog(lot)">Record Hammer</button>
-                                }
-                            </td>
                         </tr>
                     }
                 </tbody>
             </table>
-
-            @if (showHammer && hammerLot != null)
-            {
-                <div class="card mt-3 border-success">
-                    <div class="card-header bg-success text-white">Record Hammer Price — Lot #@hammerLot.LotNumber</div>
-                    <div class="card-body">
-                        <div class="row g-3">
-                            <div class="col-md-4">
-                                <label class="form-label">Hammer Price</label>
-                                <input type="number" class="form-control" @bind="hammerPrice" step="0.01" />
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label">Winning Broker ID</label>
-                                <input type="number" class="form-control" @bind="winningBrokerId" />
-                            </div>
-                            <div class="col-md-4 d-flex align-items-end">
-                                <button class="btn btn-success me-2" @onclick="RecordHammer">Confirm</button>
-                                <button class="btn btn-secondary" @onclick="() => showHammer = false">Cancel</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            }
         }
         else if (activeTab == "import")
         {
@@ -304,10 +274,6 @@ else
     private List<AuctionDto> auctions = new();
     private AuctionDto? selectedAuction;
     private List<LotDto> lots = new();
-    private bool showHammer;
-    private LotDto? hammerLot;
-    private decimal hammerPrice;
-    private int winningBrokerId;
     private string activeTab = "lots";
 
     // Import tab state
@@ -497,30 +463,13 @@ else
         lots = await Api.GetLotsByAuctionAsync(Id.Value);
     }
 
-    private void ShowHammerDialog(LotDto lot)
-    {
-        hammerLot = lot;
-        hammerPrice = lot.StartingPrice;
-        winningBrokerId = 0;
-        showHammer = true;
-    }
-
-    private async Task RecordHammer()
-    {
-        if (hammerLot != null && winningBrokerId > 0)
-        {
-            await Api.RecordHammerPriceAsync(hammerLot.Id, hammerPrice, winningBrokerId);
-            lots = await Api.GetLotsByAuctionAsync(Id!.Value);
-            showHammer = false;
-        }
-    }
-
     private string GetLotColor(LotStatus s) => s switch
     {
         LotStatus.Pending => "secondary",
         LotStatus.Active => "warning",
         LotStatus.Sold => "success",
         LotStatus.Unsold => "danger",
+        LotStatus.Broker => "info",
         _ => "secondary"
     };
 }

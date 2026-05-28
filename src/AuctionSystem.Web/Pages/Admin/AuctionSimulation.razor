@@ -5,7 +5,7 @@
 <PageTitle>Auction Simulation</PageTitle>
 
 <h1>Auction Simulation</h1>
-<p class="text-muted">Simulate external auction results — input lot number, broker, and price to assign lots.</p>
+<p class="text-muted">Simulate external auction results — enter price and broker to assign lots.</p>
 
 <div class="row">
     <div class="col-md-5">
@@ -30,8 +30,18 @@
                 }
 
                 <div class="mb-3">
-                    <label class="form-label"><strong>Lot Number</strong></label>
-                    <input type="number" class="form-control" @bind="_lotNumber" placeholder="Enter lot number" />
+                    <label class="form-label"><strong>Next Lot</strong></label>
+                    @if (_nextLot != null)
+                    {
+                        <div class="form-control-plaintext">
+                            <strong class="fs-4">Lot #@_nextLot.LotNumber</strong>
+                            <br /><small class="text-muted">@_nextLot.Description — @_nextLot.Quantity @_nextLot.Unit</small>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="form-control-plaintext text-muted">No unsold lots available. Import lots into an auction first.</div>
+                    }
                 </div>
 
                 <div class="mb-3">
@@ -46,19 +56,19 @@
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label"><strong>Price (EUR)</strong></label>
+                    <label class="form-label"><strong>Price per skin (EUR)</strong></label>
                     <div class="input-group">
                         <span class="input-group-text">€</span>
                         <input type="number" step="0.01" class="form-control" @bind="_priceEur" placeholder="0.00" />
                     </div>
                 </div>
 
-                <button class="btn btn-primary w-100" @onclick="SubmitResult" disabled="@_submitting">
+                <button class="btn btn-primary w-100" @onclick="SubmitResult" disabled="@(_submitting || _nextLot == null)">
                     @if (_submitting)
                     {
                         <span class="spinner-border spinner-border-sm me-1"></span>
                     }
-                    Submit Sale Result
+                    Record Hammer Price
                 </button>
             </div>
         </div>
@@ -125,7 +135,7 @@
 @code {
     private List<BrokerDto> _brokers = new();
     private List<AuctionResultDto> _results = new();
-    private int _lotNumber;
+    private NextUnsoldLotDto? _nextLot;
     private int _selectedBrokerId;
     private decimal _priceEur;
     private bool _submitting;
@@ -136,6 +146,7 @@
     {
         _brokers = await Api.GetBrokersAsync();
         _results = await Api.GetAuctionResultsAsync();
+        _nextLot = await Api.GetNextUnsoldLotAsync();
     }
 
     private async Task SubmitResult()
@@ -143,9 +154,9 @@
         _successMessage = null;
         _errorMessage = null;
 
-        if (_lotNumber <= 0)
+        if (_nextLot == null)
         {
-            _errorMessage = "Please enter a valid lot number.";
+            _errorMessage = "No unsold lots available.";
             return;
         }
         if (_selectedBrokerId <= 0)
@@ -162,13 +173,13 @@
         _submitting = true;
         try
         {
-            var resp = await Api.SubmitAuctionResultAsync(_lotNumber, _selectedBrokerId, _priceEur);
+            var resp = await Api.SubmitAuctionResultAsync(_nextLot.LotNumber, _selectedBrokerId, _priceEur);
             if (resp.IsSuccessStatusCode)
             {
-                _successMessage = $"Lot {_lotNumber} sold to broker for €{_priceEur:N2} — processed and assigned.";
-                _lotNumber = 0;
+                _successMessage = $"Lot {_nextLot.LotNumber} assigned to broker at €{_priceEur:N2}/skin — hammer price recorded.";
                 _priceEur = 0;
                 _results = await Api.GetAuctionResultsAsync();
+                _nextLot = await Api.GetNextUnsoldLotAsync();
             }
             else
             {

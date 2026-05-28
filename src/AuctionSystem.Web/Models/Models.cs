@@ -1,7 +1,7 @@
 namespace AuctionSystem.Web.Models;
 
 public enum AuctionStatus { Draft, Scheduled, InProgress, Completed, Cancelled }
-public enum LotStatus { Pending, Active, Sold, Unsold, Withdrawn }
+public enum LotStatus { Pending, Active, Sold, Unsold, Withdrawn, Broker }
 public enum BidStatus { Active, Outbid, Winning, Won, Cancelled }
 public enum AllocationStatus { Pending, Allocated, Delivered, Cancelled }
 public enum InvoiceStatus { Draft, Issued, Sent, Paid, Overdue, Cancelled }
@@ -282,6 +282,15 @@ public class ImportCatalogLotsRequest
 {
     public List<int> CatalogLotIds { get; set; } = new();
     public int SellerId { get; set; }
+}
+
+public class NextUnsoldLotDto
+{
+    public int LotNumber { get; set; }
+    public string? Description { get; set; }
+    public string? Category { get; set; }
+    public int Quantity { get; set; }
+    public string? Unit { get; set; }
 }
 
 public class AuctionResultDto
