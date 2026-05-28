@@ -135,19 +135,19 @@ public class SettlementFunctions
 
         var resultMap = lines.GroupBy(l => l.AuctionResultId).ToDictionary(
             g => g.Key,
-            g =>
+            g => new
             {
-                var invoice = g.Where(l => !l.Invoice.IsCreditNote).OrderByDescending(l => l.Invoice.Id).FirstOrDefault()?.Invoice;
-                var creditNote = g.Where(l => l.Invoice.IsCreditNote).OrderByDescending(l => l.Invoice.Id).FirstOrDefault()?.Invoice;
-                return new
-                {
-                    InvoiceId = invoice?.Id,
-                    InvoiceNumber = invoice?.InvoiceNumber,
-                    InvoicePdfUrl = invoice?.PdfUrl,
-                    CreditNoteId = creditNote?.Id,
-                    CreditNoteNumber = creditNote?.InvoiceNumber,
-                    CreditNotePdfUrl = creditNote?.PdfUrl
-                };
+                Documents = g.Select(l => l.Invoice)
+                    .DistinctBy(i => i.Id)
+                    .OrderBy(i => i.Id)
+                    .Select(i => new
+                    {
+                        i.Id,
+                        Number = i.InvoiceNumber,
+                        PdfUrl = i.PdfUrl,
+                        i.IsCreditNote
+                    })
+                    .ToList()
             });
 
         return await CreateJsonResponse(req, resultMap);
