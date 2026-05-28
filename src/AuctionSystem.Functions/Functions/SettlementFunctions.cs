@@ -137,8 +137,8 @@ public class SettlementFunctions
             g => g.Key,
             g =>
             {
-                var invoice = g.FirstOrDefault(l => !l.Invoice.IsCreditNote)?.Invoice;
-                var creditNote = g.FirstOrDefault(l => l.Invoice.IsCreditNote)?.Invoice;
+                var invoice = g.Where(l => !l.Invoice.IsCreditNote).OrderByDescending(l => l.Invoice.Id).FirstOrDefault()?.Invoice;
+                var creditNote = g.Where(l => l.Invoice.IsCreditNote).OrderByDescending(l => l.Invoice.Id).FirstOrDefault()?.Invoice;
                 return new
                 {
                     InvoiceId = invoice?.Id,
