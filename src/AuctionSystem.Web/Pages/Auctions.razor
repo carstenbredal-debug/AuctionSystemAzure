@@ -259,7 +259,7 @@ else
                             <td>@a.Location</td>
                             <td>@a.ScheduledDate.ToString("yyyy-MM-dd")</td>
                             <td><span class="badge bg-info">@a.Status</span></td>
-                            <td>@a.Lots.Count</td>
+                            <td>@(a.LotCount > 0 ? a.LotCount : a.Lots.Count)</td>
                         </tr>
                     }
                 </tbody>
