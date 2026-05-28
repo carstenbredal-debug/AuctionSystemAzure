@@ -693,11 +693,17 @@ public class AuctionResultFunctions
 
     private async Task<int?> GenerateCreditNoteAsync(List<int> auctionResultIds)
     {
-        var invoiceLines = await _db.Set<InvoiceLine>()
+        var allInvoiceLines = await _db.Set<InvoiceLine>()
             .Include(l => l.Invoice).ThenInclude(i => i.Buyer)
             .Include(l => l.Invoice).ThenInclude(i => i.Broker)
             .Where(l => auctionResultIds.Contains(l.AuctionResultId) && !l.Invoice.IsCreditNote)
             .ToListAsync();
+
+        // Only use the most recent invoice line per auction result to avoid double crediting
+        var invoiceLines = allInvoiceLines
+            .GroupBy(l => l.AuctionResultId)
+            .Select(g => g.OrderByDescending(l => l.Invoice.InvoiceDate).First())
+            .ToList();
 
         if (invoiceLines.Count == 0) return null;
 
