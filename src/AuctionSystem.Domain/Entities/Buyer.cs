@@ -39,6 +39,7 @@ public class Buyer
     public string Address { get; set; } = string.Empty;
     public int? BrokerId { get; set; }
     public Broker? Broker { get; set; }
+    public ICollection<BrokerBuyer> BrokerBuyers { get; set; } = new List<BrokerBuyer>();
     public string? BcCustomerId { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

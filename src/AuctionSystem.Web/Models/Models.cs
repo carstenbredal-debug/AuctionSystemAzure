@@ -143,6 +143,7 @@ public class BuyerDto
     public string Address { get; set; } = "";
     public int BrokerId { get; set; }
     public BrokerDto? Broker { get; set; }
+    public List<BrokerDto> Brokers { get; set; } = new();
 }
 
 public class BidDto
