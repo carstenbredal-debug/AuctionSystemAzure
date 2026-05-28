@@ -381,13 +381,14 @@ else if (_activeTab == "takeback")
                         <th>Initiated By</th>
                         <th>Requested</th>
                         <th>Status</th>
+                        <th>Documents</th>
                         <th style="width: 180px;">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     @if (_pendingTakebacks.Count == 0)
                     {
-                        <tr><td colspan="13" class="text-center text-muted py-4">No takeback requests.</td></tr>
+                        <tr><td colspan="14" class="text-center text-muted py-4">No takeback requests.</td></tr>
                     }
                     @foreach (var t in _pendingTakebacks)
                     {
@@ -407,6 +408,19 @@ else if (_activeTab == "takeback")
                                 <span class="badge bg-@(t.Status == CustomerRequestStatus.Pending ? "warning" : t.Status == CustomerRequestStatus.Approved ? "success" : "danger")">
                                     @t.Status
                                 </span>
+                            </td>
+                            <td>
+                                @{
+                                    var tbLink = _invoiceLinks.GetValueOrDefault(t.AuctionResultId);
+                                }
+                                @if (tbLink != null)
+                                {
+                                    @foreach (var doc in tbLink.Documents)
+                                    {
+                                        var url = !string.IsNullOrEmpty(doc.PdfUrl) ? doc.PdfUrl : Api.GetInvoicePdfUrl(doc.Id);
+                                        <a href="@url" target="_blank" class="btn btn-sm @(doc.IsCreditNote ? "btn-outline-warning" : "btn-outline-primary") me-1" title="@doc.Number">📄 @(doc.IsCreditNote ? "CN" : "Inv")</a>
+                                    }
+                                }
                             </td>
                             <td>
                                 @if (t.Status == CustomerRequestStatus.Pending && t.InitiatedBy == "Buyer")
