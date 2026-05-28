@@ -29,7 +29,9 @@ var host = new HostBuilder()
             ?? context.Configuration["Values:AzureWebJobsStorage"];
         if (!string.IsNullOrEmpty(storageConnectionString) && storageConnectionString != "UseDevelopmentStorage=true")
         {
-            services.AddSingleton(new BlobStorageService(storageConnectionString));
+            services.AddSingleton(sp => new BlobStorageService(
+                storageConnectionString,
+                sp.GetRequiredService<ILogger<BlobStorageService>>()));
         }
     })
     .Build();

@@ -302,5 +302,14 @@ public class AuctionApiClient
         => $"{_http.BaseAddress}api/settlements/invoices/{invoiceId}/pdf";
 
     public async Task<Dictionary<int, InvoiceLinkDto>> GetInvoiceLinksForBrokerAsync(int brokerId)
-        => await _http.GetFromJsonAsync<Dictionary<int, InvoiceLinkDto>>($"api/settlements/invoice-links/broker/{brokerId}") ?? new();
+    {
+        try
+        {
+            return await _http.GetFromJsonAsync<Dictionary<int, InvoiceLinkDto>>($"api/settlements/invoice-links/broker/{brokerId}") ?? new();
+        }
+        catch
+        {
+            return new();
+        }
+    }
 }
