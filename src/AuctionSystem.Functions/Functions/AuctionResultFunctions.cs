@@ -17,6 +17,7 @@ public class AuctionResultFunctions
     private readonly AuctionDbContext _db;
     private readonly CatalogDbContext _catalogDb;
     private readonly ILogger<AuctionResultFunctions> _logger;
+    private readonly BlobStorageService? _blobStorage;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -24,11 +25,12 @@ public class AuctionResultFunctions
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public AuctionResultFunctions(AuctionDbContext db, CatalogDbContext catalogDb, ILogger<AuctionResultFunctions> logger)
+    public AuctionResultFunctions(AuctionDbContext db, CatalogDbContext catalogDb, ILogger<AuctionResultFunctions> logger, BlobStorageService? blobStorage = null)
     {
         _db = db;
         _catalogDb = catalogDb;
         _logger = logger;
+        _blobStorage = blobStorage;
     }
 
     [Function("SubmitAuctionResult")]
@@ -360,7 +362,14 @@ public class AuctionResultFunctions
                 await _db.Entry(invoice).Reference(i => i.Buyer).Query().LoadAsync();
                 invoice.Buyer = buyer;
 
-                invoice.PdfData = InvoicePdfService.GeneratePdf(invoice);
+                var pdfBytes = InvoicePdfService.GeneratePdf(invoice);
+                invoice.PdfData = pdfBytes;
+
+                if (_blobStorage != null)
+                {
+                    var fileName = $"{invoice.InvoiceNumber}.pdf";
+                    invoice.PdfUrl = await _blobStorage.UploadPdfAsync(fileName, pdfBytes);
+                }
 
                 _db.Invoices.Add(invoice);
                 await _db.SaveChangesAsync();
@@ -677,7 +686,14 @@ public class AuctionResultFunctions
         creditNote.Buyer = originalInvoice.Buyer;
         creditNote.OriginalInvoice = originalInvoice;
 
-        creditNote.PdfData = InvoicePdfService.GeneratePdf(creditNote);
+        var pdfBytes = InvoicePdfService.GeneratePdf(creditNote);
+        creditNote.PdfData = pdfBytes;
+
+        if (_blobStorage != null)
+        {
+            var fileName = $"{creditNote.InvoiceNumber}.pdf";
+            creditNote.PdfUrl = await _blobStorage.UploadPdfAsync(fileName, pdfBytes);
+        }
 
         _db.Invoices.Add(creditNote);
         await _db.SaveChangesAsync();

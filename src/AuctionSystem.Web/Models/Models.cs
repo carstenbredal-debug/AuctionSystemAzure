@@ -366,4 +366,15 @@ public class InvoiceSummaryDto
     public int LinesCount { get; set; }
     public bool IsCreditNote { get; set; }
     public string? OriginalInvoiceNumber { get; set; }
+    public string? PdfUrl { get; set; }
+}
+
+public class InvoiceLinkDto
+{
+    public int? InvoiceId { get; set; }
+    public string? InvoiceNumber { get; set; }
+    public string? InvoicePdfUrl { get; set; }
+    public int? CreditNoteId { get; set; }
+    public string? CreditNoteNumber { get; set; }
+    public string? CreditNotePdfUrl { get; set; }
 }

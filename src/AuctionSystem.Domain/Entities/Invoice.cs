@@ -29,6 +29,7 @@ public class Invoice
     public Invoice? OriginalInvoice { get; set; }
 
     public byte[]? PdfData { get; set; }
+    public string? PdfUrl { get; set; }
 
     public ICollection<InvoiceLine> Lines { get; set; } = new List<InvoiceLine>();
 }

@@ -39,7 +39,8 @@ public class SettlementFunctions
             i.Id, i.InvoiceNumber, i.InvoiceDate, i.SubTotal, i.AuctionFee, i.Commission,
             i.TotalAmount, i.Currency, Status = i.Status.ToString(),
             BuyerName = i.Buyer?.Name, LinesCount = i.Lines.Count,
-            i.IsCreditNote, OriginalInvoiceNumber = i.OriginalInvoice?.InvoiceNumber
+            i.IsCreditNote, OriginalInvoiceNumber = i.OriginalInvoice?.InvoiceNumber,
+            i.PdfUrl
         }));
     }
 
@@ -102,7 +103,8 @@ public class SettlementFunctions
             i.Id, i.InvoiceNumber, i.InvoiceDate, i.SubTotal, i.AuctionFee, i.Commission,
             i.TotalAmount, i.Currency, Status = i.Status.ToString(),
             BrokerName = i.Broker?.CompanyName, LinesCount = i.Lines.Count,
-            i.IsCreditNote, OriginalInvoiceNumber = i.OriginalInvoice?.InvoiceNumber
+            i.IsCreditNote, OriginalInvoiceNumber = i.OriginalInvoice?.InvoiceNumber,
+            i.PdfUrl
         }));
     }
 
@@ -117,8 +119,38 @@ public class SettlementFunctions
             i.Id, i.InvoiceNumber, i.InvoiceDate, i.SubTotal, i.AuctionFee, i.Commission,
             i.TotalAmount, i.Currency, Status = i.Status.ToString(),
             BrokerName = i.Broker?.CompanyName, BuyerName = i.Buyer?.Name, LinesCount = i.Lines.Count,
-            i.IsCreditNote, OriginalInvoiceNumber = i.OriginalInvoice?.InvoiceNumber
+            i.IsCreditNote, OriginalInvoiceNumber = i.OriginalInvoice?.InvoiceNumber,
+            i.PdfUrl
         }));
+    }
+
+    [Function("GetInvoiceLinksForResults")]
+    public async Task<HttpResponseData> GetInvoiceLinksForResults(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements/invoice-links/broker/{brokerId:int}")] HttpRequestData req, int brokerId)
+    {
+        var lines = await _db.Set<InvoiceLine>()
+            .Include(l => l.Invoice)
+            .Where(l => l.Invoice.BrokerId == brokerId)
+            .ToListAsync();
+
+        var resultMap = lines.GroupBy(l => l.AuctionResultId).ToDictionary(
+            g => g.Key,
+            g =>
+            {
+                var invoice = g.FirstOrDefault(l => !l.Invoice.IsCreditNote)?.Invoice;
+                var creditNote = g.FirstOrDefault(l => l.Invoice.IsCreditNote)?.Invoice;
+                return new
+                {
+                    InvoiceId = invoice?.Id,
+                    InvoiceNumber = invoice?.InvoiceNumber,
+                    InvoicePdfUrl = invoice?.PdfUrl,
+                    CreditNoteId = creditNote?.Id,
+                    CreditNoteNumber = creditNote?.InvoiceNumber,
+                    CreditNotePdfUrl = creditNote?.PdfUrl
+                };
+            });
+
+        return await CreateJsonResponse(req, resultMap);
     }
 
     [Function("GetAllSettlements")]
