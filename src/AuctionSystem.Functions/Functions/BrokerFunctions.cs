@@ -125,14 +125,8 @@ public class BrokerFunctions
     public async Task<HttpResponseData> GetAllBuyers(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "buyers")] HttpRequestData req)
     {
-        var buyerIdsWithUsers = await _db.AppUsers
-            .Where(u => u.BuyerId.HasValue && u.IsActive)
-            .Select(u => u.BuyerId!.Value)
-            .ToListAsync();
-
         var buyers = await _db.Buyers
             .Include(b => b.Broker)
-            .Where(b => buyerIdsWithUsers.Contains(b.Id))
             .OrderBy(b => b.Name)
             .ToListAsync();
 
