@@ -359,25 +359,33 @@ public class AuctionResultFunctions
                 invoice.TotalAmount = subTotal + totalAuctionFee + totalCommission;
 
                 // Load buyer for PDF
-                await _db.Entry(invoice).Reference(i => i.Buyer).Query().LoadAsync();
                 invoice.Buyer = buyer;
 
                 var pdfBytes = InvoicePdfService.GeneratePdf(invoice);
                 invoice.PdfData = pdfBytes;
 
-                if (_blobStorage != null)
-                {
-                    var fileName = $"{invoice.InvoiceNumber}.pdf";
-                    invoice.PdfUrl = await _blobStorage.UploadPdfAsync(fileName, pdfBytes);
-                }
-
                 _db.Invoices.Add(invoice);
                 await _db.SaveChangesAsync();
                 invoiceId = invoice.Id;
+
+                // Upload to blob storage (non-critical)
+                if (_blobStorage != null)
+                {
+                    try
+                    {
+                        var fileName = $"{invoice.InvoiceNumber}.pdf";
+                        invoice.PdfUrl = await _blobStorage.UploadPdfAsync(fileName, pdfBytes);
+                        await _db.SaveChangesAsync();
+                    }
+                    catch (Exception blobEx)
+                    {
+                        _logger.LogWarning(blobEx, "Failed to upload invoice PDF to blob storage");
+                    }
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to generate invoice");
+                _logger.LogError(ex, "Failed to generate invoice for {Count} lots", results.Count);
             }
         }
 
@@ -689,14 +697,23 @@ public class AuctionResultFunctions
         var pdfBytes = InvoicePdfService.GeneratePdf(creditNote);
         creditNote.PdfData = pdfBytes;
 
-        if (_blobStorage != null)
-        {
-            var fileName = $"{creditNote.InvoiceNumber}.pdf";
-            creditNote.PdfUrl = await _blobStorage.UploadPdfAsync(fileName, pdfBytes);
-        }
-
         _db.Invoices.Add(creditNote);
         await _db.SaveChangesAsync();
+
+        if (_blobStorage != null)
+        {
+            try
+            {
+                var fileName = $"{creditNote.InvoiceNumber}.pdf";
+                creditNote.PdfUrl = await _blobStorage.UploadPdfAsync(fileName, pdfBytes);
+                await _db.SaveChangesAsync();
+            }
+            catch (Exception blobEx)
+            {
+                _logger.LogWarning(blobEx, "Failed to upload credit note PDF to blob storage");
+            }
+        }
+
         return creditNote.Id;
     }
 }

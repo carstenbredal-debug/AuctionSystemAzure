@@ -608,6 +608,7 @@ else if (_activeTab == "takeback")
                 _selectedBuyerId = 0;
                 _showCommissionModal = false;
                 _allResults = await Api.GetAuctionResultsByBrokerAsync(_brokerId);
+                _invoiceLinks = await Api.GetInvoiceLinksForBrokerAsync(_brokerId);
             }
             else
             {
@@ -662,6 +663,7 @@ else if (_activeTab == "takeback")
                 _selectedSoldIds.Clear();
                 _allResults = await Api.GetAuctionResultsByBrokerAsync(_brokerId);
                 _pendingTakebacks = await Api.GetTakebackRequestsByBrokerAsync(_brokerId);
+                _invoiceLinks = await Api.GetInvoiceLinksForBrokerAsync(_brokerId);
             }
             else
             {
@@ -692,6 +694,7 @@ else if (_activeTab == "takeback")
                 _brokerTakebackMessageIsError = false;
                 _allResults = await Api.GetAuctionResultsByBrokerAsync(_brokerId);
                 _pendingTakebacks = await Api.GetTakebackRequestsByBrokerAsync(_brokerId);
+                _invoiceLinks = await Api.GetInvoiceLinksForBrokerAsync(_brokerId);
             }
             else
             {
