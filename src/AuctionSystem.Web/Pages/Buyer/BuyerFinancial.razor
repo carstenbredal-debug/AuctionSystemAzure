@@ -85,6 +85,51 @@ else
         </div>
     }
 
+    <div class="card mb-4">
+        <div class="card-header">
+            <strong>Invoices</strong> <span class="badge bg-secondary">@_invoices.Count</span>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-striped table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Invoice #</th>
+                        <th>Broker</th>
+                        <th>Lots</th>
+                        <th>Subtotal</th>
+                        <th>Auction Fee</th>
+                        <th>Commission</th>
+                        <th>Total</th>
+                        <th>Status</th>
+                        <th>Date</th>
+                        <th>PDF</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_invoices.Count == 0)
+                    {
+                        <tr><td colspan="10" class="text-center text-muted py-4">No invoices yet.</td></tr>
+                    }
+                    @foreach (var inv in _invoices)
+                    {
+                        <tr>
+                            <td><strong>@inv.InvoiceNumber</strong></td>
+                            <td>@(inv.BrokerName ?? "—")</td>
+                            <td>@inv.LinesCount</td>
+                            <td>€@inv.SubTotal.ToString("N2")</td>
+                            <td>€@inv.AuctionFee.ToString("N2")</td>
+                            <td>€@inv.Commission.ToString("N2")</td>
+                            <td><strong>€@inv.TotalAmount.ToString("N2")</strong></td>
+                            <td><span class="badge bg-@GetInvoiceStatusColor(inv.Status)">@inv.Status</span></td>
+                            <td>@inv.InvoiceDate.ToString("d")</td>
+                            <td><a href="@Api.GetInvoicePdfUrl(inv.Id)" target="_blank" class="btn btn-sm btn-outline-primary">📄 PDF</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     <div class="card">
         <div class="card-header">
             <strong>Recent Purchases</strong> <span class="badge bg-secondary">@_allocations.Count</span>
@@ -129,6 +174,7 @@ else
     private int _buyerId;
     private bool _loading = true;
     private List<LotAllocationDto> _allocations = new();
+    private List<InvoiceSummaryDto> _invoices = new();
     private List<BrokerSpendingSummary> _brokerSummaries = new();
 
     protected override async Task OnInitializedAsync()
@@ -137,6 +183,7 @@ else
         if (_buyerId > 0)
         {
             _allocations = await Api.GetAllocationsByBuyerAsync(_buyerId);
+            _invoices = await Api.GetInvoicesByBuyerAsync(_buyerId);
             _brokerSummaries = _allocations
                 .GroupBy(a => new { a.BrokerId, Name = a.Broker?.CompanyName ?? $"Broker {a.BrokerId}" })
                 .Select(g => new BrokerSpendingSummary
@@ -167,6 +214,15 @@ else
         AllocationStatus.Pending => "warning",
         AllocationStatus.Cancelled => "danger",
         _ => "info"
+    };
+
+    private string GetInvoiceStatusColor(string status) => status switch
+    {
+        "Paid" => "success",
+        "Issued" or "Sent" => "primary",
+        "Overdue" => "danger",
+        "Draft" => "secondary",
+        _ => "warning"
     };
 
     private class BrokerSpendingSummary

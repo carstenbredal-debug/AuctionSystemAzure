@@ -13,46 +13,22 @@ public class SettlementService
 
     public SettlementService(AuctionDbContext db) => _db = db;
 
-    public async Task<Invoice?> GenerateInvoiceAsync(int auctionId, int brokerId)
+    public async Task<List<Invoice>> GetInvoicesByBrokerAsync(int brokerId)
+        => await _db.Invoices.Where(i => i.BrokerId == brokerId)
+            .Include(i => i.Lines).Include(i => i.Buyer)
+            .OrderByDescending(i => i.InvoiceDate).ToListAsync();
+
+    public async Task<List<Settlement>> GetSettlementsBySellerAsync(int sellerId)
+        => await _db.Settlements.Where(s => s.SellerId == sellerId)
+            .Include(s => s.Lot).ThenInclude(l => l.Auction)
+            .OrderByDescending(s => s.CreatedAt).ToListAsync();
+
+    public async Task<Invoice?> MarkInvoicePaidAsync(int invoiceId)
     {
-        var wonBids = await _db.Bids
-            .Where(b => b.BrokerId == brokerId && b.Status == BidStatus.Won && b.Lot.AuctionId == auctionId)
-            .Include(b => b.Lot)
-            .ToListAsync();
+        var invoice = await _db.Invoices.FindAsync(invoiceId);
+        if (invoice == null) return null;
 
-        if (!wonBids.Any()) return null;
-
-        var invoice = new Invoice
-        {
-            InvoiceNumber = $"INV-{DateTime.UtcNow:yyyyMMdd}-{await _db.Invoices.CountAsync() + 1:D4}",
-            BrokerId = brokerId,
-            AuctionId = auctionId,
-            IssuedDate = DateTime.UtcNow,
-            DueDate = DateTime.UtcNow.AddDays(30),
-            Status = InvoiceStatus.Issued
-        };
-
-        decimal subTotal = 0;
-        foreach (var bid in wonBids)
-        {
-            var line = new InvoiceLine
-            {
-                Description = $"Lot #{bid.Lot.LotNumber}: {bid.Lot.Description}",
-                Quantity = bid.Lot.Quantity,
-                UnitPrice = bid.Amount,
-                LineTotal = bid.Amount,
-                LotId = bid.LotId
-            };
-            invoice.Lines.Add(line);
-            subTotal += bid.Amount;
-        }
-
-        invoice.SubTotal = subTotal;
-        invoice.Commission = subTotal * CommissionRate;
-        invoice.Tax = (subTotal + invoice.Commission) * 0.25m;
-        invoice.TotalAmount = subTotal + invoice.Commission + invoice.Tax;
-
-        _db.Invoices.Add(invoice);
+        invoice.Status = InvoiceStatus.Paid;
         await _db.SaveChangesAsync();
         return invoice;
     }
@@ -81,27 +57,6 @@ public class SettlementService
         _db.Settlements.Add(settlement);
         await _db.SaveChangesAsync();
         return settlement;
-    }
-
-    public async Task<List<Invoice>> GetInvoicesByBrokerAsync(int brokerId)
-        => await _db.Invoices.Where(i => i.BrokerId == brokerId)
-            .Include(i => i.Lines).Include(i => i.Auction)
-            .OrderByDescending(i => i.IssuedDate).ToListAsync();
-
-    public async Task<List<Settlement>> GetSettlementsBySellerAsync(int sellerId)
-        => await _db.Settlements.Where(s => s.SellerId == sellerId)
-            .Include(s => s.Lot).ThenInclude(l => l.Auction)
-            .OrderByDescending(s => s.CreatedAt).ToListAsync();
-
-    public async Task<Invoice?> MarkInvoicePaidAsync(int invoiceId)
-    {
-        var invoice = await _db.Invoices.FindAsync(invoiceId);
-        if (invoice == null) return null;
-
-        invoice.Status = InvoiceStatus.Paid;
-        invoice.PaidDate = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
-        return invoice;
     }
 
     public async Task<Settlement?> MarkSettlementCompletedAsync(int settlementId)

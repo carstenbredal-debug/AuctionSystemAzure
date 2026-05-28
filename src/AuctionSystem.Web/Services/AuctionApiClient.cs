@@ -129,8 +129,7 @@ public class AuctionApiClient
         return await resp.Content.ReadFromJsonAsync<InvoiceDto>();
     }
 
-    public async Task<List<InvoiceDto>> GetInvoicesByBrokerAsync(int brokerId)
-        => await _http.GetFromJsonAsync<List<InvoiceDto>>($"api/settlements/invoices/broker/{brokerId}") ?? new();
+
 
     public async Task MarkInvoicePaidAsync(int invoiceId)
         => await _http.PutAsync($"api/settlements/invoices/{invoiceId}/paid", null);
@@ -291,4 +290,14 @@ public class AuctionApiClient
 
     public async Task<HttpResponseMessage> RespondTakebackAsync(int requestId, bool approve)
         => await _http.PutAsJsonAsync($"api/takeback-requests/{requestId}", new { approve });
+
+    // Invoices
+    public async Task<List<InvoiceSummaryDto>> GetInvoicesByBrokerAsync(int brokerId)
+        => await _http.GetFromJsonAsync<List<InvoiceSummaryDto>>($"api/settlements/invoices/broker/{brokerId}") ?? new();
+
+    public async Task<List<InvoiceSummaryDto>> GetInvoicesByBuyerAsync(int buyerId)
+        => await _http.GetFromJsonAsync<List<InvoiceSummaryDto>>($"api/settlements/invoices/buyer/{buyerId}") ?? new();
+
+    public string GetInvoicePdfUrl(int invoiceId)
+        => $"{_http.BaseAddress}api/settlements/invoices/{invoiceId}/pdf";
 }

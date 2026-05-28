@@ -1,5 +1,6 @@
 @page "/broker/lots"
 @attribute [Authorize(Roles = "Broker")]
+@using System.Net.Http.Json
 @inject AuctionApiClient Api
 @inject AuthenticationStateProvider AuthState
 
@@ -226,7 +227,11 @@ else if (_activeTab == "unsold")
     {
         <div class="alert @(_messageIsError ? "alert-danger" : "alert-success") alert-dismissible">
             @_message
-            <button type="button" class="btn-close" @onclick="() => _message = null"></button>
+            @if (_lastInvoiceId != null)
+            {
+                <a href="@Api.GetInvoicePdfUrl(_lastInvoiceId.Value)" target="_blank" class="btn btn-sm btn-outline-dark ms-2">📄 Download Invoice PDF</a>
+            }
+            <button type="button" class="btn-close" @onclick="() => { _message = null; _lastInvoiceId = null; }"></button>
         </div>
     }
 
@@ -455,6 +460,7 @@ else if (_activeTab == "takeback")
     private string _activeTab = "purchased";
     private string? _message;
     private bool _messageIsError;
+    private int? _lastInvoiceId;
     private string? _takebackMessage;
     private bool _takebackMessageIsError;
     private string? _brokerTakebackMessage;
@@ -537,7 +543,13 @@ else if (_activeTab == "takeback")
             if (resp.IsSuccessStatusCode)
             {
                 var buyer = _buyers.FirstOrDefault(b => b.Id == _selectedBuyerId);
+                var json = await resp.Content.ReadFromJsonAsync<SellResponse>();
                 _message = $"{_selectedIds.Count} lot(s) sold to {buyer?.Name ?? "buyer"}.";
+                if (json?.InvoiceId != null)
+                {
+                    _lastInvoiceId = json.InvoiceId;
+                    _message += " Invoice generated.";
+                }
                 _messageIsError = false;
                 _selectedIds.Clear();
                 _selectedBuyerId = 0;
@@ -633,5 +645,11 @@ else if (_activeTab == "takeback")
             _brokerTakebackMessage = $"Error: {ex.Message}";
             _brokerTakebackMessageIsError = true;
         }
+    }
+
+    private class SellResponse
+    {
+        public int SoldCount { get; set; }
+        public int? InvoiceId { get; set; }
     }
 }
