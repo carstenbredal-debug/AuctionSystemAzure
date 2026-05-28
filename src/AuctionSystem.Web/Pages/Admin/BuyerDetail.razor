@@ -38,7 +38,7 @@ else
         </li>
         <li class="nav-item">
             <button class="nav-link @(_activeTab == "brokers" ? "active" : "")" @onclick='() => _activeTab = "brokers"'>
-                Broker Relations <span class="badge bg-secondary ms-1">@_requests.Count</span>
+                Broker Relations <span class="badge bg-secondary ms-1">@_buyer.Brokers.Count</span>
             </button>
         </li>
         <li class="nav-item">
@@ -336,6 +336,31 @@ else
 
     @if (_activeTab == "brokers")
     {
+        <div class="card mb-3">
+            <div class="card-header bg-info text-white">
+                <strong>Link to Broker</strong>
+            </div>
+            <div class="card-body">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-6">
+                        <label class="form-label">Broker</label>
+                        <select class="form-select" @bind="_linkBrokerId">
+                            <option value="0">— Select Broker —</option>
+                            @foreach (var b in _allBrokers.Where(b => !_buyer.Brokers.Any(lb => lb.Id == b.Id)))
+                            {
+                                <option value="@b.Id">@b.CompanyName (@b.BrokerNumber)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <button class="btn btn-info text-white" @onclick="LinkToBroker" disabled="@(_linkBrokerId == 0)">
+                            Link to Broker
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="card">
             <div class="card-header">
                 <strong>Broker Relationships</strong>
@@ -344,26 +369,28 @@ else
                 <table class="table table-striped table-hover mb-0">
                     <thead class="table-dark">
                         <tr>
+                            <th>Number</th>
                             <th>Broker</th>
-                            <th>Status</th>
-                            <th>Requested</th>
-                            <th>Responded</th>
+                            <th>Email</th>
+                            <th>Phone</th>
+                            <th style="width: 100px;">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @if (_requests.Count == 0)
+                        @if (_buyer.Brokers.Count == 0)
                         {
-                            <tr><td colspan="4" class="text-center text-muted py-4">No broker relationships.</td></tr>
+                            <tr><td colspan="5" class="text-center text-muted py-4">No broker relationships.</td></tr>
                         }
-                        @foreach (var req in _requests)
+                        @foreach (var broker in _buyer.Brokers)
                         {
                             <tr>
-                                <td><strong>@(req.Broker?.CompanyName ?? $"Broker {req.BrokerId}")</strong></td>
+                                <td style="cursor: pointer;" @onclick="() => ViewBroker(broker.Id)"><strong>@broker.BrokerNumber</strong></td>
+                                <td style="cursor: pointer;" @onclick="() => ViewBroker(broker.Id)">@broker.CompanyName</td>
+                                <td>@broker.ContactEmail</td>
+                                <td>@broker.ContactPhone</td>
                                 <td>
-                                    <span class="badge bg-@GetStatusColor(req.Status)">@GetStatusText(req.Status)</span>
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => UnlinkBroker(broker.Id)">Remove</button>
                                 </td>
-                                <td>@req.RequestedAt.ToString("g")</td>
-                                <td>@(req.RespondedAt?.ToString("g") ?? "—")</td>
                             </tr>
                         }
                     </tbody>
@@ -507,6 +534,8 @@ else
     private List<BrokerCustomerRequestDto> _requests = new();
     private List<AuctionResultDto> _purchases = new();
     private List<TakebackRequestDto> _takebackRequests = new();
+    private List<BrokerDto> _allBrokers = new();
+    private int _linkBrokerId;
     private decimal _auctionFeePercent;
     private decimal _handlingFeePerSkin;
     private HashSet<int> _selectedPurchaseIds = new();
@@ -531,8 +560,8 @@ else
 
     private async Task LoadData()
     {
-        var allBuyers = await Api.GetAllBuyersAsync();
-        _buyer = allBuyers.FirstOrDefault(b => b.Id == BuyerId);
+        _buyer = await Api.GetBuyerAsync(BuyerId);
+        _allBrokers = await Api.GetBrokersAsync();
         if (_buyer != null)
         {
             _requests = await Api.GetCustomerRequestsByBuyerAsync(BuyerId);
@@ -623,6 +652,34 @@ else
             _takebackMessage = $"Error: {ex.Message}";
             _takebackMessageIsError = true;
         }
+    }
+
+    private void ViewBroker(int id) => Nav.NavigateTo($"admin/brokers/{id}");
+
+    private async Task LinkToBroker()
+    {
+        if (_linkBrokerId == 0) return;
+        var result = await Api.AdminCreateCustomerLinkAsync(_linkBrokerId, BuyerId);
+        if (result != null)
+        {
+            _message = "Buyer linked to broker.";
+            _messageIsError = false;
+        }
+        else
+        {
+            _message = "Failed to link buyer to broker.";
+            _messageIsError = true;
+        }
+        _linkBrokerId = 0;
+        await LoadData();
+    }
+
+    private async Task UnlinkBroker(int brokerId)
+    {
+        await Api.UnlinkBrokerBuyerAsync(brokerId, BuyerId);
+        _message = "Broker link removed.";
+        _messageIsError = false;
+        await LoadData();
     }
 
     private void StartEdit()

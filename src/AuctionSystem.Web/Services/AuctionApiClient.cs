@@ -180,6 +180,9 @@ public class AuctionApiClient
     public async Task DeleteCustomerRequestAsync(int requestId)
         => await _http.DeleteAsync($"api/customer-requests/{requestId}");
 
+    public async Task UnlinkBrokerBuyerAsync(int brokerId, int buyerId)
+        => await _http.DeleteAsync($"api/brokers/{brokerId}/buyers/{buyerId}");
+
     public async Task<BrokerCustomerRequestDto?> CreateCustomerRequestByBuyerAsync(int buyerId, int brokerId)
     {
         var resp = await _http.PostAsJsonAsync($"api/buyers/{buyerId}/customer-requests", new { brokerId });
