@@ -1,6 +1,6 @@
 namespace AuctionSystem.Web.Models;
 
-public enum AuctionStatus { Draft, Scheduled, InProgress, Completed, Cancelled }
+public enum AuctionStatus { Draft, Active, Closed }
 public enum LotStatus { Pending, Active, Sold, Unsold, Withdrawn, Broker }
 public enum BidStatus { Active, Outbid, Winning, Won, Cancelled }
 public enum AllocationStatus { Pending, Allocated, Delivered, Cancelled }

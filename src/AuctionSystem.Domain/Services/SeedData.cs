@@ -44,7 +44,7 @@ public static class SeedData
             Description = "Premier fur auction featuring Nordic mink and fox pelts",
             Location = "Copenhagen Auction Hall",
             ScheduledDate = new DateTime(2026, 6, 1, 10, 0, 0, DateTimeKind.Utc),
-            Status = AuctionStatus.Scheduled
+            Status = AuctionStatus.Draft
         };
         db.Auctions.Add(auction);
         db.SaveChanges();
