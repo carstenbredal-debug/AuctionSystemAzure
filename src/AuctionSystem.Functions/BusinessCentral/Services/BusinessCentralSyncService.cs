@@ -8,6 +8,13 @@ namespace AuctionSystem.Functions.BusinessCentral.Services;
 
 public class BusinessCentralSyncService
 {
+    // BC dimension IDs for Lot Test 3
+    private static readonly Guid VendorTypeDimensionId = Guid.Parse("0288ef73-a554-f111-a820-7c1e5271a821");
+    private static readonly Guid VendorTypeBrokerValueId = Guid.Parse("728c715d-be54-f111-a820-7c1e5271a821");
+    private static readonly Guid VendorTypeFarmerValueId = Guid.Parse("0688ef73-a554-f111-a820-7c1e5271a821");
+    private static readonly Guid CustomerTypeDimensionId = Guid.Parse("0188ef73-a554-f111-a820-7c1e5271a821");
+    private static readonly Guid CustomerTypeBuyerValueId = Guid.Parse("a807e197-f55a-f111-a820-70a8a55fc40b");
+
     private readonly BusinessCentralApiClient _bcClient;
     private readonly AuctionDbContext _db;
     private readonly ILogger<BusinessCentralSyncService> _logger;
@@ -421,20 +428,21 @@ public class BusinessCentralSyncService
         var bcVendor = MapBrokerToVendor(broker);
         var existing = await _bcClient.GetVendorByNumberAsync(companyId, bcVendor.Number);
 
+        BcVendor result;
         if (existing is null)
         {
-            var created = await _bcClient.CreateVendorAsync(companyId, bcVendor);
+            result = await _bcClient.CreateVendorAsync(companyId, bcVendor);
             _logger.LogInformation("Created BC vendor for broker {Number}", broker.BrokerNumber);
-            await PatchVendorVatRegAsync(companyId, created, broker.VatRegistrationNo);
         }
         else
         {
             bcVendor.Id = existing.Id;
             bcVendor.ETag = existing.ETag;
-            var updated = await _bcClient.UpdateVendorAsync(companyId, bcVendor);
+            result = await _bcClient.UpdateVendorAsync(companyId, bcVendor);
             _logger.LogInformation("Updated BC vendor for broker {Number}", broker.BrokerNumber);
-            await PatchVendorVatRegAsync(companyId, updated, broker.VatRegistrationNo);
         }
+        await PatchVendorVatRegAsync(companyId, result, broker.VatRegistrationNo);
+        await SetDefaultDimensionSafeAsync(companyId, result.Id, VendorTypeDimensionId, VendorTypeBrokerValueId, "VENDORTYPE=BROKER", broker.BrokerNumber);
     }
 
     public async Task PushSingleBuyerAsync(Buyer buyer)
@@ -443,18 +451,20 @@ public class BusinessCentralSyncService
         var bcCustomer = MapBuyerToCustomer(buyer);
         var existing = await _bcClient.GetCustomerByNumberAsync(companyId, bcCustomer.Number);
 
+        BcCustomer result;
         if (existing is null)
         {
-            await _bcClient.CreateCustomerAsync(companyId, bcCustomer);
+            result = await _bcClient.CreateCustomerAsync(companyId, bcCustomer);
             _logger.LogInformation("Created BC customer for buyer {Number}", buyer.BuyerNumber);
         }
         else
         {
             bcCustomer.Id = existing.Id;
             bcCustomer.ETag = existing.ETag;
-            await _bcClient.UpdateCustomerAsync(companyId, bcCustomer);
+            result = await _bcClient.UpdateCustomerAsync(companyId, bcCustomer);
             _logger.LogInformation("Updated BC customer for buyer {Number}", buyer.BuyerNumber);
         }
+        await SetDefaultDimensionSafeAsync(companyId, result.Id, CustomerTypeDimensionId, CustomerTypeBuyerValueId, "CUSTOMERTYPE=BUYER", buyer.BuyerNumber);
     }
 
     public async Task PushSingleFarmerAsync(Farmer farmer)
@@ -463,19 +473,33 @@ public class BusinessCentralSyncService
         var bcVendor = MapFarmerToVendor(farmer);
         var existing = await _bcClient.GetVendorByNumberAsync(companyId, bcVendor.Number);
 
+        BcVendor result;
         if (existing is null)
         {
-            var created = await _bcClient.CreateVendorAsync(companyId, bcVendor);
+            result = await _bcClient.CreateVendorAsync(companyId, bcVendor);
             _logger.LogInformation("Created BC vendor for farmer {Number}", farmer.FarmerNumber);
-            await PatchVendorVatRegAsync(companyId, created, farmer.VatRegistrationNo);
         }
         else
         {
             bcVendor.Id = existing.Id;
             bcVendor.ETag = existing.ETag;
-            var updated = await _bcClient.UpdateVendorAsync(companyId, bcVendor);
+            result = await _bcClient.UpdateVendorAsync(companyId, bcVendor);
             _logger.LogInformation("Updated BC vendor for farmer {Number}", farmer.FarmerNumber);
-            await PatchVendorVatRegAsync(companyId, updated, farmer.VatRegistrationNo);
+        }
+        await PatchVendorVatRegAsync(companyId, result, farmer.VatRegistrationNo);
+        await SetDefaultDimensionSafeAsync(companyId, result.Id, VendorTypeDimensionId, VendorTypeFarmerValueId, "VENDORTYPE=FARMER", farmer.FarmerNumber);
+    }
+
+    private async Task SetDefaultDimensionSafeAsync(Guid companyId, Guid parentId, Guid dimensionId, Guid dimensionValueId, string label, string entityNumber)
+    {
+        try
+        {
+            await _bcClient.SetDefaultDimensionAsync(companyId, parentId, dimensionId, dimensionValueId);
+            _logger.LogInformation("Set default dimension {Label} for {Number}", label, entityNumber);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to set default dimension {Label} for {Number}", label, entityNumber);
         }
     }
 
