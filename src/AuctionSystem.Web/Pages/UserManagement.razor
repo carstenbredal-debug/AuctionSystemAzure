@@ -199,18 +199,14 @@ else
                                     </select>
                                 </div>
                                 <div class="col-md-4">
-                                    <label class="form-label">Customer Posting Group</label>
+                                    <label class="form-label">Vendor Posting Group</label>
                                     <select class="form-select" @bind="_brokerForm.CustomerPostingGroup">
                                         <option value="">Select...</option>
-                                        @foreach (var g in _bcCustomerPostingGroups)
+                                        @foreach (var g in _bcVendorPostingGroups)
                                         {
                                             <option value="@g.Code">@g.Code</option>
                                         }
                                     </select>
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label">Customer Group</label>
-                                    <input class="form-control" @bind="_brokerForm.CustomerGroup" />
                                 </div>
                             </div>
                         </div>
@@ -623,6 +619,7 @@ else
     private List<BcPostingGroupDto> _bcGenBusPostingGroups = new();
     private List<BcPostingGroupDto> _bcVatBusPostingGroups = new();
     private List<BcPostingGroupDto> _bcCustomerPostingGroups = new();
+    private List<BcPostingGroupDto> _bcVendorPostingGroups = new();
     private List<BcPaymentTermDto> _bcPaymentTerms = new();
 
     private string SelectedRole
@@ -672,6 +669,7 @@ else
         _bcGenBusPostingGroups = await Api.GetBcGenBusPostingGroupsAsync();
         _bcVatBusPostingGroups = await Api.GetBcVatBusPostingGroupsAsync();
         _bcCustomerPostingGroups = await Api.GetBcCustomerPostingGroupsAsync();
+        _bcVendorPostingGroups = await Api.GetBcVendorPostingGroupsAsync();
         _bcPaymentTerms = await Api.GetBcPaymentTermsAsync();
     }
 

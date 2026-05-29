@@ -278,18 +278,14 @@ else
                             </select>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Customer Posting Group</label>
+                            <label class="form-label">Vendor Posting Group</label>
                             <select class="form-select" @bind="_editDto!.CustomerPostingGroup">
                                 <option value="">Select...</option>
-                                @foreach (var g in _bcCustomerPostingGroups)
+                                @foreach (var g in _bcVendorPostingGroups)
                                 {
                                     <option value="@g.Code">@g.Code</option>
                                 }
                             </select>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Customer Group</label>
-                            <input class="form-control" @bind="_editDto!.CustomerGroup" />
                         </div>
                     </div>
                 }
@@ -317,12 +313,8 @@ else
                             <strong>@(string.IsNullOrEmpty(_broker.VatBusPostingGroup) ? "—" : _broker.VatBusPostingGroup)</strong>
                         </div>
                         <div class="col-md-4 mb-2">
-                            <small class="text-muted d-block">Customer Posting Group</small>
+                            <small class="text-muted d-block">Vendor Posting Group</small>
                             <strong>@(string.IsNullOrEmpty(_broker.CustomerPostingGroup) ? "—" : _broker.CustomerPostingGroup)</strong>
-                        </div>
-                        <div class="col-md-4 mb-2">
-                            <small class="text-muted d-block">Customer Group</small>
-                            <strong>@(string.IsNullOrEmpty(_broker.CustomerGroup) ? "—" : _broker.CustomerGroup)</strong>
                         </div>
                     </div>
                 }
@@ -629,7 +621,7 @@ else
     private List<BcCurrencyDto> _bcCurrencies = new();
     private List<BcPostingGroupDto> _bcGenBusPostingGroups = new();
     private List<BcPostingGroupDto> _bcVatBusPostingGroups = new();
-    private List<BcPostingGroupDto> _bcCustomerPostingGroups = new();
+    private List<BcPostingGroupDto> _bcVendorPostingGroups = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -653,7 +645,7 @@ else
         _bcCurrencies = await Api.GetBcCurrenciesAsync();
         _bcGenBusPostingGroups = await Api.GetBcGenBusPostingGroupsAsync();
         _bcVatBusPostingGroups = await Api.GetBcVatBusPostingGroupsAsync();
-        _bcCustomerPostingGroups = await Api.GetBcCustomerPostingGroupsAsync();
+        _bcVendorPostingGroups = await Api.GetBcVendorPostingGroupsAsync();
     }
 
     private async Task LoadFeeParameters()

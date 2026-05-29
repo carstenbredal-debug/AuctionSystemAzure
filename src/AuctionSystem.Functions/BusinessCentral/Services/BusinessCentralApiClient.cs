@@ -91,26 +91,26 @@ public class BusinessCentralApiClient
 
     public async Task<List<BcVendor>> GetVendorsAsync(Guid companyId, int top = 1000)
     {
-        var url = $"{_options.BaseUrl}/companies({companyId})/vendors?$top={top}";
+        var url = $"{_options.CustomApiBaseUrl}/companies({companyId})/vendors?$top={top}";
         return await GetListAsync<BcVendor>(url);
     }
 
     public async Task<BcVendor?> GetVendorByNumberAsync(Guid companyId, string number)
     {
-        var url = $"{_options.BaseUrl}/companies({companyId})/vendors?$filter=number eq '{number}'";
+        var url = $"{_options.CustomApiBaseUrl}/companies({companyId})/vendors?$filter=number eq '{number}'";
         var items = await GetListAsync<BcVendor>(url);
         return items.FirstOrDefault();
     }
 
     public async Task<BcVendor> CreateVendorAsync(Guid companyId, BcVendor vendor)
     {
-        var url = $"{_options.BaseUrl}/companies({companyId})/vendors";
+        var url = $"{_options.CustomApiBaseUrl}/companies({companyId})/vendors";
         return await PostAsync<BcVendor>(url, vendor);
     }
 
     public async Task<BcVendor> UpdateVendorAsync(Guid companyId, BcVendor vendor)
     {
-        var url = $"{_options.BaseUrl}/companies({companyId})/vendors({vendor.Id})";
+        var url = $"{_options.CustomApiBaseUrl}/companies({companyId})/vendors({vendor.Id})";
         return await PatchAsync<BcVendor>(url, vendor, vendor.ETag);
     }
 
