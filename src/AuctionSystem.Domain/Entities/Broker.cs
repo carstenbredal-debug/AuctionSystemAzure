@@ -6,7 +6,6 @@ public class Broker
     public string BrokerNumber { get; set; } = string.Empty;
     public string CompanyName { get; set; } = string.Empty;
     public string CompanyName2 { get; set; } = string.Empty;
-    public string ErpAccountNumber { get; set; } = string.Empty;
     public string SearchName { get; set; } = string.Empty;
     public string ContactPerson { get; set; } = string.Empty;
     public string AddressLine1 { get; set; } = string.Empty;
@@ -30,7 +29,6 @@ public class Broker
 
     [Obsolete("Use AddressLine1 instead")]
     public string Address { get; set; } = string.Empty;
-    public string? BcCustomerId { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public ICollection<BrokerBuyer> BrokerBuyers { get; set; } = new List<BrokerBuyer>();

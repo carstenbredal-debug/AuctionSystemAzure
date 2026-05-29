@@ -271,9 +271,6 @@ namespace AuctionSystem.Domain.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("BcCustomerId")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("BrokerNumber")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -316,10 +313,6 @@ namespace AuctionSystem.Domain.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("CustomerGroup")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("ErpAccountNumber")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
@@ -468,9 +461,6 @@ namespace AuctionSystem.Domain.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("BcCustomerId")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<int?>("BrokerId")
                         .HasColumnType("int");
 
@@ -507,10 +497,6 @@ namespace AuctionSystem.Domain.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("CustomerGroup")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("ErpAccountNumber")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
@@ -832,9 +818,6 @@ namespace AuctionSystem.Domain.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("BcCustomerId")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("City")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -863,10 +846,6 @@ namespace AuctionSystem.Domain.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("CustomerGroup")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("ErpAccountNumber")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 

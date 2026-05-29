@@ -84,10 +84,6 @@ else
                             <input class="form-control" @bind="_brokerForm.BrokerNumber" />
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">ERP Account Number <span class="text-danger">*</span></label>
-                            <input class="form-control" @bind="_brokerForm.ErpAccountNumber" />
-                        </div>
-                        <div class="col-md-4">
                             <label class="form-label">Search Name</label>
                             <input class="form-control" @bind="_brokerForm.SearchName" />
                         </div>
@@ -107,14 +103,10 @@ else
                             <label class="form-label">Country <span class="text-danger">*</span></label>
                             <select class="form-select" @bind="_brokerForm.Country">
                                 <option value="">Select Country...</option>
-                                <option value="DK">Denmark</option>
-                                <option value="SE">Sweden</option>
-                                <option value="NO">Norway</option>
-                                <option value="FI">Finland</option>
-                                <option value="DE">Germany</option>
-                                <option value="GB">United Kingdom</option>
-                                <option value="NL">Netherlands</option>
-                                <option value="US">United States</option>
+                                @foreach (var c in _bcCountries)
+                                {
+                                    <option value="@c.Code">@c.DisplayName (@c.Code)</option>
+                                }
                             </select>
                         </div>
                         <div class="col-md-4">
@@ -232,10 +224,6 @@ else
                             <input class="form-control" @bind="_sellerForm.Name2" />
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">ERP Account Number</label>
-                            <input class="form-control" @bind="_sellerForm.ErpAccountNumber" />
-                        </div>
-                        <div class="col-md-4">
                             <label class="form-label">Search Name</label>
                             <input class="form-control" @bind="_sellerForm.SearchName" />
                         </div>
@@ -253,7 +241,13 @@ else
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Country</label>
-                            <input class="form-control" @bind="_sellerForm.Country" />
+                            <select class="form-select" @bind="_sellerForm.Country">
+                                <option value="">Select Country...</option>
+                                @foreach (var c in _bcCountries)
+                                {
+                                    <option value="@c.Code">@c.DisplayName (@c.Code)</option>
+                                }
+                            </select>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Postal Code</label>
@@ -367,10 +361,6 @@ else
                             <input class="form-control" @bind="_buyerForm.Name2" />
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">ERP Account Number</label>
-                            <input class="form-control" @bind="_buyerForm.ErpAccountNumber" />
-                        </div>
-                        <div class="col-md-4">
                             <label class="form-label">Search Name</label>
                             <input class="form-control" @bind="_buyerForm.SearchName" />
                         </div>
@@ -388,7 +378,13 @@ else
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Country</label>
-                            <input class="form-control" @bind="_buyerForm.Country" />
+                            <select class="form-select" @bind="_buyerForm.Country">
+                                <option value="">Select Country...</option>
+                                @foreach (var c in _bcCountries)
+                                {
+                                    <option value="@c.Code">@c.DisplayName (@c.Code)</option>
+                                }
+                            </select>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Postal Code</label>
@@ -554,6 +550,7 @@ else
     private bool _showForm;
     private string? _message;
     private bool _messageIsError;
+    private List<BcCountryRegionDto> _bcCountries = new();
 
     private string SelectedRole
     {
@@ -597,6 +594,7 @@ else
         _brokers = await Api.GetBrokersAsync();
         _sellers = await Api.GetSellersAsync();
         _buyers = await Api.GetAllBuyersAsync();
+        _bcCountries = await Api.GetBcCountriesAsync();
     }
 
     private void ShowAddForm()
@@ -649,9 +647,9 @@ else
         {
             if (_editingUser.Role == "Broker")
             {
-                if (string.IsNullOrWhiteSpace(_brokerForm.CompanyName) || string.IsNullOrWhiteSpace(_brokerForm.BrokerNumber) || string.IsNullOrWhiteSpace(_brokerForm.ErpAccountNumber))
+                if (string.IsNullOrWhiteSpace(_brokerForm.CompanyName) || string.IsNullOrWhiteSpace(_brokerForm.BrokerNumber))
                 {
-                    _message = "Broker Name, Broker Number, and ERP Account Number are required.";
+                    _message = "Broker Name and Broker Number are required.";
                     _messageIsError = true;
                     return;
                 }

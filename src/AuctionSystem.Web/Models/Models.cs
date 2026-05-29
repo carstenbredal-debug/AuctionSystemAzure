@@ -47,7 +47,6 @@ public class SellerDto
     public string SellerNumber { get; set; } = "";
     public string Name { get; set; } = "";
     public string Name2 { get; set; } = "";
-    public string ErpAccountNumber { get; set; } = "";
     public string SearchName { get; set; } = "";
     public string ContactName { get; set; } = "";
     public string AddressLine1 { get; set; } = "";
@@ -84,7 +83,6 @@ public class BrokerDto
     public string BrokerNumber { get; set; } = "";
     public string CompanyName { get; set; } = "";
     public string CompanyName2 { get; set; } = "";
-    public string ErpAccountNumber { get; set; } = "";
     public string SearchName { get; set; } = "";
     public string ContactPerson { get; set; } = "";
     public string AddressLine1 { get; set; } = "";
@@ -113,7 +111,6 @@ public class BuyerDto
     public string BuyerNumber { get; set; } = "";
     public string Name { get; set; } = "";
     public string Name2 { get; set; } = "";
-    public string ErpAccountNumber { get; set; } = "";
     public string SearchName { get; set; } = "";
     public string ContactName { get; set; } = "";
     public string AddressLine1 { get; set; } = "";
@@ -445,4 +442,10 @@ public class BcCustomerDto
     public string Country { get; set; } = "";
     public string Email { get; set; } = "";
     public string CurrencyCode { get; set; } = "";
+}
+
+public class BcCountryRegionDto
+{
+    public string Code { get; set; } = "";
+    public string DisplayName { get; set; } = "";
 }

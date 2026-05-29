@@ -6,7 +6,6 @@ public class Buyer
     public string BuyerNumber { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Name2 { get; set; } = string.Empty;
-    public string ErpAccountNumber { get; set; } = string.Empty;
     public string SearchName { get; set; } = string.Empty;
     public string ContactName { get; set; } = string.Empty;
     public string AddressLine1 { get; set; } = string.Empty;
@@ -40,7 +39,6 @@ public class Buyer
     public int? BrokerId { get; set; }
     public Broker? Broker { get; set; }
     public ICollection<BrokerBuyer> BrokerBuyers { get; set; } = new List<BrokerBuyer>();
-    public string? BcCustomerId { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public ICollection<LotAllocation> Allocations { get; set; } = new List<LotAllocation>();

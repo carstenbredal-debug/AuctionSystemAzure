@@ -68,7 +68,7 @@ public class SellerFunctions
         seller.SellerNumber = dto.SellerNumber;
         seller.Name = dto.Name;
         seller.Name2 = dto.Name2;
-        seller.ErpAccountNumber = dto.ErpAccountNumber;
+
         seller.SearchName = dto.SearchName;
         seller.ContactName = dto.ContactName;
         seller.AddressLine1 = dto.AddressLine1;

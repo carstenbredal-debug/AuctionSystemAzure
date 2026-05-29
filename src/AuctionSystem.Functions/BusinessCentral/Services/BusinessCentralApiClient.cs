@@ -87,6 +87,14 @@ public class BusinessCentralApiClient
         return await PatchAsync<BcCustomer>(url, customer, customer.ETag);
     }
 
+    // ── Countries/Regions ─────────────────────────────────────
+
+    public async Task<List<BcCountryRegion>> GetCountriesRegionsAsync(Guid companyId)
+    {
+        var url = $"{_options.BaseUrl}/companies({companyId})/countriesRegions?$top=500";
+        return await GetListAsync<BcCountryRegion>(url);
+    }
+
     // ── Items ──────────────────────────────────────────────────
 
     public async Task<List<BcItem>> GetItemsAsync(Guid companyId, int top = 1000)
