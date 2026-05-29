@@ -24,6 +24,7 @@ public class BcVendor
     public string City { get; set; } = string.Empty;
 
     [JsonPropertyName("state")]
+    [JsonIgnore]
     public string State { get; set; } = string.Empty;
 
     [JsonPropertyName("country")]
@@ -63,6 +64,7 @@ public class BcVendor
     public string PaymentMethodCode { get; set; } = string.Empty;
 
     [JsonPropertyName("taxLiable")]
+    [JsonIgnore]
     public bool TaxLiable { get; set; }
 
     [JsonPropertyName("lastModifiedDateTime")]
