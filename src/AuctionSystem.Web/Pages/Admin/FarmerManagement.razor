@@ -1,12 +1,12 @@
-@page "/admin/sellers"
+@page "/admin/farmers"
 @attribute [Authorize(Roles = "Admin")]
 @inject AuctionApiClient Api
 @inject NavigationManager Nav
 
-<PageTitle>Sellers - Admin</PageTitle>
+<PageTitle>Farmers - Admin</PageTitle>
 
-<h1>Sellers</h1>
-<p class="text-muted">Click on a seller to view details.</p>
+<h1>Farmers</h1>
+<p class="text-muted">Click on a farmer to view details.</p>
 
 @if (_loading)
 {
@@ -22,11 +22,11 @@ else
         </div>
     }
 
-    <p class="small text-muted mb-3">To add a new seller, go to <a href="admin/users">Users & Roles</a> and create a user with the Seller role.</p>
+    <p class="small text-muted mb-3">To add a new farmer, go to <a href="admin/users">Users & Roles</a> and create a user with the Farmer role.</p>
 
     <div class="card">
         <div class="card-header">
-            <strong>Registered Sellers</strong> <span class="badge bg-secondary">@_items.Count</span>
+            <strong>Registered Farmers</strong> <span class="badge bg-secondary">@_items.Count</span>
         </div>
         <div class="card-body p-0">
             <table class="table table-striped table-hover mb-0">
@@ -42,12 +42,12 @@ else
                 <tbody>
                     @if (_items.Count == 0)
                     {
-                        <tr><td colspan="5" class="text-center text-muted py-4">No sellers registered.</td></tr>
+                        <tr><td colspan="5" class="text-center text-muted py-4">No farmers registered.</td></tr>
                     }
                     @foreach (var item in _items)
                     {
-                        <tr style="cursor: pointer;" @onclick="() => ViewSeller(item.Id)">
-                            <td><strong>@item.SellerNumber</strong></td>
+                        <tr style="cursor: pointer;" @onclick="() => ViewFarmer(item.Id)">
+                            <td><strong>@item.FarmerNumber</strong></td>
                             <td>@item.Name</td>
                             <td>@item.ContactEmail</td>
                             <td>@item.ContactPhone</td>
@@ -61,16 +61,16 @@ else
 }
 
 @code {
-    private List<SellerDto> _items = new();
+    private List<FarmerDto> _items = new();
     private bool _loading = true;
     private string? _message;
     private bool _messageIsError;
 
     protected override async Task OnInitializedAsync()
     {
-        _items = await Api.GetSellersAsync();
+        _items = await Api.GetFarmersAsync();
         _loading = false;
     }
 
-    private void ViewSeller(int id) => Nav.NavigateTo($"admin/sellers/{id}");
+    private void ViewFarmer(int id) => Nav.NavigateTo($"admin/farmers/{id}");
 }

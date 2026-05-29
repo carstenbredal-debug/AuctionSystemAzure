@@ -87,6 +87,41 @@ public class BusinessCentralApiClient
         return await PatchAsync<BcCustomer>(url, customer, customer.ETag);
     }
 
+    // ── Vendors ──────────────────────────────────────────────────
+
+    public async Task<List<BcVendor>> GetVendorsAsync(Guid companyId, int top = 1000)
+    {
+        var url = $"{_options.BaseUrl}/companies({companyId})/vendors?$top={top}";
+        return await GetListAsync<BcVendor>(url);
+    }
+
+    public async Task<BcVendor?> GetVendorByNumberAsync(Guid companyId, string number)
+    {
+        var url = $"{_options.BaseUrl}/companies({companyId})/vendors?$filter=number eq '{number}'";
+        var items = await GetListAsync<BcVendor>(url);
+        return items.FirstOrDefault();
+    }
+
+    public async Task<BcVendor> CreateVendorAsync(Guid companyId, BcVendor vendor)
+    {
+        var url = $"{_options.BaseUrl}/companies({companyId})/vendors";
+        return await PostAsync<BcVendor>(url, vendor);
+    }
+
+    public async Task<BcVendor> UpdateVendorAsync(Guid companyId, BcVendor vendor)
+    {
+        var url = $"{_options.BaseUrl}/companies({companyId})/vendors({vendor.Id})";
+        return await PatchAsync<BcVendor>(url, vendor, vendor.ETag);
+    }
+
+    // ── Vendor Posting Groups (OData v4) ────────────────────────
+
+    public async Task<List<BcPostingGroup>> GetVendorPostingGroupsAsync(string companyName)
+    {
+        var url = $"{ODataBaseUrl}/Company('{Uri.EscapeDataString(companyName)}')/VendorPostingGroups";
+        return await GetListAsync<BcPostingGroup>(url);
+    }
+
     // ── Countries/Regions ─────────────────────────────────────
 
     public async Task<List<BcCountryRegion>> GetCountriesRegionsAsync(Guid companyId)
@@ -101,6 +136,14 @@ public class BusinessCentralApiClient
     {
         var url = $"{_options.BaseUrl}/companies({companyId})/currencies?$top=500";
         return await GetListAsync<BcCurrency>(url);
+    }
+
+    // ── Payment Terms ───────────────────────────────────────────
+
+    public async Task<List<BcPaymentTerm>> GetPaymentTermsAsync(Guid companyId)
+    {
+        var url = $"{_options.BaseUrl}/companies({companyId})/paymentTerms?$top=500";
+        return await GetListAsync<BcPaymentTerm>(url);
     }
 
     // ── Posting Groups (OData v4 web services) ──────────────────

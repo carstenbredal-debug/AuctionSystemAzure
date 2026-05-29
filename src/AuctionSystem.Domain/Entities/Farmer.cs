@@ -1,9 +1,9 @@
 namespace AuctionSystem.Domain.Entities;
 
-public class Seller
+public class Farmer
 {
     public int Id { get; set; }
-    public string SellerNumber { get; set; } = string.Empty;
+    public string FarmerNumber { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Name2 { get; set; } = string.Empty;
     public string SearchName { get; set; } = string.Empty;

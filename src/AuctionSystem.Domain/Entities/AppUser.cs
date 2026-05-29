@@ -8,12 +8,12 @@ public class AppUser
     public string DisplayName { get; set; } = string.Empty;
     public string Role { get; set; } = string.Empty;
     public int? BrokerId { get; set; }
-    public int? SellerId { get; set; }
+    public int? FarmerId { get; set; }
     public int? BuyerId { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public Broker? Broker { get; set; }
-    public Seller? Seller { get; set; }
+    public Farmer? Farmer { get; set; }
     public Buyer? Buyer { get; set; }
 }

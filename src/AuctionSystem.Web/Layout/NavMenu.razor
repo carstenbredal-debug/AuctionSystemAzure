@@ -34,7 +34,7 @@
                 </a>
             </Authorized>
         </AuthorizeView>
-        <AuthorizeView Roles="Admin,Seller">
+        <AuthorizeView Roles="Admin,Farmer">
             <Authorized>
                 <a class="navbar-brand" href="">
                     <div class="brand-logo">
@@ -82,8 +82,8 @@
                         </NavLink>
                     </div>
                     <div class="nav-item px-3">
-                        <NavLink class="nav-link" href="admin/sellers">
-                            Sellers
+                        <NavLink class="nav-link" href="admin/farmers">
+                            Farmers
                         </NavLink>
                     </div>
                     <div class="nav-item px-3">
@@ -163,13 +163,13 @@
                     </div>
                 </AuthorizeView>
 
-                <AuthorizeView Roles="Seller">
+                <AuthorizeView Roles="Farmer">
                     <div class="nav-item px-3 mt-2">
-                        <span class="nav-link section-label"><small><strong>SELLER</strong></small></span>
+                        <span class="nav-link section-label"><small><strong>FARMER</strong></small></span>
                     </div>
                     <div class="nav-item px-3">
-                        <NavLink class="nav-link" href="seller">
-                            Seller Portal
+                        <NavLink class="nav-link" href="farmer">
+                            Farmer Portal
                         </NavLink>
                     </div>
                 </AuthorizeView>

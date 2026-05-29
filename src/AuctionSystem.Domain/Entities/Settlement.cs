@@ -18,6 +18,6 @@ public class Settlement
     public int LotId { get; set; }
     public Lot Lot { get; set; } = null!;
 
-    public int SellerId { get; set; }
-    public Seller Seller { get; set; } = null!;
+    public int FarmerId { get; set; }
+    public Farmer Farmer { get; set; } = null!;
 }

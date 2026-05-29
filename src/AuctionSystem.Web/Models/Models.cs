@@ -5,7 +5,7 @@ public enum LotStatus { Pending, Active, Sold, Unsold, Withdrawn, Broker }
 public enum BidStatus { Active, Outbid, Winning, Won, Cancelled }
 public enum AllocationStatus { Pending, Allocated, Delivered, Cancelled }
 public enum InvoiceStatus { Draft, Issued, Sent, Paid, Overdue, Cancelled }
-public enum SettlementStatus { Pending, InvoiceGenerated, PaymentReceived, SettledWithSeller, Completed, Disputed }
+public enum SettlementStatus { Pending, InvoiceGenerated, PaymentReceived, SettledWithFarmer, Completed, Disputed }
 
 public class AuctionDto
 {
@@ -36,15 +36,15 @@ public class LotDto
     public LotStatus Status { get; set; }
     public int AuctionId { get; set; }
     public AuctionDto? Auction { get; set; }
-    public int SellerId { get; set; }
-    public SellerDto? Seller { get; set; }
+    public int FarmerId { get; set; }
+    public FarmerDto? Farmer { get; set; }
     public List<BidDto> Bids { get; set; } = new();
 }
 
-public class SellerDto
+public class FarmerDto
 {
     public int Id { get; set; }
-    public string SellerNumber { get; set; } = "";
+    public string FarmerNumber { get; set; } = "";
     public string Name { get; set; } = "";
     public string Name2 { get; set; } = "";
     public string SearchName { get; set; } = "";
@@ -143,6 +143,11 @@ public class BuyerDto
     public string Assignee { get; set; } = "";
     public bool AssignmentOfReceivable { get; set; }
     public bool IsActive { get; set; } = true;
+    public decimal CreditLimit { get; set; }
+    public string Blocked { get; set; } = "";
+    public string GenBusPostingGroup { get; set; } = "";
+    public string VatBusPostingGroup { get; set; } = "";
+    public string CustomerPostingGroup { get; set; } = "";
     public string Address { get; set; } = "";
     public int BrokerId { get; set; }
     public BrokerDto? Broker { get; set; }
@@ -219,8 +224,8 @@ public class SettlementDto
     public DateTime CreatedAt { get; set; }
     public int LotId { get; set; }
     public LotDto? Lot { get; set; }
-    public int SellerId { get; set; }
-    public SellerDto? Seller { get; set; }
+    public int FarmerId { get; set; }
+    public FarmerDto? Farmer { get; set; }
 }
 
 public class AppUserDto
@@ -231,7 +236,7 @@ public class AppUserDto
     public string DisplayName { get; set; } = "";
     public string Role { get; set; } = "";
     public int? BrokerId { get; set; }
-    public int? SellerId { get; set; }
+    public int? FarmerId { get; set; }
     public int? BuyerId { get; set; }
     public bool IsActive { get; set; } = true;
 }
@@ -285,7 +290,7 @@ public class CatalogLotDto
 public class ImportCatalogLotsRequest
 {
     public List<int> CatalogLotIds { get; set; } = new();
-    public int SellerId { get; set; }
+    public int FarmerId { get; set; }
 }
 
 public class NextUnsoldLotDto
@@ -335,7 +340,7 @@ public class DashboardStats
     public int SoldLots { get; set; }
     public int TotalBrokers { get; set; }
     public int TotalBuyers { get; set; }
-    public int TotalSellers { get; set; }
+    public int TotalFarmers { get; set; }
     public int TotalBids { get; set; }
     public int PendingInvoices { get; set; }
     public int PendingSettlements { get; set; }
@@ -466,4 +471,10 @@ public class BcPostingGroupDto
 {
     public string Code { get; set; } = "";
     public string Description { get; set; } = "";
+}
+
+public class BcPaymentTermDto
+{
+    public string Code { get; set; } = "";
+    public string DisplayName { get; set; } = "";
 }

@@ -60,7 +60,7 @@ public class AuctionService
             .OrderBy(l => l.LotNumber).ToListAsync();
 
     public async Task<Lot?> GetLotAsync(int id)
-        => await _db.Lots.Include(l => l.Seller).Include(l => l.Bids).ThenInclude(b => b.Broker)
+        => await _db.Lots.Include(l => l.Farmer).Include(l => l.Bids).ThenInclude(b => b.Broker)
             .Include(l => l.Allocations).ThenInclude(a => a.Buyer)
             .Include(l => l.Settlement)
             .FirstOrDefaultAsync(l => l.Id == id);
@@ -93,8 +93,8 @@ public class AuctionService
         return lot;
     }
 
-    public async Task<List<Lot>> GetLotsBySellerAsync(int sellerId)
-        => await _db.Lots.Where(l => l.SellerId == sellerId)
+    public async Task<List<Lot>> GetLotsByFarmerAsync(int farmerId)
+        => await _db.Lots.Where(l => l.FarmerId == farmerId)
             .Include(l => l.Auction).Include(l => l.Bids)
             .Include(l => l.Settlement)
             .OrderByDescending(l => l.Auction.ScheduledDate)

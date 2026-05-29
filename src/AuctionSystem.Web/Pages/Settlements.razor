@@ -45,13 +45,13 @@
 {
     <h4>All Settlements</h4>
     <table class="table table-striped">
-        <thead><tr><th>Number</th><th>Seller</th><th>Lot</th><th>Gross</th><th>Commission</th><th>Fees</th><th>Net</th><th>Status</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Number</th><th>Farmer</th><th>Lot</th><th>Gross</th><th>Commission</th><th>Fees</th><th>Net</th><th>Status</th><th>Actions</th></tr></thead>
         <tbody>
             @foreach (var s in allSettlements)
             {
                 <tr>
                     <td>@s.SettlementNumber</td>
-                    <td>@(s.Seller?.Name ?? "")</td>
+                    <td>@(s.Farmer?.Name ?? "")</td>
                     <td>@(s.Lot != null ? $"Lot #{s.Lot.LotNumber}" : "")</td>
                     <td>@s.GrossAmount.ToString("N2")</td>
                     <td>@s.Commission.ToString("N2")</td>

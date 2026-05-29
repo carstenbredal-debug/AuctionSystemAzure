@@ -10,13 +10,13 @@ public static class SeedData
     {
         if (db.Auctions.Any()) return;
 
-        var sellers = new[]
+        var farmers = new[]
         {
-            new Seller { SellerNumber = "SEL-001", Name = "Nordic Fur Farm", ContactEmail = "info@nordicfur.dk", ContactPhone = "+45 1234 5678", Address = "Copenhagen, Denmark" },
-            new Seller { SellerNumber = "SEL-002", Name = "Baltic Pelts Ltd", ContactEmail = "sales@balticpelts.lv", ContactPhone = "+371 2222 3333", Address = "Riga, Latvia" },
-            new Seller { SellerNumber = "SEL-003", Name = "Finnish Quality Skins", ContactEmail = "contact@fqs.fi", ContactPhone = "+358 9 1234567", Address = "Helsinki, Finland" }
+            new Farmer { FarmerNumber = "SEL-001", Name = "Nordic Fur Farm", ContactEmail = "info@nordicfur.dk", ContactPhone = "+45 1234 5678", Address = "Copenhagen, Denmark" },
+            new Farmer { FarmerNumber = "SEL-002", Name = "Baltic Pelts Ltd", ContactEmail = "sales@balticpelts.lv", ContactPhone = "+371 2222 3333", Address = "Riga, Latvia" },
+            new Farmer { FarmerNumber = "SEL-003", Name = "Finnish Quality Skins", ContactEmail = "contact@fqs.fi", ContactPhone = "+358 9 1234567", Address = "Helsinki, Finland" }
         };
-        db.Sellers.AddRange(sellers);
+        db.Farmers.AddRange(farmers);
 
         var brokers = new[]
         {
@@ -51,11 +51,11 @@ public static class SeedData
 
         var lots = new[]
         {
-            new Lot { LotNumber = 1, Description = "Premium Dark Mink Pelts", Category = "Mink", Quantity = 500, Unit = "skins", StartingPrice = 25000m, ReservePrice = 30000m, AuctionId = auction.Id, SellerId = sellers[0].Id },
-            new Lot { LotNumber = 2, Description = "Silver Fox Pelts - Grade A", Category = "Fox", Quantity = 200, Unit = "skins", StartingPrice = 40000m, ReservePrice = 45000m, AuctionId = auction.Id, SellerId = sellers[0].Id },
-            new Lot { LotNumber = 3, Description = "Baltic Brown Mink Collection", Category = "Mink", Quantity = 350, Unit = "skins", StartingPrice = 18000m, ReservePrice = 22000m, AuctionId = auction.Id, SellerId = sellers[1].Id },
-            new Lot { LotNumber = 4, Description = "Finnish Blue Fox - Premium", Category = "Fox", Quantity = 150, Unit = "skins", StartingPrice = 35000m, ReservePrice = 40000m, AuctionId = auction.Id, SellerId = sellers[2].Id },
-            new Lot { LotNumber = 5, Description = "Mixed Mink Lot - Various Grades", Category = "Mink", Quantity = 800, Unit = "skins", StartingPrice = 15000m, AuctionId = auction.Id, SellerId = sellers[1].Id }
+            new Lot { LotNumber = 1, Description = "Premium Dark Mink Pelts", Category = "Mink", Quantity = 500, Unit = "skins", StartingPrice = 25000m, ReservePrice = 30000m, AuctionId = auction.Id, FarmerId = farmers[0].Id },
+            new Lot { LotNumber = 2, Description = "Silver Fox Pelts - Grade A", Category = "Fox", Quantity = 200, Unit = "skins", StartingPrice = 40000m, ReservePrice = 45000m, AuctionId = auction.Id, FarmerId = farmers[0].Id },
+            new Lot { LotNumber = 3, Description = "Baltic Brown Mink Collection", Category = "Mink", Quantity = 350, Unit = "skins", StartingPrice = 18000m, ReservePrice = 22000m, AuctionId = auction.Id, FarmerId = farmers[1].Id },
+            new Lot { LotNumber = 4, Description = "Finnish Blue Fox - Premium", Category = "Fox", Quantity = 150, Unit = "skins", StartingPrice = 35000m, ReservePrice = 40000m, AuctionId = auction.Id, FarmerId = farmers[2].Id },
+            new Lot { LotNumber = 5, Description = "Mixed Mink Lot - Various Grades", Category = "Mink", Quantity = 800, Unit = "skins", StartingPrice = 15000m, AuctionId = auction.Id, FarmerId = farmers[1].Id }
         };
         db.Lots.AddRange(lots);
         db.SaveChanges();

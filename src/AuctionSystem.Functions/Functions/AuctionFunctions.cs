@@ -130,7 +130,7 @@ public class AuctionFunctions
             totalLots = await _db.Lots.CountAsync(),
             soldLots = await _db.Lots.CountAsync(l => l.Status == LotStatus.Sold),
             totalBrokers = await _db.Brokers.CountAsync(),
-            totalSellers = await _db.Sellers.CountAsync(),
+            totalFarmers = await _db.Farmers.CountAsync(),
             totalBuyers = await _db.Buyers.CountAsync(),
             totalBids = await _db.Bids.CountAsync(),
             pendingInvoices = await _db.Invoices.CountAsync(i => i.Status == InvoiceStatus.Issued),
@@ -150,7 +150,7 @@ public class AuctionFunctions
         {
             var tables = new[] { "InvoiceLines", "Invoices", "TakebackRequests", "LotAllocations",
                 "AuctionResults", "Settlements", "Bids", "Lots", "Auctions",
-                "BrokerBuyers", "BrokerCustomerRequests", "Buyers", "Brokers", "Sellers", "AppUsers" };
+                "BrokerBuyers", "BrokerCustomerRequests", "Buyers", "Brokers", "Farmers", "AppUsers" };
 
             // Disable FK constraints
             foreach (var t in tables)
@@ -167,7 +167,7 @@ public class AuctionFunctions
             // Get remaining counts to confirm
             var brokerCount = await _db.Brokers.CountAsync();
             var buyerCount = await _db.Buyers.CountAsync();
-            var sellerCount = await _db.Sellers.CountAsync();
+            var farmerCount = await _db.Farmers.CountAsync();
             var auctionCount = await _db.Auctions.CountAsync();
             var paramCount = await _db.SystemParameters.CountAsync();
 
@@ -180,7 +180,7 @@ public class AuctionFunctions
                 {
                     brokers = brokerCount,
                     buyers = buyerCount,
-                    sellers = sellerCount,
+                    farmers = farmerCount,
                     auctions = auctionCount,
                     systemParameters = paramCount
                 }
