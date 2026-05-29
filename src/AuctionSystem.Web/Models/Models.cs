@@ -467,3 +467,9 @@ public class BcPostingGroupDto
     public string Code { get; set; } = "";
     public string Description { get; set; } = "";
 }
+
+public class BcPaymentTermDto
+{
+    public string Code { get; set; } = "";
+    public string DisplayName { get; set; } = "";
+}

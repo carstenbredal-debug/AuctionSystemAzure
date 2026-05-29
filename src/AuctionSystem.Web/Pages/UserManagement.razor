@@ -219,7 +219,13 @@ else
                             <div class="row g-3">
                                 <div class="col-md-4">
                                     <label class="form-label">Payment Terms Code</label>
-                                    <input class="form-control" @bind="_brokerForm.PaymentTerm" />
+                                    <select class="form-select" @bind="_brokerForm.PaymentTerm">
+                                        <option value="">Select...</option>
+                                        @foreach (var t in _bcPaymentTerms)
+                                        {
+                                            <option value="@t.Code">@t.Code</option>
+                                        }
+                                    </select>
                                 </div>
                                 <div class="col-md-4">
                                     <label class="form-label">Payment Method Code</label>
@@ -576,6 +582,7 @@ else
     private List<BcPostingGroupDto> _bcGenBusPostingGroups = new();
     private List<BcPostingGroupDto> _bcVatBusPostingGroups = new();
     private List<BcPostingGroupDto> _bcCustomerPostingGroups = new();
+    private List<BcPaymentTermDto> _bcPaymentTerms = new();
 
     private string SelectedRole
     {
@@ -624,6 +631,7 @@ else
         _bcGenBusPostingGroups = await Api.GetBcGenBusPostingGroupsAsync();
         _bcVatBusPostingGroups = await Api.GetBcVatBusPostingGroupsAsync();
         _bcCustomerPostingGroups = await Api.GetBcCustomerPostingGroupsAsync();
+        _bcPaymentTerms = await Api.GetBcPaymentTermsAsync();
     }
 
     private void ShowAddForm()

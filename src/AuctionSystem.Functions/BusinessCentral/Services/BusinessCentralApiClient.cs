@@ -103,6 +103,14 @@ public class BusinessCentralApiClient
         return await GetListAsync<BcCurrency>(url);
     }
 
+    // ── Payment Terms ───────────────────────────────────────────
+
+    public async Task<List<BcPaymentTerm>> GetPaymentTermsAsync(Guid companyId)
+    {
+        var url = $"{_options.BaseUrl}/companies({companyId})/paymentTerms?$top=500";
+        return await GetListAsync<BcPaymentTerm>(url);
+    }
+
     // ── Posting Groups (OData v4 web services) ──────────────────
 
     private string ODataBaseUrl =>

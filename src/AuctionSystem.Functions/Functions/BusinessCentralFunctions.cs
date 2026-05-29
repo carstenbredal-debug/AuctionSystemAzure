@@ -96,6 +96,18 @@ public class BusinessCentralFunctions
         return await JsonResponse(req, currencies);
     }
 
+    [Function("BcGetPaymentTerms")]
+    public async Task<HttpResponseData> GetPaymentTerms(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "bc/payment-terms")] HttpRequestData req)
+    {
+        if (!EnsureConfigured(out var error))
+            return await JsonResponse(req, error!, HttpStatusCode.BadRequest);
+
+        var companyId = await _bcClient!.ResolveCompanyIdAsync();
+        var terms = await _bcClient.GetPaymentTermsAsync(companyId);
+        return await JsonResponse(req, terms);
+    }
+
     [Function("BcGetGenBusPostingGroups")]
     public async Task<HttpResponseData> GetGenBusPostingGroups(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "bc/gen-bus-posting-groups")] HttpRequestData req)
