@@ -63,6 +63,9 @@ public class BcVendor
     [JsonPropertyName("paymentMethodCode")]
     public string PaymentMethodCode { get; set; } = string.Empty;
 
+    [JsonPropertyName("vatRegistrationNo")]
+    public string VatRegistrationNo { get; set; } = string.Empty;
+
     [JsonPropertyName("taxLiable")]
     [JsonIgnore]
     public bool TaxLiable { get; set; }
