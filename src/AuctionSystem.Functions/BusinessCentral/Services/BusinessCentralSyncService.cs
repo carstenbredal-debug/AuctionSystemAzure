@@ -25,7 +25,6 @@ public class BusinessCentralSyncService
     /// <summary>
     /// Push all brokers to BC as customers. Matches by BrokerNumber.
     /// Creates new BC customers or updates existing ones.
-    /// Stores the BC customer ID on the Broker entity.
     /// </summary>
     public async Task<SyncResult> PushBrokersAsync()
     {
@@ -47,8 +46,7 @@ public class BusinessCentralSyncService
 
                 if (existing is null)
                 {
-                    var created = await _bcClient.CreateCustomerAsync(companyId, bcCustomer);
-                    broker.BcCustomerId = created.Id.ToString();
+                    await _bcClient.CreateCustomerAsync(companyId, bcCustomer);
                     result.Created++;
                     _logger.LogInformation("Created BC customer for broker {Number}", broker.BrokerNumber);
                 }
@@ -57,7 +55,6 @@ public class BusinessCentralSyncService
                     bcCustomer.Id = existing.Id;
                     bcCustomer.ETag = existing.ETag;
                     await _bcClient.UpdateCustomerAsync(companyId, bcCustomer);
-                    broker.BcCustomerId = existing.Id.ToString();
                     result.Updated++;
                     _logger.LogInformation("Updated BC customer for broker {Number}", broker.BrokerNumber);
                 }
@@ -97,8 +94,7 @@ public class BusinessCentralSyncService
 
                 if (existing is null)
                 {
-                    var created = await _bcClient.CreateCustomerAsync(companyId, bcCustomer);
-                    buyer.BcCustomerId = created.Id.ToString();
+                    await _bcClient.CreateCustomerAsync(companyId, bcCustomer);
                     result.Created++;
                     _logger.LogInformation("Created BC customer for buyer {Number}", buyer.BuyerNumber);
                 }
@@ -107,7 +103,6 @@ public class BusinessCentralSyncService
                     bcCustomer.Id = existing.Id;
                     bcCustomer.ETag = existing.ETag;
                     await _bcClient.UpdateCustomerAsync(companyId, bcCustomer);
-                    buyer.BcCustomerId = existing.Id.ToString();
                     result.Updated++;
                     _logger.LogInformation("Updated BC customer for buyer {Number}", buyer.BuyerNumber);
                 }
@@ -154,11 +149,11 @@ public class BusinessCentralSyncService
                     continue;
                 }
 
-                var buyerBcId = invoice.Buyer.BcCustomerId;
-                if (string.IsNullOrEmpty(buyerBcId))
+                var buyerBcCustomer = await _bcClient.GetCustomerByNumberAsync(companyId, invoice.Buyer.BuyerNumber);
+                if (buyerBcCustomer is null)
                 {
                     result.Failed++;
-                    result.Errors.Add($"Invoice {invoice.InvoiceNumber}: Buyer {invoice.Buyer.BuyerNumber} has no BC Customer ID. Sync buyers first.");
+                    result.Errors.Add($"Invoice {invoice.InvoiceNumber}: Buyer {invoice.Buyer.BuyerNumber} not found in BC. Sync buyers first.");
                     continue;
                 }
 
@@ -167,7 +162,7 @@ public class BusinessCentralSyncService
                     ExternalDocumentNumber = invoice.InvoiceNumber,
                     InvoiceDate = invoice.InvoiceDate.ToString("yyyy-MM-dd"),
                     DueDate = (invoice.PromptDate ?? invoice.InvoiceDate.AddDays(30)).ToString("yyyy-MM-dd"),
-                    CustomerId = Guid.Parse(buyerBcId),
+                    CustomerId = buyerBcCustomer.Id,
                     CurrencyCode = invoice.Currency == "EUR" ? "EUR" : invoice.Currency
                 };
 
@@ -256,11 +251,11 @@ public class BusinessCentralSyncService
         {
             try
             {
-                var buyerBcId = cn.Buyer.BcCustomerId;
-                if (string.IsNullOrEmpty(buyerBcId))
+                var buyerBcCustomer = await _bcClient.GetCustomerByNumberAsync(companyId, cn.Buyer.BuyerNumber);
+                if (buyerBcCustomer is null)
                 {
                     result.Failed++;
-                    result.Errors.Add($"Credit Note {cn.InvoiceNumber}: Buyer {cn.Buyer.BuyerNumber} has no BC Customer ID. Sync buyers first.");
+                    result.Errors.Add($"Credit Note {cn.InvoiceNumber}: Buyer {cn.Buyer.BuyerNumber} not found in BC. Sync buyers first.");
                     continue;
                 }
 
@@ -268,7 +263,7 @@ public class BusinessCentralSyncService
                 {
                     ExternalDocumentNumber = cn.InvoiceNumber,
                     CreditMemoDate = cn.InvoiceDate.ToString("yyyy-MM-dd"),
-                    CustomerId = Guid.Parse(buyerBcId),
+                    CustomerId = buyerBcCustomer.Id,
                     CurrencyCode = cn.Currency == "EUR" ? "EUR" : cn.Currency
                 };
 
@@ -356,14 +351,14 @@ public class BusinessCentralSyncService
             Brokers = new
             {
                 Total = brokers.Count,
-                Synced = brokers.Count(b => !string.IsNullOrEmpty(b.BcCustomerId)),
-                Unsynced = brokers.Count(b => string.IsNullOrEmpty(b.BcCustomerId))
+                Synced = brokers.Count,
+                Unsynced = 0
             },
             Buyers = new
             {
                 Total = buyers.Count,
-                Synced = buyers.Count(b => !string.IsNullOrEmpty(b.BcCustomerId)),
-                Unsynced = buyers.Count(b => string.IsNullOrEmpty(b.BcCustomerId))
+                Synced = buyers.Count,
+                Unsynced = 0
             },
             Invoices = invoices,
             CreditNotes = creditNotes
@@ -376,7 +371,7 @@ public class BusinessCentralSyncService
     {
         return new BcCustomer
         {
-            Number = $"BRK-{broker.BrokerNumber}",
+            Number = broker.BrokerNumber,
             DisplayName = broker.CompanyName,
             Type = "Company",
             AddressLine1 = broker.AddressLine1,
@@ -395,7 +390,7 @@ public class BusinessCentralSyncService
     {
         return new BcCustomer
         {
-            Number = $"BYR-{buyer.BuyerNumber}",
+            Number = buyer.BuyerNumber,
             DisplayName = buyer.Name,
             Type = "Company",
             AddressLine1 = buyer.AddressLine1,

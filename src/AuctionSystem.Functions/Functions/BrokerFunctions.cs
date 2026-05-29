@@ -33,12 +33,12 @@ public class BrokerFunctions
         var brokers = await _db.Brokers
             .Select(b => new
             {
-                b.Id, b.BrokerNumber, b.CompanyName, b.CompanyName2, b.ErpAccountNumber,
+                b.Id, b.BrokerNumber, b.CompanyName, b.CompanyName2,
                 b.SearchName, b.ContactPerson, b.AddressLine1, b.AddressLine2,
                 b.Country, b.PostalCode, b.City, b.ContactPhone, b.MobilePhone,
                 b.ContactEmail, b.HomePage, b.VatRegistrationNo, b.RegistrationNo,
                 b.CustomerGroup, b.SalesPerson, b.PaymentTerm, b.PaymentMethod,
-                b.Currency, b.Language, b.IsActive, b.Address, b.BcCustomerId, b.CreatedAt,
+                b.Currency, b.Language, b.IsActive, b.Address, b.CreatedAt,
                 BuyerCount = b.BrokerBuyers.Count
             })
             .ToListAsync();
@@ -77,7 +77,6 @@ public class BrokerFunctions
         broker.BrokerNumber = dto.BrokerNumber;
         broker.CompanyName = dto.CompanyName;
         broker.CompanyName2 = dto.CompanyName2;
-        broker.ErpAccountNumber = dto.ErpAccountNumber;
         broker.SearchName = dto.SearchName;
         broker.ContactPerson = dto.ContactPerson;
         broker.AddressLine1 = dto.AddressLine1;
@@ -150,7 +149,7 @@ public class BrokerFunctions
             .OrderBy(b => int.TryParse(b.BuyerNumber, out var n) ? n : int.MaxValue)
             .Select(b => new
             {
-                b.Id, b.BuyerNumber, b.Name, b.Name2, b.ErpAccountNumber, b.SearchName,
+                b.Id, b.BuyerNumber, b.Name, b.Name2, b.SearchName,
                 b.ContactName, b.AddressLine1, b.AddressLine2, b.Country, b.PostalCode, b.City,
                 b.ContactPhone, b.MobilePhone, b.ContactEmail, b.HomePage, b.VatRegistrationNo,
                 b.RegistrationNo, b.CustomerGroup, b.SalesPerson, b.PaymentTerm, b.PaymentMethod,
@@ -172,7 +171,7 @@ public class BrokerFunctions
         if (buyer == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
         var result = new
         {
-            buyer.Id, buyer.BuyerNumber, buyer.Name, buyer.Name2, buyer.ErpAccountNumber, buyer.SearchName,
+            buyer.Id, buyer.BuyerNumber, buyer.Name, buyer.Name2, buyer.SearchName,
             buyer.ContactName, buyer.AddressLine1, buyer.AddressLine2, buyer.Country, buyer.PostalCode, buyer.City,
             buyer.ContactPhone, buyer.MobilePhone, buyer.ContactEmail, buyer.HomePage, buyer.VatRegistrationNo,
             buyer.RegistrationNo, buyer.CustomerGroup, buyer.SalesPerson, buyer.PaymentTerm, buyer.PaymentMethod,
@@ -195,7 +194,6 @@ public class BrokerFunctions
         buyer.BuyerNumber = dto.BuyerNumber;
         buyer.Name = dto.Name;
         buyer.Name2 = dto.Name2;
-        buyer.ErpAccountNumber = dto.ErpAccountNumber;
         buyer.SearchName = dto.SearchName;
         buyer.ContactName = dto.ContactName;
         buyer.AddressLine1 = dto.AddressLine1;

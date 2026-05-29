@@ -76,7 +76,7 @@ public static class InvoicePdfService
                     var numberLabel = invoice.IsCreditNote ? "Credit note no. . :" : "Invoice number. . . :";
                     InfoRow(right, numberLabel, invoice.InvoiceNumber);
                     InfoRow(right, "Date . . . . . . . . . . :", invoice.InvoiceDate.ToString("yy-MM-dd"));
-                    InfoRow(right, "Account no . . . . :", invoice.Buyer?.ErpAccountNumber ?? "");
+                    InfoRow(right, "Buyer no . . . . . . :", invoice.Buyer?.BuyerNumber ?? "");
                     InfoRow(right, "VAT no. . . . . . . . :", invoice.Buyer?.VatRegistrationNo ?? "");
                     if (invoice.OriginalInvoice != null)
                         InfoRow(right, "Ref. invoice . . . :", invoice.OriginalInvoice.InvoiceNumber);

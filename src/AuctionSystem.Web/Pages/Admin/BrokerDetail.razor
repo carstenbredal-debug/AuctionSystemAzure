@@ -90,10 +90,6 @@ else
                             <input class="form-control" @bind="_editDto!.CompanyName2" />
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">ERP Account Number</label>
-                            <input class="form-control" @bind="_editDto!.ErpAccountNumber" />
-                        </div>
-                        <div class="col-md-4">
                             <label class="form-label">Search Name</label>
                             <input class="form-control" @bind="_editDto!.SearchName" />
                         </div>
@@ -111,7 +107,13 @@ else
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Country</label>
-                            <input class="form-control" @bind="_editDto!.Country" />
+                            <select class="form-select" @bind="_editDto!.Country">
+                                <option value="">Select Country...</option>
+                                @foreach (var c in _bcCountries)
+                                {
+                                    <option value="@c.Code">@c.DisplayName (@c.Code)</option>
+                                }
+                            </select>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Postal Code</label>
@@ -195,10 +197,6 @@ else
                         <div class="col-md-4 mb-3">
                             <small class="text-muted d-block">Broker Name 2</small>
                             <strong>@(string.IsNullOrEmpty(_broker.CompanyName2) ? "—" : _broker.CompanyName2)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">ERP Account Number</small>
-                            <strong>@(string.IsNullOrEmpty(_broker.ErpAccountNumber) ? "—" : _broker.ErpAccountNumber)</strong>
                         </div>
                         <div class="col-md-4 mb-3">
                             <small class="text-muted d-block">Search Name</small>
@@ -528,6 +526,7 @@ else
     private string? _message;
     private bool _messageIsError;
     private string _activeTab = "info";
+    private List<BcCountryRegionDto> _bcCountries = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -547,6 +546,7 @@ else
             _takebackRequests = await Api.GetTakebackRequestsByBrokerAsync(BrokerId);
             await LoadFeeParameters();
         }
+        _bcCountries = await Api.GetBcCountriesAsync();
     }
 
     private async Task LoadFeeParameters()
@@ -640,7 +640,7 @@ else
         {
             Id = _broker!.Id, BrokerNumber = _broker.BrokerNumber,
             CompanyName = _broker.CompanyName, CompanyName2 = _broker.CompanyName2,
-            ErpAccountNumber = _broker.ErpAccountNumber, SearchName = _broker.SearchName,
+            SearchName = _broker.SearchName,
             ContactPerson = _broker.ContactPerson,
             AddressLine1 = _broker.AddressLine1, AddressLine2 = _broker.AddressLine2,
             Country = _broker.Country, PostalCode = _broker.PostalCode, City = _broker.City,

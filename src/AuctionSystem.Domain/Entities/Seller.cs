@@ -6,7 +6,6 @@ public class Seller
     public string SellerNumber { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Name2 { get; set; } = string.Empty;
-    public string ErpAccountNumber { get; set; } = string.Empty;
     public string SearchName { get; set; } = string.Empty;
     public string ContactName { get; set; } = string.Empty;
     public string AddressLine1 { get; set; } = string.Empty;
@@ -37,7 +36,6 @@ public class Seller
 
     [Obsolete("Use AddressLine1 instead")]
     public string Address { get; set; } = string.Empty;
-    public string? BcCustomerId { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public ICollection<Lot> Lots { get; set; } = new List<Lot>();

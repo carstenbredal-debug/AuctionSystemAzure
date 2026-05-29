@@ -72,6 +72,18 @@ public class BusinessCentralFunctions
         return await JsonResponse(req, items);
     }
 
+    [Function("BcGetCountriesRegions")]
+    public async Task<HttpResponseData> GetCountriesRegions(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "bc/countries")] HttpRequestData req)
+    {
+        if (!EnsureConfigured(out var error))
+            return await JsonResponse(req, error!, HttpStatusCode.BadRequest);
+
+        var companyId = await _bcClient!.ResolveCompanyIdAsync();
+        var countries = await _bcClient.GetCountriesRegionsAsync(companyId);
+        return await JsonResponse(req, countries);
+    }
+
     [Function("BcSyncBrokers")]
     public async Task<HttpResponseData> SyncBrokers(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "bc/sync/brokers")] HttpRequestData req)

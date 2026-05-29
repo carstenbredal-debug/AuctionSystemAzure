@@ -381,4 +381,16 @@ public class AuctionApiClient
         if (!resp.IsSuccessStatusCode) return null;
         return await resp.Content.ReadFromJsonAsync<List<BcSyncResultDto>>();
     }
+
+    public async Task<List<BcCountryRegionDto>> GetBcCountriesAsync()
+    {
+        try
+        {
+            return await _http.GetFromJsonAsync<List<BcCountryRegionDto>>("api/bc/countries") ?? new();
+        }
+        catch
+        {
+            return new();
+        }
+    }
 }
