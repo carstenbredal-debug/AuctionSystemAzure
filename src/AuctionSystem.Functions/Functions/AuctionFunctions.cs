@@ -146,42 +146,63 @@ public class AuctionFunctions
     {
         _logger.LogWarning("RESETTING ALL DATA (except SystemParameters)");
 
-        var deleted = new Dictionary<string, int>();
+        try
+        {
+            // Single SQL batch handles FK ordering and uses NOCHECK to avoid constraint issues
+            var sql = @"
+                -- Disable FK checks
+                EXEC sp_MSforeachtable @command1='ALTER TABLE ? NOCHECK CONSTRAINT ALL', @whereand='AND SCHEMA_NAME(schema_id) = ''auction'''
 
-        var ilCount = await _db.Database.ExecuteSqlRawAsync("DELETE FROM auction.InvoiceLines");
-        deleted["InvoiceLines"] = ilCount;
-        var invCount = await _db.Database.ExecuteSqlRawAsync("DELETE FROM auction.Invoices");
-        deleted["Invoices"] = invCount;
-        var tbCount = await _db.Database.ExecuteSqlRawAsync("DELETE FROM auction.TakebackRequests");
-        deleted["TakebackRequests"] = tbCount;
-        var laCount = await _db.Database.ExecuteSqlRawAsync("DELETE FROM auction.LotAllocations");
-        deleted["LotAllocations"] = laCount;
-        var arCount = await _db.Database.ExecuteSqlRawAsync("DELETE FROM auction.AuctionResults");
-        deleted["AuctionResults"] = arCount;
-        var stCount = await _db.Database.ExecuteSqlRawAsync("DELETE FROM auction.Settlements");
-        deleted["Settlements"] = stCount;
-        var bdCount = await _db.Database.ExecuteSqlRawAsync("DELETE FROM auction.Bids");
-        deleted["Bids"] = bdCount;
-        var ltCount = await _db.Database.ExecuteSqlRawAsync("DELETE FROM auction.Lots");
-        deleted["Lots"] = ltCount;
-        var auCount = await _db.Database.ExecuteSqlRawAsync("DELETE FROM auction.Auctions");
-        deleted["Auctions"] = auCount;
-        var bbCount = await _db.Database.ExecuteSqlRawAsync("DELETE FROM auction.BrokerBuyers");
-        deleted["BrokerBuyers"] = bbCount;
-        var crCount = await _db.Database.ExecuteSqlRawAsync("DELETE FROM auction.BrokerCustomerRequests");
-        deleted["BrokerCustomerRequests"] = crCount;
-        var byCount = await _db.Database.ExecuteSqlRawAsync("DELETE FROM auction.Buyers");
-        deleted["Buyers"] = byCount;
-        var brCount = await _db.Database.ExecuteSqlRawAsync("DELETE FROM auction.Brokers");
-        deleted["Brokers"] = brCount;
-        var slCount = await _db.Database.ExecuteSqlRawAsync("DELETE FROM auction.Sellers");
-        deleted["Sellers"] = slCount;
-        var usCount = await _db.Database.ExecuteSqlRawAsync("DELETE FROM auction.AppUsers");
-        deleted["AppUsers"] = usCount;
+                -- Delete all data except SystemParameters
+                DELETE FROM auction.InvoiceLines;
+                DELETE FROM auction.Invoices;
+                DELETE FROM auction.TakebackRequests;
+                DELETE FROM auction.LotAllocations;
+                DELETE FROM auction.AuctionResults;
+                DELETE FROM auction.Settlements;
+                DELETE FROM auction.Bids;
+                DELETE FROM auction.Lots;
+                DELETE FROM auction.Auctions;
+                DELETE FROM auction.BrokerBuyers;
+                DELETE FROM auction.BrokerCustomerRequests;
+                DELETE FROM auction.Buyers;
+                DELETE FROM auction.Brokers;
+                DELETE FROM auction.Sellers;
+                DELETE FROM auction.AppUsers;
 
-        _logger.LogWarning("Reset complete: {@Deleted}", deleted);
+                -- Re-enable FK checks
+                EXEC sp_MSforeachtable @command1='ALTER TABLE ? WITH CHECK CHECK CONSTRAINT ALL', @whereand='AND SCHEMA_NAME(schema_id) = ''auction'''
+            ";
 
-        return await CreateJsonResponse(req, new { message = "All data reset (SystemParameters kept)", deleted });
+            await _db.Database.ExecuteSqlRawAsync(sql);
+
+            // Get remaining counts to confirm
+            var brokerCount = await _db.Brokers.CountAsync();
+            var buyerCount = await _db.Buyers.CountAsync();
+            var sellerCount = await _db.Sellers.CountAsync();
+            var auctionCount = await _db.Auctions.CountAsync();
+            var paramCount = await _db.SystemParameters.CountAsync();
+
+            _logger.LogWarning("Reset complete");
+
+            return await CreateJsonResponse(req, new
+            {
+                message = "All data reset (SystemParameters kept)",
+                remaining = new
+                {
+                    brokers = brokerCount,
+                    buyers = buyerCount,
+                    sellers = sellerCount,
+                    auctions = auctionCount,
+                    systemParameters = paramCount
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to reset data");
+            return await CreateJsonResponse(req, new { error = ex.Message }, System.Net.HttpStatusCode.InternalServerError);
+        }
     }
 
     private static async Task<HttpResponseData> CreateJsonResponse<T>(
