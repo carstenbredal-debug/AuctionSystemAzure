@@ -73,6 +73,11 @@ public class FarmerDto
     public string BankCountry { get; set; } = "";
     public string Assignee { get; set; } = "";
     public bool AssignmentOfReceivable { get; set; }
+    public decimal CreditLimit { get; set; }
+    public string Blocked { get; set; } = "";
+    public string GenBusPostingGroup { get; set; } = "";
+    public string VatBusPostingGroup { get; set; } = "";
+    public string VendorPostingGroup { get; set; } = "";
     public bool IsActive { get; set; } = true;
     public string Address { get; set; } = "";
 }
