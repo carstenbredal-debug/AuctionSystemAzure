@@ -287,10 +287,6 @@ else
                                 }
                             </select>
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Customer Group</label>
-                            <input class="form-control" @bind="_editDto!.CustomerGroup" />
-                        </div>
                     </div>
                 }
                 else
@@ -319,10 +315,6 @@ else
                         <div class="col-md-4 mb-2">
                             <small class="text-muted d-block">Customer Posting Group</small>
                             <strong>@(string.IsNullOrEmpty(_broker.CustomerPostingGroup) ? "—" : _broker.CustomerPostingGroup)</strong>
-                        </div>
-                        <div class="col-md-4 mb-2">
-                            <small class="text-muted d-block">Customer Group</small>
-                            <strong>@(string.IsNullOrEmpty(_broker.CustomerGroup) ? "—" : _broker.CustomerGroup)</strong>
                         </div>
                     </div>
                 }

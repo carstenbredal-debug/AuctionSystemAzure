@@ -133,10 +133,6 @@ else
                             <input class="form-control" @bind="_editDto!.RegistrationNo" />
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Customer Group</label>
-                            <input class="form-control" @bind="_editDto!.CustomerGroup" />
-                        </div>
-                        <div class="col-md-4">
                             <label class="form-label">Sales Person</label>
                             <input class="form-control" @bind="_editDto!.SalesPerson" />
                         </div>
@@ -264,10 +260,6 @@ else
                         <div class="col-md-4 mb-3">
                             <small class="text-muted d-block">Registration No</small>
                             <strong>@(string.IsNullOrEmpty(_seller.RegistrationNo) ? "—" : _seller.RegistrationNo)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Customer Group</small>
-                            <strong>@(string.IsNullOrEmpty(_seller.CustomerGroup) ? "—" : _seller.CustomerGroup)</strong>
                         </div>
                         <div class="col-md-4 mb-3">
                             <small class="text-muted d-block">Sales Person</small>
