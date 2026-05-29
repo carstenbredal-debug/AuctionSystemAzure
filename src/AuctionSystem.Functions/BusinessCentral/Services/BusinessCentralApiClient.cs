@@ -95,6 +95,37 @@ public class BusinessCentralApiClient
         return await GetListAsync<BcCountryRegion>(url);
     }
 
+    // ── Currencies ──────────────────────────────────────────────
+
+    public async Task<List<BcCurrency>> GetCurrenciesAsync(Guid companyId)
+    {
+        var url = $"{_options.BaseUrl}/companies({companyId})/currencies?$top=500";
+        return await GetListAsync<BcCurrency>(url);
+    }
+
+    // ── Posting Groups (OData v4 web services) ──────────────────
+
+    private string ODataBaseUrl =>
+        $"https://api.businesscentral.dynamics.com/v2.0/{_options.TenantId}/{_options.Environment}/ODataV4";
+
+    public async Task<List<BcPostingGroup>> GetGenBusinessPostingGroupsAsync(string companyName)
+    {
+        var url = $"{ODataBaseUrl}/Company('{Uri.EscapeDataString(companyName)}')/GenBusinessPostingGroups";
+        return await GetListAsync<BcPostingGroup>(url);
+    }
+
+    public async Task<List<BcPostingGroup>> GetVatBusinessPostingGroupsAsync(string companyName)
+    {
+        var url = $"{ODataBaseUrl}/Company('{Uri.EscapeDataString(companyName)}')/VATBusinessPostingGroups";
+        return await GetListAsync<BcPostingGroup>(url);
+    }
+
+    public async Task<List<BcPostingGroup>> GetCustomerPostingGroupsAsync(string companyName)
+    {
+        var url = $"{ODataBaseUrl}/Company('{Uri.EscapeDataString(companyName)}')/CustomerPostingGroups";
+        return await GetListAsync<BcPostingGroup>(url);
+    }
+
     // ── Items ──────────────────────────────────────────────────
 
     public async Task<List<BcItem>> GetItemsAsync(Guid companyId, int top = 1000)

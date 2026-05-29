@@ -323,6 +323,14 @@ namespace AuctionSystem.Domain.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("CustomerPostingGroup")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("GenBusPostingGroup")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("HomePage")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -359,6 +367,10 @@ namespace AuctionSystem.Domain.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("SearchName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("VatBusPostingGroup")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 

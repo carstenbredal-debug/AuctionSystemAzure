@@ -170,19 +170,47 @@ else
                                 </div>
                                 <div class="col-md-4">
                                     <label class="form-label">Currency Code</label>
-                                    <input class="form-control" @bind="_brokerForm.Currency" />
+                                    <select class="form-select" @bind="_brokerForm.Currency">
+                                        <option value="">Select Currency...</option>
+                                        @foreach (var c in _bcCurrencies)
+                                        {
+                                            <option value="@c.Code">@c.DisplayName (@c.Code)</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Gen. Bus. Posting Group</label>
+                                    <select class="form-select" @bind="_brokerForm.GenBusPostingGroup">
+                                        <option value="">Select...</option>
+                                        @foreach (var g in _bcGenBusPostingGroups)
+                                        {
+                                            <option value="@g.Code">@g.Description (@g.Code)</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">VAT Bus. Posting Group</label>
+                                    <select class="form-select" @bind="_brokerForm.VatBusPostingGroup">
+                                        <option value="">Select...</option>
+                                        @foreach (var g in _bcVatBusPostingGroups)
+                                        {
+                                            <option value="@g.Code">@g.Description (@g.Code)</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Customer Posting Group</label>
+                                    <select class="form-select" @bind="_brokerForm.CustomerPostingGroup">
+                                        <option value="">Select...</option>
+                                        @foreach (var g in _bcCustomerPostingGroups)
+                                        {
+                                            <option value="@g.Code">@g.Code</option>
+                                        }
+                                    </select>
                                 </div>
                                 <div class="col-md-4">
                                     <label class="form-label">Customer Group</label>
                                     <input class="form-control" @bind="_brokerForm.CustomerGroup" />
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label">Salesperson Code</label>
-                                    <input class="form-control" @bind="_brokerForm.SalesPerson" />
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label">Language Code</label>
-                                    <input class="form-control" @bind="_brokerForm.Language" />
                                 </div>
                             </div>
                         </div>
@@ -556,6 +584,10 @@ else
     private string? _message;
     private bool _messageIsError;
     private List<BcCountryRegionDto> _bcCountries = new();
+    private List<BcCurrencyDto> _bcCurrencies = new();
+    private List<BcPostingGroupDto> _bcGenBusPostingGroups = new();
+    private List<BcPostingGroupDto> _bcVatBusPostingGroups = new();
+    private List<BcPostingGroupDto> _bcCustomerPostingGroups = new();
 
     private string SelectedRole
     {
@@ -600,6 +632,10 @@ else
         _sellers = await Api.GetSellersAsync();
         _buyers = await Api.GetAllBuyersAsync();
         _bcCountries = await Api.GetBcCountriesAsync();
+        _bcCurrencies = await Api.GetBcCurrenciesAsync();
+        _bcGenBusPostingGroups = await Api.GetBcGenBusPostingGroupsAsync();
+        _bcVatBusPostingGroups = await Api.GetBcVatBusPostingGroupsAsync();
+        _bcCustomerPostingGroups = await Api.GetBcCustomerPostingGroupsAsync();
     }
 
     private void ShowAddForm()

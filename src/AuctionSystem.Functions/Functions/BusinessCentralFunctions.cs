@@ -84,6 +84,54 @@ public class BusinessCentralFunctions
         return await JsonResponse(req, countries);
     }
 
+    [Function("BcGetCurrencies")]
+    public async Task<HttpResponseData> GetCurrencies(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "bc/currencies")] HttpRequestData req)
+    {
+        if (!EnsureConfigured(out var error))
+            return await JsonResponse(req, error!, HttpStatusCode.BadRequest);
+
+        var companyId = await _bcClient!.ResolveCompanyIdAsync();
+        var currencies = await _bcClient.GetCurrenciesAsync(companyId);
+        return await JsonResponse(req, currencies);
+    }
+
+    [Function("BcGetGenBusPostingGroups")]
+    public async Task<HttpResponseData> GetGenBusPostingGroups(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "bc/gen-bus-posting-groups")] HttpRequestData req)
+    {
+        if (!EnsureConfigured(out var error))
+            return await JsonResponse(req, error!, HttpStatusCode.BadRequest);
+
+        var companyName = await ResolveCompanyNameAsync();
+        var groups = await _bcClient!.GetGenBusinessPostingGroupsAsync(companyName);
+        return await JsonResponse(req, groups);
+    }
+
+    [Function("BcGetVatBusPostingGroups")]
+    public async Task<HttpResponseData> GetVatBusPostingGroups(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "bc/vat-bus-posting-groups")] HttpRequestData req)
+    {
+        if (!EnsureConfigured(out var error))
+            return await JsonResponse(req, error!, HttpStatusCode.BadRequest);
+
+        var companyName = await ResolveCompanyNameAsync();
+        var groups = await _bcClient!.GetVatBusinessPostingGroupsAsync(companyName);
+        return await JsonResponse(req, groups);
+    }
+
+    [Function("BcGetCustomerPostingGroups")]
+    public async Task<HttpResponseData> GetCustomerPostingGroups(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "bc/customer-posting-groups")] HttpRequestData req)
+    {
+        if (!EnsureConfigured(out var error))
+            return await JsonResponse(req, error!, HttpStatusCode.BadRequest);
+
+        var companyName = await ResolveCompanyNameAsync();
+        var groups = await _bcClient!.GetCustomerPostingGroupsAsync(companyName);
+        return await JsonResponse(req, groups);
+    }
+
     [Function("BcSyncBrokers")]
     public async Task<HttpResponseData> SyncBrokers(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "bc/sync/brokers")] HttpRequestData req)
@@ -142,6 +190,14 @@ public class BusinessCentralFunctions
         _logger.LogInformation("Starting full Business Central sync");
         var results = await _syncService!.RunFullSyncAsync();
         return await JsonResponse(req, results);
+    }
+
+    private async Task<string> ResolveCompanyNameAsync()
+    {
+        var companyId = await _bcClient!.ResolveCompanyIdAsync();
+        var companies = await _bcClient.GetCompaniesAsync();
+        var company = companies.FirstOrDefault(c => c.Id == companyId);
+        return company?.DisplayName ?? companies.First().DisplayName;
     }
 
     private bool EnsureConfigured(out object? error)
