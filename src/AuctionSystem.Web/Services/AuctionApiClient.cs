@@ -442,6 +442,18 @@ public class AuctionApiClient
         }
     }
 
+    public async Task<List<BcPostingGroupDto>> GetBcVendorPostingGroupsAsync()
+    {
+        try
+        {
+            return await _http.GetFromJsonAsync<List<BcPostingGroupDto>>("api/bc/vendor-posting-groups") ?? new();
+        }
+        catch
+        {
+            return new();
+        }
+    }
+
     public async Task<List<BcPaymentTermDto>> GetBcPaymentTermsAsync()
     {
         try
