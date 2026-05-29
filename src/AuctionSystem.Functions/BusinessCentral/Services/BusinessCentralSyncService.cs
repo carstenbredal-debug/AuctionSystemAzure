@@ -446,7 +446,13 @@ public class BusinessCentralSyncService
             Website = broker.HomePage,
             CurrencyCode = broker.Currency == "EUR" ? "EUR" : broker.Currency,
             CreditLimit = broker.CreditLimit,
-            Blocked = string.IsNullOrEmpty(broker.Blocked) ? "_x0020_" : broker.Blocked
+            Blocked = string.IsNullOrEmpty(broker.Blocked) ? "_x0020_" : broker.Blocked,
+            GenBusPostingGroup = broker.GenBusPostingGroup,
+            VatBusPostingGroup = broker.VatBusPostingGroup,
+            CustomerPostingGroup = broker.CustomerPostingGroup,
+            PaymentTermsCode = broker.PaymentTerm,
+            PaymentMethodCode = broker.PaymentMethod,
+            VatRegistrationNo = broker.VatRegistrationNo
         };
     }
 

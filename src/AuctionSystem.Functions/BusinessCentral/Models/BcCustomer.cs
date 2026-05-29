@@ -56,6 +56,24 @@ public class BcCustomer
     [JsonPropertyName("blocked")]
     public string Blocked { get; set; } = string.Empty;
 
+    [JsonPropertyName("genBusPostingGroup")]
+    public string GenBusPostingGroup { get; set; } = string.Empty;
+
+    [JsonPropertyName("vatBusPostingGroup")]
+    public string VatBusPostingGroup { get; set; } = string.Empty;
+
+    [JsonPropertyName("customerPostingGroup")]
+    public string CustomerPostingGroup { get; set; } = string.Empty;
+
+    [JsonPropertyName("paymentTermsCode")]
+    public string PaymentTermsCode { get; set; } = string.Empty;
+
+    [JsonPropertyName("paymentMethodCode")]
+    public string PaymentMethodCode { get; set; } = string.Empty;
+
+    [JsonPropertyName("vatRegistrationNo")]
+    public string VatRegistrationNo { get; set; } = string.Empty;
+
     [JsonPropertyName("lastModifiedDateTime")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public DateTimeOffset? LastModifiedDateTime { get; set; }
