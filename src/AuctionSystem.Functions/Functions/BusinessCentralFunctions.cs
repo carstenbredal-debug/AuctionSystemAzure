@@ -151,8 +151,9 @@ public class BusinessCentralFunctions
         if (!EnsureConfigured(out var error))
             return await JsonResponse(req, error!, HttpStatusCode.BadRequest);
 
+        var companyId = await _bcClient!.ResolveCompanyIdAsync();
         var companyName = await ResolveCompanyNameAsync();
-        var groups = await _bcClient!.GetVendorPostingGroupsAsync(companyName);
+        var groups = await _bcClient!.GetVendorPostingGroupsAsync(companyId, companyName);
         return await JsonResponse(req, groups);
     }
 

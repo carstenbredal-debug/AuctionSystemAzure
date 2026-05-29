@@ -219,7 +219,13 @@ else
                             <div class="row g-3">
                                 <div class="col-md-4">
                                     <label class="form-label">Payment Terms Code</label>
-                                    <input class="form-control" @bind="_brokerForm.PaymentTerm" />
+                                    <select class="form-select" @bind="_brokerForm.PaymentTerm">
+                                        <option value="">Select...</option>
+                                        @foreach (var t in _bcPaymentTerms)
+                                        {
+                                            <option value="@t.Code">@t.Code</option>
+                                        }
+                                    </select>
                                 </div>
                                 <div class="col-md-4">
                                     <label class="form-label">Payment Method Code</label>

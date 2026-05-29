@@ -423,15 +423,17 @@ public class BusinessCentralSyncService
 
         if (existing is null)
         {
-            await _bcClient.CreateVendorAsync(companyId, bcVendor);
+            var created = await _bcClient.CreateVendorAsync(companyId, bcVendor);
             _logger.LogInformation("Created BC vendor for broker {Number}", broker.BrokerNumber);
+            await PatchVendorVatRegAsync(companyId, created, broker.VatRegistrationNo);
         }
         else
         {
             bcVendor.Id = existing.Id;
             bcVendor.ETag = existing.ETag;
-            await _bcClient.UpdateVendorAsync(companyId, bcVendor);
+            var updated = await _bcClient.UpdateVendorAsync(companyId, bcVendor);
             _logger.LogInformation("Updated BC vendor for broker {Number}", broker.BrokerNumber);
+            await PatchVendorVatRegAsync(companyId, updated, broker.VatRegistrationNo);
         }
     }
 
@@ -463,15 +465,33 @@ public class BusinessCentralSyncService
 
         if (existing is null)
         {
-            await _bcClient.CreateVendorAsync(companyId, bcVendor);
+            var created = await _bcClient.CreateVendorAsync(companyId, bcVendor);
             _logger.LogInformation("Created BC vendor for farmer {Number}", farmer.FarmerNumber);
+            await PatchVendorVatRegAsync(companyId, created, farmer.VatRegistrationNo);
         }
         else
         {
             bcVendor.Id = existing.Id;
             bcVendor.ETag = existing.ETag;
-            await _bcClient.UpdateVendorAsync(companyId, bcVendor);
+            var updated = await _bcClient.UpdateVendorAsync(companyId, bcVendor);
             _logger.LogInformation("Updated BC vendor for farmer {Number}", farmer.FarmerNumber);
+            await PatchVendorVatRegAsync(companyId, updated, farmer.VatRegistrationNo);
+        }
+    }
+
+    private async Task PatchVendorVatRegAsync(Guid companyId, BcVendor vendor, string? vatRegNo)
+    {
+        if (string.IsNullOrEmpty(vatRegNo)) return;
+        try
+        {
+            // Use standard v2.0 API which exposes taxRegistrationNumber
+            var stdVendor = await _bcClient.GetStandardVendorByIdAsync(companyId, vendor.Id);
+            if (stdVendor != null)
+                await _bcClient.PatchVendorTaxRegistrationAsync(companyId, vendor.Id, vatRegNo, stdVendor.ETag!);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to patch VAT registration for vendor {Number}", vendor.Number);
         }
     }
 
@@ -497,7 +517,8 @@ public class BusinessCentralSyncService
             VatBusPostingGroup = broker.VatBusPostingGroup,
             VendorPostingGroup = broker.CustomerPostingGroup,
             PaymentTermsCode = broker.PaymentTerm,
-            PaymentMethodCode = broker.PaymentMethod
+            PaymentMethodCode = broker.PaymentMethod,
+            VatRegistrationNo = broker.VatRegistrationNo
         };
     }
 
@@ -542,7 +563,10 @@ public class BusinessCentralSyncService
             PhoneNumber = farmer.ContactPhone,
             Email = farmer.ContactEmail,
             Website = farmer.HomePage,
-            CurrencyCode = farmer.Currency == "EUR" ? "EUR" : farmer.Currency
+            CurrencyCode = farmer.Currency == "EUR" ? "EUR" : farmer.Currency,
+            PaymentTermsCode = farmer.PaymentTerm,
+            PaymentMethodCode = farmer.PaymentMethod,
+            VatRegistrationNo = farmer.VatRegistrationNo
         };
     }
 }

@@ -114,12 +114,52 @@ public class BusinessCentralApiClient
         return await PatchAsync<BcVendor>(url, vendor, vendor.ETag);
     }
 
-    // ── Vendor Posting Groups (OData v4) ────────────────────────
-
-    public async Task<List<BcPostingGroup>> GetVendorPostingGroupsAsync(string companyName)
+    public async Task<BcVendor?> GetStandardVendorByIdAsync(Guid companyId, Guid vendorId)
     {
-        var url = $"{ODataBaseUrl}/Company('{Uri.EscapeDataString(companyName)}')/VendorPostingGroups";
-        return await GetListAsync<BcPostingGroup>(url);
+        var url = $"{_options.BaseUrl}/companies({companyId})/vendors({vendorId})";
+        return await GetSingleAsync<BcVendor>(url);
+    }
+
+    // ── Vendor Posting Groups ────────────────────────
+
+    public async Task<List<BcPostingGroup>> GetVendorPostingGroupsAsync(Guid companyId, string companyName)
+    {
+        // Try custom API first (page 50102), fall back to OData web service
+        try
+        {
+            var url = $"{_options.CustomApiBaseUrl}/companies({companyId})/vendorPostingGroups";
+            return await GetListAsync<BcPostingGroup>(url);
+        }
+        catch
+        {
+            try
+            {
+                var url = $"{ODataBaseUrl}/Company('{Uri.EscapeDataString(companyName)}')/VendorPostingGroups";
+                return await GetListAsync<BcPostingGroup>(url);
+            }
+            catch
+            {
+                _logger.LogWarning("Could not fetch vendor posting groups from custom API or OData");
+                return new List<BcPostingGroup>();
+            }
+        }
+    }
+
+    public async Task PatchVendorTaxRegistrationAsync(Guid companyId, Guid vendorId, string vatRegNo, string etag)
+    {
+        await SetAuthHeaderAsync();
+        var url = $"{_options.BaseUrl}/companies({companyId})/vendors({vendorId})";
+        _logger.LogInformation("PATCH taxRegistrationNumber on {Url}", url);
+
+        var request = new HttpRequestMessage(HttpMethod.Patch, url)
+        {
+            Content = JsonContent.Create(new { taxRegistrationNumber = vatRegNo }, options: JsonOptions)
+        };
+        if (!string.IsNullOrEmpty(etag))
+            request.Headers.Add("If-Match", etag);
+
+        var response = await _httpClient.SendAsync(request);
+        await EnsureSuccessAsync(response);
     }
 
     // ── Countries/Regions ─────────────────────────────────────
