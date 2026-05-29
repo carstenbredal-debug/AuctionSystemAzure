@@ -68,6 +68,13 @@ using (var scope = host.Services.CreateScope())
     try
     {
         var db = scope.ServiceProvider.GetRequiredService<AuctionDbContext>();
+        // Add columns not covered by EF migrations (no Designer file)
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Brokers') AND name = 'CreditLimit')
+                ALTER TABLE auction.Brokers ADD CreditLimit decimal(18,2) NOT NULL DEFAULT 0;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Brokers') AND name = 'Blocked')
+                ALTER TABLE auction.Brokers ADD Blocked nvarchar(max) NOT NULL DEFAULT '';
+        ");
         db.Database.Migrate();
     }
     catch (Exception ex)
