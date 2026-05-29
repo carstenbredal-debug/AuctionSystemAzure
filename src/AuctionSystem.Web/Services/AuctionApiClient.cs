@@ -327,4 +327,58 @@ public class AuctionApiClient
             return new();
         }
     }
+
+    // Business Central
+    public async Task<BcStatusDto> GetBcStatusAsync()
+    {
+        try
+        {
+            return await _http.GetFromJsonAsync<BcStatusDto>("api/bc/status") ?? new();
+        }
+        catch
+        {
+            return new();
+        }
+    }
+
+    public async Task<List<BcCompanyDto>> GetBcCompaniesAsync()
+        => await _http.GetFromJsonAsync<List<BcCompanyDto>>("api/bc/companies") ?? new();
+
+    public async Task<List<BcCustomerDto>> GetBcCustomersAsync()
+        => await _http.GetFromJsonAsync<List<BcCustomerDto>>("api/bc/customers") ?? new();
+
+    public async Task<BcSyncResultDto?> SyncBrokersAsync()
+    {
+        var resp = await _http.PostAsync("api/bc/sync/brokers", null);
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<BcSyncResultDto>();
+    }
+
+    public async Task<BcSyncResultDto?> SyncBuyersAsync()
+    {
+        var resp = await _http.PostAsync("api/bc/sync/buyers", null);
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<BcSyncResultDto>();
+    }
+
+    public async Task<BcSyncResultDto?> SyncInvoicesAsync()
+    {
+        var resp = await _http.PostAsync("api/bc/sync/invoices", null);
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<BcSyncResultDto>();
+    }
+
+    public async Task<BcSyncResultDto?> SyncCreditNotesAsync()
+    {
+        var resp = await _http.PostAsync("api/bc/sync/credit-notes", null);
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<BcSyncResultDto>();
+    }
+
+    public async Task<List<BcSyncResultDto>?> SyncAllAsync()
+    {
+        var resp = await _http.PostAsync("api/bc/sync/all", null);
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<List<BcSyncResultDto>>();
+    }
 }

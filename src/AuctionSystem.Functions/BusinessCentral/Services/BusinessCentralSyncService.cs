@@ -1,0 +1,412 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using AuctionSystem.Domain.Data;
+using AuctionSystem.Domain.Entities;
+using AuctionSystem.Functions.BusinessCentral.Models;
+
+namespace AuctionSystem.Functions.BusinessCentral.Services;
+
+public class BusinessCentralSyncService
+{
+    private readonly BusinessCentralApiClient _bcClient;
+    private readonly AuctionDbContext _db;
+    private readonly ILogger<BusinessCentralSyncService> _logger;
+
+    public BusinessCentralSyncService(
+        BusinessCentralApiClient bcClient,
+        AuctionDbContext db,
+        ILogger<BusinessCentralSyncService> logger)
+    {
+        _bcClient = bcClient;
+        _db = db;
+        _logger = logger;
+    }
+
+    /// <summary>
+    /// Push all brokers to BC as customers. Matches by BrokerNumber.
+    /// Creates new BC customers or updates existing ones.
+    /// Stores the BC customer ID on the Broker entity.
+    /// </summary>
+    public async Task<SyncResult> PushBrokersAsync()
+    {
+        var result = new SyncResult { Direction = "Push", EntityType = "Broker → BC Customer" };
+
+        var brokers = await _db.Set<Broker>()
+            .Where(b => b.IsActive)
+            .ToListAsync();
+
+        result.TotalProcessed = brokers.Count;
+        var companyId = await _bcClient.ResolveCompanyIdAsync();
+
+        foreach (var broker in brokers)
+        {
+            try
+            {
+                var bcCustomer = MapBrokerToCustomer(broker);
+                var existing = await _bcClient.GetCustomerByNumberAsync(companyId, bcCustomer.Number);
+
+                if (existing is null)
+                {
+                    var created = await _bcClient.CreateCustomerAsync(companyId, bcCustomer);
+                    broker.BcCustomerId = created.Id.ToString();
+                    result.Created++;
+                    _logger.LogInformation("Created BC customer for broker {Number}", broker.BrokerNumber);
+                }
+                else
+                {
+                    bcCustomer.Id = existing.Id;
+                    bcCustomer.ETag = existing.ETag;
+                    await _bcClient.UpdateCustomerAsync(companyId, bcCustomer);
+                    broker.BcCustomerId = existing.Id.ToString();
+                    result.Updated++;
+                    _logger.LogInformation("Updated BC customer for broker {Number}", broker.BrokerNumber);
+                }
+            }
+            catch (Exception ex)
+            {
+                result.Failed++;
+                result.Errors.Add($"Broker {broker.BrokerNumber}: {ex.Message}");
+                _logger.LogError(ex, "Failed to sync broker {Number}", broker.BrokerNumber);
+            }
+        }
+
+        await _db.SaveChangesAsync();
+        return result;
+    }
+
+    /// <summary>
+    /// Push all buyers to BC as customers. Matches by BuyerNumber.
+    /// </summary>
+    public async Task<SyncResult> PushBuyersAsync()
+    {
+        var result = new SyncResult { Direction = "Push", EntityType = "Buyer → BC Customer" };
+
+        var buyers = await _db.Set<Buyer>()
+            .Where(b => b.IsActive)
+            .ToListAsync();
+
+        result.TotalProcessed = buyers.Count;
+        var companyId = await _bcClient.ResolveCompanyIdAsync();
+
+        foreach (var buyer in buyers)
+        {
+            try
+            {
+                var bcCustomer = MapBuyerToCustomer(buyer);
+                var existing = await _bcClient.GetCustomerByNumberAsync(companyId, bcCustomer.Number);
+
+                if (existing is null)
+                {
+                    var created = await _bcClient.CreateCustomerAsync(companyId, bcCustomer);
+                    buyer.BcCustomerId = created.Id.ToString();
+                    result.Created++;
+                    _logger.LogInformation("Created BC customer for buyer {Number}", buyer.BuyerNumber);
+                }
+                else
+                {
+                    bcCustomer.Id = existing.Id;
+                    bcCustomer.ETag = existing.ETag;
+                    await _bcClient.UpdateCustomerAsync(companyId, bcCustomer);
+                    buyer.BcCustomerId = existing.Id.ToString();
+                    result.Updated++;
+                    _logger.LogInformation("Updated BC customer for buyer {Number}", buyer.BuyerNumber);
+                }
+            }
+            catch (Exception ex)
+            {
+                result.Failed++;
+                result.Errors.Add($"Buyer {buyer.BuyerNumber}: {ex.Message}");
+                _logger.LogError(ex, "Failed to sync buyer {Number}", buyer.BuyerNumber);
+            }
+        }
+
+        await _db.SaveChangesAsync();
+        return result;
+    }
+
+    /// <summary>
+    /// Push invoices (non-credit-notes) to BC as Sales Invoices.
+    /// Matches by InvoiceNumber as ExternalDocumentNumber.
+    /// </summary>
+    public async Task<SyncResult> PushInvoicesAsync()
+    {
+        var result = new SyncResult { Direction = "Push", EntityType = "Invoice → BC Sales Invoice" };
+
+        var invoices = await _db.Set<Invoice>()
+            .Include(i => i.Buyer)
+            .Include(i => i.Broker)
+            .Include(i => i.Lines)
+            .Where(i => !i.IsCreditNote)
+            .ToListAsync();
+
+        result.TotalProcessed = invoices.Count;
+        var companyId = await _bcClient.ResolveCompanyIdAsync();
+
+        foreach (var invoice in invoices)
+        {
+            try
+            {
+                var existing = await _bcClient.GetSalesInvoiceByExternalDocAsync(companyId, invoice.InvoiceNumber);
+                if (existing is not null)
+                {
+                    result.Skipped++;
+                    _logger.LogInformation("Invoice {Number} already exists in BC, skipping", invoice.InvoiceNumber);
+                    continue;
+                }
+
+                var buyerBcId = invoice.Buyer.BcCustomerId;
+                if (string.IsNullOrEmpty(buyerBcId))
+                {
+                    result.Failed++;
+                    result.Errors.Add($"Invoice {invoice.InvoiceNumber}: Buyer {invoice.Buyer.BuyerNumber} has no BC Customer ID. Sync buyers first.");
+                    continue;
+                }
+
+                var bcInvoice = new BcSalesInvoice
+                {
+                    ExternalDocumentNumber = invoice.InvoiceNumber,
+                    InvoiceDate = invoice.InvoiceDate.ToString("yyyy-MM-dd"),
+                    DueDate = (invoice.PromptDate ?? invoice.InvoiceDate.AddDays(30)).ToString("yyyy-MM-dd"),
+                    CustomerId = Guid.Parse(buyerBcId),
+                    CurrencyCode = invoice.Currency == "EUR" ? "EUR" : invoice.Currency
+                };
+
+                var created = await _bcClient.CreateSalesInvoiceAsync(companyId, bcInvoice);
+
+                int seq = 10000;
+                foreach (var line in invoice.Lines)
+                {
+                    var bcLine = new BcSalesInvoiceLine
+                    {
+                        DocumentId = created.Id,
+                        Sequence = seq,
+                        LineType = "Comment",
+                        Description = $"Lot {line.LotNumber}: {line.Description} ({line.Skins} skins)",
+                        Quantity = line.Skins,
+                        UnitPrice = line.PricePerSkin,
+                        LineAmount = line.HammerPrice
+                    };
+                    await _bcClient.CreateSalesInvoiceLineAsync(companyId, created.Id, bcLine);
+                    seq += 10000;
+                }
+
+                if (invoice.AuctionFee != 0)
+                {
+                    var feeLine = new BcSalesInvoiceLine
+                    {
+                        DocumentId = created.Id,
+                        Sequence = seq,
+                        LineType = "Comment",
+                        Description = "Auction Fee",
+                        Quantity = 1,
+                        UnitPrice = invoice.AuctionFee,
+                        LineAmount = invoice.AuctionFee
+                    };
+                    await _bcClient.CreateSalesInvoiceLineAsync(companyId, created.Id, feeLine);
+                    seq += 10000;
+                }
+
+                if (invoice.Commission != 0)
+                {
+                    var commLine = new BcSalesInvoiceLine
+                    {
+                        DocumentId = created.Id,
+                        Sequence = seq,
+                        LineType = "Comment",
+                        Description = "Commission",
+                        Quantity = 1,
+                        UnitPrice = invoice.Commission,
+                        LineAmount = invoice.Commission
+                    };
+                    await _bcClient.CreateSalesInvoiceLineAsync(companyId, created.Id, commLine);
+                }
+
+                result.Created++;
+                _logger.LogInformation("Created BC sales invoice for {Number}", invoice.InvoiceNumber);
+            }
+            catch (Exception ex)
+            {
+                result.Failed++;
+                result.Errors.Add($"Invoice {invoice.InvoiceNumber}: {ex.Message}");
+                _logger.LogError(ex, "Failed to sync invoice {Number}", invoice.InvoiceNumber);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Push credit notes to BC as Sales Credit Memos.
+    /// </summary>
+    public async Task<SyncResult> PushCreditNotesAsync()
+    {
+        var result = new SyncResult { Direction = "Push", EntityType = "Credit Note → BC Sales Credit Memo" };
+
+        var creditNotes = await _db.Set<Invoice>()
+            .Include(i => i.Buyer)
+            .Include(i => i.Broker)
+            .Include(i => i.Lines)
+            .Where(i => i.IsCreditNote)
+            .ToListAsync();
+
+        result.TotalProcessed = creditNotes.Count;
+        var companyId = await _bcClient.ResolveCompanyIdAsync();
+
+        foreach (var cn in creditNotes)
+        {
+            try
+            {
+                var buyerBcId = cn.Buyer.BcCustomerId;
+                if (string.IsNullOrEmpty(buyerBcId))
+                {
+                    result.Failed++;
+                    result.Errors.Add($"Credit Note {cn.InvoiceNumber}: Buyer {cn.Buyer.BuyerNumber} has no BC Customer ID. Sync buyers first.");
+                    continue;
+                }
+
+                var bcCreditMemo = new BcSalesCreditMemo
+                {
+                    ExternalDocumentNumber = cn.InvoiceNumber,
+                    CreditMemoDate = cn.InvoiceDate.ToString("yyyy-MM-dd"),
+                    CustomerId = Guid.Parse(buyerBcId),
+                    CurrencyCode = cn.Currency == "EUR" ? "EUR" : cn.Currency
+                };
+
+                var created = await _bcClient.CreateSalesCreditMemoAsync(companyId, bcCreditMemo);
+
+                int seq = 10000;
+                foreach (var line in cn.Lines)
+                {
+                    var bcLine = new BcSalesCreditMemoLine
+                    {
+                        DocumentId = created.Id,
+                        Sequence = seq,
+                        LineType = "Comment",
+                        Description = $"Lot {line.LotNumber}: {line.Description} ({line.Skins} skins)",
+                        Quantity = Math.Abs(line.Skins),
+                        UnitPrice = Math.Abs(line.PricePerSkin),
+                        LineAmount = Math.Abs(line.HammerPrice)
+                    };
+                    await _bcClient.CreateSalesCreditMemoLineAsync(companyId, created.Id, bcLine);
+                    seq += 10000;
+                }
+
+                result.Created++;
+                _logger.LogInformation("Created BC sales credit memo for {Number}", cn.InvoiceNumber);
+            }
+            catch (Exception ex)
+            {
+                result.Failed++;
+                result.Errors.Add($"Credit Note {cn.InvoiceNumber}: {ex.Message}");
+                _logger.LogError(ex, "Failed to sync credit note {Number}", cn.InvoiceNumber);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Pull customers from BC and return them (for display/reconciliation).
+    /// </summary>
+    public async Task<List<BcCustomer>> PullCustomersAsync()
+    {
+        var companyId = await _bcClient.ResolveCompanyIdAsync();
+        return await _bcClient.GetCustomersAsync(companyId);
+    }
+
+    /// <summary>
+    /// Pull items from BC.
+    /// </summary>
+    public async Task<List<BcItem>> PullItemsAsync()
+    {
+        var companyId = await _bcClient.ResolveCompanyIdAsync();
+        return await _bcClient.GetItemsAsync(companyId);
+    }
+
+    /// <summary>
+    /// Full sync: push brokers, buyers, invoices, credit notes.
+    /// </summary>
+    public async Task<List<SyncResult>> RunFullSyncAsync()
+    {
+        var results = new List<SyncResult>();
+
+        _logger.LogInformation("Starting full BC sync...");
+
+        results.Add(await PushBrokersAsync());
+        results.Add(await PushBuyersAsync());
+        results.Add(await PushInvoicesAsync());
+        results.Add(await PushCreditNotesAsync());
+
+        _logger.LogInformation("Full BC sync complete");
+        return results;
+    }
+
+    /// <summary>
+    /// Get sync status: how many entities are synced vs unsynced.
+    /// </summary>
+    public async Task<object> GetSyncStatusAsync()
+    {
+        var brokers = await _db.Set<Broker>().Where(b => b.IsActive).ToListAsync();
+        var buyers = await _db.Set<Buyer>().Where(b => b.IsActive).ToListAsync();
+        var invoices = await _db.Set<Invoice>().Where(i => !i.IsCreditNote).CountAsync();
+        var creditNotes = await _db.Set<Invoice>().Where(i => i.IsCreditNote).CountAsync();
+
+        return new
+        {
+            Brokers = new
+            {
+                Total = brokers.Count,
+                Synced = brokers.Count(b => !string.IsNullOrEmpty(b.BcCustomerId)),
+                Unsynced = brokers.Count(b => string.IsNullOrEmpty(b.BcCustomerId))
+            },
+            Buyers = new
+            {
+                Total = buyers.Count,
+                Synced = buyers.Count(b => !string.IsNullOrEmpty(b.BcCustomerId)),
+                Unsynced = buyers.Count(b => string.IsNullOrEmpty(b.BcCustomerId))
+            },
+            Invoices = invoices,
+            CreditNotes = creditNotes
+        };
+    }
+
+    // ── Mapping helpers ────────────────────────────────────────
+
+    private static BcCustomer MapBrokerToCustomer(Broker broker)
+    {
+        return new BcCustomer
+        {
+            Number = $"BRK-{broker.BrokerNumber}",
+            DisplayName = broker.CompanyName,
+            Type = "Company",
+            AddressLine1 = broker.AddressLine1,
+            AddressLine2 = broker.AddressLine2,
+            City = broker.City,
+            Country = broker.Country,
+            PostalCode = broker.PostalCode,
+            PhoneNumber = broker.ContactPhone,
+            Email = broker.ContactEmail,
+            Website = broker.HomePage,
+            CurrencyCode = broker.Currency == "EUR" ? "EUR" : broker.Currency
+        };
+    }
+
+    private static BcCustomer MapBuyerToCustomer(Buyer buyer)
+    {
+        return new BcCustomer
+        {
+            Number = $"BYR-{buyer.BuyerNumber}",
+            DisplayName = buyer.Name,
+            Type = "Company",
+            AddressLine1 = buyer.AddressLine1,
+            AddressLine2 = buyer.AddressLine2,
+            City = buyer.City,
+            Country = buyer.Country,
+            PostalCode = buyer.PostalCode,
+            PhoneNumber = buyer.ContactPhone,
+            Email = buyer.ContactEmail,
+            Website = buyer.HomePage,
+            CurrencyCode = buyer.Currency == "EUR" ? "EUR" : buyer.Currency
+        };
+    }
+}

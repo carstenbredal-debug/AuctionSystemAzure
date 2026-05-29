@@ -392,3 +392,57 @@ public class InvoiceDocDto
     public string? PdfUrl { get; set; }
     public bool IsCreditNote { get; set; }
 }
+
+// Business Central integration models
+public class BcStatusDto
+{
+    public bool Configured { get; set; }
+    public string? Message { get; set; }
+    public BcSyncStatusDto? Status { get; set; }
+}
+
+public class BcSyncStatusDto
+{
+    public BcEntityCountDto Brokers { get; set; } = new();
+    public BcEntityCountDto Buyers { get; set; } = new();
+    public int Invoices { get; set; }
+    public int CreditNotes { get; set; }
+}
+
+public class BcEntityCountDto
+{
+    public int Total { get; set; }
+    public int Synced { get; set; }
+    public int Unsynced { get; set; }
+}
+
+public class BcSyncResultDto
+{
+    public string Direction { get; set; } = "";
+    public string EntityType { get; set; } = "";
+    public int TotalProcessed { get; set; }
+    public int Created { get; set; }
+    public int Updated { get; set; }
+    public int Skipped { get; set; }
+    public int Failed { get; set; }
+    public List<string> Errors { get; set; } = new();
+    public DateTimeOffset Timestamp { get; set; }
+}
+
+public class BcCompanyDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = "";
+    public string DisplayName { get; set; } = "";
+}
+
+public class BcCustomerDto
+{
+    public Guid Id { get; set; }
+    public string Number { get; set; } = "";
+    public string DisplayName { get; set; } = "";
+    public string City { get; set; } = "";
+    public string Country { get; set; } = "";
+    public string Email { get; set; } = "";
+    public string CurrencyCode { get; set; } = "";
+}

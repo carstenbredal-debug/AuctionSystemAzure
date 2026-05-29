@@ -1,0 +1,333 @@
+@page "/admin/business-central"
+@attribute [Authorize(Roles = "Admin")]
+@inject AuctionApiClient Api
+
+<PageTitle>Business Central - Admin</PageTitle>
+
+<h1>Business Central Integration</h1>
+<p class="text-muted">Synchronize brokers, buyers, invoices, and credit notes with Microsoft Dynamics 365 Business Central.</p>
+
+@if (_loading)
+{
+    <p><em>Loading...</em></p>
+}
+else if (!_status.Configured)
+{
+    <div class="alert alert-warning">
+        <strong>Not Configured</strong> — Business Central integration requires the following environment variables on the Azure Functions app:
+        <ul class="mb-0 mt-2">
+            <li><code>BC_TENANT_ID</code> — Azure AD tenant ID</li>
+            <li><code>BC_CLIENT_ID</code> — App registration client ID</li>
+            <li><code>BC_CLIENT_SECRET</code> — App registration client secret</li>
+            <li><code>BC_ENVIRONMENT</code> — BC environment (e.g. sandbox, production)</li>
+            <li><code>BC_COMPANY_ID</code> — (Optional) Target a specific BC company by ID</li>
+        </ul>
+    </div>
+}
+else
+{
+    @if (!string.IsNullOrEmpty(_message))
+    {
+        <div class="alert @(_messageIsError ? "alert-danger" : "alert-success") alert-dismissible fade show">
+            @_message
+            <button type="button" class="btn-close" @onclick="() => _message = null"></button>
+        </div>
+    }
+
+    <!-- Sync Status Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Brokers</h5>
+                    <div class="d-flex justify-content-around">
+                        <div>
+                            <span class="badge bg-success fs-6">@_status.Status?.Brokers.Synced</span>
+                            <br /><small class="text-muted">Synced</small>
+                        </div>
+                        <div>
+                            <span class="badge bg-warning fs-6">@_status.Status?.Brokers.Unsynced</span>
+                            <br /><small class="text-muted">Unsynced</small>
+                        </div>
+                    </div>
+                    <p class="mt-2 mb-0 text-muted"><small>Total: @_status.Status?.Brokers.Total</small></p>
+                </div>
+                <div class="card-footer">
+                    <button class="btn btn-sm btn-primary w-100" @onclick="SyncBrokers" disabled="@_syncing">
+                        @if (_syncingType == "brokers") { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        Sync Brokers
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Buyers</h5>
+                    <div class="d-flex justify-content-around">
+                        <div>
+                            <span class="badge bg-success fs-6">@_status.Status?.Buyers.Synced</span>
+                            <br /><small class="text-muted">Synced</small>
+                        </div>
+                        <div>
+                            <span class="badge bg-warning fs-6">@_status.Status?.Buyers.Unsynced</span>
+                            <br /><small class="text-muted">Unsynced</small>
+                        </div>
+                    </div>
+                    <p class="mt-2 mb-0 text-muted"><small>Total: @_status.Status?.Buyers.Total</small></p>
+                </div>
+                <div class="card-footer">
+                    <button class="btn btn-sm btn-primary w-100" @onclick="SyncBuyers" disabled="@_syncing">
+                        @if (_syncingType == "buyers") { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        Sync Buyers
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Invoices</h5>
+                    <span class="badge bg-info fs-5">@_status.Status?.Invoices</span>
+                    <p class="mt-2 mb-0 text-muted"><small>Total invoices</small></p>
+                </div>
+                <div class="card-footer">
+                    <button class="btn btn-sm btn-primary w-100" @onclick="SyncInvoices" disabled="@_syncing">
+                        @if (_syncingType == "invoices") { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        Sync Invoices
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Credit Notes</h5>
+                    <span class="badge bg-secondary fs-5">@_status.Status?.CreditNotes</span>
+                    <p class="mt-2 mb-0 text-muted"><small>Total credit notes</small></p>
+                </div>
+                <div class="card-footer">
+                    <button class="btn btn-sm btn-primary w-100" @onclick="SyncCreditNotes" disabled="@_syncing">
+                        @if (_syncingType == "credit-notes") { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        Sync Credit Notes
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Full Sync Button -->
+    <div class="card mb-4">
+        <div class="card-body d-flex justify-content-between align-items-center">
+            <div>
+                <strong>Full Sync</strong>
+                <p class="mb-0 text-muted">Push all brokers, buyers, invoices, and credit notes to Business Central in one operation.</p>
+            </div>
+            <button class="btn btn-lg btn-success" @onclick="SyncAll" disabled="@_syncing">
+                @if (_syncingType == "all") { <span class="spinner-border spinner-border-sm me-1"></span> }
+                Sync All to BC
+            </button>
+        </div>
+    </div>
+
+    <!-- Sync Results -->
+    @if (_syncResults.Count > 0)
+    {
+        <div class="card mb-4">
+            <div class="card-header">
+                <strong>Sync Results</strong>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-striped mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Direction</th>
+                            <th>Entity</th>
+                            <th>Total</th>
+                            <th>Created</th>
+                            <th>Updated</th>
+                            <th>Skipped</th>
+                            <th>Failed</th>
+                            <th>Timestamp</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in _syncResults)
+                        {
+                            <tr class="@(r.Failed > 0 ? "table-danger" : "")">
+                                <td><span class="badge bg-primary">@r.Direction</span></td>
+                                <td>@r.EntityType</td>
+                                <td>@r.TotalProcessed</td>
+                                <td><span class="text-success fw-bold">@r.Created</span></td>
+                                <td><span class="text-info">@r.Updated</span></td>
+                                <td><span class="text-muted">@r.Skipped</span></td>
+                                <td><span class="text-danger fw-bold">@r.Failed</span></td>
+                                <td>@r.Timestamp.ToString("HH:mm:ss")</td>
+                            </tr>
+                            @if (r.Errors.Count > 0)
+                            {
+                                <tr>
+                                    <td colspan="8">
+                                        <div class="text-danger small">
+                                            @foreach (var err in r.Errors.Take(10))
+                                            {
+                                                <div>@err</div>
+                                            }
+                                            @if (r.Errors.Count > 10)
+                                            {
+                                                <div><em>... and @(r.Errors.Count - 10) more errors</em></div>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private bool _loading = true;
+    private bool _syncing;
+    private string? _syncingType;
+    private string? _message;
+    private bool _messageIsError;
+    private BcStatusDto _status = new();
+    private List<BcSyncResultDto> _syncResults = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadStatus();
+        _loading = false;
+    }
+
+    private async Task LoadStatus()
+    {
+        _status = await Api.GetBcStatusAsync();
+    }
+
+    private async Task SyncBrokers()
+    {
+        _syncing = true;
+        _syncingType = "brokers";
+        StateHasChanged();
+
+        var result = await Api.SyncBrokersAsync();
+        if (result is not null)
+        {
+            _syncResults.Insert(0, result);
+            _message = $"Brokers synced: {result.Created} created, {result.Updated} updated, {result.Failed} failed";
+            _messageIsError = result.Failed > 0;
+        }
+        else
+        {
+            _message = "Failed to sync brokers";
+            _messageIsError = true;
+        }
+
+        await LoadStatus();
+        _syncing = false;
+        _syncingType = null;
+    }
+
+    private async Task SyncBuyers()
+    {
+        _syncing = true;
+        _syncingType = "buyers";
+        StateHasChanged();
+
+        var result = await Api.SyncBuyersAsync();
+        if (result is not null)
+        {
+            _syncResults.Insert(0, result);
+            _message = $"Buyers synced: {result.Created} created, {result.Updated} updated, {result.Failed} failed";
+            _messageIsError = result.Failed > 0;
+        }
+        else
+        {
+            _message = "Failed to sync buyers";
+            _messageIsError = true;
+        }
+
+        await LoadStatus();
+        _syncing = false;
+        _syncingType = null;
+    }
+
+    private async Task SyncInvoices()
+    {
+        _syncing = true;
+        _syncingType = "invoices";
+        StateHasChanged();
+
+        var result = await Api.SyncInvoicesAsync();
+        if (result is not null)
+        {
+            _syncResults.Insert(0, result);
+            _message = $"Invoices synced: {result.Created} created, {result.Skipped} skipped, {result.Failed} failed";
+            _messageIsError = result.Failed > 0;
+        }
+        else
+        {
+            _message = "Failed to sync invoices";
+            _messageIsError = true;
+        }
+
+        await LoadStatus();
+        _syncing = false;
+        _syncingType = null;
+    }
+
+    private async Task SyncCreditNotes()
+    {
+        _syncing = true;
+        _syncingType = "credit-notes";
+        StateHasChanged();
+
+        var result = await Api.SyncCreditNotesAsync();
+        if (result is not null)
+        {
+            _syncResults.Insert(0, result);
+            _message = $"Credit notes synced: {result.Created} created, {result.Failed} failed";
+            _messageIsError = result.Failed > 0;
+        }
+        else
+        {
+            _message = "Failed to sync credit notes";
+            _messageIsError = true;
+        }
+
+        await LoadStatus();
+        _syncing = false;
+        _syncingType = null;
+    }
+
+    private async Task SyncAll()
+    {
+        _syncing = true;
+        _syncingType = "all";
+        StateHasChanged();
+
+        var results = await Api.SyncAllAsync();
+        if (results is not null)
+        {
+            _syncResults.InsertRange(0, results);
+            var totalCreated = results.Sum(r => r.Created);
+            var totalFailed = results.Sum(r => r.Failed);
+            _message = $"Full sync complete: {totalCreated} created, {totalFailed} failed";
+            _messageIsError = totalFailed > 0;
+        }
+        else
+        {
+            _message = "Failed to run full sync";
+            _messageIsError = true;
+        }
+
+        await LoadStatus();
+        _syncing = false;
+        _syncingType = null;
+    }
+}

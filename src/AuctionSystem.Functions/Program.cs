@@ -1,5 +1,7 @@
 using AuctionSystem.Domain.Data;
 using AuctionSystem.Domain.Services;
+using AuctionSystem.Functions.BusinessCentral.Configuration;
+using AuctionSystem.Functions.BusinessCentral.Services;
 using AuctionSystem.Functions.Services;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.EntityFrameworkCore;
@@ -24,6 +26,30 @@ var host = new HostBuilder()
         services.AddScoped<AuctionService>();
         services.AddScoped<BidService>();
         services.AddScoped<SettlementService>();
+
+        // Business Central integration
+        services.Configure<BusinessCentralOptions>(opts =>
+        {
+            opts.TenantId = context.Configuration["BC_TENANT_ID"]
+                ?? context.Configuration["Values:BC_TENANT_ID"] ?? "";
+            opts.ClientId = context.Configuration["BC_CLIENT_ID"]
+                ?? context.Configuration["Values:BC_CLIENT_ID"] ?? "";
+            opts.ClientSecret = context.Configuration["BC_CLIENT_SECRET"]
+                ?? context.Configuration["Values:BC_CLIENT_SECRET"] ?? "";
+            opts.Environment = context.Configuration["BC_ENVIRONMENT"]
+                ?? context.Configuration["Values:BC_ENVIRONMENT"] ?? "sandbox";
+            opts.CompanyId = context.Configuration["BC_COMPANY_ID"]
+                ?? context.Configuration["Values:BC_COMPANY_ID"] ?? "";
+        });
+
+        var bcTenantId = context.Configuration["BC_TENANT_ID"]
+            ?? context.Configuration["Values:BC_TENANT_ID"] ?? "";
+        if (!string.IsNullOrEmpty(bcTenantId))
+        {
+            services.AddSingleton<BusinessCentralAuthService>();
+            services.AddHttpClient<BusinessCentralApiClient>();
+            services.AddScoped<BusinessCentralSyncService>();
+        }
 
         var storageConnectionString = context.Configuration["AzureWebJobsStorage"]
             ?? context.Configuration["Values:AzureWebJobsStorage"];
