@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using AuctionSystem.Domain.Data;
 using AuctionSystem.Domain.Entities;
+using AuctionSystem.Functions.BusinessCentral.Services;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.EntityFrameworkCore;
@@ -13,6 +14,7 @@ public class BrokerFunctions
 {
     private readonly AuctionDbContext _db;
     private readonly ILogger<BrokerFunctions> _logger;
+    private readonly BusinessCentralSyncService? _bcSync;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -20,10 +22,11 @@ public class BrokerFunctions
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public BrokerFunctions(AuctionDbContext db, ILogger<BrokerFunctions> logger)
+    public BrokerFunctions(AuctionDbContext db, ILogger<BrokerFunctions> logger, BusinessCentralSyncService? bcSync = null)
     {
         _db = db;
         _logger = logger;
+        _bcSync = bcSync;
     }
 
     [Function("GetBrokers")]
@@ -63,6 +66,7 @@ public class BrokerFunctions
         if (broker == null) return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
         _db.Brokers.Add(broker);
         await _db.SaveChangesAsync();
+        await TryPushBrokerToBcAsync(broker);
         return await CreateJsonResponse(req, broker, System.Net.HttpStatusCode.Created);
     }
 
@@ -98,6 +102,7 @@ public class BrokerFunctions
         broker.Language = dto.Language;
         broker.IsActive = dto.IsActive;
         await _db.SaveChangesAsync();
+        await TryPushBrokerToBcAsync(broker);
         return await CreateJsonResponse(req, broker);
     }
 
@@ -134,6 +139,7 @@ public class BrokerFunctions
         buyer.BrokerId = brokerId > 0 ? brokerId : null;
         _db.Buyers.Add(buyer);
         await _db.SaveChangesAsync();
+        await TryPushBuyerToBcAsync(buyer);
         return await CreateJsonResponse(req, buyer, System.Net.HttpStatusCode.Created);
     }
 
@@ -223,6 +229,7 @@ public class BrokerFunctions
         buyer.IsActive = dto.IsActive;
         buyer.BrokerId = dto.BrokerId;
         await _db.SaveChangesAsync();
+        await TryPushBuyerToBcAsync(buyer);
         return await CreateJsonResponse(req, buyer);
     }
 
@@ -235,6 +242,32 @@ public class BrokerFunctions
         _db.Buyers.Remove(buyer);
         await _db.SaveChangesAsync();
         return req.CreateResponse(System.Net.HttpStatusCode.NoContent);
+    }
+
+    private async Task TryPushBrokerToBcAsync(Broker broker)
+    {
+        if (_bcSync == null) return;
+        try
+        {
+            await _bcSync.PushSingleBrokerAsync(broker);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to push broker {Number} to BC", broker.BrokerNumber);
+        }
+    }
+
+    private async Task TryPushBuyerToBcAsync(Buyer buyer)
+    {
+        if (_bcSync == null) return;
+        try
+        {
+            await _bcSync.PushSingleBuyerAsync(buyer);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to push buyer {Number} to BC", buyer.BuyerNumber);
+        }
     }
 
     private static async Task<HttpResponseData> CreateJsonResponse<T>(
