@@ -249,19 +249,47 @@ else
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Currency Code</label>
-                            <input class="form-control" @bind="_editDto!.Currency" />
+                            <select class="form-select" @bind="_editDto!.Currency">
+                                <option value="">Select Currency...</option>
+                                @foreach (var c in _bcCurrencies)
+                                {
+                                    <option value="@c.Code">@c.DisplayName (@c.Code)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Gen. Bus. Posting Group</label>
+                            <select class="form-select" @bind="_editDto!.GenBusPostingGroup">
+                                <option value="">Select...</option>
+                                @foreach (var g in _bcGenBusPostingGroups)
+                                {
+                                    <option value="@g.Code">@g.Description (@g.Code)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">VAT Bus. Posting Group</label>
+                            <select class="form-select" @bind="_editDto!.VatBusPostingGroup">
+                                <option value="">Select...</option>
+                                @foreach (var g in _bcVatBusPostingGroups)
+                                {
+                                    <option value="@g.Code">@g.Description (@g.Code)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Customer Posting Group</label>
+                            <select class="form-select" @bind="_editDto!.CustomerPostingGroup">
+                                <option value="">Select...</option>
+                                @foreach (var g in _bcCustomerPostingGroups)
+                                {
+                                    <option value="@g.Code">@g.Code</option>
+                                }
+                            </select>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Customer Group</label>
                             <input class="form-control" @bind="_editDto!.CustomerGroup" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Salesperson Code</label>
-                            <input class="form-control" @bind="_editDto!.SalesPerson" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Language Code</label>
-                            <input class="form-control" @bind="_editDto!.Language" />
                         </div>
                     </div>
                 }
@@ -281,16 +309,20 @@ else
                             <strong>@(string.IsNullOrEmpty(_broker.Currency) ? "—" : _broker.Currency)</strong>
                         </div>
                         <div class="col-md-4 mb-2">
+                            <small class="text-muted d-block">Gen. Bus. Posting Group</small>
+                            <strong>@(string.IsNullOrEmpty(_broker.GenBusPostingGroup) ? "—" : _broker.GenBusPostingGroup)</strong>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <small class="text-muted d-block">VAT Bus. Posting Group</small>
+                            <strong>@(string.IsNullOrEmpty(_broker.VatBusPostingGroup) ? "—" : _broker.VatBusPostingGroup)</strong>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <small class="text-muted d-block">Customer Posting Group</small>
+                            <strong>@(string.IsNullOrEmpty(_broker.CustomerPostingGroup) ? "—" : _broker.CustomerPostingGroup)</strong>
+                        </div>
+                        <div class="col-md-4 mb-2">
                             <small class="text-muted d-block">Customer Group</small>
                             <strong>@(string.IsNullOrEmpty(_broker.CustomerGroup) ? "—" : _broker.CustomerGroup)</strong>
-                        </div>
-                        <div class="col-md-4 mb-2">
-                            <small class="text-muted d-block">Salesperson Code</small>
-                            <strong>@(string.IsNullOrEmpty(_broker.SalesPerson) ? "—" : _broker.SalesPerson)</strong>
-                        </div>
-                        <div class="col-md-4 mb-2">
-                            <small class="text-muted d-block">Language Code</small>
-                            <strong>@(string.IsNullOrEmpty(_broker.Language) ? "—" : _broker.Language)</strong>
                         </div>
                     </div>
                 }
@@ -594,6 +626,10 @@ else
     private bool _messageIsError;
     private string _activeTab = "info";
     private List<BcCountryRegionDto> _bcCountries = new();
+    private List<BcCurrencyDto> _bcCurrencies = new();
+    private List<BcPostingGroupDto> _bcGenBusPostingGroups = new();
+    private List<BcPostingGroupDto> _bcVatBusPostingGroups = new();
+    private List<BcPostingGroupDto> _bcCustomerPostingGroups = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -614,6 +650,10 @@ else
             await LoadFeeParameters();
         }
         _bcCountries = await Api.GetBcCountriesAsync();
+        _bcCurrencies = await Api.GetBcCurrenciesAsync();
+        _bcGenBusPostingGroups = await Api.GetBcGenBusPostingGroupsAsync();
+        _bcVatBusPostingGroups = await Api.GetBcVatBusPostingGroupsAsync();
+        _bcCustomerPostingGroups = await Api.GetBcCustomerPostingGroupsAsync();
     }
 
     private async Task LoadFeeParameters()

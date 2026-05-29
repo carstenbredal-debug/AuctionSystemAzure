@@ -102,6 +102,9 @@ public class BrokerDto
     public string PaymentMethod { get; set; } = "";
     public string Currency { get; set; } = "";
     public string Language { get; set; } = "";
+    public string GenBusPostingGroup { get; set; } = "";
+    public string VatBusPostingGroup { get; set; } = "";
+    public string CustomerPostingGroup { get; set; } = "";
     public decimal CreditLimit { get; set; }
     public string Blocked { get; set; } = "";
     public bool IsActive { get; set; } = true;
@@ -450,4 +453,17 @@ public class BcCountryRegionDto
 {
     public string Code { get; set; } = "";
     public string DisplayName { get; set; } = "";
+}
+
+public class BcCurrencyDto
+{
+    public string Code { get; set; } = "";
+    public string DisplayName { get; set; } = "";
+    public string Symbol { get; set; } = "";
+}
+
+public class BcPostingGroupDto
+{
+    public string Code { get; set; } = "";
+    public string Description { get; set; } = "";
 }

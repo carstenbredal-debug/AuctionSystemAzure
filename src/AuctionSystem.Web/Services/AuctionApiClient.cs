@@ -393,4 +393,52 @@ public class AuctionApiClient
             return new();
         }
     }
+
+    public async Task<List<BcCurrencyDto>> GetBcCurrenciesAsync()
+    {
+        try
+        {
+            return await _http.GetFromJsonAsync<List<BcCurrencyDto>>("api/bc/currencies") ?? new();
+        }
+        catch
+        {
+            return new();
+        }
+    }
+
+    public async Task<List<BcPostingGroupDto>> GetBcGenBusPostingGroupsAsync()
+    {
+        try
+        {
+            return await _http.GetFromJsonAsync<List<BcPostingGroupDto>>("api/bc/gen-bus-posting-groups") ?? new();
+        }
+        catch
+        {
+            return new();
+        }
+    }
+
+    public async Task<List<BcPostingGroupDto>> GetBcVatBusPostingGroupsAsync()
+    {
+        try
+        {
+            return await _http.GetFromJsonAsync<List<BcPostingGroupDto>>("api/bc/vat-bus-posting-groups") ?? new();
+        }
+        catch
+        {
+            return new();
+        }
+    }
+
+    public async Task<List<BcPostingGroupDto>> GetBcCustomerPostingGroupsAsync()
+    {
+        try
+        {
+            return await _http.GetFromJsonAsync<List<BcPostingGroupDto>>("api/bc/customer-posting-groups") ?? new();
+        }
+        catch
+        {
+            return new();
+        }
+    }
 }

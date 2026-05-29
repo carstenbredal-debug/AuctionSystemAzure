@@ -41,7 +41,9 @@ public class BrokerFunctions
                 b.Country, b.PostalCode, b.City, b.ContactPhone, b.MobilePhone,
                 b.ContactEmail, b.HomePage, b.VatRegistrationNo, b.RegistrationNo,
                 b.CustomerGroup, b.SalesPerson, b.PaymentTerm, b.PaymentMethod,
-                b.Currency, b.Language, b.CreditLimit, b.Blocked,
+                b.Currency, b.Language,
+                b.GenBusPostingGroup, b.VatBusPostingGroup, b.CustomerPostingGroup,
+                b.CreditLimit, b.Blocked,
                 b.IsActive, b.Address, b.CreatedAt,
                 BuyerCount = b.BrokerBuyers.Count
             })
@@ -101,6 +103,9 @@ public class BrokerFunctions
         broker.PaymentMethod = dto.PaymentMethod;
         broker.Currency = dto.Currency;
         broker.Language = dto.Language;
+        broker.GenBusPostingGroup = dto.GenBusPostingGroup;
+        broker.VatBusPostingGroup = dto.VatBusPostingGroup;
+        broker.CustomerPostingGroup = dto.CustomerPostingGroup;
         broker.CreditLimit = dto.CreditLimit;
         broker.Blocked = dto.Blocked;
         broker.IsActive = dto.IsActive;

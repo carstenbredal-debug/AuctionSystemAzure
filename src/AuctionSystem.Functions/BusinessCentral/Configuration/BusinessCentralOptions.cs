@@ -13,6 +13,9 @@ public class BusinessCentralOptions
     public string BaseUrl =>
         $"https://api.businesscentral.dynamics.com/v2.0/{TenantId}/{Environment}/api/v2.0";
 
+    public string CustomApiBaseUrl =>
+        $"https://api.businesscentral.dynamics.com/v2.0/{TenantId}/{Environment}/api/auctionSystem/integration/v1.0";
+
     public bool IsConfigured =>
         !string.IsNullOrEmpty(TenantId) &&
         !string.IsNullOrEmpty(ClientId) &&
