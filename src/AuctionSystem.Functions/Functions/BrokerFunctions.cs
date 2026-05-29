@@ -190,8 +190,9 @@ public class BrokerFunctions
             buyer.ContactPhone, buyer.MobilePhone, buyer.ContactEmail, buyer.HomePage, buyer.VatRegistrationNo,
             buyer.RegistrationNo, buyer.CustomerGroup, buyer.SalesPerson, buyer.PaymentTerm, buyer.PaymentMethod,
             buyer.Currency, buyer.Language, buyer.BankName, buyer.BankAddress, buyer.BankIbanNumber, buyer.SwiftCode,
-            buyer.BankCountry, buyer.Assignee, buyer.AssignmentOfReceivable, buyer.IsActive, buyer.Address,
-            buyer.BrokerId, buyer.CreatedAt,
+            buyer.BankCountry, buyer.Assignee, buyer.AssignmentOfReceivable, buyer.IsActive,
+            buyer.CreditLimit, buyer.Blocked, buyer.GenBusPostingGroup, buyer.VatBusPostingGroup, buyer.CustomerPostingGroup,
+            buyer.Address, buyer.BrokerId, buyer.CreatedAt,
             Brokers = buyer.BrokerBuyers.Select(bb => new { bb.Broker.Id, bb.Broker.BrokerNumber, bb.Broker.CompanyName, bb.Broker.ContactEmail, bb.Broker.ContactPhone }).ToList()
         };
         return await CreateJsonResponse(req, result);
@@ -235,6 +236,11 @@ public class BrokerFunctions
         buyer.Assignee = dto.Assignee;
         buyer.AssignmentOfReceivable = dto.AssignmentOfReceivable;
         buyer.IsActive = dto.IsActive;
+        buyer.CreditLimit = dto.CreditLimit;
+        buyer.Blocked = dto.Blocked;
+        buyer.GenBusPostingGroup = dto.GenBusPostingGroup;
+        buyer.VatBusPostingGroup = dto.VatBusPostingGroup;
+        buyer.CustomerPostingGroup = dto.CustomerPostingGroup;
         buyer.BrokerId = dto.BrokerId;
         await _db.SaveChangesAsync();
         await TryPushBuyerToBcAsync(buyer);

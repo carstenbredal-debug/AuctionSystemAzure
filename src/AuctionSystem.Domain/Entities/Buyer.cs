@@ -33,6 +33,11 @@ public class Buyer
     public string Assignee { get; set; } = string.Empty;
     public bool AssignmentOfReceivable { get; set; }
     public bool IsActive { get; set; } = true;
+    public decimal CreditLimit { get; set; }
+    public string Blocked { get; set; } = string.Empty;
+    public string GenBusPostingGroup { get; set; } = string.Empty;
+    public string VatBusPostingGroup { get; set; } = string.Empty;
+    public string CustomerPostingGroup { get; set; } = string.Empty;
 
     [Obsolete("Use AddressLine1 instead")]
     public string Address { get; set; } = string.Empty;

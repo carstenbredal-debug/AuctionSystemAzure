@@ -9,7 +9,7 @@ public class AuctionDbContext : DbContext
 
     public DbSet<Auction> Auctions => Set<Auction>();
     public DbSet<Lot> Lots => Set<Lot>();
-    public DbSet<Seller> Sellers => Set<Seller>();
+    public DbSet<Farmer> Farmers => Set<Farmer>();
     public DbSet<Broker> Brokers => Set<Broker>();
     public DbSet<Buyer> Buyers => Set<Buyer>();
     public DbSet<Bid> Bids => Set<Bid>();
@@ -40,7 +40,7 @@ public class AuctionDbContext : DbContext
         {
             e.HasKey(l => l.Id);
             e.HasOne(l => l.Auction).WithMany(a => a.Lots).HasForeignKey(l => l.AuctionId);
-            e.HasOne(l => l.Seller).WithMany(s => s.Lots).HasForeignKey(l => l.SellerId).IsRequired(false);
+            e.HasOne(l => l.Farmer).WithMany(s => s.Lots).HasForeignKey(l => l.FarmerId).IsRequired(false);
             e.Property(l => l.StartingPrice).HasColumnType("decimal(18,2)");
             e.Property(l => l.ReservePrice).HasColumnType("decimal(18,2)");
             e.Property(l => l.HammerPrice).HasColumnType("decimal(18,2)");
@@ -48,11 +48,11 @@ public class AuctionDbContext : DbContext
             e.HasIndex(l => new { l.AuctionId, l.LotNumber });
         });
 
-        modelBuilder.Entity<Seller>(e =>
+        modelBuilder.Entity<Farmer>(e =>
         {
             e.HasKey(s => s.Id);
-            e.HasIndex(s => s.SellerNumber).IsUnique();
-            e.Property(s => s.SellerNumber).HasMaxLength(50).IsRequired();
+            e.HasIndex(s => s.FarmerNumber).IsUnique();
+            e.Property(s => s.FarmerNumber).HasMaxLength(50).IsRequired();
             e.Property(s => s.Name).HasMaxLength(200).IsRequired();
         });
 
@@ -129,7 +129,7 @@ public class AuctionDbContext : DbContext
             e.HasKey(s => s.Id);
             e.HasIndex(s => s.SettlementNumber).IsUnique();
             e.HasOne(s => s.Lot).WithOne(l => l.Settlement).HasForeignKey<Settlement>(s => s.LotId).OnDelete(DeleteBehavior.Restrict);
-            e.HasOne(s => s.Seller).WithMany(se => se.Settlements).HasForeignKey(s => s.SellerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(s => s.Farmer).WithMany(se => se.Settlements).HasForeignKey(s => s.FarmerId).OnDelete(DeleteBehavior.Restrict);
             e.Property(s => s.GrossAmount).HasColumnType("decimal(18,2)");
             e.Property(s => s.Commission).HasColumnType("decimal(18,2)");
             e.Property(s => s.Fees).HasColumnType("decimal(18,2)");
@@ -146,7 +146,7 @@ public class AuctionDbContext : DbContext
             e.Property(u => u.DisplayName).HasMaxLength(200).IsRequired();
             e.Property(u => u.Role).HasMaxLength(50).IsRequired();
             e.HasOne(u => u.Broker).WithMany().HasForeignKey(u => u.BrokerId).OnDelete(DeleteBehavior.Restrict);
-            e.HasOne(u => u.Seller).WithMany().HasForeignKey(u => u.SellerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(u => u.Farmer).WithMany().HasForeignKey(u => u.FarmerId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(u => u.Buyer).WithMany().HasForeignKey(u => u.BuyerId).OnDelete(DeleteBehavior.Restrict);
         });
 

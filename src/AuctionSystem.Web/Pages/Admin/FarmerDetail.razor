@@ -1,27 +1,27 @@
-@page "/admin/sellers/{SellerId:int}"
+@page "/admin/farmers/{FarmerId:int}"
 @attribute [Authorize(Roles = "Admin")]
 @inject AuctionApiClient Api
 @inject NavigationManager Nav
 
-<PageTitle>Seller Details - Admin</PageTitle>
+<PageTitle>Farmer Details - Admin</PageTitle>
 
 @if (_loading)
 {
     <p><em>Loading...</em></p>
 }
-else if (_seller == null)
+else if (_farmer == null)
 {
-    <div class="alert alert-warning">Seller not found.</div>
-    <a href="admin/sellers" class="btn btn-secondary">Back to Sellers</a>
+    <div class="alert alert-warning">Farmer not found.</div>
+    <a href="admin/farmers" class="btn btn-secondary">Back to Farmers</a>
 }
 else
 {
     <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
-            <h1>@_seller.Name</h1>
-            <p class="text-muted mb-0">Seller #@_seller.SellerNumber</p>
+            <h1>@_farmer.Name</h1>
+            <p class="text-muted mb-0">Farmer #@_farmer.FarmerNumber</p>
         </div>
-        <a href="admin/sellers" class="btn btn-outline-secondary">Back to Sellers</a>
+        <a href="admin/farmers" class="btn btn-outline-secondary">Back to Farmers</a>
     </div>
 
     @if (!string.IsNullOrEmpty(_message))
@@ -52,7 +52,7 @@ else
     {
         <div class="card">
             <div class="card-header">
-                <strong>Seller Information</strong>
+                <strong>Farmer Information</strong>
                 @if (!_editing)
                 {
                     <button class="btn btn-sm btn-outline-primary float-end" @onclick="StartEdit">Edit</button>
@@ -63,8 +63,8 @@ else
                 {
                     <div class="row g-3">
                         <div class="col-md-4">
-                            <label class="form-label">Seller Number <span class="text-danger">*</span></label>
-                            <input class="form-control" @bind="_editDto!.SellerNumber" />
+                            <label class="form-label">Farmer Number <span class="text-danger">*</span></label>
+                            <input class="form-control" @bind="_editDto!.FarmerNumber" />
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Name <span class="text-danger">*</span></label>
@@ -202,124 +202,124 @@ else
                 {
                     <div class="row">
                         <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Seller Number</small>
-                            <strong>@_seller.SellerNumber</strong>
+                            <small class="text-muted d-block">Farmer Number</small>
+                            <strong>@_farmer.FarmerNumber</strong>
                         </div>
                         <div class="col-md-4 mb-3">
                             <small class="text-muted d-block">Name</small>
-                            <strong>@_seller.Name</strong>
+                            <strong>@_farmer.Name</strong>
                         </div>
                         <div class="col-md-4 mb-3">
                             <small class="text-muted d-block">Name 2</small>
-                            <strong>@(string.IsNullOrEmpty(_seller.Name2) ? "—" : _seller.Name2)</strong>
+                            <strong>@(string.IsNullOrEmpty(_farmer.Name2) ? "—" : _farmer.Name2)</strong>
                         </div>
                         <div class="col-md-4 mb-3">
                             <small class="text-muted d-block">Search Name</small>
-                            <strong>@(string.IsNullOrEmpty(_seller.SearchName) ? "—" : _seller.SearchName)</strong>
+                            <strong>@(string.IsNullOrEmpty(_farmer.SearchName) ? "—" : _farmer.SearchName)</strong>
                         </div>
                         <div class="col-md-4 mb-3">
                             <small class="text-muted d-block">Contact Name</small>
-                            <strong>@(string.IsNullOrEmpty(_seller.ContactName) ? "—" : _seller.ContactName)</strong>
+                            <strong>@(string.IsNullOrEmpty(_farmer.ContactName) ? "—" : _farmer.ContactName)</strong>
                         </div>
                         <div class="col-md-6 mb-3">
                             <small class="text-muted d-block">Address Line 1</small>
-                            <strong>@(string.IsNullOrEmpty(_seller.AddressLine1) ? "—" : _seller.AddressLine1)</strong>
+                            <strong>@(string.IsNullOrEmpty(_farmer.AddressLine1) ? "—" : _farmer.AddressLine1)</strong>
                         </div>
                         <div class="col-md-6 mb-3">
                             <small class="text-muted d-block">Address Line 2</small>
-                            <strong>@(string.IsNullOrEmpty(_seller.AddressLine2) ? "—" : _seller.AddressLine2)</strong>
+                            <strong>@(string.IsNullOrEmpty(_farmer.AddressLine2) ? "—" : _farmer.AddressLine2)</strong>
                         </div>
                         <div class="col-md-4 mb-3">
                             <small class="text-muted d-block">Country</small>
-                            <strong>@(string.IsNullOrEmpty(_seller.Country) ? "—" : _seller.Country)</strong>
+                            <strong>@(string.IsNullOrEmpty(_farmer.Country) ? "—" : _farmer.Country)</strong>
                         </div>
                         <div class="col-md-4 mb-3">
                             <small class="text-muted d-block">Postal Code</small>
-                            <strong>@(string.IsNullOrEmpty(_seller.PostalCode) ? "—" : _seller.PostalCode)</strong>
+                            <strong>@(string.IsNullOrEmpty(_farmer.PostalCode) ? "—" : _farmer.PostalCode)</strong>
                         </div>
                         <div class="col-md-4 mb-3">
                             <small class="text-muted d-block">City</small>
-                            <strong>@(string.IsNullOrEmpty(_seller.City) ? "—" : _seller.City)</strong>
+                            <strong>@(string.IsNullOrEmpty(_farmer.City) ? "—" : _farmer.City)</strong>
                         </div>
                         <div class="col-md-4 mb-3">
                             <small class="text-muted d-block">Phone No</small>
-                            <strong>@(string.IsNullOrEmpty(_seller.ContactPhone) ? "—" : _seller.ContactPhone)</strong>
+                            <strong>@(string.IsNullOrEmpty(_farmer.ContactPhone) ? "—" : _farmer.ContactPhone)</strong>
                         </div>
                         <div class="col-md-4 mb-3">
                             <small class="text-muted d-block">Mobile Phone No</small>
-                            <strong>@(string.IsNullOrEmpty(_seller.MobilePhone) ? "—" : _seller.MobilePhone)</strong>
+                            <strong>@(string.IsNullOrEmpty(_farmer.MobilePhone) ? "—" : _farmer.MobilePhone)</strong>
                         </div>
                         <div class="col-md-4 mb-3">
                             <small class="text-muted d-block">Email</small>
-                            <strong>@(string.IsNullOrEmpty(_seller.ContactEmail) ? "—" : _seller.ContactEmail)</strong>
+                            <strong>@(string.IsNullOrEmpty(_farmer.ContactEmail) ? "—" : _farmer.ContactEmail)</strong>
                         </div>
                         <div class="col-md-4 mb-3">
                             <small class="text-muted d-block">Home Page</small>
-                            <strong>@(string.IsNullOrEmpty(_seller.HomePage) ? "—" : _seller.HomePage)</strong>
+                            <strong>@(string.IsNullOrEmpty(_farmer.HomePage) ? "—" : _farmer.HomePage)</strong>
                         </div>
                         <div class="col-md-4 mb-3">
                             <small class="text-muted d-block">VAT Registration No</small>
-                            <strong>@(string.IsNullOrEmpty(_seller.VatRegistrationNo) ? "—" : _seller.VatRegistrationNo)</strong>
+                            <strong>@(string.IsNullOrEmpty(_farmer.VatRegistrationNo) ? "—" : _farmer.VatRegistrationNo)</strong>
                         </div>
                         <div class="col-md-4 mb-3">
                             <small class="text-muted d-block">Registration No</small>
-                            <strong>@(string.IsNullOrEmpty(_seller.RegistrationNo) ? "—" : _seller.RegistrationNo)</strong>
+                            <strong>@(string.IsNullOrEmpty(_farmer.RegistrationNo) ? "—" : _farmer.RegistrationNo)</strong>
                         </div>
                         <div class="col-md-4 mb-3">
                             <small class="text-muted d-block">Customer Group</small>
-                            <strong>@(string.IsNullOrEmpty(_seller.CustomerGroup) ? "—" : _seller.CustomerGroup)</strong>
+                            <strong>@(string.IsNullOrEmpty(_farmer.CustomerGroup) ? "—" : _farmer.CustomerGroup)</strong>
                         </div>
                         <div class="col-md-4 mb-3">
                             <small class="text-muted d-block">Sales Person</small>
-                            <strong>@(string.IsNullOrEmpty(_seller.SalesPerson) ? "—" : _seller.SalesPerson)</strong>
+                            <strong>@(string.IsNullOrEmpty(_farmer.SalesPerson) ? "—" : _farmer.SalesPerson)</strong>
                         </div>
                         <div class="col-md-4 mb-3">
                             <small class="text-muted d-block">Payment Term</small>
-                            <strong>@(string.IsNullOrEmpty(_seller.PaymentTerm) ? "—" : _seller.PaymentTerm)</strong>
+                            <strong>@(string.IsNullOrEmpty(_farmer.PaymentTerm) ? "—" : _farmer.PaymentTerm)</strong>
                         </div>
                         <div class="col-md-4 mb-3">
                             <small class="text-muted d-block">Payment Method</small>
-                            <strong>@(string.IsNullOrEmpty(_seller.PaymentMethod) ? "—" : _seller.PaymentMethod)</strong>
+                            <strong>@(string.IsNullOrEmpty(_farmer.PaymentMethod) ? "—" : _farmer.PaymentMethod)</strong>
                         </div>
                         <div class="col-md-4 mb-3">
                             <small class="text-muted d-block">Currency</small>
-                            <strong>@(string.IsNullOrEmpty(_seller.Currency) ? "—" : _seller.Currency)</strong>
+                            <strong>@(string.IsNullOrEmpty(_farmer.Currency) ? "—" : _farmer.Currency)</strong>
                         </div>
                         <div class="col-md-4 mb-3">
                             <small class="text-muted d-block">Language</small>
-                            <strong>@(string.IsNullOrEmpty(_seller.Language) ? "—" : _seller.Language)</strong>
+                            <strong>@(string.IsNullOrEmpty(_farmer.Language) ? "—" : _farmer.Language)</strong>
                         </div>
                         <div class="col-md-4 mb-3">
                             <small class="text-muted d-block">Bank Name</small>
-                            <strong>@(string.IsNullOrEmpty(_seller.BankName) ? "—" : _seller.BankName)</strong>
+                            <strong>@(string.IsNullOrEmpty(_farmer.BankName) ? "—" : _farmer.BankName)</strong>
                         </div>
                         <div class="col-md-4 mb-3">
                             <small class="text-muted d-block">Bank Address</small>
-                            <strong>@(string.IsNullOrEmpty(_seller.BankAddress) ? "—" : _seller.BankAddress)</strong>
+                            <strong>@(string.IsNullOrEmpty(_farmer.BankAddress) ? "—" : _farmer.BankAddress)</strong>
                         </div>
                         <div class="col-md-4 mb-3">
                             <small class="text-muted d-block">Bank IBAN Number</small>
-                            <strong>@(string.IsNullOrEmpty(_seller.BankIbanNumber) ? "—" : _seller.BankIbanNumber)</strong>
+                            <strong>@(string.IsNullOrEmpty(_farmer.BankIbanNumber) ? "—" : _farmer.BankIbanNumber)</strong>
                         </div>
                         <div class="col-md-4 mb-3">
                             <small class="text-muted d-block">SWIFT Code</small>
-                            <strong>@(string.IsNullOrEmpty(_seller.SwiftCode) ? "—" : _seller.SwiftCode)</strong>
+                            <strong>@(string.IsNullOrEmpty(_farmer.SwiftCode) ? "—" : _farmer.SwiftCode)</strong>
                         </div>
                         <div class="col-md-4 mb-3">
                             <small class="text-muted d-block">Bank Country</small>
-                            <strong>@(string.IsNullOrEmpty(_seller.BankCountry) ? "—" : _seller.BankCountry)</strong>
+                            <strong>@(string.IsNullOrEmpty(_farmer.BankCountry) ? "—" : _farmer.BankCountry)</strong>
                         </div>
                         <div class="col-md-4 mb-3">
                             <small class="text-muted d-block">Assignee</small>
-                            <strong>@(string.IsNullOrEmpty(_seller.Assignee) ? "—" : _seller.Assignee)</strong>
+                            <strong>@(string.IsNullOrEmpty(_farmer.Assignee) ? "—" : _farmer.Assignee)</strong>
                         </div>
                         <div class="col-md-4 mb-3">
                             <small class="text-muted d-block">Assignment of Receivable</small>
-                            <strong>@(_seller.AssignmentOfReceivable ? "Yes" : "No")</strong>
+                            <strong>@(_farmer.AssignmentOfReceivable ? "Yes" : "No")</strong>
                         </div>
                         <div class="col-md-4 mb-3">
                             <small class="text-muted d-block">Is Active</small>
-                            <span class="badge bg-@(_seller.IsActive ? "success" : "secondary")">@(_seller.IsActive ? "Active" : "Inactive")</span>
+                            <span class="badge bg-@(_farmer.IsActive ? "success" : "secondary")">@(_farmer.IsActive ? "Active" : "Inactive")</span>
                         </div>
                     </div>
                 }
@@ -381,13 +381,13 @@ else
 }
 
 @code {
-    [Parameter] public int SellerId { get; set; }
+    [Parameter] public int FarmerId { get; set; }
 
-    private SellerDto? _seller;
+    private FarmerDto? _farmer;
     private List<LotDto> _lots = new();
     private bool _loading = true;
     private bool _editing;
-    private SellerDto? _editDto;
+    private FarmerDto? _editDto;
     private string? _message;
     private bool _messageIsError;
     private string _activeTab = "info";
@@ -401,33 +401,33 @@ else
 
     private async Task LoadData()
     {
-        var allSellers = await Api.GetSellersAsync();
-        _seller = allSellers.FirstOrDefault(s => s.Id == SellerId);
-        if (_seller != null)
-            _lots = await Api.GetLotsBySellerAsync(SellerId);
+        var allFarmers = await Api.GetFarmersAsync();
+        _farmer = allFarmers.FirstOrDefault(s => s.Id == FarmerId);
+        if (_farmer != null)
+            _lots = await Api.GetLotsByFarmerAsync(FarmerId);
         _bcCountries = await Api.GetBcCountriesAsync();
     }
 
     private void StartEdit()
     {
-        _editDto = new SellerDto
+        _editDto = new FarmerDto
         {
-            Id = _seller!.Id, SellerNumber = _seller.SellerNumber, Name = _seller.Name,
-            Name2 = _seller.Name2,
-            SearchName = _seller.SearchName, ContactName = _seller.ContactName,
-            AddressLine1 = _seller.AddressLine1, AddressLine2 = _seller.AddressLine2,
-            Country = _seller.Country, PostalCode = _seller.PostalCode, City = _seller.City,
-            ContactPhone = _seller.ContactPhone, MobilePhone = _seller.MobilePhone,
-            ContactEmail = _seller.ContactEmail, HomePage = _seller.HomePage,
-            VatRegistrationNo = _seller.VatRegistrationNo, RegistrationNo = _seller.RegistrationNo,
-            CustomerGroup = _seller.CustomerGroup, SalesPerson = _seller.SalesPerson,
-            PaymentTerm = _seller.PaymentTerm, PaymentMethod = _seller.PaymentMethod,
-            Currency = _seller.Currency, Language = _seller.Language,
-            BankName = _seller.BankName, BankAddress = _seller.BankAddress,
-            BankIbanNumber = _seller.BankIbanNumber, SwiftCode = _seller.SwiftCode,
-            BankCountry = _seller.BankCountry, Assignee = _seller.Assignee,
-            AssignmentOfReceivable = _seller.AssignmentOfReceivable, IsActive = _seller.IsActive,
-            Address = _seller.Address
+            Id = _farmer!.Id, FarmerNumber = _farmer.FarmerNumber, Name = _farmer.Name,
+            Name2 = _farmer.Name2,
+            SearchName = _farmer.SearchName, ContactName = _farmer.ContactName,
+            AddressLine1 = _farmer.AddressLine1, AddressLine2 = _farmer.AddressLine2,
+            Country = _farmer.Country, PostalCode = _farmer.PostalCode, City = _farmer.City,
+            ContactPhone = _farmer.ContactPhone, MobilePhone = _farmer.MobilePhone,
+            ContactEmail = _farmer.ContactEmail, HomePage = _farmer.HomePage,
+            VatRegistrationNo = _farmer.VatRegistrationNo, RegistrationNo = _farmer.RegistrationNo,
+            CustomerGroup = _farmer.CustomerGroup, SalesPerson = _farmer.SalesPerson,
+            PaymentTerm = _farmer.PaymentTerm, PaymentMethod = _farmer.PaymentMethod,
+            Currency = _farmer.Currency, Language = _farmer.Language,
+            BankName = _farmer.BankName, BankAddress = _farmer.BankAddress,
+            BankIbanNumber = _farmer.BankIbanNumber, SwiftCode = _farmer.SwiftCode,
+            BankCountry = _farmer.BankCountry, Assignee = _farmer.Assignee,
+            AssignmentOfReceivable = _farmer.AssignmentOfReceivable, IsActive = _farmer.IsActive,
+            Address = _farmer.Address
         };
         _editing = true;
         _message = null;
@@ -438,11 +438,11 @@ else
     private async Task SaveEdit()
     {
         if (_editDto == null) return;
-        if (string.IsNullOrWhiteSpace(_editDto.SellerNumber) || string.IsNullOrWhiteSpace(_editDto.Name))
-        { _message = "Seller Number and Name are required."; _messageIsError = true; return; }
+        if (string.IsNullOrWhiteSpace(_editDto.FarmerNumber) || string.IsNullOrWhiteSpace(_editDto.Name))
+        { _message = "Farmer Number and Name are required."; _messageIsError = true; return; }
 
-        await Api.UpdateSellerAsync(_editDto.Id, _editDto);
-        _message = "Seller updated."; _messageIsError = false;
+        await Api.UpdateFarmerAsync(_editDto.Id, _editDto);
+        _message = "Farmer updated."; _messageIsError = false;
         _editing = false; _editDto = null;
         await LoadData();
     }

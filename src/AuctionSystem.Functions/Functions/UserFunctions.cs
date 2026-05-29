@@ -42,7 +42,7 @@ public class UserFunctions
     {
         var users = await _db.AppUsers
             .Include(u => u.Broker)
-            .Include(u => u.Seller)
+            .Include(u => u.Farmer)
             .Include(u => u.Buyer)
             .OrderBy(u => u.DisplayName)
             .ToListAsync();
@@ -79,7 +79,7 @@ public class UserFunctions
             DisplayName = dto.DisplayName,
             Role = dto.Role,
             BrokerId = dto.BrokerId,
-            SellerId = dto.SellerId,
+            FarmerId = dto.FarmerId,
             BuyerId = dto.BuyerId,
             IsActive = true
         };
@@ -98,17 +98,17 @@ public class UserFunctions
             await _db.SaveChangesAsync();
             user.BrokerId = broker.Id;
         }
-        else if (dto.Role == AppRole.Seller && dto.SellerId == null)
+        else if (dto.Role == AppRole.Farmer && dto.FarmerId == null)
         {
-            var seller = new Seller
+            var farmer = new Farmer
             {
-                SellerNumber = $"S{DateTime.UtcNow:yyyyMMddHHmmss}",
+                FarmerNumber = $"S{DateTime.UtcNow:yyyyMMddHHmmss}",
                 Name = dto.DisplayName,
                 ContactEmail = dto.Email,
             };
-            _db.Sellers.Add(seller);
+            _db.Farmers.Add(farmer);
             await _db.SaveChangesAsync();
-            user.SellerId = seller.Id;
+            user.FarmerId = farmer.Id;
         }
         else if (dto.Role == AppRole.Buyer && dto.BuyerId == null)
         {
@@ -150,7 +150,7 @@ public class UserFunctions
         user.DisplayName = dto.DisplayName ?? user.DisplayName;
         user.Role = dto.Role ?? user.Role;
         user.BrokerId = dto.BrokerId;
-        user.SellerId = dto.SellerId;
+        user.FarmerId = dto.FarmerId;
         user.BuyerId = dto.BuyerId;
         user.IsActive = dto.IsActive;
 
@@ -181,10 +181,10 @@ public class UserFunctions
             var broker = await _db.Brokers.FindAsync(user.BrokerId.Value);
             if (broker != null) _db.Brokers.Remove(broker);
         }
-        if (user.SellerId.HasValue)
+        if (user.FarmerId.HasValue)
         {
-            var seller = await _db.Sellers.FindAsync(user.SellerId.Value);
-            if (seller != null) _db.Sellers.Remove(seller);
+            var farmer = await _db.Farmers.FindAsync(user.FarmerId.Value);
+            if (farmer != null) _db.Farmers.Remove(farmer);
         }
 
         _db.AppUsers.Remove(user);
@@ -208,6 +208,6 @@ public record AppUserRequest(
     string DisplayName,
     string Role,
     int? BrokerId,
-    int? SellerId,
+    int? FarmerId,
     int? BuyerId,
     bool IsActive = true);

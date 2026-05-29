@@ -60,7 +60,7 @@ else
                             <option value="">— Select Role —</option>
                             <option value="Admin">Admin — Full system access</option>
                             <option value="Broker">Broker — Bidding, allocations, customers</option>
-                            <option value="Seller">Seller — Lot tracking, settlements</option>
+                            <option value="Farmer">Farmer — Lot tracking, settlements</option>
                             <option value="Buyer">Buyer — Purchase history, allocations</option>
                         </select>
                     </div>
@@ -239,139 +239,135 @@ else
                         </div>
                     </div>
                 }
-                else if (_editingUser?.Role == "Seller")
+                else if (_editingUser?.Role == "Farmer")
                 {
                     <hr class="my-4" />
-                    <h5 class="mb-3">Seller Details</h5>
-                    <div class="row g-3">
-                        <div class="col-md-4">
-                            <label class="form-label">Seller Number <span class="text-danger">*</span></label>
-                            <input class="form-control" @bind="_sellerForm.SellerNumber" placeholder="S001" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Name <span class="text-danger">*</span></label>
-                            <input class="form-control" @bind="_sellerForm.Name" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Name 2</label>
-                            <input class="form-control" @bind="_sellerForm.Name2" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Search Name</label>
-                            <input class="form-control" @bind="_sellerForm.SearchName" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Contact Name</label>
-                            <input class="form-control" @bind="_sellerForm.ContactName" />
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Address Line 1</label>
-                            <input class="form-control" @bind="_sellerForm.AddressLine1" />
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Address Line 2</label>
-                            <input class="form-control" @bind="_sellerForm.AddressLine2" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Country</label>
-                            <select class="form-select" @bind="_sellerForm.Country">
-                                <option value="">Select Country...</option>
-                                @foreach (var c in _bcCountries)
-                                {
-                                    <option value="@c.Code">@c.DisplayName (@c.Code)</option>
-                                }
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Postal Code</label>
-                            <input class="form-control" @bind="_sellerForm.PostalCode" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">City</label>
-                            <input class="form-control" @bind="_sellerForm.City" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Phone No</label>
-                            <input class="form-control" @bind="_sellerForm.ContactPhone" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Mobile Phone No</label>
-                            <input class="form-control" @bind="_sellerForm.MobilePhone" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Email</label>
-                            <input class="form-control" type="email" @bind="_sellerForm.ContactEmail" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Home Page</label>
-                            <input class="form-control" @bind="_sellerForm.HomePage" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">VAT Registration No</label>
-                            <input class="form-control" @bind="_sellerForm.VatRegistrationNo" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Registration No</label>
-                            <input class="form-control" @bind="_sellerForm.RegistrationNo" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Customer Group</label>
-                            <input class="form-control" @bind="_sellerForm.CustomerGroup" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Sales Person</label>
-                            <input class="form-control" @bind="_sellerForm.SalesPerson" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Payment Term</label>
-                            <input class="form-control" @bind="_sellerForm.PaymentTerm" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Payment Method</label>
-                            <input class="form-control" @bind="_sellerForm.PaymentMethod" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Currency</label>
-                            <input class="form-control" @bind="_sellerForm.Currency" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Language</label>
-                            <input class="form-control" @bind="_sellerForm.Language" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Bank Name</label>
-                            <input class="form-control" @bind="_sellerForm.BankName" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Bank Address</label>
-                            <input class="form-control" @bind="_sellerForm.BankAddress" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Bank IBAN Number</label>
-                            <input class="form-control" @bind="_sellerForm.BankIbanNumber" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">SWIFT Code</label>
-                            <input class="form-control" @bind="_sellerForm.SwiftCode" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Bank Country</label>
-                            <input class="form-control" @bind="_sellerForm.BankCountry" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Assignee</label>
-                            <input class="form-control" @bind="_sellerForm.Assignee" />
-                        </div>
-                        <div class="col-md-4 d-flex align-items-center pt-4">
-                            <div class="form-check form-switch me-4">
-                                <input class="form-check-input" type="checkbox" @bind="_sellerForm.AssignmentOfReceivable" />
-                                <label class="form-check-label">Assignment of Receivable</label>
+                    <h5 class="mb-3">Farmer Details</h5>
+
+                    <!-- General -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-light"><strong>General</strong></div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-3">
+                                    <label class="form-label fw-bold">No. <span class="text-danger">*</span></label>
+                                    <input class="form-control" @bind="_farmerForm.FarmerNumber" placeholder="S001" />
+                                </div>
+                                <div class="col-md-5">
+                                    <label class="form-label fw-bold">Name <span class="text-danger">*</span></label>
+                                    <input class="form-control" @bind="_farmerForm.Name" />
+                                </div>
                             </div>
                         </div>
-                        <div class="col-md-4 d-flex align-items-center pt-4">
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" @bind="_sellerForm.IsActive" />
-                                <label class="form-check-label">Is Active</label>
+                    </div>
+
+                    <!-- Address & Contact -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-light"><strong>Address & Contact</strong></div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">Address</label>
+                                    <input class="form-control" @bind="_farmerForm.AddressLine1" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Address 2</label>
+                                    <input class="form-control" @bind="_farmerForm.AddressLine2" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Country/Region Code</label>
+                                    <select class="form-select" @bind="_farmerForm.Country">
+                                        <option value="">Select Country...</option>
+                                        @foreach (var c in _bcCountries)
+                                        {
+                                            <option value="@c.Code">@c.DisplayName (@c.Code)</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Post Code</label>
+                                    <input class="form-control" @bind="_farmerForm.PostalCode" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">City</label>
+                                    <input class="form-control" @bind="_farmerForm.City" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Contact Name</label>
+                                    <input class="form-control" @bind="_farmerForm.ContactName" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Phone No.</label>
+                                    <input class="form-control" @bind="_farmerForm.ContactPhone" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Mobile Phone No.</label>
+                                    <input class="form-control" @bind="_farmerForm.MobilePhone" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">E-Mail</label>
+                                    <input class="form-control" type="email" @bind="_farmerForm.ContactEmail" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Home Page</label>
+                                    <input class="form-control" @bind="_farmerForm.HomePage" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Invoicing -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-light"><strong>Invoicing</strong></div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label">VAT Registration No.</label>
+                                    <input class="form-control" @bind="_farmerForm.VatRegistrationNo" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Registration No.</label>
+                                    <input class="form-control" @bind="_farmerForm.RegistrationNo" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Currency Code</label>
+                                    <select class="form-select" @bind="_farmerForm.Currency">
+                                        <option value="">Select Currency...</option>
+                                        @foreach (var c in _bcCurrencies)
+                                        {
+                                            <option value="@c.Code">@c.DisplayName (@c.Code)</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Payments -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-light"><strong>Payments</strong></div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label">Payment Terms Code</label>
+                                    <select class="form-select" @bind="_farmerForm.PaymentTerm">
+                                        <option value="">Select...</option>
+                                        @foreach (var t in _bcPaymentTerms)
+                                        {
+                                            <option value="@t.Code">@t.Code</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Payment Method Code</label>
+                                    <input class="form-control" @bind="_farmerForm.PaymentMethod" />
+                                </div>
+                                <div class="col-md-4 d-flex align-items-center pt-4">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" @bind="_farmerForm.IsActive" />
+                                        <label class="form-check-label">Is Active</label>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -380,135 +376,174 @@ else
                 {
                     <hr class="my-4" />
                     <h5 class="mb-3">Buyer Details</h5>
-                    <div class="row g-3">
-                        <div class="col-md-4">
-                            <label class="form-label">Buyer Number <span class="text-danger">*</span></label>
-                            <input class="form-control" @bind="_buyerForm.BuyerNumber" placeholder="C001" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Name <span class="text-danger">*</span></label>
-                            <input class="form-control" @bind="_buyerForm.Name" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Name 2</label>
-                            <input class="form-control" @bind="_buyerForm.Name2" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Search Name</label>
-                            <input class="form-control" @bind="_buyerForm.SearchName" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Contact Name</label>
-                            <input class="form-control" @bind="_buyerForm.ContactName" />
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Address Line 1</label>
-                            <input class="form-control" @bind="_buyerForm.AddressLine1" />
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Address Line 2</label>
-                            <input class="form-control" @bind="_buyerForm.AddressLine2" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Country</label>
-                            <select class="form-select" @bind="_buyerForm.Country">
-                                <option value="">Select Country...</option>
-                                @foreach (var c in _bcCountries)
-                                {
-                                    <option value="@c.Code">@c.DisplayName (@c.Code)</option>
-                                }
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Postal Code</label>
-                            <input class="form-control" @bind="_buyerForm.PostalCode" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">City</label>
-                            <input class="form-control" @bind="_buyerForm.City" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Phone No</label>
-                            <input class="form-control" @bind="_buyerForm.ContactPhone" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Mobile Phone No</label>
-                            <input class="form-control" @bind="_buyerForm.MobilePhone" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Email</label>
-                            <input class="form-control" type="email" @bind="_buyerForm.ContactEmail" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Home Page</label>
-                            <input class="form-control" @bind="_buyerForm.HomePage" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">VAT Registration No</label>
-                            <input class="form-control" @bind="_buyerForm.VatRegistrationNo" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Registration No</label>
-                            <input class="form-control" @bind="_buyerForm.RegistrationNo" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Customer Group</label>
-                            <input class="form-control" @bind="_buyerForm.CustomerGroup" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Sales Person</label>
-                            <input class="form-control" @bind="_buyerForm.SalesPerson" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Payment Term</label>
-                            <input class="form-control" @bind="_buyerForm.PaymentTerm" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Payment Method</label>
-                            <input class="form-control" @bind="_buyerForm.PaymentMethod" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Currency</label>
-                            <input class="form-control" @bind="_buyerForm.Currency" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Language</label>
-                            <input class="form-control" @bind="_buyerForm.Language" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Bank Name</label>
-                            <input class="form-control" @bind="_buyerForm.BankName" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Bank Address</label>
-                            <input class="form-control" @bind="_buyerForm.BankAddress" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Bank IBAN Number</label>
-                            <input class="form-control" @bind="_buyerForm.BankIbanNumber" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">SWIFT Code</label>
-                            <input class="form-control" @bind="_buyerForm.SwiftCode" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Bank Country</label>
-                            <input class="form-control" @bind="_buyerForm.BankCountry" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Assignee</label>
-                            <input class="form-control" @bind="_buyerForm.Assignee" />
-                        </div>
-                        <div class="col-md-4 d-flex align-items-center pt-4">
-                            <div class="form-check form-switch me-4">
-                                <input class="form-check-input" type="checkbox" @bind="_buyerForm.AssignmentOfReceivable" />
-                                <label class="form-check-label">Assignment of Receivable</label>
+
+                    <!-- General -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-light"><strong>General</strong></div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-3">
+                                    <label class="form-label fw-bold">No. <span class="text-danger">*</span></label>
+                                    <input class="form-control" @bind="_buyerForm.BuyerNumber" placeholder="C001" />
+                                </div>
+                                <div class="col-md-5">
+                                    <label class="form-label fw-bold">Name <span class="text-danger">*</span></label>
+                                    <input class="form-control" @bind="_buyerForm.Name" />
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">Credit Limit</label>
+                                    <input class="form-control" type="number" step="0.01" @bind="_buyerForm.CreditLimit" />
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">Blocked</label>
+                                    <select class="form-select" @bind="_buyerForm.Blocked">
+                                        <option value="">— (None)</option>
+                                        <option value="Ship">Ship</option>
+                                        <option value="Invoice">Invoice</option>
+                                        <option value="All">All</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
-                        <div class="col-md-4 d-flex align-items-center pt-4">
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" @bind="_buyerForm.IsActive" />
-                                <label class="form-check-label">Is Active</label>
+                    </div>
+
+                    <!-- Address & Contact -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-light"><strong>Address & Contact</strong></div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">Address</label>
+                                    <input class="form-control" @bind="_buyerForm.AddressLine1" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Address 2</label>
+                                    <input class="form-control" @bind="_buyerForm.AddressLine2" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Country/Region Code</label>
+                                    <select class="form-select" @bind="_buyerForm.Country">
+                                        <option value="">Select Country...</option>
+                                        @foreach (var c in _bcCountries)
+                                        {
+                                            <option value="@c.Code">@c.DisplayName (@c.Code)</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Post Code</label>
+                                    <input class="form-control" @bind="_buyerForm.PostalCode" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">City</label>
+                                    <input class="form-control" @bind="_buyerForm.City" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Contact Name</label>
+                                    <input class="form-control" @bind="_buyerForm.ContactName" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Phone No.</label>
+                                    <input class="form-control" @bind="_buyerForm.ContactPhone" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Mobile Phone No.</label>
+                                    <input class="form-control" @bind="_buyerForm.MobilePhone" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">E-Mail</label>
+                                    <input class="form-control" type="email" @bind="_buyerForm.ContactEmail" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Home Page</label>
+                                    <input class="form-control" @bind="_buyerForm.HomePage" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Invoicing -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-light"><strong>Invoicing</strong></div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label">VAT Registration No.</label>
+                                    <input class="form-control" @bind="_buyerForm.VatRegistrationNo" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Registration No.</label>
+                                    <input class="form-control" @bind="_buyerForm.RegistrationNo" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Currency Code</label>
+                                    <select class="form-select" @bind="_buyerForm.Currency">
+                                        <option value="">Select Currency...</option>
+                                        @foreach (var c in _bcCurrencies)
+                                        {
+                                            <option value="@c.Code">@c.DisplayName (@c.Code)</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Gen. Bus. Posting Group</label>
+                                    <select class="form-select" @bind="_buyerForm.GenBusPostingGroup">
+                                        <option value="">Select...</option>
+                                        @foreach (var g in _bcGenBusPostingGroups)
+                                        {
+                                            <option value="@g.Code">@g.Code</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">VAT Bus. Posting Group</label>
+                                    <select class="form-select" @bind="_buyerForm.VatBusPostingGroup">
+                                        <option value="">Select...</option>
+                                        @foreach (var g in _bcVatBusPostingGroups)
+                                        {
+                                            <option value="@g.Code">@g.Code</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Customer Posting Group</label>
+                                    <select class="form-select" @bind="_buyerForm.CustomerPostingGroup">
+                                        <option value="">Select...</option>
+                                        @foreach (var g in _bcCustomerPostingGroups)
+                                        {
+                                            <option value="@g.Code">@g.Code</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Payments -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-light"><strong>Payments</strong></div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label">Payment Terms Code</label>
+                                    <select class="form-select" @bind="_buyerForm.PaymentTerm">
+                                        <option value="">Select...</option>
+                                        @foreach (var t in _bcPaymentTerms)
+                                        {
+                                            <option value="@t.Code">@t.Code</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Payment Method Code</label>
+                                    <input class="form-control" @bind="_buyerForm.PaymentMethod" />
+                                </div>
+                                <div class="col-md-4 d-flex align-items-center pt-4">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" @bind="_buyerForm.IsActive" />
+                                        <label class="form-check-label">Is Active</label>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -573,11 +608,11 @@ else
 @code {
     private List<AppUserDto> _users = new();
     private List<BrokerDto> _brokers = new();
-    private List<SellerDto> _sellers = new();
+    private List<FarmerDto> _farmers = new();
     private List<BuyerDto> _buyers = new();
     private AppUserDto? _editingUser;
     private BrokerDto _brokerForm = new() { IsActive = true };
-    private SellerDto _sellerForm = new();
+    private FarmerDto _farmerForm = new();
     private BuyerDto _buyerForm = new();
     private bool _loading = true;
     private bool _showForm;
@@ -588,6 +623,7 @@ else
     private List<BcPostingGroupDto> _bcGenBusPostingGroups = new();
     private List<BcPostingGroupDto> _bcVatBusPostingGroups = new();
     private List<BcPostingGroupDto> _bcCustomerPostingGroups = new();
+    private List<BcPaymentTermDto> _bcPaymentTerms = new();
 
     private string SelectedRole
     {
@@ -597,7 +633,7 @@ else
             if (_editingUser == null) return;
             _editingUser.Role = value;
             _editingUser.BrokerId = null;
-            _editingUser.SellerId = null;
+            _editingUser.FarmerId = null;
             _editingUser.BuyerId = null;
             _brokerForm = new BrokerDto
             {
@@ -606,7 +642,7 @@ else
                 ContactPerson = _editingUser.DisplayName,
                 CompanyName = _editingUser.DisplayName
             };
-            _sellerForm = new SellerDto
+            _farmerForm = new FarmerDto
             {
                 ContactEmail = _editingUser.Email,
                 Name = _editingUser.DisplayName
@@ -629,20 +665,21 @@ else
     {
         _users = await Api.GetAllUsersAsync();
         _brokers = await Api.GetBrokersAsync();
-        _sellers = await Api.GetSellersAsync();
+        _farmers = await Api.GetFarmersAsync();
         _buyers = await Api.GetAllBuyersAsync();
         _bcCountries = await Api.GetBcCountriesAsync();
         _bcCurrencies = await Api.GetBcCurrenciesAsync();
         _bcGenBusPostingGroups = await Api.GetBcGenBusPostingGroupsAsync();
         _bcVatBusPostingGroups = await Api.GetBcVatBusPostingGroupsAsync();
         _bcCustomerPostingGroups = await Api.GetBcCustomerPostingGroupsAsync();
+        _bcPaymentTerms = await Api.GetBcPaymentTermsAsync();
     }
 
     private void ShowAddForm()
     {
         _editingUser = new AppUserDto { IsActive = true };
         _brokerForm = new BrokerDto { IsActive = true };
-        _sellerForm = new SellerDto();
+        _farmerForm = new FarmerDto();
         _buyerForm = new BuyerDto();
         _showForm = true;
         _message = null;
@@ -658,12 +695,12 @@ else
             DisplayName = user.DisplayName,
             Role = user.Role,
             BrokerId = user.BrokerId,
-            SellerId = user.SellerId,
+            FarmerId = user.FarmerId,
             BuyerId = user.BuyerId,
             IsActive = user.IsActive
         };
         _brokerForm = new BrokerDto { IsActive = true };
-        _sellerForm = new SellerDto();
+        _farmerForm = new FarmerDto();
         _buyerForm = new BuyerDto();
         _showForm = true;
         _message = null;
@@ -703,22 +740,22 @@ else
                 }
                 _editingUser.BrokerId = broker.Id;
             }
-            else if (_editingUser.Role == "Seller")
+            else if (_editingUser.Role == "Farmer")
             {
-                if (string.IsNullOrWhiteSpace(_sellerForm.SellerNumber) || string.IsNullOrWhiteSpace(_sellerForm.Name))
+                if (string.IsNullOrWhiteSpace(_farmerForm.FarmerNumber) || string.IsNullOrWhiteSpace(_farmerForm.Name))
                 {
-                    _message = "Seller Number and Name are required.";
+                    _message = "Farmer Number and Name are required.";
                     _messageIsError = true;
                     return;
                 }
-                var seller = await Api.CreateSellerAsync(_sellerForm);
-                if (seller == null)
+                var farmer = await Api.CreateFarmerAsync(_farmerForm);
+                if (farmer == null)
                 {
-                    _message = "Failed to create seller.";
+                    _message = "Failed to create farmer.";
                     _messageIsError = true;
                     return;
                 }
-                _editingUser.SellerId = seller.Id;
+                _editingUser.FarmerId = farmer.Id;
             }
             else if (_editingUser.Role == "Buyer")
             {
@@ -793,7 +830,7 @@ else
     {
         "Admin" => "danger",
         "Broker" => "primary",
-        "Seller" => "success",
+        "Farmer" => "success",
         "Buyer" => "info",
         _ => "secondary"
     };
@@ -802,8 +839,8 @@ else
     {
         if (user.BrokerId.HasValue)
             return _brokers.FirstOrDefault(b => b.Id == user.BrokerId.Value)?.CompanyName ?? $"Broker #{user.BrokerId}";
-        if (user.SellerId.HasValue)
-            return _sellers.FirstOrDefault(s => s.Id == user.SellerId.Value)?.Name ?? $"Seller #{user.SellerId}";
+        if (user.FarmerId.HasValue)
+            return _farmers.FirstOrDefault(s => s.Id == user.FarmerId.Value)?.Name ?? $"Farmer #{user.FarmerId}";
         if (user.BuyerId.HasValue)
             return _buyers.FirstOrDefault(b => b.Id == user.BuyerId.Value)?.Name ?? $"Buyer #{user.BuyerId}";
         return "—";

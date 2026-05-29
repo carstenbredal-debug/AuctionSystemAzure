@@ -5,7 +5,7 @@ public enum SettlementStatus
     Pending,
     InvoiceGenerated,
     PaymentReceived,
-    SettledWithSeller,
+    SettledWithFarmer,
     Completed,
     Disputed
 }

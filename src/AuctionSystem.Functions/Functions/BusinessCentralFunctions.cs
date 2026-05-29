@@ -84,6 +84,18 @@ public class BusinessCentralFunctions
         return await JsonResponse(req, countries);
     }
 
+    [Function("BcGetPaymentTerms")]
+    public async Task<HttpResponseData> GetPaymentTerms(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "bc/payment-terms")] HttpRequestData req)
+    {
+        if (!EnsureConfigured(out var error))
+            return await JsonResponse(req, error!, HttpStatusCode.BadRequest);
+
+        var companyId = await _bcClient!.ResolveCompanyIdAsync();
+        var terms = await _bcClient.GetPaymentTermsAsync(companyId);
+        return await JsonResponse(req, terms);
+    }
+
     [Function("BcGetCurrencies")]
     public async Task<HttpResponseData> GetCurrencies(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "bc/currencies")] HttpRequestData req)
@@ -132,6 +144,30 @@ public class BusinessCentralFunctions
         return await JsonResponse(req, groups);
     }
 
+    [Function("BcGetVendorPostingGroups")]
+    public async Task<HttpResponseData> GetVendorPostingGroups(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "bc/vendor-posting-groups")] HttpRequestData req)
+    {
+        if (!EnsureConfigured(out var error))
+            return await JsonResponse(req, error!, HttpStatusCode.BadRequest);
+
+        var companyName = await ResolveCompanyNameAsync();
+        var groups = await _bcClient!.GetVendorPostingGroupsAsync(companyName);
+        return await JsonResponse(req, groups);
+    }
+
+    [Function("BcGetVendors")]
+    public async Task<HttpResponseData> GetVendors(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "bc/vendors")] HttpRequestData req)
+    {
+        if (!EnsureConfigured(out var error))
+            return await JsonResponse(req, error!, HttpStatusCode.BadRequest);
+
+        var companyId = await _bcClient!.ResolveCompanyIdAsync();
+        var vendors = await _bcClient.GetVendorsAsync(companyId);
+        return await JsonResponse(req, vendors);
+    }
+
     [Function("BcSyncBrokers")]
     public async Task<HttpResponseData> SyncBrokers(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "bc/sync/brokers")] HttpRequestData req)
@@ -141,6 +177,18 @@ public class BusinessCentralFunctions
 
         _logger.LogInformation("Syncing brokers to Business Central");
         var result = await _syncService!.PushBrokersAsync();
+        return await JsonResponse(req, result);
+    }
+
+    [Function("BcSyncFarmers")]
+    public async Task<HttpResponseData> SyncFarmers(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "bc/sync/farmers")] HttpRequestData req)
+    {
+        if (!EnsureConfigured(out var error))
+            return await JsonResponse(req, error!, HttpStatusCode.BadRequest);
+
+        _logger.LogInformation("Syncing farmers to Business Central");
+        var result = await _syncService!.PushFarmersAsync();
         return await JsonResponse(req, result);
     }
 

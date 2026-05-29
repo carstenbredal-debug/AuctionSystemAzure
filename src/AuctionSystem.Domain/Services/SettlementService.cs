@@ -29,8 +29,8 @@ public class SettlementService
             })
             .ToListAsync();
 
-    public async Task<List<Settlement>> GetSettlementsBySellerAsync(int sellerId)
-        => await _db.Settlements.Where(s => s.SellerId == sellerId)
+    public async Task<List<Settlement>> GetSettlementsByFarmerAsync(int farmerId)
+        => await _db.Settlements.Where(s => s.FarmerId == farmerId)
             .Include(s => s.Lot).ThenInclude(l => l.Auction)
             .OrderByDescending(s => s.CreatedAt).ToListAsync();
 
@@ -46,7 +46,7 @@ public class SettlementService
 
     public async Task<Settlement?> CreateSettlementAsync(int lotId)
     {
-        var lot = await _db.Lots.Include(l => l.Seller)
+        var lot = await _db.Lots.Include(l => l.Farmer)
             .FirstOrDefaultAsync(l => l.Id == lotId && l.Status == LotStatus.Sold && l.HammerPrice.HasValue);
         if (lot == null) return null;
 
@@ -57,7 +57,7 @@ public class SettlementService
         {
             SettlementNumber = $"SET-{DateTime.UtcNow:yyyyMMdd}-{await _db.Settlements.CountAsync() + 1:D4}",
             LotId = lotId,
-            SellerId = lot.SellerId ?? 0,
+            FarmerId = lot.FarmerId ?? 0,
             GrossAmount = lot.HammerPrice!.Value,
             Commission = lot.HammerPrice.Value * CommissionRate,
             Fees = lot.HammerPrice.Value * FeeRate,

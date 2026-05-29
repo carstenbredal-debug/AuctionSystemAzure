@@ -1,23 +1,23 @@
-@page "/seller"
-@attribute [Authorize(Roles = "Admin,Seller")]
+@page "/farmer"
+@attribute [Authorize(Roles = "Admin,Farmer")]
 @inject AuctionApiClient Api
 
-<PageTitle>Seller Portal - Auction System</PageTitle>
+<PageTitle>Farmer Portal - Auction System</PageTitle>
 
-<h1>Seller Portal</h1>
+<h1>Farmer Portal</h1>
 
 <div class="mb-3">
-    <label class="form-label"><strong>Select Seller</strong></label>
-    <select class="form-select w-auto" @bind="selectedSellerId" @bind:after="LoadSellerData">
+    <label class="form-label"><strong>Select Farmer</strong></label>
+    <select class="form-select w-auto" @bind="selectedFarmerId" @bind:after="LoadFarmerData">
         <option value="0">Choose...</option>
-        @foreach (var s in sellers)
+        @foreach (var s in farmers)
         {
-            <option value="@s.Id">@s.Name (@s.SellerNumber)</option>
+            <option value="@s.Id">@s.Name (@s.FarmerNumber)</option>
         }
     </select>
 </div>
 
-@if (selectedSellerId > 0)
+@if (selectedFarmerId > 0)
 {
     <ul class="nav nav-tabs mb-3">
         <li class="nav-item"><a class="nav-link @(tab == "lots" ? "active" : "")" href="#" @onclick='() => tab = "lots"' @onclick:preventDefault>My Lots</a></li>
@@ -80,22 +80,22 @@
 }
 
 @code {
-    private List<SellerDto> sellers = new();
-    private int selectedSellerId;
+    private List<FarmerDto> farmers = new();
+    private int selectedFarmerId;
     private string tab = "lots";
     private List<LotDto> lots = new();
     private List<SettlementDto> settlements = new();
 
     protected override async Task OnInitializedAsync()
     {
-        sellers = await Api.GetSellersAsync();
+        farmers = await Api.GetFarmersAsync();
     }
 
-    private async Task LoadSellerData()
+    private async Task LoadFarmerData()
     {
-        if (selectedSellerId <= 0) return;
-        lots = await Api.GetLotsBySellerAsync(selectedSellerId);
-        settlements = await Api.GetSettlementsBySellerAsync(selectedSellerId);
+        if (selectedFarmerId <= 0) return;
+        lots = await Api.GetLotsByFarmerAsync(selectedFarmerId);
+        settlements = await Api.GetSettlementsByFarmerAsync(selectedFarmerId);
     }
 
     private string GetLotColor(LotStatus s) => s switch

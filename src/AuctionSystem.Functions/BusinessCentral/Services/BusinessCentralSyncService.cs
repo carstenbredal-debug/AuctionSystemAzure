@@ -23,12 +23,11 @@ public class BusinessCentralSyncService
     }
 
     /// <summary>
-    /// Push all brokers to BC as customers. Matches by BrokerNumber.
-    /// Creates new BC customers or updates existing ones.
+    /// Push all brokers to BC as vendors. Matches by BrokerNumber.
     /// </summary>
     public async Task<SyncResult> PushBrokersAsync()
     {
-        var result = new SyncResult { Direction = "Push", EntityType = "Broker → BC Customer" };
+        var result = new SyncResult { Direction = "Push", EntityType = "Broker → BC Vendor" };
 
         var brokers = await _db.Set<Broker>()
             .Where(b => b.IsActive)
@@ -41,22 +40,22 @@ public class BusinessCentralSyncService
         {
             try
             {
-                var bcCustomer = MapBrokerToCustomer(broker);
-                var existing = await _bcClient.GetCustomerByNumberAsync(companyId, bcCustomer.Number);
+                var bcVendor = MapBrokerToVendor(broker);
+                var existing = await _bcClient.GetVendorByNumberAsync(companyId, bcVendor.Number);
 
                 if (existing is null)
                 {
-                    await _bcClient.CreateCustomerAsync(companyId, bcCustomer);
+                    await _bcClient.CreateVendorAsync(companyId, bcVendor);
                     result.Created++;
-                    _logger.LogInformation("Created BC customer for broker {Number}", broker.BrokerNumber);
+                    _logger.LogInformation("Created BC vendor for broker {Number}", broker.BrokerNumber);
                 }
                 else
                 {
-                    bcCustomer.Id = existing.Id;
-                    bcCustomer.ETag = existing.ETag;
-                    await _bcClient.UpdateCustomerAsync(companyId, bcCustomer);
+                    bcVendor.Id = existing.Id;
+                    bcVendor.ETag = existing.ETag;
+                    await _bcClient.UpdateVendorAsync(companyId, bcVendor);
                     result.Updated++;
-                    _logger.LogInformation("Updated BC customer for broker {Number}", broker.BrokerNumber);
+                    _logger.LogInformation("Updated BC vendor for broker {Number}", broker.BrokerNumber);
                 }
             }
             catch (Exception ex)
@@ -319,7 +318,55 @@ public class BusinessCentralSyncService
     }
 
     /// <summary>
-    /// Full sync: push brokers, buyers, invoices, credit notes.
+    /// Push all farmers to BC as vendors. Matches by FarmerNumber.
+    /// </summary>
+    public async Task<SyncResult> PushFarmersAsync()
+    {
+        var result = new SyncResult { Direction = "Push", EntityType = "Farmer → BC Vendor" };
+
+        var farmers = await _db.Set<Farmer>()
+            .Where(f => f.IsActive)
+            .ToListAsync();
+
+        result.TotalProcessed = farmers.Count;
+        var companyId = await _bcClient.ResolveCompanyIdAsync();
+
+        foreach (var farmer in farmers)
+        {
+            try
+            {
+                var bcVendor = MapFarmerToVendor(farmer);
+                var existing = await _bcClient.GetVendorByNumberAsync(companyId, bcVendor.Number);
+
+                if (existing is null)
+                {
+                    await _bcClient.CreateVendorAsync(companyId, bcVendor);
+                    result.Created++;
+                    _logger.LogInformation("Created BC vendor for farmer {Number}", farmer.FarmerNumber);
+                }
+                else
+                {
+                    bcVendor.Id = existing.Id;
+                    bcVendor.ETag = existing.ETag;
+                    await _bcClient.UpdateVendorAsync(companyId, bcVendor);
+                    result.Updated++;
+                    _logger.LogInformation("Updated BC vendor for farmer {Number}", farmer.FarmerNumber);
+                }
+            }
+            catch (Exception ex)
+            {
+                result.Failed++;
+                result.Errors.Add($"Farmer {farmer.FarmerNumber}: {ex.Message}");
+                _logger.LogError(ex, "Failed to sync farmer {Number}", farmer.FarmerNumber);
+            }
+        }
+
+        await _db.SaveChangesAsync();
+        return result;
+    }
+
+    /// <summary>
+    /// Full sync: push brokers, buyers, farmers, invoices, credit notes.
     /// </summary>
     public async Task<List<SyncResult>> RunFullSyncAsync()
     {
@@ -328,6 +375,7 @@ public class BusinessCentralSyncService
         _logger.LogInformation("Starting full BC sync...");
 
         results.Add(await PushBrokersAsync());
+        results.Add(await PushFarmersAsync());
         results.Add(await PushBuyersAsync());
         results.Add(await PushInvoicesAsync());
         results.Add(await PushCreditNotesAsync());
@@ -370,20 +418,20 @@ public class BusinessCentralSyncService
     public async Task PushSingleBrokerAsync(Broker broker)
     {
         var companyId = await _bcClient.ResolveCompanyIdAsync();
-        var bcCustomer = MapBrokerToCustomer(broker);
-        var existing = await _bcClient.GetCustomerByNumberAsync(companyId, bcCustomer.Number);
+        var bcVendor = MapBrokerToVendor(broker);
+        var existing = await _bcClient.GetVendorByNumberAsync(companyId, bcVendor.Number);
 
         if (existing is null)
         {
-            await _bcClient.CreateCustomerAsync(companyId, bcCustomer);
-            _logger.LogInformation("Created BC customer for broker {Number}", broker.BrokerNumber);
+            await _bcClient.CreateVendorAsync(companyId, bcVendor);
+            _logger.LogInformation("Created BC vendor for broker {Number}", broker.BrokerNumber);
         }
         else
         {
-            bcCustomer.Id = existing.Id;
-            bcCustomer.ETag = existing.ETag;
-            await _bcClient.UpdateCustomerAsync(companyId, bcCustomer);
-            _logger.LogInformation("Updated BC customer for broker {Number}", broker.BrokerNumber);
+            bcVendor.Id = existing.Id;
+            bcVendor.ETag = existing.ETag;
+            await _bcClient.UpdateVendorAsync(companyId, bcVendor);
+            _logger.LogInformation("Updated BC vendor for broker {Number}", broker.BrokerNumber);
         }
     }
 
@@ -407,35 +455,34 @@ public class BusinessCentralSyncService
         }
     }
 
-    public async Task PushSingleSellerAsync(Seller seller)
+    public async Task PushSingleFarmerAsync(Farmer farmer)
     {
         var companyId = await _bcClient.ResolveCompanyIdAsync();
-        var bcCustomer = MapSellerToCustomer(seller);
-        var existing = await _bcClient.GetCustomerByNumberAsync(companyId, bcCustomer.Number);
+        var bcVendor = MapFarmerToVendor(farmer);
+        var existing = await _bcClient.GetVendorByNumberAsync(companyId, bcVendor.Number);
 
         if (existing is null)
         {
-            await _bcClient.CreateCustomerAsync(companyId, bcCustomer);
-            _logger.LogInformation("Created BC customer for seller {Number}", seller.SellerNumber);
+            await _bcClient.CreateVendorAsync(companyId, bcVendor);
+            _logger.LogInformation("Created BC vendor for farmer {Number}", farmer.FarmerNumber);
         }
         else
         {
-            bcCustomer.Id = existing.Id;
-            bcCustomer.ETag = existing.ETag;
-            await _bcClient.UpdateCustomerAsync(companyId, bcCustomer);
-            _logger.LogInformation("Updated BC customer for seller {Number}", seller.SellerNumber);
+            bcVendor.Id = existing.Id;
+            bcVendor.ETag = existing.ETag;
+            await _bcClient.UpdateVendorAsync(companyId, bcVendor);
+            _logger.LogInformation("Updated BC vendor for farmer {Number}", farmer.FarmerNumber);
         }
     }
 
     // ── Mapping helpers ────────────────────────────────────────
 
-    private static BcCustomer MapBrokerToCustomer(Broker broker)
+    private static BcVendor MapBrokerToVendor(Broker broker)
     {
-        return new BcCustomer
+        return new BcVendor
         {
             Number = broker.BrokerNumber,
             DisplayName = broker.CompanyName,
-            Type = "Company",
             AddressLine1 = broker.AddressLine1,
             AddressLine2 = broker.AddressLine2,
             City = broker.City,
@@ -445,14 +492,12 @@ public class BusinessCentralSyncService
             Email = broker.ContactEmail,
             Website = broker.HomePage,
             CurrencyCode = broker.Currency == "EUR" ? "EUR" : broker.Currency,
-            CreditLimit = broker.CreditLimit,
             Blocked = string.IsNullOrEmpty(broker.Blocked) ? "_x0020_" : broker.Blocked,
             GenBusPostingGroup = broker.GenBusPostingGroup,
             VatBusPostingGroup = broker.VatBusPostingGroup,
-            CustomerPostingGroup = broker.CustomerPostingGroup,
+            VendorPostingGroup = broker.CustomerPostingGroup,
             PaymentTermsCode = broker.PaymentTerm,
-            PaymentMethodCode = broker.PaymentMethod,
-            VatRegistrationNo = broker.VatRegistrationNo
+            PaymentMethodCode = broker.PaymentMethod
         };
     }
 
@@ -471,26 +516,33 @@ public class BusinessCentralSyncService
             PhoneNumber = buyer.ContactPhone,
             Email = buyer.ContactEmail,
             Website = buyer.HomePage,
-            CurrencyCode = buyer.Currency == "EUR" ? "EUR" : buyer.Currency
+            CurrencyCode = buyer.Currency == "EUR" ? "EUR" : buyer.Currency,
+            CreditLimit = buyer.CreditLimit,
+            Blocked = string.IsNullOrEmpty(buyer.Blocked) ? "_x0020_" : buyer.Blocked,
+            GenBusPostingGroup = buyer.GenBusPostingGroup,
+            VatBusPostingGroup = buyer.VatBusPostingGroup,
+            CustomerPostingGroup = buyer.CustomerPostingGroup,
+            PaymentTermsCode = buyer.PaymentTerm,
+            PaymentMethodCode = buyer.PaymentMethod,
+            VatRegistrationNo = buyer.VatRegistrationNo
         };
     }
 
-    private static BcCustomer MapSellerToCustomer(Seller seller)
+    private static BcVendor MapFarmerToVendor(Farmer farmer)
     {
-        return new BcCustomer
+        return new BcVendor
         {
-            Number = seller.SellerNumber,
-            DisplayName = seller.Name,
-            Type = "Company",
-            AddressLine1 = seller.AddressLine1,
-            AddressLine2 = seller.AddressLine2,
-            City = seller.City,
-            Country = seller.Country,
-            PostalCode = seller.PostalCode,
-            PhoneNumber = seller.ContactPhone,
-            Email = seller.ContactEmail,
-            Website = seller.HomePage,
-            CurrencyCode = seller.Currency == "EUR" ? "EUR" : seller.Currency
+            Number = farmer.FarmerNumber,
+            DisplayName = farmer.Name,
+            AddressLine1 = farmer.AddressLine1,
+            AddressLine2 = farmer.AddressLine2,
+            City = farmer.City,
+            Country = farmer.Country,
+            PostalCode = farmer.PostalCode,
+            PhoneNumber = farmer.ContactPhone,
+            Email = farmer.ContactEmail,
+            Website = farmer.HomePage,
+            CurrencyCode = farmer.Currency == "EUR" ? "EUR" : farmer.Currency
         };
     }
 }

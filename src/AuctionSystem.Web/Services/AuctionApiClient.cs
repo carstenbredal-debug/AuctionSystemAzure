@@ -53,29 +53,29 @@ public class AuctionApiClient
     public async Task DeleteBrokerAsync(int id)
         => await _http.DeleteAsync($"api/brokers/{id}");
 
-    // Sellers
-    public async Task<List<SellerDto>> GetSellersAsync()
-        => await _http.GetFromJsonAsync<List<SellerDto>>("api/sellers") ?? new();
+    // Farmers
+    public async Task<List<FarmerDto>> GetFarmersAsync()
+        => await _http.GetFromJsonAsync<List<FarmerDto>>("api/farmers") ?? new();
 
-    public async Task<SellerDto?> CreateSellerAsync(SellerDto seller)
+    public async Task<FarmerDto?> CreateFarmerAsync(FarmerDto farmer)
     {
-        var resp = await _http.PostAsJsonAsync("api/sellers", seller);
+        var resp = await _http.PostAsJsonAsync("api/farmers", farmer);
         if (!resp.IsSuccessStatusCode) return null;
-        return await resp.Content.ReadFromJsonAsync<SellerDto>();
+        return await resp.Content.ReadFromJsonAsync<FarmerDto>();
     }
 
-    public async Task<SellerDto?> UpdateSellerAsync(int id, SellerDto seller)
+    public async Task<FarmerDto?> UpdateFarmerAsync(int id, FarmerDto farmer)
     {
-        var resp = await _http.PutAsJsonAsync($"api/sellers/{id}", seller);
+        var resp = await _http.PutAsJsonAsync($"api/farmers/{id}", farmer);
         if (!resp.IsSuccessStatusCode) return null;
-        return await resp.Content.ReadFromJsonAsync<SellerDto>();
+        return await resp.Content.ReadFromJsonAsync<FarmerDto>();
     }
 
-    public async Task DeleteSellerAsync(int id)
-        => await _http.DeleteAsync($"api/sellers/{id}");
+    public async Task DeleteFarmerAsync(int id)
+        => await _http.DeleteAsync($"api/farmers/{id}");
 
-    public async Task<List<LotDto>> GetLotsBySellerAsync(int sellerId)
-        => await _http.GetFromJsonAsync<List<LotDto>>($"api/sellers/{sellerId}/lots") ?? new();
+    public async Task<List<LotDto>> GetLotsByFarmerAsync(int farmerId)
+        => await _http.GetFromJsonAsync<List<LotDto>>($"api/farmers/{farmerId}/lots") ?? new();
 
     // Buyers
     public async Task<List<BuyerDto>> GetAllBuyersAsync()
@@ -144,8 +144,8 @@ public class AuctionApiClient
         return await resp.Content.ReadFromJsonAsync<SettlementDto>();
     }
 
-    public async Task<List<SettlementDto>> GetSettlementsBySellerAsync(int sellerId)
-        => await _http.GetFromJsonAsync<List<SettlementDto>>($"api/settlements/seller/{sellerId}") ?? new();
+    public async Task<List<SettlementDto>> GetSettlementsByFarmerAsync(int farmerId)
+        => await _http.GetFromJsonAsync<List<SettlementDto>>($"api/settlements/farmer/{farmerId}") ?? new();
 
     public async Task MarkSettlementCompleteAsync(int settlementId)
         => await _http.PutAsync($"api/settlements/{settlementId}/complete", null);
@@ -435,6 +435,18 @@ public class AuctionApiClient
         try
         {
             return await _http.GetFromJsonAsync<List<BcPostingGroupDto>>("api/bc/customer-posting-groups") ?? new();
+        }
+        catch
+        {
+            return new();
+        }
+    }
+
+    public async Task<List<BcPaymentTermDto>> GetBcPaymentTermsAsync()
+    {
+        try
+        {
+            return await _http.GetFromJsonAsync<List<BcPaymentTermDto>>("api/bc/payment-terms") ?? new();
         }
         catch
         {

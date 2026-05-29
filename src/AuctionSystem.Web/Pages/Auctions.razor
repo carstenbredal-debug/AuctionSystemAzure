@@ -446,7 +446,7 @@ else
             var request = new ImportCatalogLotsRequest
             {
                 CatalogLotIds = selectedCatalogLotIds.ToList(),
-                SellerId = 0
+                FarmerId = 0
             };
             var resp = await Api.ImportCatalogLotsToAuctionAsync(Id!.Value, request);
             if (resp.IsSuccessStatusCode)

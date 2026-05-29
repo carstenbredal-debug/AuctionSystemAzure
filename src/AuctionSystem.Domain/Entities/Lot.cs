@@ -18,8 +18,8 @@ public class Lot
     public int AuctionId { get; set; }
     public Auction Auction { get; set; } = null!;
 
-    public int? SellerId { get; set; }
-    public Seller? Seller { get; set; }
+    public int? FarmerId { get; set; }
+    public Farmer? Farmer { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

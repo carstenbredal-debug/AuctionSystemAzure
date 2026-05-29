@@ -68,11 +68,11 @@ public class SettlementFunctions
         return await CreateJsonResponse(req, settlement);
     }
 
-    [Function("GetSettlementsBySeller")]
-    public async Task<HttpResponseData> GetBySeller(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements/seller/{sellerId:int}")] HttpRequestData req, int sellerId)
+    [Function("GetSettlementsByFarmer")]
+    public async Task<HttpResponseData> GetByFarmer(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements/farmer/{farmerId:int}")] HttpRequestData req, int farmerId)
     {
-        var settlements = await _service.GetSettlementsBySellerAsync(sellerId);
+        var settlements = await _service.GetSettlementsByFarmerAsync(farmerId);
         return await CreateJsonResponse(req, settlements);
     }
 
@@ -171,7 +171,7 @@ public class SettlementFunctions
     public async Task<HttpResponseData> GetAllSettlements(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements")] HttpRequestData req)
     {
-        var settlements = await _db.Settlements.Include(s => s.Seller).Include(s => s.Lot)
+        var settlements = await _db.Settlements.Include(s => s.Farmer).Include(s => s.Lot)
             .OrderByDescending(s => s.CreatedAt).ToListAsync();
         return await CreateJsonResponse(req, settlements);
     }

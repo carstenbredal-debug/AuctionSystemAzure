@@ -63,7 +63,7 @@ namespace AuctionSystem.Domain.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<int?>("SellerId")
+                    b.Property<int?>("FarmerId")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
@@ -77,7 +77,7 @@ namespace AuctionSystem.Domain.Migrations
 
                     b.HasIndex("Email");
 
-                    b.HasIndex("SellerId");
+                    b.HasIndex("FarmerId");
 
                     b.ToTable("AppUsers", "auction");
                 });
@@ -730,7 +730,7 @@ namespace AuctionSystem.Domain.Migrations
                     b.Property<decimal?>("ReservePrice")
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<int?>("SellerId")
+                    b.Property<int?>("FarmerId")
                         .HasColumnType("int");
 
                     b.Property<decimal>("StartingPrice")
@@ -746,7 +746,7 @@ namespace AuctionSystem.Domain.Migrations
 
                     b.HasIndex("AuctionId");
 
-                    b.HasIndex("SellerId");
+                    b.HasIndex("FarmerId");
 
                     b.ToTable("Lots", "auction");
                 });
@@ -794,7 +794,7 @@ namespace AuctionSystem.Domain.Migrations
                     b.ToTable("LotAllocations", "auction");
                 });
 
-            modelBuilder.Entity("AuctionSystem.Domain.Entities.Seller", b =>
+            modelBuilder.Entity("AuctionSystem.Domain.Entities.Farmer", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -916,7 +916,7 @@ namespace AuctionSystem.Domain.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("SellerNumber")
+                    b.Property<string>("FarmerNumber")
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
@@ -931,10 +931,10 @@ namespace AuctionSystem.Domain.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("SellerNumber")
+                    b.HasIndex("FarmerNumber")
                         .IsUnique();
 
-                    b.ToTable("Sellers", "auction");
+                    b.ToTable("Farmers", "auction");
                 });
 
             modelBuilder.Entity("AuctionSystem.Domain.Entities.Settlement", b =>
@@ -966,7 +966,7 @@ namespace AuctionSystem.Domain.Migrations
                     b.Property<decimal>("NetAmount")
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<int>("SellerId")
+                    b.Property<int>("FarmerId")
                         .HasColumnType("int");
 
                     b.Property<DateTime?>("SettledDate")
@@ -984,7 +984,7 @@ namespace AuctionSystem.Domain.Migrations
                     b.HasIndex("LotId")
                         .IsUnique();
 
-                    b.HasIndex("SellerId");
+                    b.HasIndex("FarmerId");
 
                     b.HasIndex("SettlementNumber")
                         .IsUnique();
@@ -1087,16 +1087,16 @@ namespace AuctionSystem.Domain.Migrations
                         .HasForeignKey("BuyerId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("AuctionSystem.Domain.Entities.Seller", "Seller")
+                    b.HasOne("AuctionSystem.Domain.Entities.Farmer", "Farmer")
                         .WithMany()
-                        .HasForeignKey("SellerId")
+                        .HasForeignKey("FarmerId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Broker");
 
                     b.Navigation("Buyer");
 
-                    b.Navigation("Seller");
+                    b.Navigation("Farmer");
                 });
 
             modelBuilder.Entity("AuctionSystem.Domain.Entities.AuctionResult", b =>
@@ -1236,13 +1236,13 @@ namespace AuctionSystem.Domain.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("AuctionSystem.Domain.Entities.Seller", "Seller")
+                    b.HasOne("AuctionSystem.Domain.Entities.Farmer", "Farmer")
                         .WithMany("Lots")
-                        .HasForeignKey("SellerId");
+                        .HasForeignKey("FarmerId");
 
                     b.Navigation("Auction");
 
-                    b.Navigation("Seller");
+                    b.Navigation("Farmer");
                 });
 
             modelBuilder.Entity("AuctionSystem.Domain.Entities.LotAllocation", b =>
@@ -1280,15 +1280,15 @@ namespace AuctionSystem.Domain.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("AuctionSystem.Domain.Entities.Seller", "Seller")
+                    b.HasOne("AuctionSystem.Domain.Entities.Farmer", "Farmer")
                         .WithMany("Settlements")
-                        .HasForeignKey("SellerId")
+                        .HasForeignKey("FarmerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Lot");
 
-                    b.Navigation("Seller");
+                    b.Navigation("Farmer");
                 });
 
             modelBuilder.Entity("AuctionSystem.Domain.Entities.TakebackRequest", b =>
@@ -1355,7 +1355,7 @@ namespace AuctionSystem.Domain.Migrations
                     b.Navigation("Settlement");
                 });
 
-            modelBuilder.Entity("AuctionSystem.Domain.Entities.Seller", b =>
+            modelBuilder.Entity("AuctionSystem.Domain.Entities.Farmer", b =>
                 {
                     b.Navigation("Lots");
 
