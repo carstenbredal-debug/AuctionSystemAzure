@@ -5,6 +5,7 @@ namespace AuctionSystem.Functions.BusinessCentral.Models;
 public class BcItem
 {
     [JsonPropertyName("id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public Guid Id { get; set; }
 
     [JsonPropertyName("number")]
@@ -38,8 +39,10 @@ public class BcItem
     public decimal Inventory { get; set; }
 
     [JsonPropertyName("lastModifiedDateTime")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public DateTimeOffset? LastModifiedDateTime { get; set; }
 
     [JsonPropertyName("@odata.etag")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ETag { get; set; }
 }
