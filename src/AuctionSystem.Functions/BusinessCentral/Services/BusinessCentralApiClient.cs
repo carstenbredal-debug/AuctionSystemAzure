@@ -162,6 +162,35 @@ public class BusinessCentralApiClient
         await EnsureSuccessAsync(response);
     }
 
+    // ── Default Dimensions ────────────────────────────────────
+
+    public async Task SetDefaultDimensionAsync(Guid companyId, Guid parentId, Guid dimensionId, Guid dimensionValueId)
+    {
+        await SetAuthHeaderAsync();
+        var url = $"{_options.BaseUrl}/companies({companyId})/defaultDimensions";
+        _logger.LogInformation("POST defaultDimension on {Url}", url);
+
+        var payload = new
+        {
+            parentId = parentId,
+            dimensionId = dimensionId,
+            dimensionValueId = dimensionValueId,
+            postingValidation = "Same Code"
+        };
+
+        var response = await _httpClient.PostAsJsonAsync(url, payload, JsonOptions);
+        if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+        {
+            var body = await response.Content.ReadAsStringAsync();
+            if (body.Contains("EntityWithSameKeyExists"))
+            {
+                _logger.LogInformation("Default dimension already exists, skipping");
+                return;
+            }
+        }
+        await EnsureSuccessAsync(response);
+    }
+
     // ── Countries/Regions ─────────────────────────────────────
 
     public async Task<List<BcCountryRegion>> GetCountriesRegionsAsync(Guid companyId)
