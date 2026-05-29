@@ -140,6 +140,50 @@ public class AuctionFunctions
         return await CreateJsonResponse(req, stats);
     }
 
+    [Function("ResetAllData")]
+    public async Task<HttpResponseData> ResetAllData(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "admin/reset-all")] HttpRequestData req)
+    {
+        _logger.LogWarning("RESETTING ALL DATA (except SystemParameters)");
+
+        var deleted = new Dictionary<string, int>();
+
+        var ilCount = await _db.Database.ExecuteSqlRawAsync("DELETE FROM auction.InvoiceLines");
+        deleted["InvoiceLines"] = ilCount;
+        var invCount = await _db.Database.ExecuteSqlRawAsync("DELETE FROM auction.Invoices");
+        deleted["Invoices"] = invCount;
+        var tbCount = await _db.Database.ExecuteSqlRawAsync("DELETE FROM auction.TakebackRequests");
+        deleted["TakebackRequests"] = tbCount;
+        var laCount = await _db.Database.ExecuteSqlRawAsync("DELETE FROM auction.LotAllocations");
+        deleted["LotAllocations"] = laCount;
+        var arCount = await _db.Database.ExecuteSqlRawAsync("DELETE FROM auction.AuctionResults");
+        deleted["AuctionResults"] = arCount;
+        var stCount = await _db.Database.ExecuteSqlRawAsync("DELETE FROM auction.Settlements");
+        deleted["Settlements"] = stCount;
+        var bdCount = await _db.Database.ExecuteSqlRawAsync("DELETE FROM auction.Bids");
+        deleted["Bids"] = bdCount;
+        var ltCount = await _db.Database.ExecuteSqlRawAsync("DELETE FROM auction.Lots");
+        deleted["Lots"] = ltCount;
+        var auCount = await _db.Database.ExecuteSqlRawAsync("DELETE FROM auction.Auctions");
+        deleted["Auctions"] = auCount;
+        var bbCount = await _db.Database.ExecuteSqlRawAsync("DELETE FROM auction.BrokerBuyers");
+        deleted["BrokerBuyers"] = bbCount;
+        var crCount = await _db.Database.ExecuteSqlRawAsync("DELETE FROM auction.BrokerCustomerRequests");
+        deleted["BrokerCustomerRequests"] = crCount;
+        var byCount = await _db.Database.ExecuteSqlRawAsync("DELETE FROM auction.Buyers");
+        deleted["Buyers"] = byCount;
+        var brCount = await _db.Database.ExecuteSqlRawAsync("DELETE FROM auction.Brokers");
+        deleted["Brokers"] = brCount;
+        var slCount = await _db.Database.ExecuteSqlRawAsync("DELETE FROM auction.Sellers");
+        deleted["Sellers"] = slCount;
+        var usCount = await _db.Database.ExecuteSqlRawAsync("DELETE FROM auction.AppUsers");
+        deleted["AppUsers"] = usCount;
+
+        _logger.LogWarning("Reset complete: {@Deleted}", deleted);
+
+        return await CreateJsonResponse(req, new { message = "All data reset (SystemParameters kept)", deleted });
+    }
+
     private static async Task<HttpResponseData> CreateJsonResponse<T>(
         HttpRequestData req, T data, System.Net.HttpStatusCode status = System.Net.HttpStatusCode.OK)
     {
