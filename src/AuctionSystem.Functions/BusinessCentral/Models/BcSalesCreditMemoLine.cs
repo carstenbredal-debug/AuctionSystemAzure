@@ -5,6 +5,7 @@ namespace AuctionSystem.Functions.BusinessCentral.Models;
 public class BcSalesCreditMemoLine
 {
     [JsonPropertyName("id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public Guid Id { get; set; }
 
     [JsonPropertyName("documentId")]
@@ -32,5 +33,6 @@ public class BcSalesCreditMemoLine
     public decimal LineAmount { get; set; }
 
     [JsonPropertyName("@odata.etag")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ETag { get; set; }
 }
