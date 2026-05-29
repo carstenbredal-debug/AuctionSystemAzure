@@ -41,7 +41,8 @@ public class BrokerFunctions
                 b.Country, b.PostalCode, b.City, b.ContactPhone, b.MobilePhone,
                 b.ContactEmail, b.HomePage, b.VatRegistrationNo, b.RegistrationNo,
                 b.CustomerGroup, b.SalesPerson, b.PaymentTerm, b.PaymentMethod,
-                b.Currency, b.Language, b.IsActive, b.Address, b.CreatedAt,
+                b.Currency, b.Language, b.CreditLimit, b.Blocked,
+                b.IsActive, b.Address, b.CreatedAt,
                 BuyerCount = b.BrokerBuyers.Count
             })
             .ToListAsync();
@@ -100,6 +101,8 @@ public class BrokerFunctions
         broker.PaymentMethod = dto.PaymentMethod;
         broker.Currency = dto.Currency;
         broker.Language = dto.Language;
+        broker.CreditLimit = dto.CreditLimit;
+        broker.Blocked = dto.Blocked;
         broker.IsActive = dto.IsActive;
         await _db.SaveChangesAsync();
         await TryPushBrokerToBcAsync(broker);

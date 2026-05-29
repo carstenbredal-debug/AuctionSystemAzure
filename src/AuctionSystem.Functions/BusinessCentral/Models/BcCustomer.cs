@@ -50,6 +50,12 @@ public class BcCustomer
     [JsonPropertyName("currencyCode")]
     public string CurrencyCode { get; set; } = string.Empty;
 
+    [JsonPropertyName("creditLimit")]
+    public decimal CreditLimit { get; set; }
+
+    [JsonPropertyName("blocked")]
+    public string Blocked { get; set; } = string.Empty;
+
     [JsonPropertyName("lastModifiedDateTime")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public DateTimeOffset? LastModifiedDateTime { get; set; }

@@ -18,10 +18,9 @@ else
 {
     <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
-            <h1>@_broker.CompanyName</h1>
-            <p class="text-muted mb-0">Broker #@_broker.BrokerNumber</p>
+            <h4 class="mb-0">@_broker.BrokerNumber — @_broker.CompanyName</h4>
         </div>
-        <a href="admin/brokers" class="btn btn-outline-secondary">Back to Brokers</a>
+        <a href="admin/brokers" class="btn btn-outline-secondary btn-sm">Back to Brokers</a>
     </div>
 
     @if (!string.IsNullOrEmpty(_message))
@@ -65,48 +64,86 @@ else
 
     @if (_activeTab == "info")
     {
-        <div class="card">
-            <div class="card-header">
-                <strong>Broker Information</strong>
-                @if (!_editing)
-                {
-                    <button class="btn btn-sm btn-outline-primary float-end" @onclick="StartEdit">Edit</button>
-                }
+        @if (!_editing)
+        {
+            <button class="btn btn-sm btn-outline-primary float-end mb-2" @onclick="StartEdit">Edit</button>
+        }
+
+        <!-- General Section -->
+        <div class="card mb-3">
+            <div class="card-header bg-light">
+                <strong>General</strong>
             </div>
             <div class="card-body">
                 @if (_editing)
                 {
                     <div class="row g-3">
-                        <div class="col-md-4">
-                            <label class="form-label">Broker Number <span class="text-danger">*</span></label>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">No. <span class="text-danger">*</span></label>
                             <input class="form-control" @bind="_editDto!.BrokerNumber" />
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Broker Name <span class="text-danger">*</span></label>
+                        <div class="col-md-5">
+                            <label class="form-label fw-bold">Name <span class="text-danger">*</span></label>
                             <input class="form-control" @bind="_editDto!.CompanyName" />
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Broker Name 2</label>
-                            <input class="form-control" @bind="_editDto!.CompanyName2" />
+                        <div class="col-md-2">
+                            <label class="form-label">Credit Limit</label>
+                            <input class="form-control" type="number" step="0.01" @bind="_editDto!.CreditLimit" />
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Search Name</label>
-                            <input class="form-control" @bind="_editDto!.SearchName" />
+                        <div class="col-md-2">
+                            <label class="form-label">Blocked</label>
+                            <select class="form-select" @bind="_editDto!.Blocked">
+                                <option value="">— (None)</option>
+                                <option value="Ship">Ship</option>
+                                <option value="Invoice">Invoice</option>
+                                <option value="All">All</option>
+                            </select>
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Contact Name</label>
-                            <input class="form-control" @bind="_editDto!.ContactPerson" />
+                    </div>
+                }
+                else
+                {
+                    <div class="row">
+                        <div class="col-md-3 mb-2">
+                            <small class="text-muted d-block">No.</small>
+                            <strong>@_broker.BrokerNumber</strong>
                         </div>
+                        <div class="col-md-5 mb-2">
+                            <small class="text-muted d-block">Name</small>
+                            <strong>@_broker.CompanyName</strong>
+                        </div>
+                        <div class="col-md-2 mb-2">
+                            <small class="text-muted d-block">Credit Limit</small>
+                            <strong>@_broker.CreditLimit.ToString("N2")</strong>
+                        </div>
+                        <div class="col-md-2 mb-2">
+                            <small class="text-muted d-block">Blocked</small>
+                            <strong>@(string.IsNullOrEmpty(_broker.Blocked) ? "—" : _broker.Blocked)</strong>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Address & Contact Section -->
+        <div class="card mb-3">
+            <div class="card-header bg-light">
+                <strong>Address & Contact</strong>
+            </div>
+            <div class="card-body">
+                @if (_editing)
+                {
+                    <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label">Address Line 1</label>
+                            <label class="form-label">Address</label>
                             <input class="form-control" @bind="_editDto!.AddressLine1" />
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Address Line 2</label>
+                            <label class="form-label">Address 2</label>
                             <input class="form-control" @bind="_editDto!.AddressLine2" />
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Country</label>
+                            <label class="form-label">Country/Region Code</label>
                             <select class="form-select" @bind="_editDto!.Country">
                                 <option value="">Select Country...</option>
                                 @foreach (var c in _bcCountries)
@@ -116,7 +153,7 @@ else
                             </select>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Postal Code</label>
+                            <label class="form-label">Post Code</label>
                             <input class="form-control" @bind="_editDto!.PostalCode" />
                         </div>
                         <div class="col-md-4">
@@ -124,164 +161,194 @@ else
                             <input class="form-control" @bind="_editDto!.City" />
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Phone No</label>
+                            <label class="form-label">Contact Name</label>
+                            <input class="form-control" @bind="_editDto!.ContactPerson" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Phone No.</label>
                             <input class="form-control" @bind="_editDto!.ContactPhone" />
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Mobile Phone No</label>
+                            <label class="form-label">Mobile Phone No.</label>
                             <input class="form-control" @bind="_editDto!.MobilePhone" />
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Email</label>
+                            <label class="form-label">E-Mail</label>
                             <input class="form-control" type="email" @bind="_editDto!.ContactEmail" />
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Home Page</label>
                             <input class="form-control" @bind="_editDto!.HomePage" />
                         </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="row">
+                        <div class="col-md-6 mb-2">
+                            <small class="text-muted d-block">Address</small>
+                            <strong>@(string.IsNullOrEmpty(_broker.AddressLine1) ? "—" : _broker.AddressLine1)</strong>
+                        </div>
+                        <div class="col-md-6 mb-2">
+                            <small class="text-muted d-block">Address 2</small>
+                            <strong>@(string.IsNullOrEmpty(_broker.AddressLine2) ? "—" : _broker.AddressLine2)</strong>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <small class="text-muted d-block">Country/Region Code</small>
+                            <strong>@(string.IsNullOrEmpty(_broker.Country) ? "—" : _broker.Country)</strong>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <small class="text-muted d-block">Post Code</small>
+                            <strong>@(string.IsNullOrEmpty(_broker.PostalCode) ? "—" : _broker.PostalCode)</strong>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <small class="text-muted d-block">City</small>
+                            <strong>@(string.IsNullOrEmpty(_broker.City) ? "—" : _broker.City)</strong>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <small class="text-muted d-block">Contact Name</small>
+                            <strong>@(string.IsNullOrEmpty(_broker.ContactPerson) ? "—" : _broker.ContactPerson)</strong>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <small class="text-muted d-block">Phone No.</small>
+                            <strong>@(string.IsNullOrEmpty(_broker.ContactPhone) ? "—" : _broker.ContactPhone)</strong>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <small class="text-muted d-block">Mobile Phone No.</small>
+                            <strong>@(string.IsNullOrEmpty(_broker.MobilePhone) ? "—" : _broker.MobilePhone)</strong>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <small class="text-muted d-block">E-Mail</small>
+                            <strong>@(string.IsNullOrEmpty(_broker.ContactEmail) ? "—" : _broker.ContactEmail)</strong>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <small class="text-muted d-block">Home Page</small>
+                            <strong>@(string.IsNullOrEmpty(_broker.HomePage) ? "—" : _broker.HomePage)</strong>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Invoicing Section -->
+        <div class="card mb-3">
+            <div class="card-header bg-light">
+                <strong>Invoicing</strong>
+            </div>
+            <div class="card-body">
+                @if (_editing)
+                {
+                    <div class="row g-3">
                         <div class="col-md-4">
-                            <label class="form-label">VAT Registration No</label>
+                            <label class="form-label">VAT Registration No.</label>
                             <input class="form-control" @bind="_editDto!.VatRegistrationNo" />
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Registration No</label>
+                            <label class="form-label">Registration No.</label>
                             <input class="form-control" @bind="_editDto!.RegistrationNo" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Currency Code</label>
+                            <input class="form-control" @bind="_editDto!.Currency" />
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Customer Group</label>
                             <input class="form-control" @bind="_editDto!.CustomerGroup" />
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Sales Person</label>
+                            <label class="form-label">Salesperson Code</label>
                             <input class="form-control" @bind="_editDto!.SalesPerson" />
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Payment Term</label>
-                            <input class="form-control" @bind="_editDto!.PaymentTerm" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Payment Method</label>
-                            <input class="form-control" @bind="_editDto!.PaymentMethod" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Currency</label>
-                            <input class="form-control" @bind="_editDto!.Currency" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Language</label>
+                            <label class="form-label">Language Code</label>
                             <input class="form-control" @bind="_editDto!.Language" />
-                        </div>
-                        <div class="col-md-4 d-flex align-items-center pt-4">
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" @bind="_editDto!.IsActive" />
-                                <label class="form-check-label">Is Active</label>
-                            </div>
-                        </div>
-                        <div class="col-12 mt-3">
-                            <button class="btn btn-success me-2" @onclick="SaveEdit">Save</button>
-                            <button class="btn btn-secondary" @onclick="CancelEdit">Cancel</button>
                         </div>
                     </div>
                 }
                 else
                 {
                     <div class="row">
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Broker Number</small>
-                            <strong>@_broker.BrokerNumber</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Broker Name</small>
-                            <strong>@_broker.CompanyName</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Broker Name 2</small>
-                            <strong>@(string.IsNullOrEmpty(_broker.CompanyName2) ? "—" : _broker.CompanyName2)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Search Name</small>
-                            <strong>@(string.IsNullOrEmpty(_broker.SearchName) ? "—" : _broker.SearchName)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Contact Name</small>
-                            <strong>@(string.IsNullOrEmpty(_broker.ContactPerson) ? "—" : _broker.ContactPerson)</strong>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <small class="text-muted d-block">Address Line 1</small>
-                            <strong>@(string.IsNullOrEmpty(_broker.AddressLine1) ? "—" : _broker.AddressLine1)</strong>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <small class="text-muted d-block">Address Line 2</small>
-                            <strong>@(string.IsNullOrEmpty(_broker.AddressLine2) ? "—" : _broker.AddressLine2)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Country</small>
-                            <strong>@(string.IsNullOrEmpty(_broker.Country) ? "—" : _broker.Country)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Postal Code</small>
-                            <strong>@(string.IsNullOrEmpty(_broker.PostalCode) ? "—" : _broker.PostalCode)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">City</small>
-                            <strong>@(string.IsNullOrEmpty(_broker.City) ? "—" : _broker.City)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Phone No</small>
-                            <strong>@(string.IsNullOrEmpty(_broker.ContactPhone) ? "—" : _broker.ContactPhone)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Mobile Phone No</small>
-                            <strong>@(string.IsNullOrEmpty(_broker.MobilePhone) ? "—" : _broker.MobilePhone)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Email</small>
-                            <strong>@(string.IsNullOrEmpty(_broker.ContactEmail) ? "—" : _broker.ContactEmail)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Home Page</small>
-                            <strong>@(string.IsNullOrEmpty(_broker.HomePage) ? "—" : _broker.HomePage)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">VAT Registration No</small>
+                        <div class="col-md-4 mb-2">
+                            <small class="text-muted d-block">VAT Registration No.</small>
                             <strong>@(string.IsNullOrEmpty(_broker.VatRegistrationNo) ? "—" : _broker.VatRegistrationNo)</strong>
                         </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Registration No</small>
+                        <div class="col-md-4 mb-2">
+                            <small class="text-muted d-block">Registration No.</small>
                             <strong>@(string.IsNullOrEmpty(_broker.RegistrationNo) ? "—" : _broker.RegistrationNo)</strong>
                         </div>
-                        <div class="col-md-4 mb-3">
+                        <div class="col-md-4 mb-2">
+                            <small class="text-muted d-block">Currency Code</small>
+                            <strong>@(string.IsNullOrEmpty(_broker.Currency) ? "—" : _broker.Currency)</strong>
+                        </div>
+                        <div class="col-md-4 mb-2">
                             <small class="text-muted d-block">Customer Group</small>
                             <strong>@(string.IsNullOrEmpty(_broker.CustomerGroup) ? "—" : _broker.CustomerGroup)</strong>
                         </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Sales Person</small>
+                        <div class="col-md-4 mb-2">
+                            <small class="text-muted d-block">Salesperson Code</small>
                             <strong>@(string.IsNullOrEmpty(_broker.SalesPerson) ? "—" : _broker.SalesPerson)</strong>
                         </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Payment Term</small>
-                            <strong>@(string.IsNullOrEmpty(_broker.PaymentTerm) ? "—" : _broker.PaymentTerm)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Payment Method</small>
-                            <strong>@(string.IsNullOrEmpty(_broker.PaymentMethod) ? "—" : _broker.PaymentMethod)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Currency</small>
-                            <strong>@(string.IsNullOrEmpty(_broker.Currency) ? "—" : _broker.Currency)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Language</small>
+                        <div class="col-md-4 mb-2">
+                            <small class="text-muted d-block">Language Code</small>
                             <strong>@(string.IsNullOrEmpty(_broker.Language) ? "—" : _broker.Language)</strong>
                         </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Is Active</small>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Payments Section -->
+        <div class="card mb-3">
+            <div class="card-header bg-light">
+                <strong>Payments</strong>
+            </div>
+            <div class="card-body">
+                @if (_editing)
+                {
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Payment Terms Code</label>
+                            <input class="form-control" @bind="_editDto!.PaymentTerm" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Payment Method Code</label>
+                            <input class="form-control" @bind="_editDto!.PaymentMethod" />
+                        </div>
+                        <div class="col-md-4 d-flex align-items-center pt-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" @bind="_editDto!.IsActive" />
+                                <label class="form-check-label">Active</label>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="row">
+                        <div class="col-md-4 mb-2">
+                            <small class="text-muted d-block">Payment Terms Code</small>
+                            <strong>@(string.IsNullOrEmpty(_broker.PaymentTerm) ? "—" : _broker.PaymentTerm)</strong>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <small class="text-muted d-block">Payment Method Code</small>
+                            <strong>@(string.IsNullOrEmpty(_broker.PaymentMethod) ? "—" : _broker.PaymentMethod)</strong>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <small class="text-muted d-block">Active</small>
                             <span class="badge bg-@(_broker.IsActive ? "success" : "secondary")">@(_broker.IsActive ? "Active" : "Inactive")</span>
                         </div>
                     </div>
                 }
             </div>
         </div>
+
+        @if (_editing)
+        {
+            <div class="mt-2">
+                <button class="btn btn-success me-2" @onclick="SaveEdit">Save</button>
+                <button class="btn btn-secondary" @onclick="CancelEdit">Cancel</button>
+            </div>
+        }
     }
 
     @if (_activeTab == "customers")
@@ -649,7 +716,9 @@ else
             VatRegistrationNo = _broker.VatRegistrationNo, RegistrationNo = _broker.RegistrationNo,
             CustomerGroup = _broker.CustomerGroup, SalesPerson = _broker.SalesPerson,
             PaymentTerm = _broker.PaymentTerm, PaymentMethod = _broker.PaymentMethod,
-            Currency = _broker.Currency, Language = _broker.Language, IsActive = _broker.IsActive
+            Currency = _broker.Currency, Language = _broker.Language,
+            CreditLimit = _broker.CreditLimit, Blocked = _broker.Blocked,
+            IsActive = _broker.IsActive
         };
         _editing = true;
         _message = null;

@@ -102,6 +102,8 @@ public class BrokerDto
     public string PaymentMethod { get; set; } = "";
     public string Currency { get; set; } = "";
     public string Language { get; set; } = "";
+    public decimal CreditLimit { get; set; }
+    public string Blocked { get; set; } = "";
     public bool IsActive { get; set; } = true;
 }
 
