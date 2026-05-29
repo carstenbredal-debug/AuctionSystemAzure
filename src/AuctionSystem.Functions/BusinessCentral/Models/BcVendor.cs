@@ -4,9 +4,13 @@ namespace AuctionSystem.Functions.BusinessCentral.Models;
 
 public class BcVendor
 {
-    [JsonPropertyName("id")]
+    [JsonPropertyName("systemId")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public Guid Id { get; set; }
+
+    [JsonPropertyName("id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public Guid StandardApiId { get => Guid.Empty; set { if (value != Guid.Empty) Id = value; } }
 
     [JsonPropertyName("number")]
     public string Number { get; set; } = string.Empty;
