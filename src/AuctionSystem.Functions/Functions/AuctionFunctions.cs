@@ -142,7 +142,7 @@ public class AuctionFunctions
 
     [Function("ResetAllData")]
     public async Task<HttpResponseData> ResetAllData(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "admin/reset-all")] HttpRequestData req)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "system/reset-all")] HttpRequestData req)
     {
         _logger.LogWarning("RESETTING ALL DATA (except SystemParameters)");
 
