@@ -148,33 +148,21 @@ public class AuctionFunctions
 
         try
         {
-            // Single SQL batch handles FK ordering and uses NOCHECK to avoid constraint issues
-            var sql = @"
-                -- Disable FK checks
-                EXEC sp_MSforeachtable @command1='ALTER TABLE ? NOCHECK CONSTRAINT ALL', @whereand='AND SCHEMA_NAME(schema_id) = ''auction'''
+            var tables = new[] { "InvoiceLines", "Invoices", "TakebackRequests", "LotAllocations",
+                "AuctionResults", "Settlements", "Bids", "Lots", "Auctions",
+                "BrokerBuyers", "BrokerCustomerRequests", "Buyers", "Brokers", "Sellers", "AppUsers" };
 
-                -- Delete all data except SystemParameters
-                DELETE FROM auction.InvoiceLines;
-                DELETE FROM auction.Invoices;
-                DELETE FROM auction.TakebackRequests;
-                DELETE FROM auction.LotAllocations;
-                DELETE FROM auction.AuctionResults;
-                DELETE FROM auction.Settlements;
-                DELETE FROM auction.Bids;
-                DELETE FROM auction.Lots;
-                DELETE FROM auction.Auctions;
-                DELETE FROM auction.BrokerBuyers;
-                DELETE FROM auction.BrokerCustomerRequests;
-                DELETE FROM auction.Buyers;
-                DELETE FROM auction.Brokers;
-                DELETE FROM auction.Sellers;
-                DELETE FROM auction.AppUsers;
+            // Disable FK constraints
+            foreach (var t in tables)
+                await _db.Database.ExecuteSqlRawAsync($"ALTER TABLE auction.[{t}] NOCHECK CONSTRAINT ALL");
 
-                -- Re-enable FK checks
-                EXEC sp_MSforeachtable @command1='ALTER TABLE ? WITH CHECK CHECK CONSTRAINT ALL', @whereand='AND SCHEMA_NAME(schema_id) = ''auction'''
-            ";
+            // Delete all data
+            foreach (var t in tables)
+                await _db.Database.ExecuteSqlRawAsync($"DELETE FROM auction.[{t}]");
 
-            await _db.Database.ExecuteSqlRawAsync(sql);
+            // Re-enable FK constraints
+            foreach (var t in tables)
+                await _db.Database.ExecuteSqlRawAsync($"ALTER TABLE auction.[{t}] WITH CHECK CHECK CONSTRAINT ALL");
 
             // Get remaining counts to confirm
             var brokerCount = await _db.Brokers.CountAsync();
