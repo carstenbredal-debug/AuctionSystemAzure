@@ -444,7 +444,9 @@ public class BusinessCentralSyncService
             PhoneNumber = broker.ContactPhone,
             Email = broker.ContactEmail,
             Website = broker.HomePage,
-            CurrencyCode = broker.Currency == "EUR" ? "EUR" : broker.Currency
+            CurrencyCode = broker.Currency == "EUR" ? "EUR" : broker.Currency,
+            CreditLimit = broker.CreditLimit,
+            Blocked = string.IsNullOrEmpty(broker.Blocked) ? "_x0020_" : broker.Blocked
         };
     }
 
