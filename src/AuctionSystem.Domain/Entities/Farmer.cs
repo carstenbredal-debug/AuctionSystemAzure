@@ -32,6 +32,11 @@ public class Farmer
     public string BankCountry { get; set; } = string.Empty;
     public string Assignee { get; set; } = string.Empty;
     public bool AssignmentOfReceivable { get; set; }
+    public decimal CreditLimit { get; set; }
+    public string Blocked { get; set; } = string.Empty;
+    public string GenBusPostingGroup { get; set; } = string.Empty;
+    public string VatBusPostingGroup { get; set; } = string.Empty;
+    public string VendorPostingGroup { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
 
     [Obsolete("Use AddressLine1 instead")]

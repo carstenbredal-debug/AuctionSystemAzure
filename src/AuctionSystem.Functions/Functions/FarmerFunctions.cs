@@ -99,6 +99,11 @@ public class FarmerFunctions
         farmer.BankCountry = dto.BankCountry;
         farmer.Assignee = dto.Assignee;
         farmer.AssignmentOfReceivable = dto.AssignmentOfReceivable;
+        farmer.CreditLimit = dto.CreditLimit;
+        farmer.Blocked = dto.Blocked;
+        farmer.GenBusPostingGroup = dto.GenBusPostingGroup;
+        farmer.VatBusPostingGroup = dto.VatBusPostingGroup;
+        farmer.VendorPostingGroup = dto.VendorPostingGroup;
         farmer.IsActive = dto.IsActive;
         await _db.SaveChangesAsync();
         await TryPushFarmerToBcAsync(farmer);

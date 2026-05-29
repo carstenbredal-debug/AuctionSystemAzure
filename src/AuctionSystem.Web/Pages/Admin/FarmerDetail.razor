@@ -50,272 +50,218 @@ else
 
     @if (_activeTab == "info")
     {
-        <div class="card">
-            <div class="card-header">
-                <strong>Farmer Information</strong>
-                @if (!_editing)
-                {
-                    <button class="btn btn-sm btn-outline-primary float-end" @onclick="StartEdit">Edit</button>
-                }
-            </div>
+        <!-- General Section -->
+        <div class="card mb-3">
+            <div class="card-header bg-light"><strong>General</strong></div>
             <div class="card-body">
-                @if (_editing)
-                {
-                    <div class="row g-3">
-                        <div class="col-md-4">
-                            <label class="form-label">Farmer Number <span class="text-danger">*</span></label>
-                            <input class="form-control" @bind="_editDto!.FarmerNumber" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Name <span class="text-danger">*</span></label>
-                            <input class="form-control" @bind="_editDto!.Name" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Name 2</label>
-                            <input class="form-control" @bind="_editDto!.Name2" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Search Name</label>
-                            <input class="form-control" @bind="_editDto!.SearchName" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Contact Name</label>
-                            <input class="form-control" @bind="_editDto!.ContactName" />
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Address Line 1</label>
-                            <input class="form-control" @bind="_editDto!.AddressLine1" />
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Address Line 2</label>
-                            <input class="form-control" @bind="_editDto!.AddressLine2" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Country</label>
-                            <select class="form-select" @bind="_editDto!.Country">
-                                <option value="">Select Country...</option>
-                                @foreach (var c in _bcCountries)
-                                {
-                                    <option value="@c.Code">@c.DisplayName (@c.Code)</option>
-                                }
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Postal Code</label>
-                            <input class="form-control" @bind="_editDto!.PostalCode" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">City</label>
-                            <input class="form-control" @bind="_editDto!.City" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Phone No</label>
-                            <input class="form-control" @bind="_editDto!.ContactPhone" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Mobile Phone No</label>
-                            <input class="form-control" @bind="_editDto!.MobilePhone" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Email</label>
-                            <input class="form-control" type="email" @bind="_editDto!.ContactEmail" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Home Page</label>
-                            <input class="form-control" @bind="_editDto!.HomePage" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">VAT Registration No</label>
-                            <input class="form-control" @bind="_editDto!.VatRegistrationNo" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Registration No</label>
-                            <input class="form-control" @bind="_editDto!.RegistrationNo" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Sales Person</label>
-                            <input class="form-control" @bind="_editDto!.SalesPerson" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Payment Term</label>
-                            <input class="form-control" @bind="_editDto!.PaymentTerm" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Payment Method</label>
-                            <input class="form-control" @bind="_editDto!.PaymentMethod" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Currency</label>
-                            <input class="form-control" @bind="_editDto!.Currency" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Language</label>
-                            <input class="form-control" @bind="_editDto!.Language" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Bank Name</label>
-                            <input class="form-control" @bind="_editDto!.BankName" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Bank Address</label>
-                            <input class="form-control" @bind="_editDto!.BankAddress" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Bank IBAN Number</label>
-                            <input class="form-control" @bind="_editDto!.BankIbanNumber" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">SWIFT Code</label>
-                            <input class="form-control" @bind="_editDto!.SwiftCode" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Bank Country</label>
-                            <input class="form-control" @bind="_editDto!.BankCountry" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Assignee</label>
-                            <input class="form-control" @bind="_editDto!.Assignee" />
-                        </div>
-                        <div class="col-md-4 d-flex align-items-center pt-4">
-                            <div class="form-check form-switch me-4">
-                                <input class="form-check-input" type="checkbox" @bind="_editDto!.AssignmentOfReceivable" />
-                                <label class="form-check-label">Assignment of Receivable</label>
-                            </div>
-                        </div>
-                        <div class="col-md-4 d-flex align-items-center pt-4">
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" @bind="_editDto!.IsActive" />
-                                <label class="form-check-label">Is Active</label>
-                            </div>
-                        </div>
-                        <div class="col-12 mt-3">
-                            <button class="btn btn-success me-2" @onclick="SaveEdit">Save</button>
-                            <button class="btn btn-secondary" @onclick="CancelEdit">Cancel</button>
-                        </div>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">No. <span class="text-danger">*</span></label>
+                        <input class="form-control" @bind="_editDto!.FarmerNumber" />
                     </div>
-                }
-                else
-                {
-                    <div class="row">
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Farmer Number</small>
-                            <strong>@_farmer.FarmerNumber</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Name</small>
-                            <strong>@_farmer.Name</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Name 2</small>
-                            <strong>@(string.IsNullOrEmpty(_farmer.Name2) ? "—" : _farmer.Name2)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Search Name</small>
-                            <strong>@(string.IsNullOrEmpty(_farmer.SearchName) ? "—" : _farmer.SearchName)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Contact Name</small>
-                            <strong>@(string.IsNullOrEmpty(_farmer.ContactName) ? "—" : _farmer.ContactName)</strong>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <small class="text-muted d-block">Address Line 1</small>
-                            <strong>@(string.IsNullOrEmpty(_farmer.AddressLine1) ? "—" : _farmer.AddressLine1)</strong>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <small class="text-muted d-block">Address Line 2</small>
-                            <strong>@(string.IsNullOrEmpty(_farmer.AddressLine2) ? "—" : _farmer.AddressLine2)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Country</small>
-                            <strong>@(string.IsNullOrEmpty(_farmer.Country) ? "—" : _farmer.Country)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Postal Code</small>
-                            <strong>@(string.IsNullOrEmpty(_farmer.PostalCode) ? "—" : _farmer.PostalCode)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">City</small>
-                            <strong>@(string.IsNullOrEmpty(_farmer.City) ? "—" : _farmer.City)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Phone No</small>
-                            <strong>@(string.IsNullOrEmpty(_farmer.ContactPhone) ? "—" : _farmer.ContactPhone)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Mobile Phone No</small>
-                            <strong>@(string.IsNullOrEmpty(_farmer.MobilePhone) ? "—" : _farmer.MobilePhone)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Email</small>
-                            <strong>@(string.IsNullOrEmpty(_farmer.ContactEmail) ? "—" : _farmer.ContactEmail)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Home Page</small>
-                            <strong>@(string.IsNullOrEmpty(_farmer.HomePage) ? "—" : _farmer.HomePage)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">VAT Registration No</small>
-                            <strong>@(string.IsNullOrEmpty(_farmer.VatRegistrationNo) ? "—" : _farmer.VatRegistrationNo)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Registration No</small>
-                            <strong>@(string.IsNullOrEmpty(_farmer.RegistrationNo) ? "—" : _farmer.RegistrationNo)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Sales Person</small>
-                            <strong>@(string.IsNullOrEmpty(_farmer.SalesPerson) ? "—" : _farmer.SalesPerson)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Payment Term</small>
-                            <strong>@(string.IsNullOrEmpty(_farmer.PaymentTerm) ? "—" : _farmer.PaymentTerm)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Payment Method</small>
-                            <strong>@(string.IsNullOrEmpty(_farmer.PaymentMethod) ? "—" : _farmer.PaymentMethod)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Currency</small>
-                            <strong>@(string.IsNullOrEmpty(_farmer.Currency) ? "—" : _farmer.Currency)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Language</small>
-                            <strong>@(string.IsNullOrEmpty(_farmer.Language) ? "—" : _farmer.Language)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Bank Name</small>
-                            <strong>@(string.IsNullOrEmpty(_farmer.BankName) ? "—" : _farmer.BankName)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Bank Address</small>
-                            <strong>@(string.IsNullOrEmpty(_farmer.BankAddress) ? "—" : _farmer.BankAddress)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Bank IBAN Number</small>
-                            <strong>@(string.IsNullOrEmpty(_farmer.BankIbanNumber) ? "—" : _farmer.BankIbanNumber)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">SWIFT Code</small>
-                            <strong>@(string.IsNullOrEmpty(_farmer.SwiftCode) ? "—" : _farmer.SwiftCode)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Bank Country</small>
-                            <strong>@(string.IsNullOrEmpty(_farmer.BankCountry) ? "—" : _farmer.BankCountry)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Assignee</small>
-                            <strong>@(string.IsNullOrEmpty(_farmer.Assignee) ? "—" : _farmer.Assignee)</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Assignment of Receivable</small>
-                            <strong>@(_farmer.AssignmentOfReceivable ? "Yes" : "No")</strong>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <small class="text-muted d-block">Is Active</small>
-                            <span class="badge bg-@(_farmer.IsActive ? "success" : "secondary")">@(_farmer.IsActive ? "Active" : "Inactive")</span>
-                        </div>
+                    <div class="col-md-5">
+                        <label class="form-label fw-bold">Name <span class="text-danger">*</span></label>
+                        <input class="form-control" @bind="_editDto!.Name" />
                     </div>
-                }
+                    <div class="col-md-2">
+                        <label class="form-label">Credit Limit</label>
+                        <input class="form-control" type="number" step="0.01" @bind="_editDto!.CreditLimit" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Blocked</label>
+                        <select class="form-select" @bind="_editDto!.Blocked">
+                            <option value="">— (None)</option>
+                            <option value="Ship">Ship</option>
+                            <option value="Invoice">Invoice</option>
+                            <option value="All">All</option>
+                        </select>
+                    </div>
+                </div>
             </div>
+        </div>
+
+        <!-- Address & Contact Section -->
+        <div class="card mb-3">
+            <div class="card-header bg-light"><strong>Address & Contact</strong></div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Address</label>
+                        <input class="form-control" @bind="_editDto!.AddressLine1" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Address 2</label>
+                        <input class="form-control" @bind="_editDto!.AddressLine2" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Country/Region Code</label>
+                        <select class="form-select" @bind="_editDto!.Country">
+                            <option value="">Select Country...</option>
+                            @foreach (var c in _bcCountries)
+                            {
+                                <option value="@c.Code">@c.DisplayName (@c.Code)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Post Code</label>
+                        <input class="form-control" @bind="_editDto!.PostalCode" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">City</label>
+                        <input class="form-control" @bind="_editDto!.City" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Contact Name</label>
+                        <input class="form-control" @bind="_editDto!.ContactName" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Phone No.</label>
+                        <input class="form-control" @bind="_editDto!.ContactPhone" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Mobile Phone No.</label>
+                        <input class="form-control" @bind="_editDto!.MobilePhone" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">E-Mail</label>
+                        <input class="form-control" type="email" @bind="_editDto!.ContactEmail" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Home Page</label>
+                        <input class="form-control" @bind="_editDto!.HomePage" placeholder="https://" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Invoicing Section -->
+        <div class="card mb-3">
+            <div class="card-header bg-light"><strong>Invoicing</strong></div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">VAT Registration No.</label>
+                        <input class="form-control" @bind="_editDto!.VatRegistrationNo" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Registration No.</label>
+                        <input class="form-control" @bind="_editDto!.RegistrationNo" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Currency Code</label>
+                        <select class="form-select" @bind="_editDto!.Currency">
+                            <option value="">Select Currency...</option>
+                            @foreach (var c in _bcCurrencies)
+                            {
+                                <option value="@c.Code">@c.DisplayName (@c.Code)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Gen. Bus. Posting Group</label>
+                        <select class="form-select" @bind="_editDto!.GenBusPostingGroup">
+                            <option value="">Select...</option>
+                            @foreach (var g in _bcGenBusPostingGroups)
+                            {
+                                <option value="@g.Code">@g.Description (@g.Code)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">VAT Bus. Posting Group</label>
+                        <select class="form-select" @bind="_editDto!.VatBusPostingGroup">
+                            <option value="">Select...</option>
+                            @foreach (var g in _bcVatBusPostingGroups)
+                            {
+                                <option value="@g.Code">@g.Description (@g.Code)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Vendor Posting Group</label>
+                        <select class="form-select" @bind="_editDto!.VendorPostingGroup">
+                            <option value="">Select...</option>
+                            @foreach (var g in _bcVendorPostingGroups)
+                            {
+                                <option value="@g.Code">@g.Code</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payments Section -->
+        <div class="card mb-3">
+            <div class="card-header bg-light"><strong>Payments</strong></div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Payment Terms Code</label>
+                        <select class="form-select" @bind="_editDto!.PaymentTerm">
+                            <option value="">Select...</option>
+                            @foreach (var t in _bcPaymentTerms)
+                            {
+                                <option value="@t.Code">@t.Code</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Payment Method Code</label>
+                        <input class="form-control" @bind="_editDto!.PaymentMethod" />
+                    </div>
+                    <div class="col-md-4 d-flex align-items-center pt-4">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" @bind="_editDto!.IsActive" />
+                            <label class="form-check-label">Active</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Banking Section -->
+        <div class="card mb-3">
+            <div class="card-header bg-light"><strong>Banking</strong></div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Bank Name</label>
+                        <input class="form-control" @bind="_editDto!.BankName" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Bank Address</label>
+                        <input class="form-control" @bind="_editDto!.BankAddress" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Bank Country</label>
+                        <input class="form-control" @bind="_editDto!.BankCountry" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">IBAN Number</label>
+                        <input class="form-control" @bind="_editDto!.BankIbanNumber" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">SWIFT Code</label>
+                        <input class="form-control" @bind="_editDto!.SwiftCode" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Assignee</label>
+                        <input class="form-control" @bind="_editDto!.Assignee" />
+                    </div>
+                    <div class="col-md-4 d-flex align-items-center pt-4">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" @bind="_editDto!.AssignmentOfReceivable" />
+                            <label class="form-check-label">Assignment of Receivable</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-2">
+            <button class="btn btn-success me-2" @onclick="SaveEdit">Save</button>
         </div>
     }
 
@@ -378,12 +324,16 @@ else
     private FarmerDto? _farmer;
     private List<LotDto> _lots = new();
     private bool _loading = true;
-    private bool _editing;
     private FarmerDto? _editDto;
     private string? _message;
     private bool _messageIsError;
     private string _activeTab = "info";
     private List<BcCountryRegionDto> _bcCountries = new();
+    private List<BcCurrencyDto> _bcCurrencies = new();
+    private List<BcPostingGroupDto> _bcGenBusPostingGroups = new();
+    private List<BcPostingGroupDto> _bcVatBusPostingGroups = new();
+    private List<BcPostingGroupDto> _bcVendorPostingGroups = new();
+    private List<BcPaymentTermDto> _bcPaymentTerms = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -396,36 +346,44 @@ else
         var allFarmers = await Api.GetFarmersAsync();
         _farmer = allFarmers.FirstOrDefault(s => s.Id == FarmerId);
         if (_farmer != null)
+        {
             _lots = await Api.GetLotsByFarmerAsync(FarmerId);
+            InitEditDto();
+        }
         _bcCountries = await Api.GetBcCountriesAsync();
+        _bcCurrencies = await Api.GetBcCurrenciesAsync();
+        _bcGenBusPostingGroups = await Api.GetBcGenBusPostingGroupsAsync();
+        _bcVatBusPostingGroups = await Api.GetBcVatBusPostingGroupsAsync();
+        _bcVendorPostingGroups = await Api.GetBcVendorPostingGroupsAsync();
+        _bcPaymentTerms = await Api.GetBcPaymentTermsAsync();
     }
 
-    private void StartEdit()
+    private void InitEditDto()
     {
         _editDto = new FarmerDto
         {
             Id = _farmer!.Id, FarmerNumber = _farmer.FarmerNumber, Name = _farmer.Name,
-            Name2 = _farmer.Name2,
-            SearchName = _farmer.SearchName, ContactName = _farmer.ContactName,
+            Name2 = _farmer.Name2, SearchName = _farmer.SearchName,
+            ContactName = _farmer.ContactName,
             AddressLine1 = _farmer.AddressLine1, AddressLine2 = _farmer.AddressLine2,
             Country = _farmer.Country, PostalCode = _farmer.PostalCode, City = _farmer.City,
             ContactPhone = _farmer.ContactPhone, MobilePhone = _farmer.MobilePhone,
             ContactEmail = _farmer.ContactEmail, HomePage = _farmer.HomePage,
             VatRegistrationNo = _farmer.VatRegistrationNo, RegistrationNo = _farmer.RegistrationNo,
-            CustomerGroup = _farmer.CustomerGroup, SalesPerson = _farmer.SalesPerson,
+            CustomerGroup = _farmer.CustomerGroup,
+            GenBusPostingGroup = _farmer.GenBusPostingGroup,
+            VatBusPostingGroup = _farmer.VatBusPostingGroup,
+            VendorPostingGroup = _farmer.VendorPostingGroup,
             PaymentTerm = _farmer.PaymentTerm, PaymentMethod = _farmer.PaymentMethod,
-            Currency = _farmer.Currency, Language = _farmer.Language,
+            Currency = _farmer.Currency,
             BankName = _farmer.BankName, BankAddress = _farmer.BankAddress,
             BankIbanNumber = _farmer.BankIbanNumber, SwiftCode = _farmer.SwiftCode,
             BankCountry = _farmer.BankCountry, Assignee = _farmer.Assignee,
-            AssignmentOfReceivable = _farmer.AssignmentOfReceivable, IsActive = _farmer.IsActive,
-            Address = _farmer.Address
+            AssignmentOfReceivable = _farmer.AssignmentOfReceivable,
+            CreditLimit = _farmer.CreditLimit, Blocked = _farmer.Blocked,
+            IsActive = _farmer.IsActive, Address = _farmer.Address
         };
-        _editing = true;
-        _message = null;
     }
-
-    private void CancelEdit() { _editing = false; _editDto = null; }
 
     private async Task SaveEdit()
     {
@@ -435,7 +393,6 @@ else
 
         await Api.UpdateFarmerAsync(_editDto.Id, _editDto);
         _message = "Farmer updated."; _messageIsError = false;
-        _editing = false; _editDto = null;
         await LoadData();
     }
 }

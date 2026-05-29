@@ -122,6 +122,17 @@ using (var scope = host.Services.CreateScope())
                 ALTER TABLE auction.Buyers ADD VatBusPostingGroup nvarchar(max) NOT NULL DEFAULT '';
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Buyers') AND name = 'CustomerPostingGroup')
                 ALTER TABLE auction.Buyers ADD CustomerPostingGroup nvarchar(max) NOT NULL DEFAULT '';
+            -- Farmer new columns
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Farmers') AND name = 'CreditLimit')
+                ALTER TABLE auction.Farmers ADD CreditLimit decimal(18,2) NOT NULL DEFAULT 0;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Farmers') AND name = 'Blocked')
+                ALTER TABLE auction.Farmers ADD Blocked nvarchar(max) NOT NULL DEFAULT '';
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Farmers') AND name = 'GenBusPostingGroup')
+                ALTER TABLE auction.Farmers ADD GenBusPostingGroup nvarchar(max) NOT NULL DEFAULT '';
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Farmers') AND name = 'VatBusPostingGroup')
+                ALTER TABLE auction.Farmers ADD VatBusPostingGroup nvarchar(max) NOT NULL DEFAULT '';
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Farmers') AND name = 'VendorPostingGroup')
+                ALTER TABLE auction.Farmers ADD VendorPostingGroup nvarchar(max) NOT NULL DEFAULT '';
         ");
         db.Database.Migrate();
     }

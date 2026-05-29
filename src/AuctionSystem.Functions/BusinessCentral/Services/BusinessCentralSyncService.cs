@@ -588,6 +588,10 @@ public class BusinessCentralSyncService
             Email = farmer.ContactEmail,
             Website = farmer.HomePage,
             CurrencyCode = farmer.Currency == "EUR" ? "EUR" : farmer.Currency,
+            Blocked = string.IsNullOrEmpty(farmer.Blocked) ? "_x0020_" : farmer.Blocked,
+            GenBusPostingGroup = farmer.GenBusPostingGroup,
+            VatBusPostingGroup = farmer.VatBusPostingGroup,
+            VendorPostingGroup = farmer.VendorPostingGroup,
             PaymentTermsCode = farmer.PaymentTerm,
             PaymentMethodCode = farmer.PaymentMethod,
             VatRegistrationNo = farmer.VatRegistrationNo
