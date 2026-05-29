@@ -365,6 +365,68 @@ public class BusinessCentralSyncService
         };
     }
 
+    // ── Single-entity push (called on create/update) ─────────
+
+    public async Task PushSingleBrokerAsync(Broker broker)
+    {
+        var companyId = await _bcClient.ResolveCompanyIdAsync();
+        var bcCustomer = MapBrokerToCustomer(broker);
+        var existing = await _bcClient.GetCustomerByNumberAsync(companyId, bcCustomer.Number);
+
+        if (existing is null)
+        {
+            await _bcClient.CreateCustomerAsync(companyId, bcCustomer);
+            _logger.LogInformation("Created BC customer for broker {Number}", broker.BrokerNumber);
+        }
+        else
+        {
+            bcCustomer.Id = existing.Id;
+            bcCustomer.ETag = existing.ETag;
+            await _bcClient.UpdateCustomerAsync(companyId, bcCustomer);
+            _logger.LogInformation("Updated BC customer for broker {Number}", broker.BrokerNumber);
+        }
+    }
+
+    public async Task PushSingleBuyerAsync(Buyer buyer)
+    {
+        var companyId = await _bcClient.ResolveCompanyIdAsync();
+        var bcCustomer = MapBuyerToCustomer(buyer);
+        var existing = await _bcClient.GetCustomerByNumberAsync(companyId, bcCustomer.Number);
+
+        if (existing is null)
+        {
+            await _bcClient.CreateCustomerAsync(companyId, bcCustomer);
+            _logger.LogInformation("Created BC customer for buyer {Number}", buyer.BuyerNumber);
+        }
+        else
+        {
+            bcCustomer.Id = existing.Id;
+            bcCustomer.ETag = existing.ETag;
+            await _bcClient.UpdateCustomerAsync(companyId, bcCustomer);
+            _logger.LogInformation("Updated BC customer for buyer {Number}", buyer.BuyerNumber);
+        }
+    }
+
+    public async Task PushSingleSellerAsync(Seller seller)
+    {
+        var companyId = await _bcClient.ResolveCompanyIdAsync();
+        var bcCustomer = MapSellerToCustomer(seller);
+        var existing = await _bcClient.GetCustomerByNumberAsync(companyId, bcCustomer.Number);
+
+        if (existing is null)
+        {
+            await _bcClient.CreateCustomerAsync(companyId, bcCustomer);
+            _logger.LogInformation("Created BC customer for seller {Number}", seller.SellerNumber);
+        }
+        else
+        {
+            bcCustomer.Id = existing.Id;
+            bcCustomer.ETag = existing.ETag;
+            await _bcClient.UpdateCustomerAsync(companyId, bcCustomer);
+            _logger.LogInformation("Updated BC customer for seller {Number}", seller.SellerNumber);
+        }
+    }
+
     // ── Mapping helpers ────────────────────────────────────────
 
     private static BcCustomer MapBrokerToCustomer(Broker broker)
@@ -402,6 +464,25 @@ public class BusinessCentralSyncService
             Email = buyer.ContactEmail,
             Website = buyer.HomePage,
             CurrencyCode = buyer.Currency == "EUR" ? "EUR" : buyer.Currency
+        };
+    }
+
+    private static BcCustomer MapSellerToCustomer(Seller seller)
+    {
+        return new BcCustomer
+        {
+            Number = seller.SellerNumber,
+            DisplayName = seller.Name,
+            Type = "Company",
+            AddressLine1 = seller.AddressLine1,
+            AddressLine2 = seller.AddressLine2,
+            City = seller.City,
+            Country = seller.Country,
+            PostalCode = seller.PostalCode,
+            PhoneNumber = seller.ContactPhone,
+            Email = seller.ContactEmail,
+            Website = seller.HomePage,
+            CurrencyCode = seller.Currency == "EUR" ? "EUR" : seller.Currency
         };
     }
 }

@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using AuctionSystem.Domain.Data;
 using AuctionSystem.Domain.Entities;
 using AuctionSystem.Domain.Services;
+using AuctionSystem.Functions.BusinessCentral.Services;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.EntityFrameworkCore;
@@ -15,6 +16,7 @@ public class SellerFunctions
     private readonly AuctionDbContext _db;
     private readonly AuctionService _auctionService;
     private readonly ILogger<SellerFunctions> _logger;
+    private readonly BusinessCentralSyncService? _bcSync;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -22,11 +24,12 @@ public class SellerFunctions
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public SellerFunctions(AuctionDbContext db, AuctionService auctionService, ILogger<SellerFunctions> logger)
+    public SellerFunctions(AuctionDbContext db, AuctionService auctionService, ILogger<SellerFunctions> logger, BusinessCentralSyncService? bcSync = null)
     {
         _db = db;
         _auctionService = auctionService;
         _logger = logger;
+        _bcSync = bcSync;
     }
 
     [Function("GetSellers")]
@@ -54,6 +57,7 @@ public class SellerFunctions
         if (seller == null) return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
         _db.Sellers.Add(seller);
         await _db.SaveChangesAsync();
+        await TryPushSellerToBcAsync(seller);
         return await CreateJsonResponse(req, seller, System.Net.HttpStatusCode.Created);
     }
 
@@ -97,6 +101,7 @@ public class SellerFunctions
         seller.AssignmentOfReceivable = dto.AssignmentOfReceivable;
         seller.IsActive = dto.IsActive;
         await _db.SaveChangesAsync();
+        await TryPushSellerToBcAsync(seller);
         return await CreateJsonResponse(req, seller);
     }
 
@@ -117,6 +122,19 @@ public class SellerFunctions
     {
         var lots = await _auctionService.GetLotsBySellerAsync(sellerId);
         return await CreateJsonResponse(req, lots);
+    }
+
+    private async Task TryPushSellerToBcAsync(Seller seller)
+    {
+        if (_bcSync == null) return;
+        try
+        {
+            await _bcSync.PushSingleSellerAsync(seller);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to push seller {Number} to BC", seller.SellerNumber);
+        }
     }
 
     private static async Task<HttpResponseData> CreateJsonResponse<T>(
