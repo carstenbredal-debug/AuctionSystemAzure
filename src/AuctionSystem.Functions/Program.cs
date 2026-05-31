@@ -40,6 +40,8 @@ var host = new HostBuilder()
                 ?? context.Configuration["Values:BC_ENVIRONMENT"] ?? "sandbox";
             opts.CompanyId = context.Configuration["BC_COMPANY_ID"]
                 ?? context.Configuration["Values:BC_COMPANY_ID"] ?? "";
+            opts.CompanyName = context.Configuration["BC_COMPANY_NAME"]
+                ?? context.Configuration["Values:BC_COMPANY_NAME"] ?? "Lot Test 3";
         });
 
         var bcTenantId = context.Configuration["BC_TENANT_ID"]
