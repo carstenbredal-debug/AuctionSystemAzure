@@ -106,8 +106,8 @@
                         {
                             <tr>
                                 <td><strong>@r.LotNumber</strong></td>
-                                <td>@r.BrokerNumber — @r.BrokerName</td>
-                                <td>€@r.PriceEur.ToString("N2")</td>
+                                <td>@(r.IsMatched || r.IsDisagreement ? $"{r.BrokerNumber} — {r.BrokerName}" : "—")</td>
+                                <td>@(r.IsMatched || r.IsDisagreement ? $"€{r.PriceEur:N2}" : "—")</td>
                                 <td>
                                     @if (r.IsMatched)
                                     {
