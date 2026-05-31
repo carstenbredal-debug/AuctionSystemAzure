@@ -4,8 +4,11 @@ using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using AuctionSystem.Domain.Data;
+using AuctionSystem.Domain.Entities;
 using AuctionSystem.Functions.BusinessCentral.Configuration;
 using AuctionSystem.Functions.BusinessCentral.Services;
+using Microsoft.EntityFrameworkCore;
 
 namespace AuctionSystem.Functions.Functions;
 
@@ -14,15 +17,18 @@ public class BusinessCentralFunctions
     private readonly BusinessCentralSyncService? _syncService;
     private readonly BusinessCentralApiClient? _bcClient;
     private readonly BusinessCentralOptions _options;
+    private readonly AuctionDbContext _db;
     private readonly ILogger<BusinessCentralFunctions> _logger;
 
     public BusinessCentralFunctions(
         IOptions<BusinessCentralOptions> options,
+        AuctionDbContext db,
         ILogger<BusinessCentralFunctions> logger,
         BusinessCentralSyncService? syncService = null,
         BusinessCentralApiClient? bcClient = null)
     {
         _options = options.Value;
+        _db = db;
         _logger = logger;
         _syncService = syncService;
         _bcClient = bcClient;
@@ -287,6 +293,94 @@ public class BusinessCentralFunctions
             deleted,
             skipped,
             errors = errors.Count > 0 ? (object)errors : null
+        });
+    }
+
+    [Function("BcConsistencyCheck")]
+    public async Task<HttpResponseData> ConsistencyCheck(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "bc/consistency-check")] HttpRequestData req)
+    {
+        if (!EnsureConfigured(out var err))
+            return await JsonResponse(req, err!, HttpStatusCode.ServiceUnavailable);
+
+        var companyId = await _bcClient!.ResolveCompanyIdAsync();
+        var mismatches = new List<object>();
+
+        // Check Brokers ↔ BC Vendors
+        var brokers = await _db.Brokers.Where(b => b.IsActive).ToListAsync();
+        foreach (var broker in brokers)
+        {
+            var bcVendor = await _bcClient.GetVendorByNumberAsync(companyId, broker.BrokerNumber);
+            if (bcVendor is null)
+            {
+                mismatches.Add(new { entity = "Broker", number = broker.BrokerNumber, name = broker.CompanyName, field = "BC Vendor", auction = "exists", bc = "NOT FOUND" });
+                continue;
+            }
+
+            var localCurrency = broker.Currency == "EUR" ? "" : broker.Currency;
+            if (!string.IsNullOrEmpty(broker.GenBusPostingGroup) && broker.GenBusPostingGroup != bcVendor.GenBusPostingGroup)
+                mismatches.Add(new { entity = "Broker", number = broker.BrokerNumber, name = broker.CompanyName, field = "GenBusPostingGroup", auction = broker.GenBusPostingGroup, bc = bcVendor.GenBusPostingGroup });
+            if (!string.IsNullOrEmpty(broker.VatBusPostingGroup) && broker.VatBusPostingGroup != bcVendor.VatBusPostingGroup)
+                mismatches.Add(new { entity = "Broker", number = broker.BrokerNumber, name = broker.CompanyName, field = "VatBusPostingGroup", auction = broker.VatBusPostingGroup, bc = bcVendor.VatBusPostingGroup });
+            if (!string.IsNullOrEmpty(localCurrency) && localCurrency != bcVendor.CurrencyCode)
+                mismatches.Add(new { entity = "Broker", number = broker.BrokerNumber, name = broker.CompanyName, field = "CurrencyCode", auction = broker.Currency, bc = string.IsNullOrEmpty(bcVendor.CurrencyCode) ? "(LCY)" : bcVendor.CurrencyCode });
+            if (!string.IsNullOrEmpty(broker.Country) && broker.Country != bcVendor.Country)
+                mismatches.Add(new { entity = "Broker", number = broker.BrokerNumber, name = broker.CompanyName, field = "Country", auction = broker.Country, bc = bcVendor.Country });
+        }
+
+        // Check Buyers ↔ BC Customers
+        var buyers = await _db.Buyers.Where(b => b.IsActive).ToListAsync();
+        foreach (var buyer in buyers)
+        {
+            var bcCustomer = await _bcClient.GetCustomerByNumberAsync(companyId, buyer.BuyerNumber);
+            if (bcCustomer is null)
+            {
+                mismatches.Add(new { entity = "Buyer", number = buyer.BuyerNumber, name = buyer.Name, field = "BC Customer", auction = "exists", bc = "NOT FOUND" });
+                continue;
+            }
+
+            var localCurrency = buyer.Currency == "EUR" ? "" : buyer.Currency;
+            if (!string.IsNullOrEmpty(buyer.GenBusPostingGroup) && buyer.GenBusPostingGroup != bcCustomer.GenBusPostingGroup)
+                mismatches.Add(new { entity = "Buyer", number = buyer.BuyerNumber, name = buyer.Name, field = "GenBusPostingGroup", auction = buyer.GenBusPostingGroup, bc = bcCustomer.GenBusPostingGroup });
+            if (!string.IsNullOrEmpty(buyer.VatBusPostingGroup) && buyer.VatBusPostingGroup != bcCustomer.VatBusPostingGroup)
+                mismatches.Add(new { entity = "Buyer", number = buyer.BuyerNumber, name = buyer.Name, field = "VatBusPostingGroup", auction = buyer.VatBusPostingGroup, bc = bcCustomer.VatBusPostingGroup });
+            if (!string.IsNullOrEmpty(buyer.CustomerPostingGroup) && buyer.CustomerPostingGroup != bcCustomer.CustomerPostingGroup)
+                mismatches.Add(new { entity = "Buyer", number = buyer.BuyerNumber, name = buyer.Name, field = "CustomerPostingGroup", auction = buyer.CustomerPostingGroup, bc = bcCustomer.CustomerPostingGroup });
+            if (!string.IsNullOrEmpty(localCurrency) && localCurrency != bcCustomer.CurrencyCode)
+                mismatches.Add(new { entity = "Buyer", number = buyer.BuyerNumber, name = buyer.Name, field = "CurrencyCode", auction = buyer.Currency, bc = string.IsNullOrEmpty(bcCustomer.CurrencyCode) ? "(LCY)" : bcCustomer.CurrencyCode });
+            if (!string.IsNullOrEmpty(buyer.Country) && buyer.Country != bcCustomer.Country)
+                mismatches.Add(new { entity = "Buyer", number = buyer.BuyerNumber, name = buyer.Name, field = "Country", auction = buyer.Country, bc = bcCustomer.Country });
+        }
+
+        // Check Farmers ↔ BC Vendors
+        var farmers = await _db.Farmers.Where(f => f.IsActive).ToListAsync();
+        foreach (var farmer in farmers)
+        {
+            var bcVendor = await _bcClient.GetVendorByNumberAsync(companyId, farmer.FarmerNumber);
+            if (bcVendor is null)
+            {
+                mismatches.Add(new { entity = "Farmer", number = farmer.FarmerNumber, name = farmer.Name, field = "BC Vendor", auction = "exists", bc = "NOT FOUND" });
+                continue;
+            }
+
+            var localCurrency = farmer.Currency == "EUR" ? "" : farmer.Currency;
+            if (!string.IsNullOrEmpty(farmer.GenBusPostingGroup) && farmer.GenBusPostingGroup != bcVendor.GenBusPostingGroup)
+                mismatches.Add(new { entity = "Farmer", number = farmer.FarmerNumber, name = farmer.Name, field = "GenBusPostingGroup", auction = farmer.GenBusPostingGroup, bc = bcVendor.GenBusPostingGroup });
+            if (!string.IsNullOrEmpty(farmer.VatBusPostingGroup) && farmer.VatBusPostingGroup != bcVendor.VatBusPostingGroup)
+                mismatches.Add(new { entity = "Farmer", number = farmer.FarmerNumber, name = farmer.Name, field = "VatBusPostingGroup", auction = farmer.VatBusPostingGroup, bc = bcVendor.VatBusPostingGroup });
+            if (!string.IsNullOrEmpty(farmer.VendorPostingGroup) && farmer.VendorPostingGroup != bcVendor.VendorPostingGroup)
+                mismatches.Add(new { entity = "Farmer", number = farmer.FarmerNumber, name = farmer.Name, field = "VendorPostingGroup", auction = farmer.VendorPostingGroup, bc = bcVendor.VendorPostingGroup });
+            if (!string.IsNullOrEmpty(localCurrency) && localCurrency != bcVendor.CurrencyCode)
+                mismatches.Add(new { entity = "Farmer", number = farmer.FarmerNumber, name = farmer.Name, field = "CurrencyCode", auction = farmer.Currency, bc = string.IsNullOrEmpty(bcVendor.CurrencyCode) ? "(LCY)" : bcVendor.CurrencyCode });
+            if (!string.IsNullOrEmpty(farmer.Country) && farmer.Country != bcVendor.Country)
+                mismatches.Add(new { entity = "Farmer", number = farmer.FarmerNumber, name = farmer.Name, field = "Country", auction = farmer.Country, bc = bcVendor.Country });
+        }
+
+        return await JsonResponse(req, new
+        {
+            message = mismatches.Count == 0 ? "All consistent" : $"{mismatches.Count} mismatch(es) found",
+            checked_ = new { brokers = brokers.Count, buyers = buyers.Count, farmers = farmers.Count },
+            mismatches
         });
     }
 
