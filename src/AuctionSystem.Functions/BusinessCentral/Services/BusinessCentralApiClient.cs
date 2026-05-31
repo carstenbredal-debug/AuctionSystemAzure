@@ -316,6 +316,23 @@ public class BusinessCentralApiClient
         await EnsureSuccessAsync(response);
     }
 
+    public async Task<byte[]?> GetSalesInvoicePdfAsync(Guid companyId, Guid invoiceId)
+    {
+        await SetAuthHeaderAsync();
+        var url = $"{_options.BaseUrl}/companies({companyId})/salesInvoices({invoiceId})/pdfDocument/pdfDocumentContent";
+        _logger.LogInformation("GET {Url} (PDF)", url);
+
+        var response = await _httpClient.GetAsync(url);
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync();
+            _logger.LogWarning("Could not download invoice PDF: {Status} {Body}", (int)response.StatusCode, body);
+            return null;
+        }
+
+        return await response.Content.ReadAsByteArrayAsync();
+    }
+
     // ── Sales Credit Memos ─────────────────────────────────────
 
     public async Task<BcSalesCreditMemo> CreateSalesCreditMemoAsync(Guid companyId, BcSalesCreditMemo creditMemo)
