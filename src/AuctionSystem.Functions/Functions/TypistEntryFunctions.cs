@@ -327,15 +327,32 @@ public class TypistEntryFunctions
     public async Task<HttpResponseData> GetNextUnsoldLot(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "typist-entries/next-unsold-lot")] HttpRequestData req)
     {
-        // Find lots that don't have matched typist entries and aren't sold
-        var soldLotNumbers = await _db.TypistEntries
+        // If typistUserId is provided, find next lot THIS typist hasn't entered yet
+        var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+        var typistUserIdStr = query["typistUserId"];
+
+        // Lots already matched (sold) — skip these for everyone
+        var matchedLotNumbers = await _db.TypistEntries
             .Where(e => e.IsMatched)
             .Select(e => e.LotNumber)
             .Distinct()
             .ToListAsync();
 
+        // Lots this typist already entered (and entry is still active — not resolved)
+        var myEnteredLotNumbers = new List<int>();
+        if (int.TryParse(typistUserIdStr, out var typistUserId))
+        {
+            myEnteredLotNumbers = await _db.TypistEntries
+                .Where(e => e.TypistUserId == typistUserId && !e.IsResolved)
+                .Select(e => e.LotNumber)
+                .Distinct()
+                .ToListAsync();
+        }
+
+        var skipLots = matchedLotNumbers.Union(myEnteredLotNumbers).ToList();
+
         var nextLot = await _db.Lots
-            .Where(l => l.Status != LotStatus.Sold && !soldLotNumbers.Contains(l.LotNumber))
+            .Where(l => l.Status != LotStatus.Sold && !skipLots.Contains(l.LotNumber))
             .OrderBy(l => l.LotNumber)
             .Select(l => new { l.LotNumber, l.Description, l.Category, l.Quantity, l.Unit })
             .FirstOrDefaultAsync();
