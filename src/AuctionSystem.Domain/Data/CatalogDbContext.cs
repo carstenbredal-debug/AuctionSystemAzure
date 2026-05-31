@@ -8,6 +8,7 @@ public class CatalogDbContext : DbContext
     public CatalogDbContext(DbContextOptions<CatalogDbContext> options) : base(options) { }
 
     public DbSet<CatalogLot> CatalogLots => Set<CatalogLot>();
+    public DbSet<Skin> Skins => Set<Skin>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -25,6 +26,12 @@ public class CatalogDbContext : DbContext
             e.Property(c => c.Color).HasMaxLength(50);
             e.Property(c => c.Clarity).HasMaxLength(50);
             e.Property(c => c.Damages).HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<Skin>(e =>
+        {
+            e.ToTable("skintable", "dbo");
+            e.HasKey(s => s.UniqueID);
         });
     }
 }
