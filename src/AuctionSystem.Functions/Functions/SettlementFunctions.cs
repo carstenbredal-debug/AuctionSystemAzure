@@ -125,6 +125,22 @@ public class SettlementFunctions
         return await CreateJsonResponse(req, invoices);
     }
 
+    [Function("GetUnpushedInvoices")]
+    public async Task<HttpResponseData> GetUnpushedInvoices(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements/invoices/unpushed")] HttpRequestData req)
+    {
+        var invoices = await _db.Invoices
+            .Where(i => !i.IsCreditNote && (i.BcInvoiceNumber == null || i.BcInvoiceNumber == ""))
+            .OrderByDescending(i => i.InvoiceDate)
+            .Select(i => new
+            {
+                i.Id, i.InvoiceNumber, i.InvoiceDate, i.SubTotal, i.AuctionFee, i.Commission,
+                i.TotalAmount, i.Currency, Status = i.Status.ToString(),
+                BrokerName = i.Broker.CompanyName, BuyerName = i.Buyer.Name, LinesCount = i.Lines.Count
+            }).ToListAsync();
+        return await CreateJsonResponse(req, invoices);
+    }
+
     [Function("GetInvoiceLinksForResults")]
     public async Task<HttpResponseData> GetInvoiceLinksForResults(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements/invoice-links/broker/{brokerId:int}")] HttpRequestData req, int brokerId)

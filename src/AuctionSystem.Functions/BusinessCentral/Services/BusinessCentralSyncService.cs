@@ -243,21 +243,23 @@ public class BusinessCentralSyncService
                     await _bcClient.CreateSalesInvoiceLineAsync(companyId, created.Id, commLine);
                 }
 
-                // Post the invoice in BC
-                await _bcClient.PostSalesInvoiceAsync(companyId, created.Id);
+                // Post the invoice in BC and get the posted number
+                var posted = await _bcClient.PostSalesInvoiceAsync(companyId, created.Id);
+                var finalNumber = posted?.Number ?? created.Number;
+                var finalId = posted?.Id ?? created.Id;
 
                 // Store BC-assigned invoice number as THE invoice number
-                invoice.BcInvoiceNumber = created.Number;
-                invoice.BcInvoiceId = created.Id;
-                invoice.InvoiceNumber = created.Number;
+                invoice.BcInvoiceNumber = finalNumber;
+                invoice.BcInvoiceId = finalId;
+                invoice.InvoiceNumber = finalNumber;
 
                 // Fetch PDF from BC and store in blob storage
-                await TryFetchAndStorePdfAsync(companyId, created.Id, invoice);
+                await TryFetchAndStorePdfAsync(companyId, finalId, invoice);
 
                 await _db.SaveChangesAsync();
 
                 result.Created++;
-                _logger.LogInformation("Created and posted BC sales invoice {BcNumber} for {Number}", created.Number, invoice.InvoiceNumber);
+                _logger.LogInformation("Created and posted BC sales invoice {BcNumber}", finalNumber);
             }
             catch (Exception ex)
             {
@@ -446,16 +448,18 @@ public class BusinessCentralSyncService
             await _bcClient.CreateSalesInvoiceLineAsync(companyId, created.Id, commLine);
         }
 
-        // Post the invoice in BC
-        await _bcClient.PostSalesInvoiceAsync(companyId, created.Id);
+        // Post the invoice in BC and get the posted number (may differ from draft number)
+        var posted = await _bcClient.PostSalesInvoiceAsync(companyId, created.Id);
+        var finalNumber = posted?.Number ?? created.Number;
+        var finalId = posted?.Id ?? created.Id;
 
         // Store BC-assigned invoice number as THE invoice number
-        invoice.BcInvoiceNumber = created.Number;
-        invoice.BcInvoiceId = created.Id;
-        invoice.InvoiceNumber = created.Number;
+        invoice.BcInvoiceNumber = finalNumber;
+        invoice.BcInvoiceId = finalId;
+        invoice.InvoiceNumber = finalNumber;
 
         // Fetch PDF from BC and store in blob storage
-        await TryFetchAndStorePdfAsync(companyId, created.Id, invoice);
+        await TryFetchAndStorePdfAsync(companyId, finalId, invoice);
 
         await _db.SaveChangesAsync();
 
