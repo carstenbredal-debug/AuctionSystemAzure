@@ -100,8 +100,8 @@ public class BusinessCentralSyncService
         {
             try
             {
-                var bcCustomer = MapBuyerToCustomer(buyer);
-                var existing = await _bcClient.GetCustomerByNumberAsync(companyId, bcCustomer.Number);
+                var existing = await _bcClient.GetCustomerByNumberAsync(companyId, buyer.BuyerNumber);
+                var bcCustomer = MapBuyerToCustomer(buyer, existing);
 
                 if (existing is null)
                 {
@@ -575,8 +575,8 @@ public class BusinessCentralSyncService
     public async Task PushSingleBuyerAsync(Buyer buyer)
     {
         var companyId = await _bcClient.ResolveCompanyIdAsync();
-        var bcCustomer = MapBuyerToCustomer(buyer);
-        var existing = await _bcClient.GetCustomerByNumberAsync(companyId, bcCustomer.Number);
+        var existing = await _bcClient.GetCustomerByNumberAsync(companyId, buyer.BuyerNumber);
+        var bcCustomer = MapBuyerToCustomer(buyer, existing);
 
         BcCustomer result;
         if (existing is null)
@@ -673,7 +673,7 @@ public class BusinessCentralSyncService
         };
     }
 
-    private static BcCustomer MapBuyerToCustomer(Buyer buyer)
+    private static BcCustomer MapBuyerToCustomer(Buyer buyer, BcCustomer? existing = null)
     {
         return new BcCustomer
         {
@@ -688,14 +688,14 @@ public class BusinessCentralSyncService
             PhoneNumber = buyer.ContactPhone,
             Email = buyer.ContactEmail,
             Website = buyer.HomePage,
-            CurrencyCode = buyer.Currency == "EUR" ? "EUR" : buyer.Currency,
+            CurrencyCode = buyer.Currency == "EUR" ? "" : buyer.Currency,
             CreditLimit = buyer.CreditLimit,
             Blocked = string.IsNullOrEmpty(buyer.Blocked) ? "_x0020_" : buyer.Blocked,
-            GenBusPostingGroup = buyer.GenBusPostingGroup,
-            VatBusPostingGroup = buyer.VatBusPostingGroup,
-            CustomerPostingGroup = buyer.CustomerPostingGroup,
-            PaymentTermsCode = buyer.PaymentTerm,
-            PaymentMethodCode = buyer.PaymentMethod,
+            GenBusPostingGroup = !string.IsNullOrEmpty(buyer.GenBusPostingGroup) ? buyer.GenBusPostingGroup : existing?.GenBusPostingGroup ?? string.Empty,
+            VatBusPostingGroup = !string.IsNullOrEmpty(buyer.VatBusPostingGroup) ? buyer.VatBusPostingGroup : existing?.VatBusPostingGroup ?? string.Empty,
+            CustomerPostingGroup = !string.IsNullOrEmpty(buyer.CustomerPostingGroup) ? buyer.CustomerPostingGroup : existing?.CustomerPostingGroup ?? string.Empty,
+            PaymentTermsCode = !string.IsNullOrEmpty(buyer.PaymentTerm) ? buyer.PaymentTerm : existing?.PaymentTermsCode ?? string.Empty,
+            PaymentMethodCode = !string.IsNullOrEmpty(buyer.PaymentMethod) ? buyer.PaymentMethod : existing?.PaymentMethodCode ?? string.Empty,
             VatRegistrationNo = buyer.VatRegistrationNo
         };
     }
