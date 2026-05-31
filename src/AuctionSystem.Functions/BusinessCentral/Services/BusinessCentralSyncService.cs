@@ -164,18 +164,13 @@ public class BusinessCentralSyncService
                     continue;
                 }
 
-                // Only send currencyCode when it differs from BC company LCY (EUR).
-                // Sending the LCY code explicitly makes BC treat it as foreign currency.
-                var currency = string.Equals(invoice.Currency, "EUR", StringComparison.OrdinalIgnoreCase)
-                    ? null : invoice.Currency;
-
                 var bcInvoice = new BcSalesInvoice
                 {
                     ExternalDocumentNumber = invoice.InvoiceNumber,
                     InvoiceDate = invoice.InvoiceDate.ToString("yyyy-MM-dd"),
                     DueDate = (invoice.PromptDate ?? invoice.InvoiceDate.AddDays(30)).ToString("yyyy-MM-dd"),
                     CustomerId = buyerBcCustomer.Id,
-                    CurrencyCode = currency
+                    CurrencyCode = ""
                 };
 
                 var created = await _bcClient.CreateSalesInvoiceAsync(companyId, bcInvoice);
@@ -187,12 +182,11 @@ public class BusinessCentralSyncService
                     {
                         DocumentId = created.Id,
                         Sequence = seq,
-                        LineType = "Account",
-                        LineObjectNumber = "2300",
+                        LineType = "Item",
+                        LineObjectNumber = "LOTSALE",
                         Description = $"Lot {line.LotNumber}: {line.Description} ({line.Skins} skins)",
                         Quantity = line.Skins,
-                        UnitPrice = line.PricePerSkin,
-                        LineAmount = line.HammerPrice
+                        UnitPrice = line.PricePerSkin
                     };
                     await _bcClient.CreateSalesInvoiceLineAsync(companyId, created.Id, bcLine);
                     seq += 10000;
@@ -204,12 +198,11 @@ public class BusinessCentralSyncService
                     {
                         DocumentId = created.Id,
                         Sequence = seq,
-                        LineType = "Account",
-                        LineObjectNumber = "4040",
+                        LineType = "Item",
+                        LineObjectNumber = "AUCTFEE",
                         Description = "Auction Fee",
                         Quantity = 1,
-                        UnitPrice = invoice.AuctionFee,
-                        LineAmount = invoice.AuctionFee
+                        UnitPrice = invoice.AuctionFee
                     };
                     await _bcClient.CreateSalesInvoiceLineAsync(companyId, created.Id, feeLine);
                     seq += 10000;
@@ -221,15 +214,17 @@ public class BusinessCentralSyncService
                     {
                         DocumentId = created.Id,
                         Sequence = seq,
-                        LineType = "Account",
-                        LineObjectNumber = "2310",
+                        LineType = "Item",
+                        LineObjectNumber = "BROKERCOMM",
                         Description = "Commission",
                         Quantity = 1,
-                        UnitPrice = invoice.Commission,
-                        LineAmount = invoice.Commission
+                        UnitPrice = invoice.Commission
                     };
                     await _bcClient.CreateSalesInvoiceLineAsync(companyId, created.Id, commLine);
                 }
+
+                // Post the invoice in BC
+                await _bcClient.PostSalesInvoiceAsync(companyId, created.Id);
 
                 // Store BC-assigned invoice number
                 invoice.BcInvoiceNumber = created.Number;
@@ -237,7 +232,7 @@ public class BusinessCentralSyncService
                 await _db.SaveChangesAsync();
 
                 result.Created++;
-                _logger.LogInformation("Created BC sales invoice {BcNumber} for {Number}", created.Number, invoice.InvoiceNumber);
+                _logger.LogInformation("Created and posted BC sales invoice {BcNumber} for {Number}", created.Number, invoice.InvoiceNumber);
             }
             catch (Exception ex)
             {
@@ -351,83 +346,78 @@ public class BusinessCentralSyncService
             return;
         }
 
-        // Only send currencyCode when it differs from BC company LCY (EUR).
-        // Sending the LCY code explicitly makes BC treat it as foreign currency.
-        var currency = string.Equals(invoice.Currency, "EUR", StringComparison.OrdinalIgnoreCase)
-            ? null : invoice.Currency;
-
         var bcInvoice = new BcSalesInvoice
         {
             ExternalDocumentNumber = invoice.InvoiceNumber,
             InvoiceDate = invoice.InvoiceDate.ToString("yyyy-MM-dd"),
             DueDate = (invoice.PromptDate ?? invoice.InvoiceDate.AddDays(30)).ToString("yyyy-MM-dd"),
             CustomerId = buyerBcCustomer.Id,
-            CurrencyCode = currency
+            CurrencyCode = ""
         };
 
         var created = await _bcClient.CreateSalesInvoiceAsync(companyId, bcInvoice);
 
-        // Store BC-assigned invoice number
-        invoice.BcInvoiceNumber = created.Number;
-        invoice.BcInvoiceId = created.Id;
-        await _db.SaveChangesAsync();
-
         int seq = 10000;
 
-        // Lot sale lines — account 2300
+        // Lot sale lines — Item LOTSALE
         foreach (var line in invoice.Lines)
         {
             var bcLine = new BcSalesInvoiceLine
             {
                 DocumentId = created.Id,
                 Sequence = seq,
-                LineType = "Account",
-                LineObjectNumber = "2300",
+                LineType = "Item",
+                LineObjectNumber = "LOTSALE",
                 Description = $"Lot {line.LotNumber}: {line.Description} ({line.Skins} skins)",
                 Quantity = line.Skins,
-                UnitPrice = line.PricePerSkin,
-                LineAmount = line.HammerPrice
+                UnitPrice = line.PricePerSkin
             };
             await _bcClient.CreateSalesInvoiceLineAsync(companyId, created.Id, bcLine);
             seq += 10000;
         }
 
-        // Auction Fee line — account 4040
+        // Auction Fee line — Item AUCTFEE
         if (invoice.AuctionFee != 0)
         {
             var feeLine = new BcSalesInvoiceLine
             {
                 DocumentId = created.Id,
                 Sequence = seq,
-                LineType = "Account",
-                LineObjectNumber = "4040",
+                LineType = "Item",
+                LineObjectNumber = "AUCTFEE",
                 Description = "Auction Fee",
                 Quantity = 1,
-                UnitPrice = invoice.AuctionFee,
-                LineAmount = invoice.AuctionFee
+                UnitPrice = invoice.AuctionFee
             };
             await _bcClient.CreateSalesInvoiceLineAsync(companyId, created.Id, feeLine);
             seq += 10000;
         }
 
-        // Commission line — account 2310
+        // Commission line — Item BROKERCOMM
         if (invoice.Commission != 0)
         {
             var commLine = new BcSalesInvoiceLine
             {
                 DocumentId = created.Id,
                 Sequence = seq,
-                LineType = "Account",
-                LineObjectNumber = "2310",
+                LineType = "Item",
+                LineObjectNumber = "BROKERCOMM",
                 Description = "Commission",
                 Quantity = 1,
-                UnitPrice = invoice.Commission,
-                LineAmount = invoice.Commission
+                UnitPrice = invoice.Commission
             };
             await _bcClient.CreateSalesInvoiceLineAsync(companyId, created.Id, commLine);
         }
 
-        _logger.LogInformation("Created BC sales invoice for {Number} (customer={Customer})",
+        // Post the invoice in BC
+        await _bcClient.PostSalesInvoiceAsync(companyId, created.Id);
+
+        // Store BC-assigned invoice number
+        invoice.BcInvoiceNumber = created.Number;
+        invoice.BcInvoiceId = created.Id;
+        await _db.SaveChangesAsync();
+
+        _logger.LogInformation("Created and posted BC sales invoice for {Number} (customer={Customer})",
             invoice.InvoiceNumber, buyer.BuyerNumber);
     }
 
