@@ -128,42 +128,103 @@ else
     else
     {
         <div class="row mb-4">
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <div class="card text-center">
                     <div class="card-body">
-                        <h5 class="card-title text-muted">Total Lots Sold</h5>
-                        <h2>@_soldLots.Count</h2>
+                        <h5 class="card-title text-muted">Total Invoices</h5>
+                        <h2>@_customerInvoices.Count</h2>
                     </div>
                 </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <div class="card text-center">
                     <div class="card-body">
-                        <h5 class="card-title text-muted">Total Skins</h5>
-                        <h2>@_soldLots.Sum(l => l.TotalSkins)</h2>
+                        <h5 class="card-title text-muted">Outstanding</h5>
+                        <h2 class="text-warning">@_customerInvoices.Count(i => i.Status != "Paid")</h2>
                     </div>
                 </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <div class="card text-center">
                     <div class="card-body">
-                        <h5 class="card-title text-muted">Total Value</h5>
-                        <h2>€@_soldLots.Sum(l => l.PriceEur).ToString("N2")</h2>
+                        <h5 class="card-title text-muted">Paid</h5>
+                        <h2 class="text-success">@_customerInvoices.Count(i => i.Status == "Paid")</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title text-muted">Total Amount</h5>
+                        <h2>€@_customerInvoices.Sum(i => i.TotalAmount).ToString("N2")</h2>
                     </div>
                 </div>
             </div>
         </div>
 
         <div class="card">
-            <div class="card-header"><strong>Financial Summary</strong></div>
-            <div class="card-body">
-                <table class="table table-borderless mb-0">
-                    <tr><td class="text-muted" style="width: 200px;">Payment Term</td><td>@_buyer.PaymentTerm</td></tr>
-                    <tr><td class="text-muted">Payment Method</td><td>@_buyer.PaymentMethod</td></tr>
-                    <tr><td class="text-muted">Currency</td><td>@_buyer.Currency</td></tr>
-                    <tr><td class="text-muted">Bank Name</td><td>@_buyer.BankName</td></tr>
-                    <tr><td class="text-muted">IBAN</td><td>@_buyer.BankIbanNumber</td></tr>
-                    <tr><td class="text-muted">SWIFT</td><td>@_buyer.SwiftCode</td></tr>
+            <div class="card-header">
+                <strong>Invoices</strong> <span class="badge bg-secondary">@_customerInvoices.Count</span>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-striped table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Type</th>
+                            <th>Number</th>
+                            <th>Lots</th>
+                            <th>Subtotal</th>
+                            <th>Auction Fee</th>
+                            <th>Commission</th>
+                            <th>Total</th>
+                            <th>Date</th>
+                            <th>PDF</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (_customerInvoices.Count == 0)
+                        {
+                            <tr><td colspan="9" class="text-center text-muted py-4">No invoices for this customer yet.</td></tr>
+                        }
+                        @foreach (var inv in _customerInvoices)
+                        {
+                            <tr class="@(inv.IsCreditNote ? "table-warning" : "")">
+                                <td>
+                                    @if (inv.IsCreditNote)
+                                    {
+                                        <span class="badge bg-warning text-dark">Credit Note</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-primary">Invoice</span>
+                                    }
+                                </td>
+                                <td>
+                                    <strong>@inv.InvoiceNumber</strong>
+                                    @if (!string.IsNullOrEmpty(inv.OriginalInvoiceNumber))
+                                    {
+                                        <br /><small class="text-muted">Ref: @inv.OriginalInvoiceNumber</small>
+                                    }
+                                </td>
+                                <td>@inv.LinesCount</td>
+                                <td>€@inv.SubTotal.ToString("N2")</td>
+                                <td>€@inv.AuctionFee.ToString("N2")</td>
+                                <td>€@inv.Commission.ToString("N2")</td>
+                                <td><strong>€@inv.TotalAmount.ToString("N2")</strong></td>
+                                <td>@inv.InvoiceDate.ToString("d")</td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(inv.PdfUrl))
+                                    {
+                                        <a href="@inv.PdfUrl" target="_blank" class="btn btn-sm btn-outline-primary">📄 PDF</a>
+                                    }
+                                    else
+                                    {
+                                        <a href="@Api.GetInvoicePdfUrl(inv.Id)" target="_blank" class="btn btn-sm btn-outline-primary">📄 PDF</a>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
                 </table>
             </div>
         </div>
@@ -175,6 +236,8 @@ else
 
     private BuyerDto? _buyer;
     private List<AuctionResultDto> _soldLots = new();
+    private List<InvoiceSummaryDto> _customerInvoices = new();
+    private int _brokerId;
     private bool _loading = true;
     private string _activeTab = "info";
 
@@ -182,11 +245,26 @@ else
     {
         try
         {
+            _brokerId = await ResolveBrokerId();
             _buyer = await Api.GetBuyerAsync(BuyerId);
             _soldLots = await Api.GetAuctionResultsByBuyerAsync(BuyerId);
+
+            if (_brokerId > 0)
+            {
+                _customerInvoices = await Api.GetInvoicesByBrokerAndBuyerAsync(_brokerId, BuyerId);
+            }
         }
         catch { }
 
         _loading = false;
+    }
+
+    private async Task<int> ResolveBrokerId()
+    {
+        var auth = await AuthState.GetAuthenticationStateAsync();
+        var oid = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(oid)) return 0;
+        var user = await Api.GetCurrentUserAsync(oid);
+        return user?.BrokerId ?? 0;
     }
 }
