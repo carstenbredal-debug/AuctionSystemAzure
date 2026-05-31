@@ -1,0 +1,161 @@
+@page "/admin/connections"
+@attribute [Authorize(Roles = "Admin")]
+@inject AuctionApiClient Api
+
+<PageTitle>Connections - Admin</PageTitle>
+
+<h1>Connections</h1>
+<p class="text-muted">View connection status and details for external services.</p>
+
+@if (_loading)
+{
+    <p><em>Loading connections...</em></p>
+}
+else
+{
+    <ul class="nav nav-tabs mb-4" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(_activeTab == "bc" ? "active" : "")" @onclick='() => _activeTab = "bc"' type="button">
+                Business Central
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(_activeTab == "azure" ? "active" : "")" @onclick='() => _activeTab = "azure"' type="button">
+                Azure
+            </button>
+        </li>
+    </ul>
+
+    @if (_activeTab == "bc")
+    {
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong>Business Central</strong>
+                @if (_info.BusinessCentral.Connected)
+                {
+                    <span class="badge bg-success">Connected</span>
+                }
+                else if (_info.BusinessCentral.Configured)
+                {
+                    <span class="badge bg-warning">Configured but not connected</span>
+                }
+                else
+                {
+                    <span class="badge bg-danger">Not configured</span>
+                }
+            </div>
+            <div class="card-body">
+                @if (!_info.BusinessCentral.Configured)
+                {
+                    <div class="alert alert-warning mb-0">
+                        Business Central integration is not configured. Set <code>BC_TENANT_ID</code>, <code>BC_CLIENT_ID</code>, <code>BC_CLIENT_SECRET</code> on the Azure Functions app.
+                    </div>
+                }
+                else
+                {
+                    <table class="table table-sm mb-0">
+                        <tbody>
+                            <tr>
+                                <th style="width: 200px;">Tenant ID</th>
+                                <td><code>@_info.BusinessCentral.TenantId</code></td>
+                            </tr>
+                            <tr>
+                                <th>Environment</th>
+                                <td>@_info.BusinessCentral.Environment</td>
+                            </tr>
+                            <tr>
+                                <th>Company</th>
+                                <td>@(string.IsNullOrEmpty(_info.BusinessCentral.CompanyName) ? _info.BusinessCentral.CompanyId : _info.BusinessCentral.CompanyName)</td>
+                            </tr>
+                            <tr>
+                                <th>API URL</th>
+                                <td><code>@_info.BusinessCentral.ApiUrl</code></td>
+                            </tr>
+                            @if (!string.IsNullOrEmpty(_info.BusinessCentral.Error))
+                            {
+                                <tr class="table-danger">
+                                    <th>Error</th>
+                                    <td>@_info.BusinessCentral.Error</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+    }
+
+    @if (_activeTab == "azure")
+    {
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong>Azure SQL Database</strong>
+                @if (_info.Azure.Sql.Connected)
+                {
+                    <span class="badge bg-success">Connected</span>
+                }
+                else
+                {
+                    <span class="badge bg-danger">Not connected</span>
+                }
+            </div>
+            <div class="card-body">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        <tr>
+                            <th style="width: 200px;">Server</th>
+                            <td><code>@_info.Azure.Sql.Server</code></td>
+                        </tr>
+                        <tr>
+                            <th>Database</th>
+                            <td><code>@_info.Azure.Sql.Database</code></td>
+                        </tr>
+                        @if (!string.IsNullOrEmpty(_info.Azure.Sql.Error))
+                        {
+                            <tr class="table-danger">
+                                <th>Error</th>
+                                <td>@_info.Azure.Sql.Error</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong>Azure Blob Storage</strong>
+                @if (_info.Azure.BlobStorage.Configured)
+                {
+                    <span class="badge bg-success">Configured</span>
+                }
+                else
+                {
+                    <span class="badge bg-warning">Not configured</span>
+                }
+            </div>
+            <div class="card-body">
+                @if (_info.Azure.BlobStorage.Configured)
+                {
+                    <p class="mb-0 text-muted">Blob storage is configured and available for PDF storage.</p>
+                }
+                else
+                {
+                    <p class="mb-0 text-muted">Blob storage is not configured. Set <code>AzureWebJobsStorage</code> to a valid storage connection string.</p>
+                }
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private bool _loading = true;
+    private string _activeTab = "bc";
+    private ConnectionsInfoDto _info = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _info = await Api.GetConnectionsInfoAsync();
+        _loading = false;
+    }
+}
