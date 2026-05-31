@@ -39,6 +39,29 @@ else
         </div>
     </div>
 
+    <!-- Search -->
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <input class="form-control" placeholder="Search by farmer, farm, barcode, or box number..." 
+                   @bind="_searchText" @bind:event="oninput" @onkeydown="HandleSearchKey" />
+        </div>
+        <div class="col-md-2">
+            <button class="btn btn-primary" @onclick="SearchSkins">Search</button>
+            @if (!string.IsNullOrEmpty(_activeSearch))
+            {
+                <button class="btn btn-outline-secondary ms-1" @onclick="ClearSearch">Clear</button>
+            }
+        </div>
+        <div class="col-md-3">
+            <select class="form-select" @bind="_pageSize" @bind:after="() => GoToPage(1)">
+                <option value="50">50 per page</option>
+                <option value="100">100 per page</option>
+                <option value="200">200 per page</option>
+                <option value="500">500 per page</option>
+            </select>
+        </div>
+    </div>
+
     <!-- Tabs -->
     <ul class="nav nav-tabs mb-3">
         <li class="nav-item">
@@ -58,7 +81,7 @@ else
         </li>
     </ul>
 
-    @if (!_displayedSkins.Any())
+    @if (!_skins.Any())
     {
         <div class="alert alert-info">No skins found.</div>
     }
@@ -83,7 +106,7 @@ else
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var skin in _displayedSkins)
+                    @foreach (var skin in _skins)
                     {
                         <tr>
                             <td>@skin.BoxNumber</td>
@@ -112,17 +135,51 @@ else
                 </tbody>
             </table>
         </div>
+
+        <!-- Pagination -->
+        <nav>
+            <div class="d-flex justify-content-between align-items-center">
+                <small class="text-muted">
+                    Showing @(((_page - 1) * _pageSize) + 1)–@(Math.Min(_page * _pageSize, _filteredCount)) of @_filteredCount.ToString("N0")
+                </small>
+                <ul class="pagination mb-0">
+                    <li class="page-item @(_page <= 1 ? "disabled" : "")">
+                        <a class="page-link" href="javascript:void(0)" @onclick="() => GoToPage(1)">First</a>
+                    </li>
+                    <li class="page-item @(_page <= 1 ? "disabled" : "")">
+                        <a class="page-link" href="javascript:void(0)" @onclick="() => GoToPage(_page - 1)">Prev</a>
+                    </li>
+                    @foreach (var pg in GetPageNumbers())
+                    {
+                        <li class="page-item @(pg == _page ? "active" : "")">
+                            <a class="page-link" href="javascript:void(0)" @onclick="() => GoToPage(pg)">@pg</a>
+                        </li>
+                    }
+                    <li class="page-item @(_page >= _totalPages ? "disabled" : "")">
+                        <a class="page-link" href="javascript:void(0)" @onclick="() => GoToPage(_page + 1)">Next</a>
+                    </li>
+                    <li class="page-item @(_page >= _totalPages ? "disabled" : "")">
+                        <a class="page-link" href="javascript:void(0)" @onclick="() => GoToPage(_totalPages)">Last</a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
     }
 }
 
 @code {
     private bool _loading = true;
     private string _activeTab = "all";
+    private int _page = 1;
+    private int _pageSize = 100;
+    private int _totalPages;
     private int _totalSkins;
     private int _soldSkins;
     private int _unsoldSkins;
-    private List<SkinItem> _allSkins = new();
-    private List<SkinItem> _displayedSkins = new();
+    private int _filteredCount;
+    private string _searchText = "";
+    private string _activeSearch = "";
+    private List<SkinItem> _skins = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -132,9 +189,14 @@ else
     private async Task LoadSkins()
     {
         _loading = true;
+        StateHasChanged();
         try
         {
-            var response = await Http.GetAsync("api/skins?filter=all");
+            var url = $"api/skins?filter={_activeTab}&page={_page}&pageSize={_pageSize}";
+            if (!string.IsNullOrEmpty(_activeSearch))
+                url += $"&search={Uri.EscapeDataString(_activeSearch)}";
+
+            var response = await Http.GetAsync(url);
             if (response.IsSuccessStatusCode)
             {
                 var json = await response.Content.ReadAsStringAsync();
@@ -142,33 +204,67 @@ else
                 _totalSkins = doc.RootElement.GetProperty("totalSkins").GetInt32();
                 _soldSkins = doc.RootElement.GetProperty("soldSkins").GetInt32();
                 _unsoldSkins = doc.RootElement.GetProperty("unsoldSkins").GetInt32();
+                _filteredCount = doc.RootElement.GetProperty("filteredCount").GetInt32();
+                _page = doc.RootElement.GetProperty("page").GetInt32();
+                _totalPages = doc.RootElement.GetProperty("totalPages").GetInt32();
 
                 var skinsArray = doc.RootElement.GetProperty("skins");
-                _allSkins = JsonSerializer.Deserialize<List<SkinItem>>(skinsArray.GetRawText(), new JsonSerializerOptions
+                _skins = JsonSerializer.Deserialize<List<SkinItem>>(skinsArray.GetRawText(), new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
                 }) ?? new();
             }
         }
         catch { }
-        ApplyFilter();
         _loading = false;
+        StateHasChanged();
     }
 
-    private void SetTab(string tab)
+    private async Task SetTab(string tab)
     {
         _activeTab = tab;
-        ApplyFilter();
+        _page = 1;
+        await LoadSkins();
     }
 
-    private void ApplyFilter()
+    private async Task GoToPage(int page)
     {
-        _displayedSkins = _activeTab switch
+        if (page < 1 || page > _totalPages) return;
+        _page = page;
+        await LoadSkins();
+    }
+
+    private async Task SearchSkins()
+    {
+        _activeSearch = _searchText;
+        _page = 1;
+        await LoadSkins();
+    }
+
+    private async Task ClearSearch()
+    {
+        _searchText = "";
+        _activeSearch = "";
+        _page = 1;
+        await LoadSkins();
+    }
+
+    private async Task HandleSearchKey(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await SearchSkins();
+    }
+
+    private IEnumerable<int> GetPageNumbers()
+    {
+        var start = Math.Max(1, _page - 2);
+        var end = Math.Min(_totalPages, _page + 2);
+        if (end - start < 4)
         {
-            "sold" => _allSkins.Where(s => s.IsSold).ToList(),
-            "unsold" => _allSkins.Where(s => !s.IsSold).ToList(),
-            _ => _allSkins
-        };
+            start = Math.Max(1, end - 4);
+            end = Math.Min(_totalPages, start + 4);
+        }
+        return Enumerable.Range(start, end - start + 1);
     }
 
     private class SkinItem
