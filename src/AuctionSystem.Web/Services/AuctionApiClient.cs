@@ -313,6 +313,9 @@ public class AuctionApiClient
     public async Task<List<InvoiceSummaryDto>> GetInvoicesByBuyerAsync(int buyerId)
         => await _http.GetFromJsonAsync<List<InvoiceSummaryDto>>($"api/settlements/invoices/buyer/{buyerId}") ?? new();
 
+    public async Task<List<InvoiceSummaryDto>> GetInvoicesByBrokerAndBuyerAsync(int brokerId, int buyerId)
+        => await _http.GetFromJsonAsync<List<InvoiceSummaryDto>>($"api/settlements/invoices/broker/{brokerId}/buyer/{buyerId}") ?? new();
+
     public string GetInvoicePdfUrl(int invoiceId)
         => $"{_http.BaseAddress}api/settlements/invoices/{invoiceId}/pdf";
 
