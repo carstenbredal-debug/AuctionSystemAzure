@@ -246,7 +246,8 @@ public class BusinessCentralFunctions
         var companyId = await _bcClient!.ResolveCompanyIdAsync();
         var companies = await _bcClient.GetCompaniesAsync();
         var company = companies.FirstOrDefault(c => c.Id == companyId);
-        return company?.DisplayName ?? companies.First().DisplayName;
+        // Use Name (internal) not DisplayName — OData endpoints require the internal name
+        return company?.Name ?? companies.First().Name;
     }
 
     [Function("BcResetInvoices")]
