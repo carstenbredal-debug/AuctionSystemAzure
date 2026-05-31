@@ -148,7 +148,7 @@ public class AuctionFunctions
 
         try
         {
-            var tables = new[] { "TypistEntries", "InvoiceLines", "Invoices", "TakebackRequests", "LotAllocations",
+            var tables = new[] { "AuctionTransactions", "TypistEntries", "InvoiceLines", "Invoices", "TakebackRequests", "LotAllocations",
                 "AuctionResults", "Settlements", "Bids", "Lots", "Auctions",
                 "BrokerBuyers", "BrokerCustomerRequests", "Buyers", "Brokers", "Farmers", "AppUsers" };
 

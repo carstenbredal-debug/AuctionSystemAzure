@@ -1,0 +1,139 @@
+@page "/admin/auction-transactions"
+@using AuctionSystem.Web.Models
+@using AuctionSystem.Web.Services
+@inject AuctionApiClient Api
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
+
+<h3>Auction Transactions</h3>
+
+@if (_loading)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <!-- Auction filter -->
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <label class="form-label">Filter by Auction</label>
+            <select class="form-select" @bind="_selectedAuctionId" @bind:after="LoadTransactions">
+                <option value="0">All Auctions</option>
+                @foreach (var a in _auctions)
+                {
+                    <option value="@a.Id">@a.AuctionNumber — @a.Title</option>
+                }
+            </select>
+        </div>
+    </div>
+
+    <!-- Summary cards -->
+    @if (_summary.Any())
+    {
+        <div class="row mb-4">
+            @foreach (var s in _summary)
+            {
+                <div class="col-md-4">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h5 class="card-title text-muted">@FormatType(s.TransactionType)</h5>
+                            <h2>€@s.TotalAmount.ToString("N2")</h2>
+                            <small class="text-muted">@s.Count transactions</small>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    <!-- Transaction table -->
+    @if (!_transactions.Any())
+    {
+        <div class="alert alert-info">No transactions found.</div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped table-sm">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Lot</th>
+                        <th>Type</th>
+                        <th>Broker</th>
+                        <th>Description</th>
+                        <th class="text-end">Qty</th>
+                        <th class="text-end">Unit Price</th>
+                        <th class="text-end">Amount</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var t in _transactions)
+                    {
+                        <tr class="@GetRowClass(t.TransactionType)">
+                            <td><strong>@t.LotNumber</strong></td>
+                            <td><span class="badge @GetBadgeClass(t.TransactionType)">@FormatType(t.TransactionType)</span></td>
+                            <td>@t.BrokerNumber — @t.BrokerName</td>
+                            <td><small>@t.Description</small></td>
+                            <td class="text-end">@t.Quantity</td>
+                            <td class="text-end">€@t.UnitPrice.ToString("N4")</td>
+                            <td class="text-end"><strong>€@t.Amount.ToString("N2")</strong></td>
+                            <td><small>@t.CreatedAt.ToString("yyyy-MM-dd HH:mm")</small></td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr class="table-dark">
+                        <td colspan="6"><strong>Total</strong></td>
+                        <td class="text-end"><strong>€@_transactions.Sum(t => t.Amount).ToString("N2")</strong></td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    }
+}
+
+@code {
+    private bool _loading = true;
+    private int _selectedAuctionId;
+    private List<AuctionDto> _auctions = new();
+    private List<AuctionTransactionDto> _transactions = new();
+    private List<AuctionTransactionSummaryDto> _summary = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _auctions = await Api.GetAuctionsAsync();
+        await LoadTransactions();
+    }
+
+    private async Task LoadTransactions()
+    {
+        _loading = true;
+        int? auctionId = _selectedAuctionId > 0 ? _selectedAuctionId : null;
+        _transactions = await Api.GetAuctionTransactionsAsync(auctionId);
+        _summary = await Api.GetAuctionTransactionSummaryAsync(auctionId);
+        _loading = false;
+    }
+
+    private static string FormatType(string type) => type switch
+    {
+        "LotSale" => "Lot Sale",
+        "AuctionFee" => "Auction Fee",
+        "Commission" => "Commission",
+        _ => type
+    };
+
+    private static string GetBadgeClass(string type) => type switch
+    {
+        "LotSale" => "bg-primary",
+        "AuctionFee" => "bg-warning text-dark",
+        "Commission" => "bg-info text-dark",
+        _ => "bg-secondary"
+    };
+
+    private static string GetRowClass(string type) => type switch
+    {
+        "AuctionFee" or "Commission" => "table-light",
+        _ => ""
+    };
+}

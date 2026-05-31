@@ -24,6 +24,7 @@ public class AuctionDbContext : DbContext
     public DbSet<TakebackRequest> TakebackRequests => Set<TakebackRequest>();
     public DbSet<BrokerBuyer> BrokerBuyers => Set<BrokerBuyer>();
     public DbSet<TypistEntry> TypistEntries => Set<TypistEntry>();
+    public DbSet<AuctionTransaction> AuctionTransactions => Set<AuctionTransaction>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -198,6 +199,23 @@ public class AuctionDbContext : DbContext
             e.HasOne(r => r.Broker).WithMany().HasForeignKey(r => r.BrokerId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(r => r.Buyer).WithMany().HasForeignKey(r => r.BuyerId).OnDelete(DeleteBehavior.Restrict);
             e.Property(r => r.InitiatedBy).HasMaxLength(10).HasDefaultValue("Broker");
+        });
+
+        modelBuilder.Entity<AuctionTransaction>(e =>
+        {
+            e.HasKey(t => t.Id);
+            e.HasOne(t => t.Auction).WithMany().HasForeignKey(t => t.AuctionId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(t => t.Broker).WithMany().HasForeignKey(t => t.BrokerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(t => t.Buyer).WithMany().HasForeignKey(t => t.BuyerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(t => t.AuctionResult).WithMany().HasForeignKey(t => t.AuctionResultId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(t => new { t.AuctionId, t.LotNumber });
+            e.HasIndex(t => t.TransactionType);
+            e.HasIndex(t => t.BrokerId);
+            e.Property(t => t.UnitPrice).HasColumnType("decimal(18,4)");
+            e.Property(t => t.Amount).HasColumnType("decimal(18,2)");
+            e.Property(t => t.Description).HasMaxLength(500);
+            e.Property(t => t.DebitAccount).HasMaxLength(50);
+            e.Property(t => t.CreditAccount).HasMaxLength(50);
         });
 
         modelBuilder.Entity<TypistEntry>(e =>
