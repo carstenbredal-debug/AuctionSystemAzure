@@ -42,32 +42,145 @@ else
 
     @if (_activeTab == "info")
     {
-        <div class="card">
-            <div class="card-header"><strong>Customer Information</strong></div>
+        <!-- General Section -->
+        <div class="card mb-3">
+            <div class="card-header bg-light"><strong>General</strong></div>
             <div class="card-body">
-                <div class="row">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">No.</label>
+                        <input class="form-control" value="@_buyer.BuyerNumber" readonly />
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label fw-bold">Name</label>
+                        <input class="form-control" value="@_buyer.Name" readonly />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Name 2</label>
+                        <input class="form-control" value="@_buyer.Name2" readonly />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Credit Limit</label>
+                        <input class="form-control" value="@_buyer.CreditLimit.ToString("N2")" readonly />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Blocked</label>
+                        <input class="form-control" value="@(_buyer.Blocked ?? "—")" readonly />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Currency Code</label>
+                        <input class="form-control" value="@(_buyer.Currency ?? "—")" readonly />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Language</label>
+                        <input class="form-control" value="@(_buyer.Language ?? "—")" readonly />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Address & Contact Section -->
+        <div class="card mb-3">
+            <div class="card-header bg-light"><strong>Address & Contact</strong></div>
+            <div class="card-body">
+                <div class="row g-3">
                     <div class="col-md-6">
-                        <table class="table table-borderless mb-0">
-                            <tr><td class="text-muted" style="width: 160px;">Name</td><td><strong>@_buyer.Name</strong></td></tr>
-                            <tr><td class="text-muted">Name 2</td><td>@_buyer.Name2</td></tr>
-                            <tr><td class="text-muted">Number</td><td>@_buyer.BuyerNumber</td></tr>
-                            <tr><td class="text-muted">Contact</td><td>@_buyer.ContactName</td></tr>
-                            <tr><td class="text-muted">Email</td><td>@_buyer.ContactEmail</td></tr>
-                            <tr><td class="text-muted">Phone</td><td>@_buyer.ContactPhone</td></tr>
-                            <tr><td class="text-muted">Mobile</td><td>@_buyer.MobilePhone</td></tr>
-                        </table>
+                        <label class="form-label">Address</label>
+                        <input class="form-control" value="@_buyer.AddressLine1" readonly />
                     </div>
                     <div class="col-md-6">
-                        <table class="table table-borderless mb-0">
-                            <tr><td class="text-muted" style="width: 160px;">Address</td><td>@_buyer.AddressLine1</td></tr>
-                            <tr><td class="text-muted">Address 2</td><td>@_buyer.AddressLine2</td></tr>
-                            <tr><td class="text-muted">City</td><td>@_buyer.PostalCode @_buyer.City</td></tr>
-                            <tr><td class="text-muted">Country</td><td>@_buyer.Country</td></tr>
-                            <tr><td class="text-muted">VAT No.</td><td>@_buyer.VatRegistrationNo</td></tr>
-                            <tr><td class="text-muted">Currency</td><td>@_buyer.Currency</td></tr>
-                            <tr><td class="text-muted">Language</td><td>@_buyer.Language</td></tr>
+                        <label class="form-label">Address 2</label>
+                        <input class="form-control" value="@_buyer.AddressLine2" readonly />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Country/Region Code</label>
+                        <input class="form-control" value="@(_buyer.Country ?? "—")" readonly />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Post Code</label>
+                        <input class="form-control" value="@_buyer.PostalCode" readonly />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">City</label>
+                        <input class="form-control" value="@_buyer.City" readonly />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Contact Name</label>
+                        <input class="form-control" value="@_buyer.ContactName" readonly />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Phone No.</label>
+                        <input class="form-control" value="@_buyer.ContactPhone" readonly />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Mobile Phone No.</label>
+                        <input class="form-control" value="@_buyer.MobilePhone" readonly />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">E-Mail</label>
+                        <input class="form-control" value="@_buyer.ContactEmail" readonly />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Home Page</label>
+                        <input class="form-control" value="@_buyer.HomePage" readonly />
+                    </div>
+                </div>
+            </div>
+        </div>
 
-                        </table>
+        <!-- Invoicing Section -->
+        <div class="card mb-3">
+            <div class="card-header bg-light"><strong>Invoicing</strong></div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">VAT Registration No.</label>
+                        <input class="form-control" value="@_buyer.VatRegistrationNo" readonly />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Registration No.</label>
+                        <input class="form-control" value="@_buyer.RegistrationNo" readonly />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Gen. Bus. Posting Group</label>
+                        <input class="form-control" value="@(_buyer.GenBusPostingGroup ?? "—")" readonly />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">VAT Bus. Posting Group</label>
+                        <input class="form-control" value="@(_buyer.VatBusPostingGroup ?? "—")" readonly />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Customer Posting Group</label>
+                        <input class="form-control" value="@(_buyer.CustomerPostingGroup ?? "—")" readonly />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payments Section -->
+        <div class="card mb-3">
+            <div class="card-header bg-light"><strong>Payments</strong></div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Payment Terms Code</label>
+                        <input class="form-control" value="@(_buyer.PaymentTerm ?? "—")" readonly />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Payment Method Code</label>
+                        <input class="form-control" value="@(_buyer.PaymentMethod ?? "—")" readonly />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Bank Name</label>
+                        <input class="form-control" value="@_buyer.BankName" readonly />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">IBAN</label>
+                        <input class="form-control" value="@_buyer.BankIbanNumber" readonly />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">SWIFT Code</label>
+                        <input class="form-control" value="@_buyer.SwiftCode" readonly />
                     </div>
                 </div>
             </div>
