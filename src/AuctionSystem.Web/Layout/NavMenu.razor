@@ -34,7 +34,7 @@
                 </a>
             </Authorized>
         </AuthorizeView>
-        <AuthorizeView Roles="Admin,Farmer">
+        <AuthorizeView Roles="Admin,Farmer,Typist">
             <Authorized>
                 <a class="navbar-brand" href="">
                     <div class="brand-logo">
@@ -170,6 +170,22 @@
                     <div class="nav-item px-3">
                         <NavLink class="nav-link" href="farmer">
                             Farmer Portal
+                        </NavLink>
+                    </div>
+                </AuthorizeView>
+
+                <AuthorizeView Roles="Typist">
+                    <div class="nav-item px-3 mt-2">
+                        <span class="nav-link section-label"><small><strong>TYPIST</strong></small></span>
+                    </div>
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="typist/auction-entry">
+                            Auction Entry
+                        </NavLink>
+                    </div>
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="typist/disagreements">
+                            Disagreements
                         </NavLink>
                     </div>
                 </AuthorizeView>

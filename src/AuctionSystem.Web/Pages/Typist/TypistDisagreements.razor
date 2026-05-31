@@ -1,0 +1,225 @@
+@page "/typist/disagreements"
+@attribute [Authorize(Roles = "Typist")]
+@inject AuctionApiClient Api
+@inject AuthenticationStateProvider AuthState
+
+<PageTitle>Disagreements</PageTitle>
+
+<h1>Disagreements</h1>
+<p class="text-muted">Lots where the two typists entered different values. Both typists must re-enter to resolve.</p>
+
+@if (!string.IsNullOrEmpty(_successMessage))
+{
+    <div class="alert alert-success alert-dismissible">
+        @_successMessage
+        <button type="button" class="btn-close" @onclick="() => _successMessage = null"></button>
+    </div>
+}
+@if (!string.IsNullOrEmpty(_errorMessage))
+{
+    <div class="alert alert-danger alert-dismissible">
+        @_errorMessage
+        <button type="button" class="btn-close" @onclick="() => _errorMessage = null"></button>
+    </div>
+}
+
+@if (_loading)
+{
+    <div class="text-center py-4">
+        <div class="spinner-border" role="status"></div>
+        <p class="mt-2">Loading disagreements...</p>
+    </div>
+}
+else if (_disagreements.Count == 0)
+{
+    <div class="alert alert-info">No disagreements to resolve.</div>
+}
+else
+{
+    @foreach (var group in _disagreements)
+    {
+        <div class="card mb-4">
+            <div class="card-header bg-warning bg-opacity-25 d-flex justify-content-between align-items-center">
+                <strong>Lot #@group.LotNumber</strong>
+                <span class="badge bg-danger">Disagreement</span>
+            </div>
+            <div class="card-body">
+                <h6>Original Entries:</h6>
+                <table class="table table-sm table-bordered mb-3">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Typist</th>
+                            <th>Broker</th>
+                            <th>Price (EUR)</th>
+                            <th>Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var entry in group.Entries)
+                        {
+                            <tr>
+                                <td>
+                                    <span class="badge bg-secondary">Slot @entry.TypistSlot</span>
+                                    @entry.TypistName
+                                </td>
+                                <td>@entry.BrokerNumber — @entry.BrokerName</td>
+                                <td>€@entry.PriceEur.ToString("N2")</td>
+                                <td><small>@entry.EnteredAt.ToString("HH:mm:ss")</small></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+
+                <h6>Re-enter:</h6>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label"><strong>Broker</strong></label>
+                        <select class="form-select" @bind="@GetReentryState(group.LotNumber).BrokerId">
+                            <option value="0">— Select Broker —</option>
+                            @foreach (var broker in _brokers)
+                            {
+                                <option value="@broker.Id">@broker.BrokerNumber — @broker.CompanyName</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label"><strong>Price per skin (EUR)</strong></label>
+                        <div class="input-group">
+                            <span class="input-group-text">€</span>
+                            <input type="number" step="0.01" class="form-control"
+                                   @bind="@GetReentryState(group.LotNumber).PriceEur" placeholder="0.00" />
+                        </div>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button class="btn btn-primary w-100"
+                                @onclick="() => SubmitReentry(group.LotNumber)"
+                                disabled="@_submitting">
+                            @if (_submitting)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1"></span>
+                            }
+                            Re-enter
+                        </button>
+                    </div>
+                </div>
+
+                @if (_reentryResults.ContainsKey(group.LotNumber))
+                {
+                    var result = _reentryResults[group.LotNumber];
+                    <div class="mt-3">
+                        @if (result.WaitingForOtherTypist)
+                        {
+                            <div class="alert alert-info mb-0">
+                                Waiting for the other typist to re-enter for Lot #@group.LotNumber.
+                            </div>
+                        }
+                        else if (result.IsMatched)
+                        {
+                            <div class="alert alert-success mb-0">
+                                <strong>Resolved!</strong> Both typists agree. Lot #@group.LotNumber recorded.
+                            </div>
+                        }
+                        else if (result.IsDisagreement)
+                        {
+                            <div class="alert alert-warning mb-0">
+                                <strong>Still disagreeing!</strong> Please try again.
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private List<TypistDisagreementGroup> _disagreements = new();
+    private List<BrokerDto> _brokers = new();
+    private AppUserDto? _currentUser;
+    private bool _loading = true;
+    private bool _submitting;
+    private string? _successMessage;
+    private string? _errorMessage;
+    private Dictionary<int, ReentryState> _reentryStates = new();
+    private Dictionary<int, TypistSubmitResult> _reentryResults = new();
+
+    private class ReentryState
+    {
+        public int BrokerId { get; set; }
+        public decimal PriceEur { get; set; }
+    }
+
+    private ReentryState GetReentryState(int lotNumber)
+    {
+        if (!_reentryStates.ContainsKey(lotNumber))
+            _reentryStates[lotNumber] = new ReentryState();
+        return _reentryStates[lotNumber];
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthState.GetAuthenticationStateAsync();
+        var oid = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (oid != null)
+            _currentUser = await Api.GetCurrentUserAsync(oid);
+
+        _brokers = await Api.GetBrokersAsync();
+        _disagreements = await Api.GetTypistDisagreementsAsync();
+        _loading = false;
+    }
+
+    private async Task SubmitReentry(int lotNumber)
+    {
+        _successMessage = null;
+        _errorMessage = null;
+
+        var state = GetReentryState(lotNumber);
+        if (state.BrokerId <= 0)
+        {
+            _errorMessage = "Please select a broker.";
+            return;
+        }
+        if (state.PriceEur <= 0)
+        {
+            _errorMessage = "Please enter a valid price.";
+            return;
+        }
+        if (_currentUser == null)
+        {
+            _errorMessage = "User not authenticated.";
+            return;
+        }
+
+        _submitting = true;
+        try
+        {
+            var result = await Api.SubmitTypistReentryAsync(lotNumber, state.BrokerId, state.PriceEur, _currentUser.Id);
+            if (result != null)
+            {
+                _reentryResults[lotNumber] = result;
+                if (result.IsMatched)
+                {
+                    _successMessage = $"Lot {lotNumber} resolved — both typists agree! Lot recorded.";
+                    _disagreements = await Api.GetTypistDisagreementsAsync();
+                }
+                else if (result.IsDisagreement)
+                {
+                    _errorMessage = $"Lot {lotNumber} — still disagreeing! Both typists must re-enter.";
+                    _disagreements = await Api.GetTypistDisagreementsAsync();
+                }
+            }
+            else
+            {
+                _errorMessage = "Failed to submit re-entry.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+}
