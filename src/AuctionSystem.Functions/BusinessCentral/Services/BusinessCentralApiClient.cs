@@ -323,14 +323,30 @@ public class BusinessCentralApiClient
         _logger.LogInformation("GET {Url} (PDF)", url);
 
         var response = await _httpClient.GetAsync(url);
+
+        // BC may return non-success status (e.g. 501) but still include the PDF in the body.
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        if (bytes.Length >= 4 && bytes[0] == 0x25 && bytes[1] == 0x50 && bytes[2] == 0x44 && bytes[3] == 0x46)
+        {
+            if (!response.IsSuccessStatusCode)
+                _logger.LogInformation("BC returned {Status} for PDF but body contains valid PDF ({Bytes} bytes)", (int)response.StatusCode, bytes.Length);
+            return bytes;
+        }
+
         if (!response.IsSuccessStatusCode)
         {
-            var body = await response.Content.ReadAsStringAsync();
+            var body = System.Text.Encoding.UTF8.GetString(bytes);
             _logger.LogWarning("Could not download invoice PDF: {Status} {Body}", (int)response.StatusCode, body);
             return null;
         }
 
-        return await response.Content.ReadAsByteArrayAsync();
+        if (bytes.Length == 0)
+        {
+            _logger.LogWarning("PDF response was empty for invoice {InvoiceId}", invoiceId);
+            return null;
+        }
+
+        return bytes;
     }
 
     // ── Sales Credit Memos ─────────────────────────────────────
