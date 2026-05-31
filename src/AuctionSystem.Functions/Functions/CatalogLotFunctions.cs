@@ -54,6 +54,22 @@ public class CatalogLotFunctions
         return response;
     }
 
+    [Function("GetDbSchema")]
+    public async Task<HttpResponseData> GetDbSchema(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "diag/schema/{tableName}")] HttpRequestData req, string tableName)
+    {
+        var columns = await _catalogDb.Database
+            .SqlQueryRaw<SchemaColumn>(
+                "SELECT COLUMN_NAME as ColumnName, DATA_TYPE as DataType, CHARACTER_MAXIMUM_LENGTH as MaxLength FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = {0} ORDER BY ORDINAL_POSITION",
+                tableName)
+            .ToListAsync();
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(new { table = tableName, columns }, JsonOptions));
+        return response;
+    }
+
     [Function("ImportCatalogLotsToAuction")]
     public async Task<HttpResponseData> ImportToAuction(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auctions/{auctionId:int}/import-catalog-lots")] HttpRequestData req, int auctionId)
@@ -109,4 +125,11 @@ public class ImportCatalogLotsRequest
 {
     public List<int> CatalogLotIds { get; set; } = new();
     public int FarmerId { get; set; }
+}
+
+public class SchemaColumn
+{
+    public string ColumnName { get; set; } = "";
+    public string DataType { get; set; } = "";
+    public int? MaxLength { get; set; }
 }
