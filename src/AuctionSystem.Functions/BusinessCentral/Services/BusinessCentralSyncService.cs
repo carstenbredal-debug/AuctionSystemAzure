@@ -164,12 +164,18 @@ public class BusinessCentralSyncService
                     continue;
                 }
 
+                // Only send currencyCode when it differs from BC company LCY (EUR).
+                // Sending the LCY code explicitly makes BC treat it as foreign currency.
+                var currency = string.Equals(invoice.Currency, "EUR", StringComparison.OrdinalIgnoreCase)
+                    ? null : invoice.Currency;
+
                 var bcInvoice = new BcSalesInvoice
                 {
                     ExternalDocumentNumber = invoice.InvoiceNumber,
                     InvoiceDate = invoice.InvoiceDate.ToString("yyyy-MM-dd"),
                     DueDate = (invoice.PromptDate ?? invoice.InvoiceDate.AddDays(30)).ToString("yyyy-MM-dd"),
-                    CustomerId = buyerBcCustomer.Id
+                    CustomerId = buyerBcCustomer.Id,
+                    CurrencyCode = currency
                 };
 
                 var created = await _bcClient.CreateSalesInvoiceAsync(companyId, bcInvoice);
@@ -345,12 +351,18 @@ public class BusinessCentralSyncService
             return;
         }
 
+        // Only send currencyCode when it differs from BC company LCY (EUR).
+        // Sending the LCY code explicitly makes BC treat it as foreign currency.
+        var currency = string.Equals(invoice.Currency, "EUR", StringComparison.OrdinalIgnoreCase)
+            ? null : invoice.Currency;
+
         var bcInvoice = new BcSalesInvoice
         {
             ExternalDocumentNumber = invoice.InvoiceNumber,
             InvoiceDate = invoice.InvoiceDate.ToString("yyyy-MM-dd"),
             DueDate = (invoice.PromptDate ?? invoice.InvoiceDate.AddDays(30)).ToString("yyyy-MM-dd"),
-            CustomerId = buyerBcCustomer.Id
+            CustomerId = buyerBcCustomer.Id,
+            CurrencyCode = currency
         };
 
         var created = await _bcClient.CreateSalesInvoiceAsync(companyId, bcInvoice);
