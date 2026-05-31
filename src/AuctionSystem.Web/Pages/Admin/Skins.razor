@@ -1,0 +1,197 @@
+@page "/admin/skins"
+@using System.Text.Json
+@inject HttpClient Http
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
+
+<h3>Skins</h3>
+
+@if (_loading)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <!-- Summary cards -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">Total Skins</h5>
+                    <h2>@_totalSkins.ToString("N0")</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">Sold</h5>
+                    <h2 class="text-success">@_soldSkins.ToString("N0")</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">Unsold</h5>
+                    <h2 class="text-warning">@_unsoldSkins.ToString("N0")</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+            <a class="nav-link @(_activeTab == "all" ? "active" : "")" href="javascript:void(0)" @onclick='() => SetTab("all")'>
+                All (@_totalSkins.ToString("N0"))
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(_activeTab == "sold" ? "active" : "")" href="javascript:void(0)" @onclick='() => SetTab("sold")'>
+                Sold (@_soldSkins.ToString("N0"))
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(_activeTab == "unsold" ? "active" : "")" href="javascript:void(0)" @onclick='() => SetTab("unsold")'>
+                Unsold (@_unsoldSkins.ToString("N0"))
+            </a>
+        </li>
+    </ul>
+
+    @if (!_displayedSkins.Any())
+    {
+        <div class="alert alert-info">No skins found.</div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped table-sm">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Box</th>
+                        <th>Barcode</th>
+                        <th>Farmer</th>
+                        <th>Farm</th>
+                        <th>Sales Type</th>
+                        <th>Gender</th>
+                        <th>Group</th>
+                        <th>Size</th>
+                        <th>Color</th>
+                        <th>Quality</th>
+                        <th>Clarity</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var skin in _displayedSkins)
+                    {
+                        <tr>
+                            <td>@skin.BoxNumber</td>
+                            <td>@skin.Barcode</td>
+                            <td>@skin.Farmer</td>
+                            <td>@skin.Farm</td>
+                            <td>@skin.SalesType</td>
+                            <td>@skin.Gender</td>
+                            <td>@skin.Group</td>
+                            <td>@skin.Size</td>
+                            <td>@skin.Color</td>
+                            <td>@skin.Quality</td>
+                            <td>@skin.Clarity</td>
+                            <td>
+                                @if (skin.IsSold)
+                                {
+                                    <span class="badge bg-success">Sold</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-warning text-dark">Unsold</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+}
+
+@code {
+    private bool _loading = true;
+    private string _activeTab = "all";
+    private int _totalSkins;
+    private int _soldSkins;
+    private int _unsoldSkins;
+    private List<SkinItem> _allSkins = new();
+    private List<SkinItem> _displayedSkins = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSkins();
+    }
+
+    private async Task LoadSkins()
+    {
+        _loading = true;
+        try
+        {
+            var response = await Http.GetAsync("api/skins?filter=all");
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync();
+                var doc = JsonDocument.Parse(json);
+                _totalSkins = doc.RootElement.GetProperty("totalSkins").GetInt32();
+                _soldSkins = doc.RootElement.GetProperty("soldSkins").GetInt32();
+                _unsoldSkins = doc.RootElement.GetProperty("unsoldSkins").GetInt32();
+
+                var skinsArray = doc.RootElement.GetProperty("skins");
+                _allSkins = JsonSerializer.Deserialize<List<SkinItem>>(skinsArray.GetRawText(), new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                }) ?? new();
+            }
+        }
+        catch { }
+        ApplyFilter();
+        _loading = false;
+    }
+
+    private void SetTab(string tab)
+    {
+        _activeTab = tab;
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        _displayedSkins = _activeTab switch
+        {
+            "sold" => _allSkins.Where(s => s.IsSold).ToList(),
+            "unsold" => _allSkins.Where(s => !s.IsSold).ToList(),
+            _ => _allSkins
+        };
+    }
+
+    private class SkinItem
+    {
+        public Guid UniqueID { get; set; }
+        public int BoxNumber { get; set; }
+        public long Barcode { get; set; }
+        public string? Farmer { get; set; }
+        public string? Farm { get; set; }
+        public string? BoxType { get; set; }
+        public string? BoxStatus { get; set; }
+        public string? SalesType { get; set; }
+        public string? Gender { get; set; }
+        public string? Group { get; set; }
+        public string? Size { get; set; }
+        public string? HairLength { get; set; }
+        public string? Color { get; set; }
+        public string? Quality { get; set; }
+        public string? Clarity { get; set; }
+        public string? Damages { get; set; }
+        public string? Auction { get; set; }
+        public string? Location { get; set; }
+        public DateTime? LastChangedAt { get; set; }
+        public bool IsSold { get; set; }
+    }
+}
