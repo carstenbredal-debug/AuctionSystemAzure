@@ -349,9 +349,9 @@ public class AuctionResultFunctions
 
         await _db.SaveChangesAsync();
 
-        // Generate invoice
+        // Create and push invoice to BC
         int? invoiceId = null;
-        if (results.Count > 0)
+        if (results.Count > 0 && _bcSyncService != null)
         {
             try
             {
@@ -361,10 +361,9 @@ public class AuctionResultFunctions
                 var auctionFeePercent = auctionFeeParam != null ? decimal.Parse(auctionFeeParam.Value, CultureInfo.InvariantCulture) : 0m;
                 var handlingFeePerSkin = handlingFeeParam != null ? decimal.Parse(handlingFeeParam.Value, CultureInfo.InvariantCulture) : 0m;
 
-                var invoiceCount = await _db.Invoices.CountAsync();
                 var invoice = new Invoice
                 {
-                    InvoiceNumber = $"INV-{DateTime.UtcNow:yyyyMMdd}-{invoiceCount + 1:D5}",
+                    InvoiceNumber = "",
                     InvoiceDate = DateTime.UtcNow,
                     BrokerId = brokerId,
                     BuyerId = body.BuyerId,
@@ -401,55 +400,23 @@ public class AuctionResultFunctions
                 invoice.AuctionFee = totalAuctionFee;
                 invoice.Commission = totalCommission;
                 invoice.TotalAmount = subTotal + totalAuctionFee + totalCommission;
-
-                // Load buyer for PDF
                 invoice.Buyer = buyer;
-
-                var pdfBytes = InvoicePdfService.GeneratePdf(invoice);
-                invoice.PdfData = pdfBytes;
 
                 _db.Invoices.Add(invoice);
                 await _db.SaveChangesAsync();
                 invoiceId = invoice.Id;
 
-                // Upload to blob storage (non-critical)
-                if (_blobStorage != null)
-                {
-                    try
-                    {
-                        var fileName = $"{invoice.InvoiceNumber}.pdf";
-                        _logger.LogInformation("Uploading internal PDF for {Number} to blob storage", invoice.InvoiceNumber);
-                        invoice.PdfUrl = await _blobStorage.UploadPdfAsync(fileName, pdfBytes);
-                        await _db.SaveChangesAsync();
-                        _logger.LogInformation("Saved PdfUrl={Url} for {Number}", invoice.PdfUrl, invoice.InvoiceNumber);
-                    }
-                    catch (Exception blobEx)
-                    {
-                        _logger.LogWarning(blobEx, "Failed to upload invoice PDF to blob storage");
-                    }
-                }
-                else
-                {
-                    _logger.LogWarning("BlobStorageService is null — skipping PDF upload for {Number}", invoice.InvoiceNumber);
-                }
+                // Push to BC — BC assigns the invoice number and PDF
+                await _bcSyncService.PushInvoiceToBcAsync(invoice);
+                // InvoiceNumber is now set from BC (e.g. SI-100017)
+                invoice.InvoiceNumber = invoice.BcInvoiceNumber ?? "";
+                await _db.SaveChangesAsync();
 
-                // Auto-push to BC as Sales Invoice (non-critical)
-                if (_bcSyncService != null)
-                {
-                    try
-                    {
-                        await _bcSyncService.PushInvoiceToBcAsync(invoice);
-                        _logger.LogInformation("Auto-pushed invoice {Number} to BC", invoice.InvoiceNumber);
-                    }
-                    catch (Exception bcEx)
-                    {
-                        _logger.LogWarning(bcEx, "Failed to auto-push invoice {Number} to BC", invoice.InvoiceNumber);
-                    }
-                }
+                _logger.LogInformation("Invoice {Number} created and posted in BC", invoice.InvoiceNumber);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to generate invoice for {Count} lots", results.Count);
+                _logger.LogError(ex, "Failed to create BC invoice for {Count} lots", results.Count);
             }
         }
 
