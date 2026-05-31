@@ -300,6 +300,32 @@ public class BusinessCentralFunctions
         });
     }
 
+    [Function("BcClearInvoiceRefs")]
+    public async Task<HttpResponseData> ClearInvoiceRefs(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "bc/clear-invoice-refs")] HttpRequestData req)
+    {
+        // Clear all local BC references so invoices can be re-pushed
+        var invoices = await _db.Invoices
+            .Where(i => !i.IsCreditNote && (i.BcInvoiceNumber != null && i.BcInvoiceNumber != ""))
+            .ToListAsync();
+
+        foreach (var inv in invoices)
+        {
+            inv.BcInvoiceNumber = null;
+            inv.BcInvoiceId = null;
+            inv.InvoiceNumber = "";
+            inv.PdfUrl = null;
+        }
+
+        await _db.SaveChangesAsync();
+
+        return await JsonResponse(req, new
+        {
+            message = $"Cleared BC references on {invoices.Count} invoice(s). They will appear as unpushed.",
+            cleared = invoices.Count
+        });
+    }
+
     [Function("BcConsistencyCheck")]
     public async Task<HttpResponseData> ConsistencyCheck(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "bc/consistency-check")] HttpRequestData req)

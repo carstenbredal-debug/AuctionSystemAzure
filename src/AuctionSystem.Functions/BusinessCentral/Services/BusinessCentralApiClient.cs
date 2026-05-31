@@ -306,7 +306,7 @@ public class BusinessCentralApiClient
         return await PostAsync<BcSalesInvoiceLine>(url, line);
     }
 
-    public async Task PostSalesInvoiceAsync(Guid companyId, Guid invoiceId)
+    public async Task<BcSalesInvoice?> PostSalesInvoiceAsync(Guid companyId, Guid invoiceId)
     {
         await SetAuthHeaderAsync();
         var url = $"{_options.BaseUrl}/companies({companyId})/salesInvoices({invoiceId})/Microsoft.NAV.post";
@@ -314,6 +314,19 @@ public class BusinessCentralApiClient
 
         var response = await _httpClient.PostAsync(url, null);
         await EnsureSuccessAsync(response);
+
+        // After posting, the invoice may have a new number from the Posted Invoice Nos. series.
+        // Re-fetch it by ID (BC keeps the same ID but status changes to posted).
+        try
+        {
+            var fetchUrl = $"{_options.BaseUrl}/companies({companyId})/salesInvoices({invoiceId})";
+            var posted = await GetSingleAsync<BcSalesInvoice>(fetchUrl);
+            return posted;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     public async Task DeleteSalesInvoiceAsync(Guid companyId, Guid invoiceId, string? etag = null)
