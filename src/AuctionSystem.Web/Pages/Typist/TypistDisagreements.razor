@@ -63,8 +63,8 @@ else
                                     <span class="badge bg-secondary">Slot @entry.TypistSlot</span>
                                     @entry.TypistName
                                 </td>
-                                <td>@entry.BrokerNumber — @entry.BrokerName</td>
-                                <td>€@entry.PriceEur.ToString("N2")</td>
+                                <td>@(_currentUser != null && entry.TypistUserId == _currentUser.Id ? $"{entry.BrokerNumber} — {entry.BrokerName}" : "—")</td>
+                                <td>@(_currentUser != null && entry.TypistUserId == _currentUser.Id ? $"€{entry.PriceEur:N2}" : "—")</td>
                                 <td><small>@entry.EnteredAt.ToString("HH:mm:ss")</small></td>
                             </tr>
                         }
