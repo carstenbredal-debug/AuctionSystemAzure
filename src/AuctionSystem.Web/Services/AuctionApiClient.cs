@@ -512,4 +512,21 @@ public class AuctionApiClient
 
     public async Task<List<TypistEntryDto>> GetRecentTypistEntriesAsync()
         => await _http.GetFromJsonAsync<List<TypistEntryDto>>("api/typist-entries/recent") ?? new();
+
+    // Auction Transactions
+    public async Task<List<AuctionTransactionDto>> GetAuctionTransactionsAsync(int? auctionId = null)
+    {
+        var url = "api/auction-transactions";
+        if (auctionId.HasValue)
+            url += $"?auctionId={auctionId.Value}";
+        return await _http.GetFromJsonAsync<List<AuctionTransactionDto>>(url) ?? new();
+    }
+
+    public async Task<List<AuctionTransactionSummaryDto>> GetAuctionTransactionSummaryAsync(int? auctionId = null)
+    {
+        var url = "api/auction-transactions/summary";
+        if (auctionId.HasValue)
+            url += $"?auctionId={auctionId.Value}";
+        return await _http.GetFromJsonAsync<List<AuctionTransactionSummaryDto>>(url) ?? new();
+    }
 }

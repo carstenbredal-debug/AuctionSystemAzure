@@ -160,6 +160,35 @@ using (var scope = host.Services.CreateScope())
                 CREATE INDEX IX_TypistEntries_TypistUserId ON auction.TypistEntries(TypistUserId);
             END
         ");
+        // AuctionTransactions table
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'AuctionTransactions')
+            BEGIN
+                CREATE TABLE auction.AuctionTransactions (
+                    Id INT IDENTITY(1,1) PRIMARY KEY,
+                    AuctionId INT NOT NULL,
+                    LotNumber INT NOT NULL,
+                    TransactionType INT NOT NULL,
+                    BrokerId INT NOT NULL,
+                    BuyerId INT NULL,
+                    Description NVARCHAR(500) NOT NULL DEFAULT '',
+                    Quantity INT NOT NULL DEFAULT 0,
+                    UnitPrice DECIMAL(18,4) NOT NULL DEFAULT 0,
+                    Amount DECIMAL(18,2) NOT NULL DEFAULT 0,
+                    DebitAccount NVARCHAR(50) NULL,
+                    CreditAccount NVARCHAR(50) NULL,
+                    CreatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+                    AuctionResultId INT NULL,
+                    CONSTRAINT FK_AuctionTransactions_Auction FOREIGN KEY (AuctionId) REFERENCES auction.Auctions(Id),
+                    CONSTRAINT FK_AuctionTransactions_Broker FOREIGN KEY (BrokerId) REFERENCES auction.Brokers(Id),
+                    CONSTRAINT FK_AuctionTransactions_Buyer FOREIGN KEY (BuyerId) REFERENCES auction.Buyers(Id),
+                    CONSTRAINT FK_AuctionTransactions_AuctionResult FOREIGN KEY (AuctionResultId) REFERENCES auction.AuctionResults(Id)
+                );
+                CREATE INDEX IX_AuctionTransactions_AuctionId_LotNumber ON auction.AuctionTransactions(AuctionId, LotNumber);
+                CREATE INDEX IX_AuctionTransactions_TransactionType ON auction.AuctionTransactions(TransactionType);
+                CREATE INDEX IX_AuctionTransactions_BrokerId ON auction.AuctionTransactions(BrokerId);
+            END
+        ");
         db.Database.Migrate();
     }
     catch (Exception ex)

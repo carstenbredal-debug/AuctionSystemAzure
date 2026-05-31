@@ -208,6 +208,9 @@ public class TypistEntryFunctions
 
             await _db.SaveChangesAsync();
 
+            // Create auction transactions (journal entries)
+            await CreateTransactionsForMatch(result, auctionLot);
+
             _logger.LogInformation("Typist entries matched for lot {LotNumber}: broker={BrokerId}, price={Price}",
                 entry1.LotNumber, entry1.BrokerId, entry1.PriceEur);
         }
@@ -224,6 +227,88 @@ public class TypistEntryFunctions
             _logger.LogWarning("Typist disagreement for lot {LotNumber}: entry1(broker={B1}, price={P1}) vs entry2(broker={B2}, price={P2})",
                 entry1.LotNumber, entry1.BrokerId, entry1.PriceEur, entry2.BrokerId, entry2.PriceEur);
         }
+    }
+
+    private async Task CreateTransactionsForMatch(AuctionResult result, Lot? auctionLot)
+    {
+        if (auctionLot == null) return;
+
+        var auctionId = auctionLot.AuctionId;
+        var quantity = result.TotalSkins;
+        var pricePerSkin = result.PriceEur;
+        var hammerPrice = quantity * pricePerSkin;
+        var lotDesc = $"Lot {result.LotNumber} — {auctionLot.Description}";
+
+        // Read fee/commission parameters
+        decimal auctionFeePercent = 0;
+        decimal handlingFeePerSkin = 0;
+
+        var auctionFeeParam = await _db.SystemParameters.FirstOrDefaultAsync(p => p.Key == "AuctionFee");
+        var handlingFeeParam = await _db.SystemParameters.FirstOrDefaultAsync(p => p.Key == "HandlingFee");
+        if (auctionFeeParam != null)
+            decimal.TryParse(auctionFeeParam.Value, System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out auctionFeePercent);
+        if (handlingFeeParam != null)
+            decimal.TryParse(handlingFeeParam.Value, System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out handlingFeePerSkin);
+
+        // 1. Lot Sale transaction
+        _db.AuctionTransactions.Add(new AuctionTransaction
+        {
+            AuctionId = auctionId,
+            LotNumber = result.LotNumber,
+            TransactionType = TransactionType.LotSale,
+            BrokerId = result.BrokerId,
+            Description = lotDesc,
+            Quantity = quantity,
+            UnitPrice = pricePerSkin,
+            Amount = hammerPrice,
+            AuctionResultId = result.Id,
+            CreatedAt = DateTime.UtcNow
+        });
+
+        // 2. Auction Fee transaction
+        var handlingTotal = quantity * handlingFeePerSkin;
+        var auctionFeeAmount = (hammerPrice + handlingTotal) * auctionFeePercent / 100m;
+        if (auctionFeeAmount > 0)
+        {
+            _db.AuctionTransactions.Add(new AuctionTransaction
+            {
+                AuctionId = auctionId,
+                LotNumber = result.LotNumber,
+                TransactionType = TransactionType.AuctionFee,
+                BrokerId = result.BrokerId,
+                Description = $"Auction Fee — {lotDesc} ({auctionFeePercent}%)",
+                Quantity = quantity,
+                UnitPrice = Math.Round(auctionFeeAmount / quantity, 4),
+                Amount = Math.Round(auctionFeeAmount, 2),
+                AuctionResultId = result.Id,
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
+        // 3. Commission transaction (if set on the result)
+        var commissionAmount = result.CommissionAmount ?? 0;
+        if (commissionAmount > 0)
+        {
+            _db.AuctionTransactions.Add(new AuctionTransaction
+            {
+                AuctionId = auctionId,
+                LotNumber = result.LotNumber,
+                TransactionType = TransactionType.Commission,
+                BrokerId = result.BrokerId,
+                Description = $"Commission — {lotDesc} ({result.CommissionType} {result.CommissionValue})",
+                Quantity = quantity,
+                UnitPrice = Math.Round(commissionAmount / quantity, 4),
+                Amount = Math.Round(commissionAmount, 2),
+                AuctionResultId = result.Id,
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
+        await _db.SaveChangesAsync();
+        _logger.LogInformation("Created auction transactions for lot {LotNumber}: sale={Sale}, fee={Fee}, commission={Commission}",
+            result.LotNumber, hammerPrice, auctionFeeAmount, commissionAmount);
     }
 
     private static string? ParseField(string? description, int index)

@@ -529,3 +529,33 @@ public class TypistLotStatus
     public bool IsDisagreement { get; set; }
     public List<TypistEntryDto> Entries { get; set; } = new();
 }
+
+// Auction Transaction models
+public class AuctionTransactionDto
+{
+    public int Id { get; set; }
+    public int AuctionId { get; set; }
+    public int LotNumber { get; set; }
+    public string TransactionType { get; set; } = "";
+    public int BrokerId { get; set; }
+    public string BrokerNumber { get; set; } = "";
+    public string BrokerName { get; set; } = "";
+    public int? BuyerId { get; set; }
+    public string? BuyerNumber { get; set; }
+    public string? BuyerName { get; set; }
+    public string Description { get; set; } = "";
+    public int Quantity { get; set; }
+    public decimal UnitPrice { get; set; }
+    public decimal Amount { get; set; }
+    public string? DebitAccount { get; set; }
+    public string? CreditAccount { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public int? AuctionResultId { get; set; }
+}
+
+public class AuctionTransactionSummaryDto
+{
+    public string TransactionType { get; set; } = "";
+    public int Count { get; set; }
+    public decimal TotalAmount { get; set; }
+}
