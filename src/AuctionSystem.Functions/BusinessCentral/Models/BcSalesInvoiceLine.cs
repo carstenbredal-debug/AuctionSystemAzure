@@ -30,6 +30,7 @@ public class BcSalesInvoiceLine
     public decimal UnitPrice { get; set; }
 
     [JsonPropertyName("lineAmount")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public decimal LineAmount { get; set; }
 
     [JsonPropertyName("@odata.etag")]
