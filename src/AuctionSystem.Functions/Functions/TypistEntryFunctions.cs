@@ -105,24 +105,16 @@ public class TypistEntryFunctions
         if (broker == null)
             return await CreateErrorResponse(req, "Broker not found");
 
-        // Mark old disagreement entries for this lot as resolved
-        var oldEntries = await _db.TypistEntries
-            .Where(e => e.LotNumber == body.LotNumber && e.IsDisagreement && !e.IsResolved)
-            .ToListAsync();
-
-        foreach (var old in oldEntries)
-            old.IsResolved = true;
-
-        // Check if this typist already re-entered for this lot
+        // Check if this typist already re-entered for this lot (pending reentry, not yet compared)
         var existingReentry = await _db.TypistEntries
             .Where(e => e.LotNumber == body.LotNumber && e.TypistUserId == body.TypistUserId
                         && !e.IsResolved && !e.IsDisagreement && !e.IsMatched)
             .FirstOrDefaultAsync();
 
         if (existingReentry != null)
-            return await CreateErrorResponse(req, "You have already re-entered for this lot");
+            return await CreateErrorResponse(req, "You have already re-entered for this lot. Waiting for the other typist.");
 
-        // Determine slot
+        // Count existing reentries from the OTHER typist for this lot
         var existingReentries = await _db.TypistEntries
             .Where(e => e.LotNumber == body.LotNumber && !e.IsResolved && !e.IsDisagreement && !e.IsMatched)
             .ToListAsync();
@@ -142,8 +134,19 @@ public class TypistEntryFunctions
         _db.TypistEntries.Add(entry);
         await _db.SaveChangesAsync();
 
+        // Only compare and resolve when BOTH typists have re-entered
         if (slot == 2)
         {
+            // Now mark old disagreement entries as resolved
+            var oldEntries = await _db.TypistEntries
+                .Where(e => e.LotNumber == body.LotNumber && e.IsDisagreement && !e.IsResolved)
+                .ToListAsync();
+
+            foreach (var old in oldEntries)
+                old.IsResolved = true;
+
+            await _db.SaveChangesAsync();
+
             var otherEntry = existingReentries[0];
             await CompareEntries(entry, otherEntry);
         }
