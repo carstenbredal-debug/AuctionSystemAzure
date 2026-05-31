@@ -25,7 +25,8 @@ public class AuctionService
 
     public async Task<Auction> CreateAuctionAsync(Auction auction)
     {
-        auction.AuctionNumber = $"AUC-{DateTime.UtcNow:yyyyMMdd}-{await _db.Auctions.CountAsync() + 1:D4}";
+        if (string.IsNullOrWhiteSpace(auction.AuctionNumber))
+            auction.AuctionNumber = $"AUC-{DateTime.UtcNow:yyyyMMdd}-{await _db.Auctions.CountAsync() + 1:D4}";
         _db.Auctions.Add(auction);
         await _db.SaveChangesAsync();
         return auction;
