@@ -103,7 +103,7 @@ public class SettlementFunctions
                 i.TotalAmount, i.Currency, Status = i.Status.ToString(),
                 BrokerName = i.Broker.CompanyName, LinesCount = i.Lines.Count,
                 i.IsCreditNote, OriginalInvoiceNumber = i.OriginalInvoice != null ? i.OriginalInvoice.InvoiceNumber : null,
-                i.PdfUrl
+                i.PdfUrl, i.BcInvoiceNumber
             }).ToListAsync();
         return await CreateJsonResponse(req, invoices);
     }
@@ -120,7 +120,7 @@ public class SettlementFunctions
                 i.TotalAmount, i.Currency, Status = i.Status.ToString(),
                 BrokerName = i.Broker.CompanyName, BuyerName = i.Buyer.Name, LinesCount = i.Lines.Count,
                 i.IsCreditNote, OriginalInvoiceNumber = i.OriginalInvoice != null ? i.OriginalInvoice.InvoiceNumber : null,
-                i.PdfUrl
+                i.PdfUrl, i.BcInvoiceNumber
             }).ToListAsync();
         return await CreateJsonResponse(req, invoices);
     }
