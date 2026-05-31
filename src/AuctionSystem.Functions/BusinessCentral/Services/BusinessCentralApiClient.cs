@@ -319,38 +319,18 @@ public class BusinessCentralApiClient
     public async Task<byte[]?> GetSalesInvoicePdfAsync(Guid companyId, Guid invoiceId)
     {
         await SetAuthHeaderAsync();
-        var url = $"{_options.BaseUrl}/companies({companyId})/salesInvoices({invoiceId})/pdfDocument";
+        var url = $"{_options.BaseUrl}/companies({companyId})/salesInvoices({invoiceId})/pdfDocument/pdfDocumentContent";
         _logger.LogInformation("GET {Url} (PDF)", url);
 
-        var metaResponse = await _httpClient.GetAsync(url);
-        if (!metaResponse.IsSuccessStatusCode)
+        var response = await _httpClient.GetAsync(url);
+        if (!response.IsSuccessStatusCode)
         {
-            var body = await metaResponse.Content.ReadAsStringAsync();
-            _logger.LogWarning("Could not get PDF metadata: {Status} {Body}", (int)metaResponse.StatusCode, body);
+            var body = await response.Content.ReadAsStringAsync();
+            _logger.LogWarning("Could not download invoice PDF: {Status} {Body}", (int)response.StatusCode, body);
             return null;
         }
 
-        var meta = await metaResponse.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
-        var docs = meta.GetProperty("value");
-        if (docs.GetArrayLength() == 0)
-        {
-            _logger.LogWarning("No PDF document found for invoice {Id}", invoiceId);
-            return null;
-        }
-
-        var pdfId = docs[0].GetProperty("id").GetString();
-        var contentUrl = $"{url}({pdfId})/pdfDocumentContent";
-        _logger.LogInformation("GET {Url} (PDF content)", contentUrl);
-
-        var contentResponse = await _httpClient.GetAsync(contentUrl);
-        if (!contentResponse.IsSuccessStatusCode)
-        {
-            var body = await contentResponse.Content.ReadAsStringAsync();
-            _logger.LogWarning("Could not download PDF content: {Status} {Body}", (int)contentResponse.StatusCode, body);
-            return null;
-        }
-
-        return await contentResponse.Content.ReadAsByteArrayAsync();
+        return await response.Content.ReadAsByteArrayAsync();
     }
 
     // ── Sales Credit Memos ─────────────────────────────────────
