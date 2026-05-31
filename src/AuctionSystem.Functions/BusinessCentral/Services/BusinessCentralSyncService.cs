@@ -169,8 +169,7 @@ public class BusinessCentralSyncService
                     ExternalDocumentNumber = invoice.InvoiceNumber,
                     InvoiceDate = invoice.InvoiceDate.ToString("yyyy-MM-dd"),
                     DueDate = (invoice.PromptDate ?? invoice.InvoiceDate.AddDays(30)).ToString("yyyy-MM-dd"),
-                    CustomerId = buyerBcCustomer.Id,
-                    CurrencyCode = invoice.Currency == "EUR" ? "EUR" : invoice.Currency
+                    CustomerId = buyerBcCustomer.Id
                 };
 
                 var created = await _bcClient.CreateSalesInvoiceAsync(companyId, bcInvoice);
@@ -351,8 +350,7 @@ public class BusinessCentralSyncService
             ExternalDocumentNumber = invoice.InvoiceNumber,
             InvoiceDate = invoice.InvoiceDate.ToString("yyyy-MM-dd"),
             DueDate = (invoice.PromptDate ?? invoice.InvoiceDate.AddDays(30)).ToString("yyyy-MM-dd"),
-            CustomerId = buyerBcCustomer.Id,
-            CurrencyCode = invoice.Currency == "EUR" ? "EUR" : invoice.Currency
+            CustomerId = buyerBcCustomer.Id
         };
 
         var created = await _bcClient.CreateSalesInvoiceAsync(companyId, bcInvoice);
