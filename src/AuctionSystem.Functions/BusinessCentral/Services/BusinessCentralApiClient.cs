@@ -316,6 +316,18 @@ public class BusinessCentralApiClient
         await EnsureSuccessAsync(response);
     }
 
+    public async Task DeleteSalesInvoiceAsync(Guid companyId, Guid invoiceId, string? etag = null)
+    {
+        await SetAuthHeaderAsync();
+        var url = $"{_options.BaseUrl}/companies({companyId})/salesInvoices({invoiceId})";
+        _logger.LogInformation("DELETE {Url}", url);
+
+        var request = new HttpRequestMessage(HttpMethod.Delete, url);
+        request.Headers.Add("If-Match", etag ?? "*");
+        var response = await _httpClient.SendAsync(request);
+        await EnsureSuccessAsync(response);
+    }
+
     public async Task<byte[]?> GetSalesInvoicePdfAsync(Guid companyId, Guid invoiceId)
     {
         await SetAuthHeaderAsync();
