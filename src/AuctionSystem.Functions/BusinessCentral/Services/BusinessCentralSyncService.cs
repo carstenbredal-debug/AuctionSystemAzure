@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using AuctionSystem.Domain.Data;
 using AuctionSystem.Domain.Entities;
+using AuctionSystem.Domain.Enums;
 using AuctionSystem.Functions.BusinessCentral.Models;
 
 namespace AuctionSystem.Functions.BusinessCentral.Services;
@@ -304,6 +305,112 @@ public class BusinessCentralSyncService
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Push a single invoice to BC as a Sales Invoice with G/L account lines.
+    /// Account mapping: Lot Sale=2300, Auction Fee=4040, Commission=2310.
+    /// </summary>
+    public async Task PushInvoiceToBcAsync(Invoice invoice)
+    {
+        var companyId = await _bcClient.ResolveCompanyIdAsync();
+
+        // Check if already pushed
+        var existing = await _bcClient.GetSalesInvoiceByExternalDocAsync(companyId, invoice.InvoiceNumber);
+        if (existing is not null)
+        {
+            _logger.LogInformation("Invoice {Number} already exists in BC, skipping", invoice.InvoiceNumber);
+            return;
+        }
+
+        // Resolve buyer as BC customer
+        var buyer = invoice.Buyer ?? await _db.Buyers.FindAsync(invoice.BuyerId);
+        if (buyer == null)
+        {
+            _logger.LogWarning("Invoice {Number}: Buyer {Id} not found, skipping BC push", invoice.InvoiceNumber, invoice.BuyerId);
+            return;
+        }
+
+        var buyerBcCustomer = await _bcClient.GetCustomerByNumberAsync(companyId, buyer.BuyerNumber);
+        if (buyerBcCustomer is null)
+        {
+            _logger.LogWarning("Invoice {Number}: Buyer {Number} not found in BC, skipping", invoice.InvoiceNumber, buyer.BuyerNumber);
+            return;
+        }
+
+        var bcInvoice = new BcSalesInvoice
+        {
+            ExternalDocumentNumber = invoice.InvoiceNumber,
+            InvoiceDate = invoice.InvoiceDate.ToString("yyyy-MM-dd"),
+            DueDate = (invoice.PromptDate ?? invoice.InvoiceDate.AddDays(30)).ToString("yyyy-MM-dd"),
+            CustomerId = buyerBcCustomer.Id,
+            CurrencyCode = invoice.Currency == "EUR" ? "EUR" : invoice.Currency
+        };
+
+        var created = await _bcClient.CreateSalesInvoiceAsync(companyId, bcInvoice);
+
+        // Store BC-assigned invoice number
+        invoice.BcInvoiceNumber = created.Number;
+        invoice.BcInvoiceId = created.Id;
+        await _db.SaveChangesAsync();
+
+        int seq = 10000;
+
+        // Lot sale lines — account 2300
+        foreach (var line in invoice.Lines)
+        {
+            var bcLine = new BcSalesInvoiceLine
+            {
+                DocumentId = created.Id,
+                Sequence = seq,
+                LineType = "Account",
+                LineObjectNumber = "2300",
+                Description = $"Lot {line.LotNumber}: {line.Description} ({line.Skins} skins)",
+                Quantity = line.Skins,
+                UnitPrice = line.PricePerSkin,
+                LineAmount = line.HammerPrice
+            };
+            await _bcClient.CreateSalesInvoiceLineAsync(companyId, created.Id, bcLine);
+            seq += 10000;
+        }
+
+        // Auction Fee line — account 4040
+        if (invoice.AuctionFee != 0)
+        {
+            var feeLine = new BcSalesInvoiceLine
+            {
+                DocumentId = created.Id,
+                Sequence = seq,
+                LineType = "Account",
+                LineObjectNumber = "4040",
+                Description = "Auction Fee",
+                Quantity = 1,
+                UnitPrice = invoice.AuctionFee,
+                LineAmount = invoice.AuctionFee
+            };
+            await _bcClient.CreateSalesInvoiceLineAsync(companyId, created.Id, feeLine);
+            seq += 10000;
+        }
+
+        // Commission line — account 2310
+        if (invoice.Commission != 0)
+        {
+            var commLine = new BcSalesInvoiceLine
+            {
+                DocumentId = created.Id,
+                Sequence = seq,
+                LineType = "Account",
+                LineObjectNumber = "2310",
+                Description = "Commission",
+                Quantity = 1,
+                UnitPrice = invoice.Commission,
+                LineAmount = invoice.Commission
+            };
+            await _bcClient.CreateSalesInvoiceLineAsync(companyId, created.Id, commLine);
+        }
+
+        _logger.LogInformation("Created BC sales invoice for {Number} (customer={Customer})",
+            invoice.InvoiceNumber, buyer.BuyerNumber);
     }
 
     /// <summary>

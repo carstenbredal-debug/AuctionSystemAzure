@@ -40,6 +40,8 @@ var host = new HostBuilder()
                 ?? context.Configuration["Values:BC_ENVIRONMENT"] ?? "sandbox";
             opts.CompanyId = context.Configuration["BC_COMPANY_ID"]
                 ?? context.Configuration["Values:BC_COMPANY_ID"] ?? "";
+            opts.CompanyName = context.Configuration["BC_COMPANY_NAME"]
+                ?? context.Configuration["Values:BC_COMPANY_NAME"] ?? "Lot Test 3";
         });
 
         var bcTenantId = context.Configuration["BC_TENANT_ID"]
@@ -133,6 +135,13 @@ using (var scope = host.Services.CreateScope())
                 ALTER TABLE auction.Farmers ADD VatBusPostingGroup nvarchar(max) NOT NULL DEFAULT '';
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Farmers') AND name = 'VendorPostingGroup')
                 ALTER TABLE auction.Farmers ADD VendorPostingGroup nvarchar(max) NOT NULL DEFAULT '';
+        ");
+        // Invoice BC columns
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Invoices') AND name = 'BcInvoiceNumber')
+                ALTER TABLE auction.Invoices ADD BcInvoiceNumber nvarchar(50) NULL;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Invoices') AND name = 'BcInvoiceId')
+                ALTER TABLE auction.Invoices ADD BcInvoiceId uniqueidentifier NULL;
         ");
         // TypistEntries table
         db.Database.ExecuteSqlRaw(@"

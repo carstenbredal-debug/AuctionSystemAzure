@@ -9,6 +9,7 @@ public class BusinessCentralOptions
     public string ClientSecret { get; set; } = string.Empty;
     public string Environment { get; set; } = "sandbox";
     public string CompanyId { get; set; } = string.Empty;
+    public string CompanyName { get; set; } = string.Empty;
 
     public string BaseUrl =>
         $"https://api.businesscentral.dynamics.com/v2.0/{TenantId}/{Environment}/api/v2.0";

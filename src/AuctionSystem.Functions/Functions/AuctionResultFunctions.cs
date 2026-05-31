@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using AuctionSystem.Domain.Data;
 using AuctionSystem.Domain.Entities;
 using AuctionSystem.Domain.Enums;
+using AuctionSystem.Functions.BusinessCentral.Services;
 using AuctionSystem.Functions.Services;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
@@ -17,6 +18,7 @@ public class AuctionResultFunctions
     private readonly AuctionDbContext _db;
     private readonly ILogger<AuctionResultFunctions> _logger;
     private readonly BlobStorageService? _blobStorage;
+    private readonly BusinessCentralSyncService? _bcSyncService;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -24,11 +26,12 @@ public class AuctionResultFunctions
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public AuctionResultFunctions(AuctionDbContext db, ILogger<AuctionResultFunctions> logger, BlobStorageService? blobStorage = null)
+    public AuctionResultFunctions(AuctionDbContext db, ILogger<AuctionResultFunctions> logger, BlobStorageService? blobStorage = null, BusinessCentralSyncService? bcSyncService = null)
     {
         _db = db;
         _logger = logger;
         _blobStorage = blobStorage;
+        _bcSyncService = bcSyncService;
     }
 
     [Function("SubmitAuctionResult")]
@@ -421,6 +424,20 @@ public class AuctionResultFunctions
                     catch (Exception blobEx)
                     {
                         _logger.LogWarning(blobEx, "Failed to upload invoice PDF to blob storage");
+                    }
+                }
+
+                // Auto-push to BC as Sales Invoice (non-critical)
+                if (_bcSyncService != null)
+                {
+                    try
+                    {
+                        await _bcSyncService.PushInvoiceToBcAsync(invoice);
+                        _logger.LogInformation("Auto-pushed invoice {Number} to BC", invoice.InvoiceNumber);
+                    }
+                    catch (Exception bcEx)
+                    {
+                        _logger.LogWarning(bcEx, "Failed to auto-push invoice {Number} to BC", invoice.InvoiceNumber);
                     }
                 }
             }

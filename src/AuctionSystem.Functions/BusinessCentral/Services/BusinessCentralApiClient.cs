@@ -49,6 +49,20 @@ public class BusinessCentralApiClient
         if (companies.Count == 0)
             throw new InvalidOperationException("No companies found in Business Central.");
 
+        // Match by name if configured
+        if (!string.IsNullOrEmpty(_options.CompanyName))
+        {
+            var match = companies.FirstOrDefault(c =>
+                string.Equals(c.DisplayName, _options.CompanyName, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(c.Name, _options.CompanyName, StringComparison.OrdinalIgnoreCase));
+            if (match != null)
+            {
+                _logger.LogInformation("Using company '{Name}' ({Id}) matched by name", match.DisplayName, match.Id);
+                return match.Id;
+            }
+            _logger.LogWarning("Company name '{Name}' not found, falling back to first company", _options.CompanyName);
+        }
+
         var company = companies[0];
         _logger.LogInformation("Using company '{Name}' ({Id})", company.DisplayName, company.Id);
         return company.Id;
