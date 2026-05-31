@@ -406,6 +406,18 @@ public class AuctionApiClient
         }
     }
 
+    public async Task<BcConsistencyCheckDto> GetBcConsistencyCheckAsync()
+    {
+        try
+        {
+            return await _http.GetFromJsonAsync<BcConsistencyCheckDto>("api/bc/consistency-check") ?? new();
+        }
+        catch
+        {
+            return new() { Message = "Failed to run consistency check" };
+        }
+    }
+
     public async Task<List<BcPostingGroupDto>> GetBcGenBusPostingGroupsAsync()
     {
         try
