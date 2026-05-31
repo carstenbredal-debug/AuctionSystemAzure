@@ -130,6 +130,62 @@ else
         </div>
     </div>
 
+    <!-- Consistency Check -->
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <strong>Consistency Check</strong>
+            <button class="btn btn-sm btn-outline-primary" @onclick="RunConsistencyCheck" disabled="@_checkingConsistency">
+                @if (_checkingConsistency) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                Run Check
+            </button>
+        </div>
+        @if (_consistencyResult is not null)
+        {
+            <div class="card-body">
+                <p class="mb-2">
+                    Checked: <strong>@_consistencyResult.Checked_?.Brokers</strong> brokers,
+                    <strong>@_consistencyResult.Checked_?.Buyers</strong> buyers,
+                    <strong>@_consistencyResult.Checked_?.Farmers</strong> farmers
+                </p>
+                @if (_consistencyResult.Mismatches.Count == 0)
+                {
+                    <div class="alert alert-success mb-0">All consistent — no mismatches found.</div>
+                }
+                else
+                {
+                    <div class="alert alert-warning">@_consistencyResult.Message</div>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-sm mb-0">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Entity</th>
+                                    <th>Number</th>
+                                    <th>Name</th>
+                                    <th>Field</th>
+                                    <th>Auction System</th>
+                                    <th>Business Central</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var m in _consistencyResult.Mismatches)
+                                {
+                                    <tr class="@(m.Bc == "NOT FOUND" ? "table-danger" : "table-warning")">
+                                        <td><span class="badge @(m.Entity == "Broker" ? "bg-primary" : m.Entity == "Buyer" ? "bg-success" : "bg-info")">@m.Entity</span></td>
+                                        <td>@m.Number</td>
+                                        <td>@m.Name</td>
+                                        <td><code>@m.Field</code></td>
+                                        <td>@m.Auction</td>
+                                        <td>@m.Bc</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
     <!-- Sync Results -->
     @if (_syncResults.Count > 0)
     {
@@ -197,6 +253,8 @@ else
     private bool _messageIsError;
     private BcStatusDto _status = new();
     private List<BcSyncResultDto> _syncResults = new();
+    private bool _checkingConsistency;
+    private BcConsistencyCheckDto? _consistencyResult;
 
     protected override async Task OnInitializedAsync()
     {
@@ -329,5 +387,15 @@ else
         await LoadStatus();
         _syncing = false;
         _syncingType = null;
+    }
+
+    private async Task RunConsistencyCheck()
+    {
+        _checkingConsistency = true;
+        StateHasChanged();
+
+        _consistencyResult = await Api.GetBcConsistencyCheckAsync();
+
+        _checkingConsistency = false;
     }
 }

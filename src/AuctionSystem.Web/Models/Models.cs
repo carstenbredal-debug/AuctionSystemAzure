@@ -559,3 +559,27 @@ public class AuctionTransactionSummaryDto
     public int Count { get; set; }
     public decimal TotalAmount { get; set; }
 }
+
+public class BcConsistencyCheckDto
+{
+    public string Message { get; set; } = "";
+    public BcConsistencyCheckedDto? Checked_ { get; set; }
+    public List<BcConsistencyMismatchDto> Mismatches { get; set; } = new();
+}
+
+public class BcConsistencyCheckedDto
+{
+    public int Brokers { get; set; }
+    public int Buyers { get; set; }
+    public int Farmers { get; set; }
+}
+
+public class BcConsistencyMismatchDto
+{
+    public string Entity { get; set; } = "";
+    public string Number { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string Field { get; set; } = "";
+    public string Auction { get; set; } = "";
+    public string Bc { get; set; } = "";
+}
