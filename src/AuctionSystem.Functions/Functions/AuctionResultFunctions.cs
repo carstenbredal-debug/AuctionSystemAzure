@@ -809,6 +809,36 @@ public class AuctionResultFunctions
 
         return creditNote.Id;
     }
+
+    [Function("DiagBlobStorage")]
+    public async Task<HttpResponseData> DiagBlobStorage(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "diag/blob")] HttpRequestData req)
+    {
+        var result = new Dictionary<string, object?>();
+        result["blobStorageAvailable"] = _blobStorage != null;
+        result["bcSyncServiceAvailable"] = _bcSyncService != null;
+
+        if (_blobStorage != null)
+        {
+            try
+            {
+                var testData = System.Text.Encoding.UTF8.GetBytes("blob-storage-test");
+                var url = await _blobStorage.UploadPdfAsync("_diag_test.txt", testData);
+                result["uploadSuccess"] = true;
+                result["uploadUrl"] = url;
+            }
+            catch (Exception ex)
+            {
+                result["uploadSuccess"] = false;
+                result["uploadError"] = ex.ToString();
+            }
+        }
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(result, JsonOptions));
+        return response;
+    }
 }
 
 public class SubmitAuctionResultRequest
