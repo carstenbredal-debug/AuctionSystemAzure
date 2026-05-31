@@ -4,6 +4,7 @@ using AuctionSystem.Domain.Data;
 using AuctionSystem.Domain.Entities;
 using AuctionSystem.Domain.Enums;
 using AuctionSystem.Functions.BusinessCentral.Models;
+using AuctionSystem.Functions.Services;
 
 namespace AuctionSystem.Functions.BusinessCentral.Services;
 
@@ -18,15 +19,18 @@ public class BusinessCentralSyncService
 
     private readonly BusinessCentralApiClient _bcClient;
     private readonly AuctionDbContext _db;
+    private readonly BlobStorageService _blobStorage;
     private readonly ILogger<BusinessCentralSyncService> _logger;
 
     public BusinessCentralSyncService(
         BusinessCentralApiClient bcClient,
         AuctionDbContext db,
+        BlobStorageService blobStorage,
         ILogger<BusinessCentralSyncService> logger)
     {
         _bcClient = bcClient;
         _db = db;
+        _blobStorage = blobStorage;
         _logger = logger;
     }
 
@@ -229,6 +233,10 @@ public class BusinessCentralSyncService
                 // Store BC-assigned invoice number
                 invoice.BcInvoiceNumber = created.Number;
                 invoice.BcInvoiceId = created.Id;
+
+                // Fetch PDF from BC and store in blob storage
+                await TryFetchAndStorePdfAsync(companyId, created.Id, invoice);
+
                 await _db.SaveChangesAsync();
 
                 result.Created++;
@@ -415,6 +423,10 @@ public class BusinessCentralSyncService
         // Store BC-assigned invoice number
         invoice.BcInvoiceNumber = created.Number;
         invoice.BcInvoiceId = created.Id;
+
+        // Fetch PDF from BC and store in blob storage
+        await TryFetchAndStorePdfAsync(companyId, created.Id, invoice);
+
         await _db.SaveChangesAsync();
 
         _logger.LogInformation("Created and posted BC sales invoice for {Number} (customer={Customer})",
@@ -711,5 +723,26 @@ public class BusinessCentralSyncService
             PaymentMethodCode = farmer.PaymentMethod,
             VatRegistrationNo = farmer.VatRegistrationNo
         };
+    }
+
+    private async Task TryFetchAndStorePdfAsync(Guid companyId, Guid bcInvoiceId, Invoice invoice)
+    {
+        try
+        {
+            var pdfBytes = await _bcClient.GetSalesInvoicePdfAsync(companyId, bcInvoiceId);
+            if (pdfBytes is null || pdfBytes.Length == 0)
+            {
+                _logger.LogWarning("No PDF returned from BC for invoice {Number}", invoice.InvoiceNumber);
+                return;
+            }
+
+            var fileName = $"bc-{invoice.InvoiceNumber}.pdf";
+            invoice.PdfUrl = await _blobStorage.UploadPdfAsync(fileName, pdfBytes);
+            _logger.LogInformation("Stored BC invoice PDF for {Number} ({Bytes} bytes)", invoice.InvoiceNumber, pdfBytes.Length);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to fetch/store BC invoice PDF for {Number}", invoice.InvoiceNumber);
+        }
     }
 }

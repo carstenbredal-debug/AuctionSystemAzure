@@ -316,6 +316,43 @@ public class BusinessCentralApiClient
         await EnsureSuccessAsync(response);
     }
 
+    public async Task<byte[]?> GetSalesInvoicePdfAsync(Guid companyId, Guid invoiceId)
+    {
+        await SetAuthHeaderAsync();
+        var url = $"{_options.BaseUrl}/companies({companyId})/salesInvoices({invoiceId})/pdfDocument";
+        _logger.LogInformation("GET {Url} (PDF)", url);
+
+        var metaResponse = await _httpClient.GetAsync(url);
+        if (!metaResponse.IsSuccessStatusCode)
+        {
+            var body = await metaResponse.Content.ReadAsStringAsync();
+            _logger.LogWarning("Could not get PDF metadata: {Status} {Body}", (int)metaResponse.StatusCode, body);
+            return null;
+        }
+
+        var meta = await metaResponse.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        var docs = meta.GetProperty("value");
+        if (docs.GetArrayLength() == 0)
+        {
+            _logger.LogWarning("No PDF document found for invoice {Id}", invoiceId);
+            return null;
+        }
+
+        var pdfId = docs[0].GetProperty("id").GetString();
+        var contentUrl = $"{url}({pdfId})/pdfDocumentContent";
+        _logger.LogInformation("GET {Url} (PDF content)", contentUrl);
+
+        var contentResponse = await _httpClient.GetAsync(contentUrl);
+        if (!contentResponse.IsSuccessStatusCode)
+        {
+            var body = await contentResponse.Content.ReadAsStringAsync();
+            _logger.LogWarning("Could not download PDF content: {Status} {Body}", (int)contentResponse.StatusCode, body);
+            return null;
+        }
+
+        return await contentResponse.Content.ReadAsByteArrayAsync();
+    }
+
     // ── Sales Credit Memos ─────────────────────────────────────
 
     public async Task<BcSalesCreditMemo> CreateSalesCreditMemoAsync(Guid companyId, BcSalesCreditMemo creditMemo)
