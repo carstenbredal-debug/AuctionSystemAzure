@@ -349,6 +349,11 @@ public class BusinessCentralSyncService
 
         var created = await _bcClient.CreateSalesInvoiceAsync(companyId, bcInvoice);
 
+        // Store BC-assigned invoice number
+        invoice.BcInvoiceNumber = created.Number;
+        invoice.BcInvoiceId = created.Id;
+        await _db.SaveChangesAsync();
+
         int seq = 10000;
 
         // Lot sale lines — account 2300
