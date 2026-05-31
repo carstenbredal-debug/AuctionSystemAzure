@@ -152,12 +152,27 @@ public class BusinessCentralSyncService
         {
             try
             {
-                var existing = await _bcClient.GetSalesInvoiceByExternalDocAsync(companyId, invoice.InvoiceNumber);
-                if (existing is not null)
+                // Skip if already pushed
+                if (!string.IsNullOrEmpty(invoice.BcInvoiceNumber))
                 {
                     result.Skipped++;
-                    _logger.LogInformation("Invoice {Number} already exists in BC, skipping", invoice.InvoiceNumber);
                     continue;
+                }
+
+                // Check by external doc if we have an invoice number
+                if (!string.IsNullOrEmpty(invoice.InvoiceNumber))
+                {
+                    var existing = await _bcClient.GetSalesInvoiceByExternalDocAsync(companyId, invoice.InvoiceNumber);
+                    if (existing is not null)
+                    {
+                        invoice.BcInvoiceNumber = existing.Number;
+                        invoice.BcInvoiceId = existing.Id;
+                        invoice.InvoiceNumber = existing.Number;
+                        await _db.SaveChangesAsync();
+                        result.Skipped++;
+                        _logger.LogInformation("Invoice {Id} already exists in BC as {Number}", invoice.Id, existing.Number);
+                        continue;
+                    }
                 }
 
                 var buyerBcCustomer = await _bcClient.GetCustomerByNumberAsync(companyId, invoice.Buyer.BuyerNumber);
@@ -168,9 +183,10 @@ public class BusinessCentralSyncService
                     continue;
                 }
 
+                var extDoc = !string.IsNullOrEmpty(invoice.InvoiceNumber) ? invoice.InvoiceNumber : $"AUC-{invoice.Id}";
                 var bcInvoice = new BcSalesInvoice
                 {
-                    ExternalDocumentNumber = invoice.InvoiceNumber,
+                    ExternalDocumentNumber = extDoc,
                     InvoiceDate = invoice.InvoiceDate.ToString("yyyy-MM-dd"),
                     DueDate = (invoice.PromptDate ?? invoice.InvoiceDate.AddDays(30)).ToString("yyyy-MM-dd"),
                     CustomerId = buyerBcCustomer.Id,
@@ -230,9 +246,10 @@ public class BusinessCentralSyncService
                 // Post the invoice in BC
                 await _bcClient.PostSalesInvoiceAsync(companyId, created.Id);
 
-                // Store BC-assigned invoice number
+                // Store BC-assigned invoice number as THE invoice number
                 invoice.BcInvoiceNumber = created.Number;
                 invoice.BcInvoiceId = created.Id;
+                invoice.InvoiceNumber = created.Number;
 
                 // Fetch PDF from BC and store in blob storage
                 await TryFetchAndStorePdfAsync(companyId, created.Id, invoice);
@@ -324,18 +341,30 @@ public class BusinessCentralSyncService
     }
 
     /// <summary>
-    /// Push a single invoice to BC as a Sales Invoice with G/L account lines.
-    /// Account mapping: Lot Sale=2300, Auction Fee=4040, Commission=2310.
+    /// Push a single invoice to BC as a Sales Invoice.
+    /// BC assigns the invoice number from the SALESINV number series.
+    /// PDF is fetched from BC and stored in blob storage.
     /// </summary>
     public async Task PushInvoiceToBcAsync(Invoice invoice)
     {
         var companyId = await _bcClient.ResolveCompanyIdAsync();
 
-        // Check if already pushed
-        var existing = await _bcClient.GetSalesInvoiceByExternalDocAsync(companyId, invoice.InvoiceNumber);
+        // Check if already pushed (by BC reference or external doc)
+        var extDocRef = !string.IsNullOrEmpty(invoice.InvoiceNumber) ? invoice.InvoiceNumber : $"AUC-{invoice.Id}";
+        if (!string.IsNullOrEmpty(invoice.BcInvoiceNumber))
+        {
+            _logger.LogInformation("Invoice {Id} already pushed to BC as {Number}", invoice.Id, invoice.BcInvoiceNumber);
+            return;
+        }
+        var existing = !string.IsNullOrEmpty(invoice.InvoiceNumber)
+            ? await _bcClient.GetSalesInvoiceByExternalDocAsync(companyId, invoice.InvoiceNumber)
+            : null;
         if (existing is not null)
         {
-            _logger.LogInformation("Invoice {Number} already exists in BC, skipping", invoice.InvoiceNumber);
+            invoice.BcInvoiceNumber = existing.Number;
+            invoice.BcInvoiceId = existing.Id;
+            await _db.SaveChangesAsync();
+            _logger.LogInformation("Invoice {Id} already exists in BC as {Number}", invoice.Id, existing.Number);
             return;
         }
 
@@ -343,20 +372,20 @@ public class BusinessCentralSyncService
         var buyer = invoice.Buyer ?? await _db.Buyers.FindAsync(invoice.BuyerId);
         if (buyer == null)
         {
-            _logger.LogWarning("Invoice {Number}: Buyer {Id} not found, skipping BC push", invoice.InvoiceNumber, invoice.BuyerId);
+            _logger.LogWarning("Invoice {Id}: Buyer {BuyerId} not found, skipping BC push", invoice.Id, invoice.BuyerId);
             return;
         }
 
         var buyerBcCustomer = await _bcClient.GetCustomerByNumberAsync(companyId, buyer.BuyerNumber);
         if (buyerBcCustomer is null)
         {
-            _logger.LogWarning("Invoice {Number}: Buyer {Number} not found in BC, skipping", invoice.InvoiceNumber, buyer.BuyerNumber);
+            _logger.LogWarning("Invoice {Id}: Buyer {Number} not found in BC, skipping", invoice.Id, buyer.BuyerNumber);
             return;
         }
 
         var bcInvoice = new BcSalesInvoice
         {
-            ExternalDocumentNumber = invoice.InvoiceNumber,
+            ExternalDocumentNumber = extDocRef,
             InvoiceDate = invoice.InvoiceDate.ToString("yyyy-MM-dd"),
             DueDate = (invoice.PromptDate ?? invoice.InvoiceDate.AddDays(30)).ToString("yyyy-MM-dd"),
             CustomerId = buyerBcCustomer.Id,
@@ -420,16 +449,17 @@ public class BusinessCentralSyncService
         // Post the invoice in BC
         await _bcClient.PostSalesInvoiceAsync(companyId, created.Id);
 
-        // Store BC-assigned invoice number
+        // Store BC-assigned invoice number as THE invoice number
         invoice.BcInvoiceNumber = created.Number;
         invoice.BcInvoiceId = created.Id;
+        invoice.InvoiceNumber = created.Number;
 
         // Fetch PDF from BC and store in blob storage
         await TryFetchAndStorePdfAsync(companyId, created.Id, invoice);
 
         await _db.SaveChangesAsync();
 
-        _logger.LogInformation("Created and posted BC sales invoice for {Number} (customer={Customer})",
+        _logger.LogInformation("Created and posted BC sales invoice {BcNumber} (customer={Customer})",
             invoice.InvoiceNumber, buyer.BuyerNumber);
     }
 
