@@ -583,3 +583,40 @@ public class BcConsistencyMismatchDto
     public string Auction { get; set; } = "";
     public string Bc { get; set; } = "";
 }
+
+public class ConnectionsInfoDto
+{
+    public BcConnectionInfoDto BusinessCentral { get; set; } = new();
+    public AzureConnectionInfoDto Azure { get; set; } = new();
+}
+
+public class BcConnectionInfoDto
+{
+    public bool Configured { get; set; }
+    public bool Connected { get; set; }
+    public string TenantId { get; set; } = "";
+    public string Environment { get; set; } = "";
+    public string CompanyId { get; set; } = "";
+    public string CompanyName { get; set; } = "";
+    public string ApiUrl { get; set; } = "";
+    public string Error { get; set; } = "";
+}
+
+public class AzureConnectionInfoDto
+{
+    public SqlConnectionInfoDto Sql { get; set; } = new();
+    public BlobConnectionInfoDto BlobStorage { get; set; } = new();
+}
+
+public class SqlConnectionInfoDto
+{
+    public bool Connected { get; set; }
+    public string Server { get; set; } = "";
+    public string Database { get; set; } = "";
+    public string Error { get; set; } = "";
+}
+
+public class BlobConnectionInfoDto
+{
+    public bool Configured { get; set; }
+}

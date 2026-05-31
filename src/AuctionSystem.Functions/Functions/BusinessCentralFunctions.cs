@@ -8,6 +8,7 @@ using AuctionSystem.Domain.Data;
 using AuctionSystem.Domain.Entities;
 using AuctionSystem.Functions.BusinessCentral.Configuration;
 using AuctionSystem.Functions.BusinessCentral.Services;
+using AuctionSystem.Functions.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace AuctionSystem.Functions.Functions;
@@ -19,19 +20,22 @@ public class BusinessCentralFunctions
     private readonly BusinessCentralOptions _options;
     private readonly AuctionDbContext _db;
     private readonly ILogger<BusinessCentralFunctions> _logger;
+    private readonly BlobStorageService? _blobStorage;
 
     public BusinessCentralFunctions(
         IOptions<BusinessCentralOptions> options,
         AuctionDbContext db,
         ILogger<BusinessCentralFunctions> logger,
         BusinessCentralSyncService? syncService = null,
-        BusinessCentralApiClient? bcClient = null)
+        BusinessCentralApiClient? bcClient = null,
+        BlobStorageService? blobStorage = null)
     {
         _options = options.Value;
         _db = db;
         _logger = logger;
         _syncService = syncService;
         _bcClient = bcClient;
+        _blobStorage = blobStorage;
     }
 
     [Function("BcGetStatus")]
@@ -381,6 +385,83 @@ public class BusinessCentralFunctions
             message = mismatches.Count == 0 ? "All consistent" : $"{mismatches.Count} mismatch(es) found",
             checked_ = new { brokers = brokers.Count, buyers = buyers.Count, farmers = farmers.Count },
             mismatches
+        });
+    }
+
+    [Function("DiagConnections")]
+    public async Task<HttpResponseData> GetConnections(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "diag/connections")] HttpRequestData req)
+    {
+        var bcConnected = false;
+        var bcCompanyName = "";
+        var bcError = "";
+        if (_options.IsConfigured && _bcClient is not null)
+        {
+            try
+            {
+                var companies = await _bcClient.GetCompaniesAsync();
+                bcConnected = companies.Count > 0;
+                var target = companies.FirstOrDefault(c => c.Id.ToString() == _options.CompanyId);
+                bcCompanyName = target?.DisplayName ?? companies.FirstOrDefault()?.DisplayName ?? "";
+            }
+            catch (Exception ex)
+            {
+                bcError = ex.Message;
+            }
+        }
+
+        var sqlConnected = false;
+        var sqlServer = "";
+        var sqlDatabase = "";
+        var sqlError = "";
+        try
+        {
+            var conn = _db.Database.GetConnectionString() ?? "";
+            sqlConnected = await _db.Database.CanConnectAsync();
+            var parts = conn.Split(';', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var part in parts)
+            {
+                var kv = part.Split('=', 2);
+                if (kv.Length == 2)
+                {
+                    var key = kv[0].Trim().ToLowerInvariant();
+                    if (key is "server" or "data source") sqlServer = kv[1].Trim();
+                    if (key is "database" or "initial catalog") sqlDatabase = kv[1].Trim();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            sqlError = ex.Message;
+        }
+
+        return await JsonResponse(req, new
+        {
+            businessCentral = new
+            {
+                configured = _options.IsConfigured,
+                connected = bcConnected,
+                tenantId = _options.TenantId,
+                environment = _options.Environment,
+                companyId = _options.CompanyId,
+                companyName = bcCompanyName,
+                apiUrl = _options.IsConfigured ? _options.BaseUrl : "",
+                error = bcError
+            },
+            azure = new
+            {
+                sql = new
+                {
+                    connected = sqlConnected,
+                    server = sqlServer,
+                    database = sqlDatabase,
+                    error = sqlError
+                },
+                blobStorage = new
+                {
+                    configured = _blobStorage is not null
+                }
+            }
         });
     }
 

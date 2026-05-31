@@ -418,6 +418,18 @@ public class AuctionApiClient
         }
     }
 
+    public async Task<ConnectionsInfoDto> GetConnectionsInfoAsync()
+    {
+        try
+        {
+            return await _http.GetFromJsonAsync<ConnectionsInfoDto>("api/diag/connections") ?? new();
+        }
+        catch
+        {
+            return new();
+        }
+    }
+
     public async Task<List<BcPostingGroupDto>> GetBcGenBusPostingGroupsAsync()
     {
         try
