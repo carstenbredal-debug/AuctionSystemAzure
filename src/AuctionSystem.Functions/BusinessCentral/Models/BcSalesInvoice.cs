@@ -33,8 +33,7 @@ public class BcSalesInvoice
     public string? CustomerName { get; set; }
 
     [JsonPropertyName("currencyCode")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public string? CurrencyCode { get; set; }
+    public string CurrencyCode { get; set; } = string.Empty;
 
     [JsonPropertyName("status")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]

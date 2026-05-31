@@ -306,6 +306,16 @@ public class BusinessCentralApiClient
         return await PostAsync<BcSalesInvoiceLine>(url, line);
     }
 
+    public async Task PostSalesInvoiceAsync(Guid companyId, Guid invoiceId)
+    {
+        await SetAuthHeaderAsync();
+        var url = $"{_options.BaseUrl}/companies({companyId})/salesInvoices({invoiceId})/Microsoft.NAV.post";
+        _logger.LogInformation("POST {Url}", url);
+
+        var response = await _httpClient.PostAsync(url, null);
+        await EnsureSuccessAsync(response);
+    }
+
     // ── Sales Credit Memos ─────────────────────────────────────
 
     public async Task<BcSalesCreditMemo> CreateSalesCreditMemoAsync(Guid companyId, BcSalesCreditMemo creditMemo)
