@@ -182,7 +182,8 @@ public class BusinessCentralSyncService
                     {
                         DocumentId = created.Id,
                         Sequence = seq,
-                        LineType = "Comment",
+                        LineType = "Account",
+                        LineObjectNumber = "2300",
                         Description = $"Lot {line.LotNumber}: {line.Description} ({line.Skins} skins)",
                         Quantity = line.Skins,
                         UnitPrice = line.PricePerSkin,
@@ -198,7 +199,8 @@ public class BusinessCentralSyncService
                     {
                         DocumentId = created.Id,
                         Sequence = seq,
-                        LineType = "Comment",
+                        LineType = "Account",
+                        LineObjectNumber = "4040",
                         Description = "Auction Fee",
                         Quantity = 1,
                         UnitPrice = invoice.AuctionFee,
@@ -214,7 +216,8 @@ public class BusinessCentralSyncService
                     {
                         DocumentId = created.Id,
                         Sequence = seq,
-                        LineType = "Comment",
+                        LineType = "Account",
+                        LineObjectNumber = "2310",
                         Description = "Commission",
                         Quantity = 1,
                         UnitPrice = invoice.Commission,
@@ -223,8 +226,13 @@ public class BusinessCentralSyncService
                     await _bcClient.CreateSalesInvoiceLineAsync(companyId, created.Id, commLine);
                 }
 
+                // Store BC-assigned invoice number
+                invoice.BcInvoiceNumber = created.Number;
+                invoice.BcInvoiceId = created.Id;
+                await _db.SaveChangesAsync();
+
                 result.Created++;
-                _logger.LogInformation("Created BC sales invoice for {Number}", invoice.InvoiceNumber);
+                _logger.LogInformation("Created BC sales invoice {BcNumber} for {Number}", created.Number, invoice.InvoiceNumber);
             }
             catch (Exception ex)
             {
