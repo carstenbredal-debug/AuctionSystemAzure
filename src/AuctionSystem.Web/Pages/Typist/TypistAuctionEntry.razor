@@ -2,6 +2,7 @@
 @attribute [Authorize(Roles = "Typist")]
 @inject AuctionApiClient Api
 @inject AuthenticationStateProvider AuthState
+@implements IDisposable
 
 <PageTitle>Auction Entry</PageTitle>
 
@@ -75,30 +76,6 @@
                     }
                     Submit Entry
                 </button>
-
-                @if (_lastResult != null)
-                {
-                    <div class="mt-3">
-                        @if (_lastResult.WaitingForOtherTypist)
-                        {
-                            <div class="alert alert-info mb-0">
-                                <strong>Waiting for other typist</strong> to enter their values for Lot #@_lastResult.LotNumber.
-                            </div>
-                        }
-                        else if (_lastResult.IsMatched)
-                        {
-                            <div class="alert alert-success mb-0">
-                                <strong>Match!</strong> Both typists agree on Lot #@_lastResult.LotNumber. Lot recorded.
-                            </div>
-                        }
-                        else if (_lastResult.IsDisagreement)
-                        {
-                            <div class="alert alert-warning mb-0">
-                                <strong>Disagreement!</strong> Entries don't match for Lot #@_lastResult.LotNumber. Please re-enter on the Disagreements page.
-                            </div>
-                        }
-                    </div>
-                }
             </div>
         </div>
     </div>
@@ -146,7 +123,7 @@
                                     }
                                     else
                                     {
-                                        <span class="badge bg-warning">Waiting</span>
+                                        <span class="badge bg-warning">Pending</span>
                                     }
                                 </td>
                                 <td><small>@r.EnteredAt.ToString("HH:mm:ss")</small></td>
@@ -169,7 +146,7 @@
     private bool _submitting;
     private string? _successMessage;
     private string? _errorMessage;
-    private TypistSubmitResult? _lastResult;
+    private System.Threading.Timer? _pollTimer;
 
     protected override async Task OnInitializedAsync()
     {
@@ -180,14 +157,46 @@
 
         _brokers = await Api.GetBrokersAsync();
         _recentEntries = await Api.GetRecentTypistEntriesAsync();
-        _nextLot = await Api.GetNextUnsoldLotForTypistAsync();
+        _nextLot = await Api.GetNextUnsoldLotForTypistAsync(_currentUser?.Id);
+
+        // Poll every 3 seconds to auto-update the recent results panel
+        _pollTimer = new System.Threading.Timer(async _ => await PollForUpdates(), null, 3000, 3000);
+    }
+
+    private async Task PollForUpdates()
+    {
+        try
+        {
+            var newRecent = await Api.GetRecentTypistEntriesAsync();
+            var changed = false;
+
+            if (newRecent.Count != _recentEntries.Count)
+                changed = true;
+            else if (newRecent.Count > 0 && _recentEntries.Count > 0)
+            {
+                var newest = newRecent[0];
+                var oldNewest = _recentEntries[0];
+                changed = newest.Id != oldNewest.Id
+                    || newest.IsMatched != oldNewest.IsMatched
+                    || newest.IsDisagreement != oldNewest.IsDisagreement;
+            }
+
+            if (changed)
+            {
+                _recentEntries = newRecent;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch
+        {
+            // Silently ignore polling errors
+        }
     }
 
     private async Task SubmitEntry()
     {
         _successMessage = null;
         _errorMessage = null;
-        _lastResult = null;
 
         if (_nextLot == null)
         {
@@ -213,30 +222,16 @@
         _submitting = true;
         try
         {
-            var result = await Api.SubmitTypistEntryAsync(_nextLot.LotNumber, _selectedBrokerId, _priceEur, _currentUser.Id);
+            var lotNum = _nextLot.LotNumber;
+            var result = await Api.SubmitTypistEntryAsync(lotNum, _selectedBrokerId, _priceEur, _currentUser.Id);
             if (result != null)
             {
-                _lastResult = result;
-                if (result.IsMatched)
-                {
-                    _successMessage = $"Lot {_nextLot.LotNumber} — both typists agree! Lot recorded.";
-                    _priceEur = 0;
-                    _selectedBrokerId = 0;
-                    _nextLot = await Api.GetNextUnsoldLotForTypistAsync();
-                }
-                else if (result.IsDisagreement)
-                {
-                    _errorMessage = $"Lot {_nextLot.LotNumber} — disagreement! Entries don't match. Check the Disagreements page.";
-                    _priceEur = 0;
-                    _selectedBrokerId = 0;
-                    _nextLot = await Api.GetNextUnsoldLotForTypistAsync();
-                }
-                else
-                {
-                    _successMessage = $"Entry recorded for Lot {_nextLot.LotNumber}. Waiting for the other typist.";
-                    _priceEur = 0;
-                    _selectedBrokerId = 0;
-                }
+                _successMessage = $"Entry recorded for Lot {lotNum}.";
+                _priceEur = 0;
+                _selectedBrokerId = 0;
+
+                // Always advance to the next lot this typist hasn't entered
+                _nextLot = await Api.GetNextUnsoldLotForTypistAsync(_currentUser.Id);
                 _recentEntries = await Api.GetRecentTypistEntriesAsync();
             }
             else
@@ -252,5 +247,10 @@
         {
             _submitting = false;
         }
+    }
+
+    public void Dispose()
+    {
+        _pollTimer?.Dispose();
     }
 }

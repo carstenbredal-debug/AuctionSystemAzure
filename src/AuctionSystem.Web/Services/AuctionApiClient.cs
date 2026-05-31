@@ -498,11 +498,14 @@ public class AuctionApiClient
         catch { return null; }
     }
 
-    public async Task<NextUnsoldLotDto?> GetNextUnsoldLotForTypistAsync()
+    public async Task<NextUnsoldLotDto?> GetNextUnsoldLotForTypistAsync(int? typistUserId = null)
     {
         try
         {
-            return await _http.GetFromJsonAsync<NextUnsoldLotDto>("api/typist-entries/next-unsold-lot");
+            var url = "api/typist-entries/next-unsold-lot";
+            if (typistUserId.HasValue)
+                url += $"?typistUserId={typistUserId.Value}";
+            return await _http.GetFromJsonAsync<NextUnsoldLotDto>(url);
         }
         catch { return null; }
     }
