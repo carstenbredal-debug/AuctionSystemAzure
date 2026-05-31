@@ -483,3 +483,49 @@ public class BcPaymentTermDto
     public string Code { get; set; } = "";
     public string DisplayName { get; set; } = "";
 }
+
+// Typist entry models
+public class TypistEntryDto
+{
+    public int Id { get; set; }
+    public int LotNumber { get; set; }
+    public int BrokerId { get; set; }
+    public string BrokerNumber { get; set; } = "";
+    public string BrokerName { get; set; } = "";
+    public decimal PriceEur { get; set; }
+    public int TypistUserId { get; set; }
+    public string TypistName { get; set; } = "";
+    public int TypistSlot { get; set; }
+    public DateTime EnteredAt { get; set; }
+    public bool IsMatched { get; set; }
+    public bool IsDisagreement { get; set; }
+    public bool IsResolved { get; set; }
+    public int? MatchedWithEntryId { get; set; }
+    public int? AuctionResultId { get; set; }
+}
+
+public class TypistSubmitResult
+{
+    public int EntryId { get; set; }
+    public int LotNumber { get; set; }
+    public int Slot { get; set; }
+    public bool IsMatched { get; set; }
+    public bool IsDisagreement { get; set; }
+    public bool WaitingForOtherTypist { get; set; }
+}
+
+public class TypistDisagreementGroup
+{
+    public int LotNumber { get; set; }
+    public List<TypistEntryDto> Entries { get; set; } = new();
+}
+
+public class TypistLotStatus
+{
+    public int LotNumber { get; set; }
+    public int EntriesCount { get; set; }
+    public bool IsComplete { get; set; }
+    public bool IsMatched { get; set; }
+    public bool IsDisagreement { get; set; }
+    public List<TypistEntryDto> Entries { get; set; } = new();
+}

@@ -134,6 +134,32 @@ using (var scope = host.Services.CreateScope())
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Farmers') AND name = 'VendorPostingGroup')
                 ALTER TABLE auction.Farmers ADD VendorPostingGroup nvarchar(max) NOT NULL DEFAULT '';
         ");
+        // TypistEntries table
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'TypistEntries')
+            BEGIN
+                CREATE TABLE auction.TypistEntries (
+                    Id INT IDENTITY(1,1) PRIMARY KEY,
+                    LotNumber INT NOT NULL,
+                    BrokerId INT NOT NULL,
+                    PriceEur DECIMAL(18,2) NOT NULL,
+                    TypistUserId INT NOT NULL,
+                    TypistSlot INT NOT NULL,
+                    EnteredAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+                    IsMatched BIT NOT NULL DEFAULT 0,
+                    IsDisagreement BIT NOT NULL DEFAULT 0,
+                    IsResolved BIT NOT NULL DEFAULT 0,
+                    MatchedWithEntryId INT NULL,
+                    AuctionResultId INT NULL,
+                    CONSTRAINT FK_TypistEntries_Broker FOREIGN KEY (BrokerId) REFERENCES auction.Brokers(Id),
+                    CONSTRAINT FK_TypistEntries_TypistUser FOREIGN KEY (TypistUserId) REFERENCES auction.AppUsers(Id),
+                    CONSTRAINT FK_TypistEntries_MatchedWith FOREIGN KEY (MatchedWithEntryId) REFERENCES auction.TypistEntries(Id),
+                    CONSTRAINT FK_TypistEntries_AuctionResult FOREIGN KEY (AuctionResultId) REFERENCES auction.AuctionResults(Id)
+                );
+                CREATE INDEX IX_TypistEntries_LotNumber_Slot ON auction.TypistEntries(LotNumber, TypistSlot);
+                CREATE INDEX IX_TypistEntries_TypistUserId ON auction.TypistEntries(TypistUserId);
+            END
+        ");
         db.Database.Migrate();
     }
     catch (Exception ex)

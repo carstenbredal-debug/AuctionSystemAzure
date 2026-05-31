@@ -465,4 +465,48 @@ public class AuctionApiClient
             return new();
         }
     }
+
+    // Typist Entry methods
+    public async Task<TypistSubmitResult?> SubmitTypistEntryAsync(int lotNumber, int brokerId, decimal priceEur, int typistUserId)
+    {
+        var resp = await _http.PostAsJsonAsync("api/typist-entries", new { lotNumber, brokerId, priceEur, typistUserId });
+        if (resp.IsSuccessStatusCode)
+            return await resp.Content.ReadFromJsonAsync<TypistSubmitResult>();
+        return null;
+    }
+
+    public async Task<TypistSubmitResult?> SubmitTypistReentryAsync(int lotNumber, int brokerId, decimal priceEur, int typistUserId)
+    {
+        var resp = await _http.PostAsJsonAsync("api/typist-entries/reentry", new { lotNumber, brokerId, priceEur, typistUserId });
+        if (resp.IsSuccessStatusCode)
+            return await resp.Content.ReadFromJsonAsync<TypistSubmitResult>();
+        return null;
+    }
+
+    public async Task<List<TypistEntryDto>> GetTypistEntriesAsync()
+        => await _http.GetFromJsonAsync<List<TypistEntryDto>>("api/typist-entries") ?? new();
+
+    public async Task<List<TypistDisagreementGroup>> GetTypistDisagreementsAsync()
+        => await _http.GetFromJsonAsync<List<TypistDisagreementGroup>>("api/typist-entries/disagreements") ?? new();
+
+    public async Task<TypistLotStatus?> GetTypistLotStatusAsync(int lotNumber)
+    {
+        try
+        {
+            return await _http.GetFromJsonAsync<TypistLotStatus>($"api/typist-entries/status/{lotNumber}");
+        }
+        catch { return null; }
+    }
+
+    public async Task<NextUnsoldLotDto?> GetNextUnsoldLotForTypistAsync()
+    {
+        try
+        {
+            return await _http.GetFromJsonAsync<NextUnsoldLotDto>("api/typist-entries/next-unsold-lot");
+        }
+        catch { return null; }
+    }
+
+    public async Task<List<TypistEntryDto>> GetRecentTypistEntriesAsync()
+        => await _http.GetFromJsonAsync<List<TypistEntryDto>>("api/typist-entries/recent") ?? new();
 }
