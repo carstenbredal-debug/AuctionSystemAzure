@@ -418,13 +418,19 @@ public class AuctionResultFunctions
                     try
                     {
                         var fileName = $"{invoice.InvoiceNumber}.pdf";
+                        _logger.LogInformation("Uploading internal PDF for {Number} to blob storage", invoice.InvoiceNumber);
                         invoice.PdfUrl = await _blobStorage.UploadPdfAsync(fileName, pdfBytes);
                         await _db.SaveChangesAsync();
+                        _logger.LogInformation("Saved PdfUrl={Url} for {Number}", invoice.PdfUrl, invoice.InvoiceNumber);
                     }
                     catch (Exception blobEx)
                     {
                         _logger.LogWarning(blobEx, "Failed to upload invoice PDF to blob storage");
                     }
+                }
+                else
+                {
+                    _logger.LogWarning("BlobStorageService is null — skipping PDF upload for {Number}", invoice.InvoiceNumber);
                 }
 
                 // Auto-push to BC as Sales Invoice (non-critical)

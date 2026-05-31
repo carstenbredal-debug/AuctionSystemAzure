@@ -35,11 +35,13 @@ public class BlobStorageService
     {
         await EnsureContainerAsync();
         var blob = _container.GetBlobClient(fileName);
+        _logger.LogInformation("Uploading PDF {FileName} ({Bytes} bytes) to blob storage", fileName, pdfData.Length);
         using var stream = new MemoryStream(pdfData);
-        await blob.UploadAsync(stream, new BlobUploadOptions
-        {
-            HttpHeaders = new BlobHttpHeaders { ContentType = "application/pdf" }
-        });
-        return blob.Uri.ToString();
+        await blob.UploadAsync(stream, overwrite: true);
+        // Set content type after upload
+        await blob.SetHttpHeadersAsync(new BlobHttpHeaders { ContentType = "application/pdf" });
+        var uri = blob.Uri.ToString();
+        _logger.LogInformation("PDF uploaded to {Uri}", uri);
+        return uri;
     }
 }
