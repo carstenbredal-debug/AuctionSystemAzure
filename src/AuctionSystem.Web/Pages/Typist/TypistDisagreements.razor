@@ -73,9 +73,8 @@ else
 
                 @if (_submittedLots.Contains(group.LotNumber))
                 {
-                    <div class="alert alert-info d-flex align-items-center mb-0">
-                        <span class="spinner-border spinner-border-sm me-2"></span>
-                        <span>Your re-entry is recorded. Waiting for the other typist to re-enter...</span>
+                    <div class="alert alert-success mb-0">
+                        Re-entry recorded for Lot #@group.LotNumber.
                     </div>
                 }
                 else
@@ -232,7 +231,7 @@ else
                 }
                 else if (result.WaitingForOtherTypist)
                 {
-                    _successMessage = $"Re-entry recorded for Lot {lotNumber}. Waiting for the other typist.";
+                    _successMessage = $"Re-entry recorded for Lot {lotNumber}.";
                     _submittedLots.Add(lotNumber);
                 }
             }
