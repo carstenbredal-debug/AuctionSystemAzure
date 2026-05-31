@@ -249,6 +249,46 @@ public class BusinessCentralFunctions
         return company?.DisplayName ?? companies.First().DisplayName;
     }
 
+    [Function("BcResetInvoices")]
+    public async Task<HttpResponseData> ResetInvoices(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "bc/reset-invoices")] HttpRequestData req)
+    {
+        if (!EnsureConfigured(out var err))
+            return await JsonResponse(req, err!, HttpStatusCode.ServiceUnavailable);
+
+        var companyId = Guid.Parse(_options.CompanyId);
+        _logger.LogWarning("RESETTING BC Sales Invoices in company {CompanyId}", companyId);
+
+        var invoices = await _bcClient!.GetSalesInvoicesAsync(companyId);
+        int deleted = 0, skipped = 0;
+        var errors = new List<string>();
+
+        foreach (var inv in invoices)
+        {
+            try
+            {
+                await _bcClient.DeleteSalesInvoiceAsync(companyId, inv.Id, inv.ETag);
+                deleted++;
+                _logger.LogInformation("Deleted BC invoice {Number} ({Id})", inv.Number, inv.Id);
+            }
+            catch (Exception ex)
+            {
+                skipped++;
+                errors.Add($"{inv.Number}: {ex.Message}");
+                _logger.LogWarning(ex, "Could not delete BC invoice {Number}", inv.Number);
+            }
+        }
+
+        return await JsonResponse(req, new
+        {
+            message = $"BC invoice reset complete",
+            total = invoices.Count,
+            deleted,
+            skipped,
+            errors = errors.Count > 0 ? (object)errors : null
+        });
+    }
+
     private bool EnsureConfigured(out object? error)
     {
         if (!_options.IsConfigured || _syncService is null || _bcClient is null)

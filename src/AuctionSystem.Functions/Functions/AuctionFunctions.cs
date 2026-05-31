@@ -144,43 +144,61 @@ public class AuctionFunctions
     public async Task<HttpResponseData> ResetAllData(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "system/reset-all")] HttpRequestData req)
     {
-        _logger.LogWarning("RESETTING ALL DATA (except SystemParameters)");
+        var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+        var keepEntities = query["keepEntities"]?.Equals("true", StringComparison.OrdinalIgnoreCase) == true;
+
+        if (keepEntities)
+            _logger.LogWarning("RESETTING TRANSACTION DATA (keeping Brokers, Buyers, Farmers, AppUsers, SystemParameters)");
+        else
+            _logger.LogWarning("RESETTING ALL DATA (except SystemParameters)");
 
         try
         {
-            var tables = new[] { "AuctionTransactions", "TypistEntries", "InvoiceLines", "Invoices", "TakebackRequests", "LotAllocations",
-                "AuctionResults", "Settlements", "Bids", "Lots", "Auctions",
-                "BrokerBuyers", "BrokerCustomerRequests", "Buyers", "Brokers", "Farmers", "AppUsers" };
+            // Transaction tables (always deleted)
+            var transactionTables = new[] { "AuctionTransactions", "TypistEntries", "InvoiceLines", "Invoices",
+                "TakebackRequests", "LotAllocations", "AuctionResults", "Settlements", "Bids", "Lots", "Auctions",
+                "BrokerCustomerRequests" };
 
-            // Disable FK constraints
-            foreach (var t in tables)
+            // Entity tables (only deleted if keepEntities=false)
+            var entityTables = new[] { "BrokerBuyers", "Buyers", "Brokers", "Farmers", "AppUsers" };
+
+            var allTables = keepEntities ? transactionTables : transactionTables.Concat(entityTables).ToArray();
+
+            // Disable FK constraints on ALL tables (including entity tables for FK references)
+            var constraintTables = transactionTables.Concat(entityTables).ToArray();
+            foreach (var t in constraintTables)
                 await _db.Database.ExecuteSqlRawAsync($"ALTER TABLE auction.[{t}] NOCHECK CONSTRAINT ALL");
 
-            // Delete all data
-            foreach (var t in tables)
+            // Delete data
+            foreach (var t in allTables)
                 await _db.Database.ExecuteSqlRawAsync($"DELETE FROM auction.[{t}]");
 
             // Re-enable FK constraints
-            foreach (var t in tables)
+            foreach (var t in constraintTables)
                 await _db.Database.ExecuteSqlRawAsync($"ALTER TABLE auction.[{t}] WITH CHECK CHECK CONSTRAINT ALL");
 
-            // Get remaining counts to confirm
             var brokerCount = await _db.Brokers.CountAsync();
             var buyerCount = await _db.Buyers.CountAsync();
             var farmerCount = await _db.Farmers.CountAsync();
             var auctionCount = await _db.Auctions.CountAsync();
             var paramCount = await _db.SystemParameters.CountAsync();
+            var userCount = keepEntities ? await _db.AppUsers.CountAsync() : 0;
 
             _logger.LogWarning("Reset complete");
 
+            var message = keepEntities
+                ? "Transaction data reset (Brokers, Buyers, Farmers, AppUsers, SystemParameters kept)"
+                : "All data reset (SystemParameters kept)";
+
             return await CreateJsonResponse(req, new
             {
-                message = "All data reset (SystemParameters kept)",
+                message,
                 remaining = new
                 {
                     brokers = brokerCount,
                     buyers = buyerCount,
                     farmers = farmerCount,
+                    appUsers = userCount,
                     auctions = auctionCount,
                     systemParameters = paramCount
                 }
