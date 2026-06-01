@@ -153,7 +153,7 @@ else
                                 {
                                     var invId = inv.Id;
                                     <button class="btn btn-sm btn-outline-info me-1" @onclick="() => OpenDownpaymentPopup(invId)" disabled="@_updatingId.HasValue">Downpayment</button>
-                                    <button class="btn btn-sm btn-outline-success" @onclick="() => SetStatus(invId, StatusPaid)" disabled="@_updatingId.HasValue">Fully Paid</button>
+                                    <button class="btn btn-sm btn-outline-success" @onclick="() => OpenFullyPaidPopup(invId)" disabled="@_updatingId.HasValue">Fully Paid</button>
                                 }
                                 else if (inv.Status == "Downpayment")
                                 {
@@ -166,6 +166,10 @@ else
                                 else if (inv.Status == "Paid")
                                 {
                                     <span class="text-success">Paid</span>
+                                    @if (inv.ShippingStatus == "Released")
+                                    {
+                                        <span class="badge bg-primary ms-1">Shipped</span>
+                                    }
                                 }
                             </td>
                             <td>
@@ -293,6 +297,27 @@ else
     </div>
 }
 
+@if (_showFullyPaidShippingConfirm)
+{
+    <div class="modal d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Release Lots for Shipping?</h5>
+                    <button type="button" class="btn-close" @onclick="() => _showFullyPaidShippingConfirm = false"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Do you want to release all uncredited lots on this invoice for shipping?</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => SubmitFullyPaid(false)">No</button>
+                    <button class="btn btn-success" @onclick="() => SubmitFullyPaid(true)">Yes — Release for Shipping</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private const string StatusDownpayment = "Downpayment";
     private const string StatusPaid = "Paid";
@@ -313,6 +338,10 @@ else
     private int _dpInvoiceId;
     private decimal _dpAmount;
     private bool _dpIsPercentage = true;
+
+    // Fully Paid popup state
+    private bool _showFullyPaidShippingConfirm;
+    private int _fpInvoiceId;
 
     private List<InvoiceSummaryDto> FilteredInvoices
     {
@@ -391,6 +420,30 @@ else
             if (inv != null)
             {
                 inv.Status = "Downpayment";
+                if (releaseForShipping) inv.ShippingStatus = "Released";
+            }
+        }
+        _updatingId = null;
+    }
+
+    private void OpenFullyPaidPopup(int invoiceId)
+    {
+        _fpInvoiceId = invoiceId;
+        _showFullyPaidShippingConfirm = true;
+    }
+
+    private async Task SubmitFullyPaid(bool releaseForShipping)
+    {
+        _showFullyPaidShippingConfirm = false;
+        _updatingId = _fpInvoiceId;
+
+        var resp = await Api.UpdateInvoiceStatusAsync(_fpInvoiceId, StatusPaid, releaseForShipping);
+        if (resp.IsSuccessStatusCode)
+        {
+            var inv = _invoices.FirstOrDefault(i => i.Id == _fpInvoiceId);
+            if (inv != null)
+            {
+                inv.Status = StatusPaid;
                 if (releaseForShipping) inv.ShippingStatus = "Released";
             }
         }
