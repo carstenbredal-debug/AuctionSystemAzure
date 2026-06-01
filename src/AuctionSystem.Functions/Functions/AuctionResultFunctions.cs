@@ -505,11 +505,17 @@ public class AuctionResultFunctions
         await _db.SaveChangesAsync();
 
         int? creditNoteId = null;
+        string? creditNotePdfUrl = null;
         if (takenBackResultIds.Count > 0)
         {
             try
             {
                 creditNoteId = await GenerateCreditNoteAsync(takenBackResultIds);
+                if (creditNoteId != null)
+                {
+                    var cn = await _db.Invoices.FindAsync(creditNoteId.Value);
+                    creditNotePdfUrl = cn?.PdfUrl;
+                }
             }
             catch (Exception ex)
             {
@@ -519,7 +525,7 @@ public class AuctionResultFunctions
 
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
-        await response.WriteStringAsync(JsonSerializer.Serialize(new { requestCount = created.Count, creditNoteId }, JsonOptions));
+        await response.WriteStringAsync(JsonSerializer.Serialize(new { requestCount = created.Count, creditNoteId, creditNotePdfUrl }, JsonOptions));
         return response;
     }
 
