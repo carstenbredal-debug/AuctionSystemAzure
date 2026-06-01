@@ -34,5 +34,9 @@ public class Invoice
     public string? BcInvoiceNumber { get; set; }
     public Guid? BcInvoiceId { get; set; }
 
+    public string? ShippingStatus { get; set; }
+    public decimal? DownpaymentAmount { get; set; }
+    public decimal? DownpaymentPercentage { get; set; }
+
     public ICollection<InvoiceLine> Lines { get; set; } = new List<InvoiceLine>();
 }

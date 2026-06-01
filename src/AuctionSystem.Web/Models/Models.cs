@@ -390,6 +390,9 @@ public class InvoiceSummaryDto
     public bool IsCreditNote { get; set; }
     public string? OriginalInvoiceNumber { get; set; }
     public string? PdfUrl { get; set; }
+    public string? ShippingStatus { get; set; }
+    public decimal? DownpaymentAmount { get; set; }
+    public decimal? DownpaymentPercentage { get; set; }
     public decimal CreditedAmount { get; set; }
     public int CreditedLots { get; set; }
     public List<int> UncreditedLotNumbers { get; set; } = new();
@@ -404,6 +407,18 @@ public class InvoiceLotDto
     public decimal PricePerSkin { get; set; }
     public decimal SubTotal { get; set; }
     public bool IsCredited { get; set; }
+}
+
+public class ShippingBoxDto
+{
+    public int InvoiceId { get; set; }
+    public string InvoiceNumber { get; set; } = "";
+    public string? BrokerName { get; set; }
+    public string? BuyerName { get; set; }
+    public int LotNumber { get; set; }
+    public int Skins { get; set; }
+    public decimal PricePerSkin { get; set; }
+    public decimal HammerPrice { get; set; }
 }
 
 public class InvoiceLinkDto

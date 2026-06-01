@@ -142,6 +142,12 @@ using (var scope = host.Services.CreateScope())
                 ALTER TABLE auction.Invoices ADD BcInvoiceNumber nvarchar(50) NULL;
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Invoices') AND name = 'BcInvoiceId')
                 ALTER TABLE auction.Invoices ADD BcInvoiceId uniqueidentifier NULL;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Invoices') AND name = 'ShippingStatus')
+                ALTER TABLE auction.Invoices ADD ShippingStatus nvarchar(50) NULL;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Invoices') AND name = 'DownpaymentAmount')
+                ALTER TABLE auction.Invoices ADD DownpaymentAmount decimal(18,2) NULL;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Invoices') AND name = 'DownpaymentPercentage')
+                ALTER TABLE auction.Invoices ADD DownpaymentPercentage decimal(18,4) NULL;
         ");
         // TypistEntries table
         db.Database.ExecuteSqlRaw(@"

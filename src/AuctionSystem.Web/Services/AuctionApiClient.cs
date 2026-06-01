@@ -140,6 +140,16 @@ public class AuctionApiClient
     public async Task<HttpResponseMessage> UpdateInvoiceStatusAsync(int invoiceId, string status)
         => await _http.PutAsJsonAsync($"api/settlements/invoices/{invoiceId}/status", new { status });
 
+    public async Task<HttpResponseMessage> ProcessDownpaymentAsync(int invoiceId, decimal amount, bool isPercentage, bool releaseForShipping)
+        => await _http.PostAsJsonAsync($"api/settlements/invoices/{invoiceId}/downpayment", new { amount, isPercentage, releaseForShipping });
+
+    public async Task<List<ShippingBoxDto>> GetShippingBoxesAsync()
+    {
+        var resp = await _http.GetAsync("api/shipping/boxes");
+        if (!resp.IsSuccessStatusCode) return new();
+        return await resp.Content.ReadFromJsonAsync<List<ShippingBoxDto>>() ?? new();
+    }
+
     public async Task<SettlementDto?> CreateSettlementAsync(int lotId)
     {
         var resp = await _http.PostAsJsonAsync("api/settlements/create", lotId);

@@ -1,19 +1,88 @@
 @page "/admin/shipping"
 @attribute [Authorize(Roles = "Admin")]
+@inject AuctionApiClient Api
 
 <PageTitle>Shipping - Admin</PageTitle>
 
 <h3 class="mb-4">Shipping — Boxes Ready for Shipping</h3>
 
-<div class="alert alert-info">
-    This page will show boxes that are ready for shipping. The shipping functionality will be triggered from the Invoice page.
-</div>
-
-<div class="card">
-    <div class="card-body">
-        <p class="text-muted mb-0">No boxes ready for shipping yet.</p>
+@if (_loading)
+{
+    <p><em>Loading...</em></p>
+}
+else if (_boxes.Count == 0)
+{
+    <div class="alert alert-info">No lots released for shipping yet.</div>
+}
+else
+{
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">Total Lots</h5>
+                    <h3>@_boxes.Count</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">Total Skins</h5>
+                    <h3>@_boxes.Sum(b => b.Skins)</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">Total Value</h5>
+                    <h3>€@_boxes.Sum(b => b.HammerPrice).ToString("N2")</h3>
+                </div>
+            </div>
+        </div>
     </div>
-</div>
+
+    <div class="card">
+        <div class="card-body p-0">
+            <table class="table table-striped table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Invoice</th>
+                        <th>Broker</th>
+                        <th>Buyer</th>
+                        <th>Lot #</th>
+                        <th>Skins</th>
+                        <th>Price/Skin</th>
+                        <th>Hammer Price</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var box in _boxes)
+                    {
+                        <tr>
+                            <td>@box.InvoiceNumber</td>
+                            <td>@(box.BrokerName ?? "—")</td>
+                            <td>@(box.BuyerName ?? "—")</td>
+                            <td>@box.LotNumber</td>
+                            <td>@box.Skins</td>
+                            <td>€@box.PricePerSkin.ToString("N2")</td>
+                            <td><strong>€@box.HammerPrice.ToString("N2")</strong></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
 
 @code {
+    private List<ShippingBoxDto> _boxes = new();
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _boxes = await Api.GetShippingBoxesAsync();
+        _loading = false;
+    }
 }
