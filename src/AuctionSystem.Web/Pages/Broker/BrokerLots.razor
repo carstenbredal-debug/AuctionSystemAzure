@@ -157,7 +157,11 @@ else if (_activeTab == "sold")
     {
         <div class="alert @(_takebackMessageIsError ? "alert-danger" : "alert-success") alert-dismissible">
             @_takebackMessage
-            @if (_lastCreditNoteId != null)
+            @if (!string.IsNullOrEmpty(_lastCreditNotePdfUrl))
+            {
+                <a href="@_lastCreditNotePdfUrl" target="_blank" class="btn btn-sm btn-outline-dark ms-2">📄 Download Credit Note PDF</a>
+            }
+            else if (_lastCreditNoteId != null)
             {
                 <a href="@Api.GetInvoicePdfUrl(_lastCreditNoteId.Value)" target="_blank" class="btn btn-sm btn-outline-dark ms-2">📄 Download Credit Note PDF</a>
             }
@@ -518,6 +522,7 @@ else if (_activeTab == "takeback")
     private int? _lastInvoiceId;
     private string? _lastInvoicePdfUrl;
     private int? _lastCreditNoteId;
+    private string? _lastCreditNotePdfUrl;
     private Dictionary<int, InvoiceLinkDto> _invoiceLinks = new();
     private string? _takebackMessage;
     private bool _takebackMessageIsError;
@@ -664,6 +669,7 @@ else if (_activeTab == "takeback")
                 if (json?.CreditNoteId != null)
                 {
                     _lastCreditNoteId = json.CreditNoteId;
+                    _lastCreditNotePdfUrl = json.CreditNotePdfUrl;
                     _takebackMessage += " Credit note generated.";
                 }
                 _takebackMessageIsError = false;
@@ -727,5 +733,6 @@ else if (_activeTab == "takeback")
     {
         public int RequestCount { get; set; }
         public int? CreditNoteId { get; set; }
+        public string? CreditNotePdfUrl { get; set; }
     }
 }
