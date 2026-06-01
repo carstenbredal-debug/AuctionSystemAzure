@@ -194,28 +194,34 @@ else
                                                 <th>Skins</th>
                                                 <th>Price/Skin</th>
                                                 <th>Subtotal</th>
-                                                <th>Credit Status</th>
+                                                @if (!inv.IsCreditNote)
+                                                {
+                                                    <th>Credit Status</th>
+                                                }
                                             </tr>
                                         </thead>
                                         <tbody>
                                             @foreach (var lot in inv.Lots)
                                             {
-                                                <tr class="@(lot.IsCredited ? "table-success" : "")">
+                                                <tr class="@(!inv.IsCreditNote && lot.IsCredited ? "table-success" : "")">
                                                     <td>@lot.LotNumber</td>
                                                     <td>@lot.Description</td>
                                                     <td>@lot.Skins</td>
                                                     <td>€@lot.PricePerSkin.ToString("N2")</td>
                                                     <td>€@lot.SubTotal.ToString("N2")</td>
-                                                    <td>
-                                                        @if (lot.IsCredited)
-                                                        {
-                                                            <span class="badge bg-success">Credited</span>
-                                                        }
-                                                        else
-                                                        {
-                                                            <span class="badge bg-danger">Not Credited</span>
-                                                        }
-                                                    </td>
+                                                    @if (!inv.IsCreditNote)
+                                                    {
+                                                        <td>
+                                                            @if (lot.IsCredited)
+                                                            {
+                                                                <span class="badge bg-success">Credited</span>
+                                                            }
+                                                            else
+                                                            {
+                                                                <span class="badge bg-danger">Not Credited</span>
+                                                            }
+                                                        </td>
+                                                    }
                                                 </tr>
                                             }
                                         </tbody>
