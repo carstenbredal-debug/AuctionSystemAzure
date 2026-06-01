@@ -390,6 +390,20 @@ public class InvoiceSummaryDto
     public bool IsCreditNote { get; set; }
     public string? OriginalInvoiceNumber { get; set; }
     public string? PdfUrl { get; set; }
+    public decimal CreditedAmount { get; set; }
+    public int CreditedLots { get; set; }
+    public List<int> UncreditedLotNumbers { get; set; } = new();
+    public List<InvoiceLotDto> Lots { get; set; } = new();
+}
+
+public class InvoiceLotDto
+{
+    public int LotNumber { get; set; }
+    public string Description { get; set; } = "";
+    public int Skins { get; set; }
+    public decimal PricePerSkin { get; set; }
+    public decimal SubTotal { get; set; }
+    public bool IsCredited { get; set; }
 }
 
 public class InvoiceLinkDto
