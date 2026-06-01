@@ -69,6 +69,100 @@ public class SettlementFunctions
 
     private class UpdateStatusRequest { public string Status { get; set; } = ""; }
 
+    [Function("ProcessDownpayment")]
+    public async Task<HttpResponseData> ProcessDownpayment(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "settlements/invoices/{invoiceId:int}/downpayment")] HttpRequestData req, int invoiceId)
+    {
+        var body = await req.ReadFromJsonAsync<DownpaymentRequest>();
+        if (body == null) return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+
+        var invoice = await _db.Invoices.Include(i => i.Lines).FirstOrDefaultAsync(i => i.Id == invoiceId);
+        if (invoice == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        // Calculate downpayment amount
+        decimal amount;
+        if (body.IsPercentage)
+        {
+            amount = invoice.TotalAmount * (body.Amount / 100m);
+            invoice.DownpaymentPercentage = body.Amount;
+            invoice.DownpaymentAmount = amount;
+        }
+        else
+        {
+            amount = body.Amount;
+            invoice.DownpaymentAmount = amount;
+            invoice.DownpaymentPercentage = invoice.TotalAmount > 0 ? (amount / invoice.TotalAmount) * 100m : 0;
+        }
+
+        // Update status to Downpayment
+        invoice.Status = InvoiceStatus.Downpayment;
+
+        // Release for shipping if requested
+        if (body.ReleaseForShipping)
+        {
+            invoice.ShippingStatus = "Released";
+        }
+
+        await _db.SaveChangesAsync();
+        return await CreateJsonResponse(req, new { invoice.Id, Status = invoice.Status.ToString(), invoice.ShippingStatus, invoice.DownpaymentAmount, invoice.DownpaymentPercentage });
+    }
+
+    private class DownpaymentRequest
+    {
+        public decimal Amount { get; set; }
+        public bool IsPercentage { get; set; }
+        public bool ReleaseForShipping { get; set; }
+    }
+
+    [Function("GetShippingBoxes")]
+    public async Task<HttpResponseData> GetShippingBoxes(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "shipping/boxes")] HttpRequestData req)
+    {
+        // Get invoices released for shipping
+        var releasedInvoices = await _db.Invoices
+            .Include(i => i.Lines)
+            .Include(i => i.Broker)
+            .Include(i => i.Buyer)
+            .Where(i => i.ShippingStatus == "Released" && !i.IsCreditNote)
+            .ToListAsync();
+
+        // Build credit note lookup to find credited lots
+        var creditNotes = await _db.Invoices
+            .Include(i => i.Lines)
+            .Where(i => i.IsCreditNote && i.OriginalInvoiceId != null)
+            .ToListAsync();
+
+        var creditedLotsByInvoice = creditNotes
+            .GroupBy(cn => cn.OriginalInvoiceId!.Value)
+            .ToDictionary(
+                g => g.Key,
+                g => g.SelectMany(cn => cn.Lines.Select(l => l.LotNumber)).Distinct().ToHashSet());
+
+        // Get uncredited lot numbers for each released invoice
+        var shippingLots = new List<object>();
+        foreach (var inv in releasedInvoices)
+        {
+            var creditedLots = creditedLotsByInvoice.GetValueOrDefault(inv.Id) ?? new HashSet<int>();
+            var uncreditedLines = inv.Lines.Where(l => !creditedLots.Contains(l.LotNumber)).ToList();
+            foreach (var line in uncreditedLines)
+            {
+                shippingLots.Add(new
+                {
+                    InvoiceId = inv.Id,
+                    inv.InvoiceNumber,
+                    BrokerName = inv.Broker?.CompanyName,
+                    BuyerName = inv.Buyer?.Name,
+                    line.LotNumber,
+                    line.Skins,
+                    line.PricePerSkin,
+                    HammerPrice = line.HammerPrice
+                });
+            }
+        }
+
+        return await CreateJsonResponse(req, shippingLots);
+    }
+
     [Function("CreateSettlement")]
     public async Task<HttpResponseData> CreateSettlement(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "settlements/create")] HttpRequestData req)
@@ -161,7 +255,8 @@ public class SettlementFunctions
                 i.TotalAmount, i.Currency, Status = i.Status.ToString(),
                 BrokerName = i.Broker?.CompanyName, BuyerName = i.Buyer?.Name, LinesCount = i.Lines.Count,
                 i.IsCreditNote, OriginalInvoiceNumber = i.OriginalInvoice?.InvoiceNumber,
-                i.PdfUrl, i.BcInvoiceNumber,
+                i.PdfUrl, i.BcInvoiceNumber, i.ShippingStatus,
+                i.DownpaymentAmount, i.DownpaymentPercentage,
                 CreditedAmount = creditInfo?.Amount ?? 0m,
                 CreditedLots = creditInfo?.LotNumbers.Count ?? 0,
                 UncreditedLotNumbers = uncreditedLots,

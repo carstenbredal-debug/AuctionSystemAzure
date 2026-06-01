@@ -149,14 +149,19 @@ else
                                 <span class="badge bg-@GetStatusColor(creditStatus)">@creditStatus</span>
                             </td>
                             <td>
-                                @if (!inv.IsCreditNote && inv.Status != "Paid")
+                                @if (!inv.IsCreditNote && inv.Status != "Paid" && inv.Status != "Downpayment")
                                 {
                                     var invId = inv.Id;
-                                    @if (inv.Status != "Downpayment")
-                                    {
-                                        <button class="btn btn-sm btn-outline-info me-1" @onclick="() => SetStatus(invId, StatusDownpayment)" disabled="@_updatingId.HasValue">Downpayment</button>
-                                    }
+                                    <button class="btn btn-sm btn-outline-info me-1" @onclick="() => OpenDownpaymentPopup(invId)" disabled="@_updatingId.HasValue">Downpayment</button>
                                     <button class="btn btn-sm btn-outline-success" @onclick="() => SetStatus(invId, StatusPaid)" disabled="@_updatingId.HasValue">Fully Paid</button>
+                                }
+                                else if (inv.Status == "Downpayment")
+                                {
+                                    <span class="text-info">DP Paid</span>
+                                    @if (inv.ShippingStatus == "Released")
+                                    {
+                                        <span class="badge bg-primary ms-1">Shipped</span>
+                                    }
                                 }
                                 else if (inv.Status == "Paid")
                                 {
@@ -236,6 +241,58 @@ else
     </div>
 }
 
+@if (_showDownpaymentPopup)
+{
+    <div class="modal d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Process Downpayment</h5>
+                    <button type="button" class="btn-close" @onclick="CloseDownpaymentPopup"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Amount Type</label>
+                        <select class="form-select" @bind="_dpIsPercentage">
+                            <option value="true">Percentage (%)</option>
+                            <option value="false">Absolute Amount (€)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">@(_dpIsPercentage ? "Percentage" : "Amount")</label>
+                        <input type="number" class="form-control" @bind="_dpAmount" step="0.01" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseDownpaymentPopup">Cancel</button>
+                    <button class="btn btn-primary" @onclick="ConfirmDownpayment" disabled="@(_dpAmount <= 0)">Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showShippingConfirm)
+{
+    <div class="modal d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Release Lots for Shipping?</h5>
+                    <button type="button" class="btn-close" @onclick="() => _showShippingConfirm = false"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Do you want to release all uncredited lots on this invoice for shipping?</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => SubmitDownpayment(false)">No</button>
+                    <button class="btn btn-success" @onclick="() => SubmitDownpayment(true)">Yes — Release for Shipping</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private const string StatusDownpayment = "Downpayment";
     private const string StatusPaid = "Paid";
@@ -249,6 +306,13 @@ else
     private List<string> _buyerNames = new();
     private int? _updatingId;
     private int? _expandedInvoiceId;
+
+    // Downpayment popup state
+    private bool _showDownpaymentPopup;
+    private bool _showShippingConfirm;
+    private int _dpInvoiceId;
+    private decimal _dpAmount;
+    private bool _dpIsPercentage = true;
 
     private List<InvoiceSummaryDto> FilteredInvoices
     {
@@ -293,6 +357,42 @@ else
         {
             var inv = _invoices.FirstOrDefault(i => i.Id == invoiceId);
             if (inv != null) inv.Status = status;
+        }
+        _updatingId = null;
+    }
+
+    private void OpenDownpaymentPopup(int invoiceId)
+    {
+        _dpInvoiceId = invoiceId;
+        _dpAmount = 0;
+        _dpIsPercentage = true;
+        _showDownpaymentPopup = true;
+    }
+
+    private void CloseDownpaymentPopup()
+    {
+        _showDownpaymentPopup = false;
+    }
+
+    private void ConfirmDownpayment()
+    {
+        _showDownpaymentPopup = false;
+        _showShippingConfirm = true;
+    }
+
+    private async Task SubmitDownpayment(bool releaseForShipping)
+    {
+        _showShippingConfirm = false;
+        _updatingId = _dpInvoiceId;
+        var resp = await Api.ProcessDownpaymentAsync(_dpInvoiceId, _dpAmount, _dpIsPercentage, releaseForShipping);
+        if (resp.IsSuccessStatusCode)
+        {
+            var inv = _invoices.FirstOrDefault(i => i.Id == _dpInvoiceId);
+            if (inv != null)
+            {
+                inv.Status = "Downpayment";
+                if (releaseForShipping) inv.ShippingStatus = "Released";
+            }
         }
         _updatingId = null;
     }
