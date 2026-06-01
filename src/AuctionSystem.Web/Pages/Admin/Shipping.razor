@@ -20,7 +20,7 @@ else
         <div class="col-md-3">
             <div class="card text-center">
                 <div class="card-body">
-                    <h5 class="card-title text-muted">Total Lots</h5>
+                    <h5 class="card-title text-muted">Total Boxes</h5>
                     <h3>@_boxes.Count</h3>
                 </div>
             </div>
@@ -52,6 +52,7 @@ else
                         <th>Broker</th>
                         <th>Buyer</th>
                         <th>Lot #</th>
+                        <th>Box #</th>
                         <th>Skins</th>
                         <th>Price/Skin</th>
                         <th>Hammer Price</th>
@@ -65,6 +66,7 @@ else
                             <td>@(box.BrokerName ?? "—")</td>
                             <td>@(box.BuyerName ?? "—")</td>
                             <td>@box.LotNumber</td>
+                            <td>@box.BoxNumber</td>
                             <td>@box.Skins</td>
                             <td>€@box.PricePerSkin.ToString("N2")</td>
                             <td><strong>€@box.HammerPrice.ToString("N2")</strong></td>
