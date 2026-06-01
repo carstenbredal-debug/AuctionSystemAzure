@@ -16,12 +16,25 @@ else if (_boxes.Count == 0)
 }
 else
 {
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <label class="form-label fw-bold">Filter by Customer</label>
+            <select class="form-select" @bind="_selectedBuyer">
+                <option value="">All Customers</option>
+                @foreach (var buyer in _buyerNames)
+                {
+                    <option value="@buyer">@buyer</option>
+                }
+            </select>
+        </div>
+    </div>
+
     <div class="row mb-4">
         <div class="col-md-3">
             <div class="card text-center">
                 <div class="card-body">
                     <h5 class="card-title text-muted">Total Boxes</h5>
-                    <h3>@_boxes.Count</h3>
+                    <h3>@FilteredBoxes.Count</h3>
                 </div>
             </div>
         </div>
@@ -29,11 +42,10 @@ else
             <div class="card text-center">
                 <div class="card-body">
                     <h5 class="card-title text-muted">Total Skins</h5>
-                    <h3>@_boxes.Sum(b => b.Skins)</h3>
+                    <h3>@FilteredBoxes.Sum(b => b.Skins)</h3>
                 </div>
             </div>
         </div>
-
     </div>
 
     <div class="card">
@@ -42,7 +54,6 @@ else
                 <thead class="table-dark">
                     <tr>
                         <th>Invoice</th>
-                        <th>Broker</th>
                         <th>Buyer</th>
                         <th>Lot #</th>
                         <th>Box #</th>
@@ -51,11 +62,10 @@ else
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var box in _boxes)
+                    @foreach (var box in FilteredBoxes)
                     {
                         <tr>
                             <td>@box.InvoiceNumber</td>
-                            <td>@(box.BrokerName ?? "—")</td>
                             <td>@(box.BuyerName ?? "—")</td>
                             <td>@box.LotNumber</td>
                             <td>@box.BoxNumber</td>
@@ -72,10 +82,18 @@ else
 @code {
     private List<ShippingBoxDto> _boxes = new();
     private bool _loading = true;
+    private string _selectedBuyer = "";
+    private List<string> _buyerNames = new();
+
+    private List<ShippingBoxDto> FilteredBoxes =>
+        string.IsNullOrEmpty(_selectedBuyer)
+            ? _boxes
+            : _boxes.Where(b => b.BuyerName == _selectedBuyer).ToList();
 
     protected override async Task OnInitializedAsync()
     {
         _boxes = await Api.GetShippingBoxesAsync();
+        _buyerNames = _boxes.Select(b => b.BuyerName ?? "—").Distinct().OrderBy(n => n).ToList();
         _loading = false;
     }
 }
