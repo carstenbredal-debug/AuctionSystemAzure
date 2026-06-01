@@ -1,0 +1,139 @@
+@page "/admin/data-integrity"
+@using System.Text.Json
+@inject HttpClient Http
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
+
+<h3>Data Integrity</h3>
+<p class="text-muted">Check that sold skin counts and hammer prices match across lots, boxes, and skins.</p>
+
+<div class="mb-4">
+    <button class="btn btn-primary" @onclick="RunCheck" disabled="@_checking">
+        @if (_checking)
+        {
+            <span class="spinner-border spinner-border-sm me-1"></span>
+            <span>Checking...</span>
+        }
+        else
+        {
+            <span>Run Skins Price Check</span>
+        }
+    </button>
+</div>
+
+@if (_hasResult)
+{
+    <div class="alert @(_totalMismatches == 0 ? "alert-success" : "alert-warning")">
+        @_message
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">Lots Checked</h5>
+                    <h2>@_totalChecked</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">Mismatches</h5>
+                    <h2 class="@(_totalMismatches > 0 ? "text-danger" : "text-success")">@_totalMismatches</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (_mismatches.Any())
+    {
+        <div class="table-responsive">
+            <table class="table table-striped table-sm">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Lot</th>
+                        <th>Broker</th>
+                        <th>Buyer</th>
+                        <th>Price/Skin</th>
+                        <th>Expected Skins</th>
+                        <th>Actual Skins</th>
+                        <th>Expected Hammer</th>
+                        <th>Actual Hammer</th>
+                        <th>Difference</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var m in _mismatches)
+                    {
+                        <tr class="table-warning">
+                            <td>@m.LotNumber</td>
+                            <td>@m.Broker</td>
+                            <td>@m.Buyer</td>
+                            <td>€@m.PricePerSkin.ToString("N2")</td>
+                            <td>@m.ExpectedSkins</td>
+                            <td>@m.ActualSkins</td>
+                            <td>€@m.ExpectedHammerPrice.ToString("N2")</td>
+                            <td>€@m.ActualHammerPrice.ToString("N2")</td>
+                            <td class="text-danger fw-bold">€@m.Difference.ToString("N2")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+}
+
+@code {
+    private bool _checking;
+    private bool _hasResult;
+    private string _message = "";
+    private int _totalChecked;
+    private int _totalMismatches;
+    private List<MismatchItem> _mismatches = new();
+
+    private async Task RunCheck()
+    {
+        _checking = true;
+        _hasResult = false;
+        StateHasChanged();
+
+        try
+        {
+            var response = await Http.GetAsync("api/diag/skins-price-check");
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync();
+                var doc = JsonDocument.Parse(json);
+
+                _message = doc.RootElement.GetProperty("message").GetString() ?? "";
+                _totalChecked = doc.RootElement.GetProperty("totalChecked").GetInt32();
+                _totalMismatches = doc.RootElement.GetProperty("totalMismatches").GetInt32();
+
+                var arr = doc.RootElement.GetProperty("mismatches");
+                _mismatches = JsonSerializer.Deserialize<List<MismatchItem>>(arr.GetRawText(), new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                }) ?? new();
+
+                _hasResult = true;
+            }
+        }
+        catch { }
+
+        _checking = false;
+        StateHasChanged();
+    }
+
+    private class MismatchItem
+    {
+        public int LotNumber { get; set; }
+        public string Broker { get; set; } = "";
+        public string Buyer { get; set; } = "";
+        public decimal PricePerSkin { get; set; }
+        public int ExpectedSkins { get; set; }
+        public int ActualSkins { get; set; }
+        public decimal ExpectedHammerPrice { get; set; }
+        public decimal ActualHammerPrice { get; set; }
+        public decimal Difference { get; set; }
+    }
+}

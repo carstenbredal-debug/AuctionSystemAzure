@@ -110,6 +110,101 @@ public class SkinFunctions
         return response;
     }
 
+    [Function("CheckSkinsPriceIntegrity")]
+    public async Task<HttpResponseData> CheckSkinsPriceIntegrity(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "diag/skins-price-check")] HttpRequestData req)
+    {
+        // Get all sold auction results
+        var soldResults = await _auctionDb.AuctionResults
+            .Where(r => r.SoldToBuyerId != null)
+            .Include(r => r.Broker)
+            .Include(r => r.SoldToBuyer)
+            .ToListAsync();
+
+        if (soldResults.Count == 0)
+        {
+            var emptyResponse = req.CreateResponse(System.Net.HttpStatusCode.OK);
+            emptyResponse.Headers.Add("Content-Type", "application/json");
+            await emptyResponse.WriteStringAsync(JsonSerializer.Serialize(new
+            {
+                message = "No sold lots found",
+                mismatches = Array.Empty<object>(),
+                totalChecked = 0,
+                totalMismatches = 0
+            }, JsonOptions));
+            return emptyResponse;
+        }
+
+        // Get catalog lots for sold lot numbers
+        var soldLotNumbers = soldResults.Select(r => r.LotNumber).Distinct().ToList();
+        var catalogLots = await _catalogDb.CatalogLots
+            .Where(cl => soldLotNumbers.Contains(cl.LotNumber))
+            .ToListAsync();
+
+        // Build lot → box numbers mapping
+        var lotBoxes = new Dictionary<int, List<int>>();
+        foreach (var cl in catalogLots)
+        {
+            if (string.IsNullOrEmpty(cl.IncludedBoxNumbers)) continue;
+            var boxes = cl.IncludedBoxNumbers
+                .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(b => int.TryParse(b.Trim(), out var n) ? n : 0)
+                .Where(n => n > 0)
+                .ToList();
+            lotBoxes[cl.LotNumber] = boxes;
+        }
+
+        // Get all relevant box numbers and count skins per box
+        var allBoxNumbers = lotBoxes.Values.SelectMany(b => b).Distinct().ToList();
+        var skinsPerBox = await _catalogDb.Skins
+            .Where(s => s.IsActive && allBoxNumbers.Contains(s.BoxNumber))
+            .GroupBy(s => s.BoxNumber)
+            .Select(g => new { BoxNumber = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.BoxNumber, x => x.Count);
+
+        // Check each sold lot
+        var mismatches = new List<object>();
+        foreach (var result in soldResults)
+        {
+            if (!lotBoxes.TryGetValue(result.LotNumber, out var boxes)) continue;
+
+            var actualSkinCount = boxes.Sum(b => skinsPerBox.GetValueOrDefault(b, 0));
+            var expectedHammerPrice = result.TotalSkins * result.PriceEur;
+            var actualHammerPrice = actualSkinCount * result.PriceEur;
+
+            if (actualSkinCount != result.TotalSkins)
+            {
+                mismatches.Add(new
+                {
+                    lotNumber = result.LotNumber,
+                    broker = result.Broker.CompanyName,
+                    buyer = result.SoldToBuyer?.Name,
+                    pricePerSkin = result.PriceEur,
+                    expectedSkins = result.TotalSkins,
+                    actualSkins = actualSkinCount,
+                    expectedHammerPrice,
+                    actualHammerPrice,
+                    difference = actualHammerPrice - expectedHammerPrice
+                });
+            }
+        }
+
+        var checkResult = new
+        {
+            message = mismatches.Count == 0
+                ? $"All {soldResults.Count} sold lots match — skin counts and hammer prices are consistent"
+                : $"{mismatches.Count} mismatch(es) found out of {soldResults.Count} sold lots",
+            totalChecked = soldResults.Count,
+            totalMismatches = mismatches.Count,
+            mismatches
+        };
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(checkResult, JsonOptions));
+        return response;
+    }
+
     private async Task<Dictionary<int, BoxSaleInfo>> GetSoldBoxSaleInfoAsync()
     {
         // Get sold auction results with broker and buyer info
