@@ -32,18 +32,19 @@ public class SkinFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "skins")] HttpRequestData req)
     {
         var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
-        var filter = query["filter"] ?? "all";
         var page = int.TryParse(query["page"], out var p) ? Math.Max(1, p) : 1;
         var pageSize = int.TryParse(query["pageSize"], out var ps) ? Math.Clamp(ps, 10, 500) : 100;
         var search = query["search"]?.Trim();
 
-        // Get sold box numbers (cached per request — small set)
-        var soldBoxNumbers = await GetSoldBoxNumbersAsync();
+        // Build sold box → sale info lookup
+        var saleInfoByBox = await GetSoldBoxSaleInfoAsync();
+        var soldBoxNumbers = saleInfoByBox.Keys.ToHashSet();
 
-        // Build base query
-        IQueryable<Domain.Entities.Skin> baseQuery = _catalogDb.Skins.Where(s => s.IsActive);
+        // Query only sold skins
+        IQueryable<Domain.Entities.Skin> baseQuery = _catalogDb.Skins
+            .Where(s => s.IsActive && soldBoxNumbers.Contains(s.BoxNumber));
 
-        // Apply search filter
+        // Apply search
         if (!string.IsNullOrEmpty(search))
         {
             baseQuery = baseQuery.Where(s =>
@@ -53,40 +54,10 @@ public class SkinFunctions
                 s.BoxNumber.ToString().Contains(search));
         }
 
-        // Get total counts (using COUNT at DB level)
         int totalCount = await baseQuery.CountAsync();
 
-        // For sold/unsold counts, we need box-level filtering
-        // Get distinct box numbers that are sold
-        int soldCount, unsoldCount;
-        if (soldBoxNumbers.Count == 0)
-        {
-            soldCount = 0;
-            unsoldCount = totalCount;
-        }
-        else
-        {
-            soldCount = await baseQuery.Where(s => soldBoxNumbers.Contains(s.BoxNumber)).CountAsync();
-            unsoldCount = totalCount - soldCount;
-        }
-
-        // Apply sold/unsold filter
-        IQueryable<Domain.Entities.Skin> filteredQuery = filter switch
-        {
-            "sold" => baseQuery.Where(s => soldBoxNumbers.Contains(s.BoxNumber)),
-            "unsold" => baseQuery.Where(s => !soldBoxNumbers.Contains(s.BoxNumber)),
-            _ => baseQuery
-        };
-
-        var filteredCount = filter switch
-        {
-            "sold" => soldCount,
-            "unsold" => unsoldCount,
-            _ => totalCount
-        };
-
-        // Apply pagination
-        var skins = await filteredQuery
+        // Paginate
+        var skins = await baseQuery
             .OrderBy(s => s.BoxNumber)
             .ThenBy(s => s.Barcode)
             .Skip((page - 1) * pageSize)
@@ -99,37 +70,37 @@ public class SkinFunctions
                 Farmer = s.Farmer,
                 Farm = s.Farm,
                 BoxType = s.BoxType,
-                BoxStatus = s.BoxStatus,
                 SalesType = s.SalesType,
                 Gender = s.Gender,
                 Group = s.Group,
                 Size = s.Size,
-                HairLength = s.HairLength,
                 Color = s.Color,
                 Quality = s.Quality,
                 Clarity = s.Clarity,
                 Damages = s.Damages,
                 Auction = s.Auction,
-                Location = s.Location,
                 LastChangedAt = s.LastChangedAt
             })
             .ToListAsync();
 
-        // Set IsSold flag on returned page
+        // Attach sale info
         foreach (var skin in skins)
         {
-            skin.IsSold = soldBoxNumbers.Contains(skin.BoxNumber);
+            if (saleInfoByBox.TryGetValue(skin.BoxNumber, out var info))
+            {
+                skin.BrokerName = info.BrokerName;
+                skin.BuyerName = info.BuyerName;
+                skin.PriceEur = info.PriceEur;
+                skin.LotNumber = info.LotNumber;
+            }
         }
 
         var result = new
         {
             totalSkins = totalCount,
-            soldSkins = soldCount,
-            unsoldSkins = unsoldCount,
-            filteredCount,
             page,
             pageSize,
-            totalPages = (int)Math.Ceiling((double)filteredCount / pageSize),
+            totalPages = (int)Math.Ceiling((double)totalCount / pageSize),
             skins
         };
 
@@ -139,36 +110,66 @@ public class SkinFunctions
         return response;
     }
 
-    private async Task<HashSet<int>> GetSoldBoxNumbersAsync()
+    private async Task<Dictionary<int, BoxSaleInfo>> GetSoldBoxSaleInfoAsync()
     {
-        // Get lot numbers that have been sold (SoldToBuyerId is set)
-        var soldLotNumbers = await _auctionDb.AuctionResults
+        // Get sold auction results with broker and buyer info
+        var soldResults = await _auctionDb.AuctionResults
             .Where(r => r.SoldToBuyerId != null)
-            .Select(r => r.LotNumber)
-            .ToListAsync();
-
-        if (soldLotNumbers.Count == 0)
-            return new HashSet<int>();
-
-        // Get catalog lots matching those lot numbers
-        var soldCatalogLots = await _catalogDb.CatalogLots
-            .Where(cl => soldLotNumbers.Contains(cl.LotNumber))
-            .Select(cl => cl.IncludedBoxNumbers)
-            .ToListAsync();
-
-        // Parse box numbers from comma-separated lists
-        var soldBoxNumbers = new HashSet<int>();
-        foreach (var boxList in soldCatalogLots)
-        {
-            if (string.IsNullOrEmpty(boxList)) continue;
-            foreach (var boxStr in boxList.Split(',', StringSplitOptions.RemoveEmptyEntries))
+            .Include(r => r.Broker)
+            .Include(r => r.SoldToBuyer)
+            .Select(r => new
             {
-                if (int.TryParse(boxStr.Trim(), out var boxNum))
-                    soldBoxNumbers.Add(boxNum);
+                r.LotNumber,
+                r.PriceEur,
+                BrokerName = r.Broker.CompanyName,
+                BuyerName = r.SoldToBuyer!.Name
+            })
+            .ToListAsync();
+
+        if (soldResults.Count == 0)
+            return new Dictionary<int, BoxSaleInfo>();
+
+        // Get catalog lots to map lot numbers to box numbers
+        var soldLotNumbers = soldResults.Select(r => r.LotNumber).Distinct().ToList();
+        var catalogLots = await _catalogDb.CatalogLots
+            .Where(cl => soldLotNumbers.Contains(cl.LotNumber))
+            .Select(cl => new { cl.LotNumber, cl.IncludedBoxNumbers })
+            .ToListAsync();
+
+        // Build lookup: lot number → sale info
+        var lotSaleInfo = soldResults.ToDictionary(r => r.LotNumber, r => r);
+
+        // Build lookup: box number → sale info
+        var boxSaleInfo = new Dictionary<int, BoxSaleInfo>();
+        foreach (var lot in catalogLots)
+        {
+            if (string.IsNullOrEmpty(lot.IncludedBoxNumbers)) continue;
+            if (!lotSaleInfo.TryGetValue(lot.LotNumber, out var sale)) continue;
+
+            foreach (var boxStr in lot.IncludedBoxNumbers.Split(',', StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (int.TryParse(boxStr.Trim(), out var boxNum) && !boxSaleInfo.ContainsKey(boxNum))
+                {
+                    boxSaleInfo[boxNum] = new BoxSaleInfo
+                    {
+                        BrokerName = sale.BrokerName,
+                        BuyerName = sale.BuyerName,
+                        PriceEur = sale.PriceEur,
+                        LotNumber = lot.LotNumber
+                    };
+                }
             }
         }
 
-        return soldBoxNumbers;
+        return boxSaleInfo;
+    }
+
+    private class BoxSaleInfo
+    {
+        public string BrokerName { get; set; } = "";
+        public string BuyerName { get; set; } = "";
+        public decimal PriceEur { get; set; }
+        public int LotNumber { get; set; }
     }
 }
 
@@ -180,18 +181,18 @@ public class SkinDto
     public string? Farmer { get; set; }
     public string? Farm { get; set; }
     public string? BoxType { get; set; }
-    public string? BoxStatus { get; set; }
     public string? SalesType { get; set; }
     public string? Gender { get; set; }
     public string? Group { get; set; }
     public string? Size { get; set; }
-    public string? HairLength { get; set; }
     public string? Color { get; set; }
     public string? Quality { get; set; }
     public string? Clarity { get; set; }
     public string? Damages { get; set; }
     public string? Auction { get; set; }
-    public string? Location { get; set; }
     public DateTime? LastChangedAt { get; set; }
-    public bool IsSold { get; set; }
+    public string? BrokerName { get; set; }
+    public string? BuyerName { get; set; }
+    public decimal? PriceEur { get; set; }
+    public int? LotNumber { get; set; }
 }
