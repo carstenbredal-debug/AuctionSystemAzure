@@ -361,9 +361,24 @@ public class AuctionResultFunctions
                 var auctionFeePercent = auctionFeeParam != null ? decimal.Parse(auctionFeeParam.Value, CultureInfo.InvariantCulture) : 0m;
                 var handlingFeePerSkin = handlingFeeParam != null ? decimal.Parse(handlingFeeParam.Value, CultureInfo.InvariantCulture) : 0m;
 
+                // Get auction number for external document number
+                var auctionId = await _db.Lots
+                    .Where(l => lotNumbers.Contains(l.LotNumber))
+                    .Select(l => l.AuctionId)
+                    .FirstOrDefaultAsync();
+                var auction = auctionId > 0 ? await _db.Auctions.FindAsync(auctionId) : null;
+                var auctionNumber = auction?.AuctionNumber ?? "0";
+
+                // Serial: count existing invoices for this auction + 1
+                var existingCount = await _db.Invoices
+                    .Where(i => i.ExternalDocumentNumber != null && i.ExternalDocumentNumber.StartsWith(auctionNumber + "-"))
+                    .CountAsync();
+                var extDocNumber = $"{auctionNumber}-{existingCount + 1}";
+
                 var invoice = new Invoice
                 {
                     InvoiceNumber = "",
+                    ExternalDocumentNumber = extDocNumber,
                     InvoiceDate = DateTime.UtcNow,
                     BrokerId = brokerId,
                     BuyerId = body.BuyerId,

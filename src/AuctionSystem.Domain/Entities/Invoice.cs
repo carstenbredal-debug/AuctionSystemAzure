@@ -31,6 +31,7 @@ public class Invoice
     public byte[]? PdfData { get; set; }
     public string? PdfUrl { get; set; }
 
+    public string? ExternalDocumentNumber { get; set; }
     public string? BcInvoiceNumber { get; set; }
     public Guid? BcInvoiceId { get; set; }
 
