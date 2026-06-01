@@ -9,7 +9,8 @@ public class BcSalesCreditMemo
     public Guid Id { get; set; }
 
     [JsonPropertyName("number")]
-    public string Number { get; set; } = string.Empty;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public string? Number { get; set; }
 
     [JsonPropertyName("externalDocumentNumber")]
     public string ExternalDocumentNumber { get; set; } = string.Empty;
@@ -18,24 +19,29 @@ public class BcSalesCreditMemo
     public string CreditMemoDate { get; set; } = string.Empty;
 
     [JsonPropertyName("customerNumber")]
-    public string CustomerNumber { get; set; } = string.Empty;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public string? CustomerNumber { get; set; }
 
     [JsonPropertyName("customerId")]
     public Guid CustomerId { get; set; }
 
     [JsonPropertyName("customerName")]
-    public string CustomerName { get; set; } = string.Empty;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public string? CustomerName { get; set; }
 
     [JsonPropertyName("currencyCode")]
     public string CurrencyCode { get; set; } = string.Empty;
 
     [JsonPropertyName("status")]
-    public string Status { get; set; } = string.Empty;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public string? Status { get; set; }
 
     [JsonPropertyName("totalAmountExcludingTax")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public decimal TotalAmountExcludingTax { get; set; }
 
     [JsonPropertyName("totalAmountIncludingTax")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public decimal TotalAmountIncludingTax { get; set; }
 
     [JsonPropertyName("lastModifiedDateTime")]
