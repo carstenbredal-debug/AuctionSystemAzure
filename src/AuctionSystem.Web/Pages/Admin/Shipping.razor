@@ -46,6 +46,7 @@ else
                         <th>Buyer</th>
                         <th>Lot #</th>
                         <th>Box #</th>
+                        <th>Box Type</th>
                         <th>Skins</th>
                     </tr>
                 </thead>
@@ -58,6 +59,7 @@ else
                             <td>@(box.BuyerName ?? "—")</td>
                             <td>@box.LotNumber</td>
                             <td>@box.BoxNumber</td>
+                            <td>@box.BoxType</td>
                             <td>@box.Skins</td>
                         </tr>
                     }

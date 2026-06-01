@@ -417,6 +417,7 @@ public class ShippingBoxDto
     public string? BuyerName { get; set; }
     public int LotNumber { get; set; }
     public int BoxNumber { get; set; }
+    public string BoxType { get; set; } = "";
     public int Skins { get; set; }
     public decimal PricePerSkin { get; set; }
     public decimal HammerPrice { get; set; }

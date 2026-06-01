@@ -178,15 +178,15 @@ public class SettlementFunctions
                 .Select(b => int.TryParse(b.Trim(), out var n) ? n : 0).Where(n => n > 0))
             .Distinct().ToList();
 
-        var boxSkins = new Dictionary<int, int>();
+        var boxInfo = new Dictionary<int, BoxViewInfo>();
         if (allBoxNumbers.Count > 0)
         {
             var boxData = await _catalogDb.Database
-                .SqlQueryRaw<BoxSkinCount>("SELECT BoxNumber, Skins FROM dbo.boxes WHERE BoxNumber IN (" +
+                .SqlQueryRaw<BoxViewInfo>("SELECT BoxNumber, Skins, BoxType FROM dbo.boxes WHERE BoxNumber IN (" +
                     string.Join(",", allBoxNumbers) + ")")
                 .ToListAsync();
             foreach (var b in boxData)
-                boxSkins[b.BoxNumber] = b.Skins;
+                boxInfo[b.BoxNumber] = b;
         }
 
         // Build shipping boxes response
@@ -199,6 +199,7 @@ public class SettlementFunctions
             foreach (var boxStr in cl.IncludedBoxNumbers.Split(',', StringSplitOptions.RemoveEmptyEntries))
             {
                 if (!int.TryParse(boxStr.Trim(), out var boxNumber) || boxNumber <= 0) continue;
+                var bi = boxInfo.GetValueOrDefault(boxNumber);
                 shippingBoxes.Add(new
                 {
                     InvoiceId = info.Inv.Id,
@@ -207,7 +208,8 @@ public class SettlementFunctions
                     BuyerName = info.Inv.Buyer?.Name,
                     LotNumber = cl.LotNumber,
                     BoxNumber = boxNumber,
-                    Skins = boxSkins.GetValueOrDefault(boxNumber, 0),
+                    BoxType = bi?.BoxType ?? "",
+                    Skins = bi?.Skins ?? 0,
                     info.Line.PricePerSkin,
                     HammerPrice = info.Line.HammerPrice
                 });
@@ -217,10 +219,11 @@ public class SettlementFunctions
         return await CreateJsonResponse(req, shippingBoxes);
     }
 
-    private class BoxSkinCount
+    private class BoxViewInfo
     {
         public int BoxNumber { get; set; }
         public int Skins { get; set; }
+        public string BoxType { get; set; } = "";
     }
 
     [Function("CreateSettlement")]
