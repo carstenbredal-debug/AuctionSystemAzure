@@ -1,0 +1,19 @@
+@page "/admin/shipping"
+@attribute [Authorize(Roles = "Admin")]
+
+<PageTitle>Shipping - Admin</PageTitle>
+
+<h3 class="mb-4">Shipping — Boxes Ready for Shipping</h3>
+
+<div class="alert alert-info">
+    This page will show boxes that are ready for shipping. The shipping functionality will be triggered from the Invoice page.
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <p class="text-muted mb-0">No boxes ready for shipping yet.</p>
+    </div>
+</div>
+
+@code {
+}
