@@ -3,7 +3,7 @@
 @inject HttpClient Http
 @attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
 
-<h3>Skins</h3>
+<h3>Sold Skins</h3>
 
 @if (_loading)
 {
@@ -11,38 +11,22 @@
 }
 else
 {
-    <!-- Summary cards -->
+    <!-- Summary -->
     <div class="row mb-4">
         <div class="col-md-4">
             <div class="card text-center">
                 <div class="card-body">
-                    <h5 class="card-title text-muted">Total Skins</h5>
+                    <h5 class="card-title text-muted">Total Sold Skins</h5>
                     <h2>@_totalSkins.ToString("N0")</h2>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h5 class="card-title text-muted">Sold</h5>
-                    <h2 class="text-success">@_soldSkins.ToString("N0")</h2>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h5 class="card-title text-muted">Unsold</h5>
-                    <h2 class="text-warning">@_unsoldSkins.ToString("N0")</h2>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Search -->
+    <!-- Search + Page Size -->
     <div class="row mb-3">
         <div class="col-md-4">
-            <input class="form-control" placeholder="Search by farmer, farm, barcode, or box number..." 
+            <input class="form-control" placeholder="Search by farmer, farm, barcode, or box..." 
                    @bind="_searchText" @bind:event="oninput" @onkeydown="HandleSearchKey" />
         </div>
         <div class="col-md-2">
@@ -62,28 +46,9 @@ else
         </div>
     </div>
 
-    <!-- Tabs -->
-    <ul class="nav nav-tabs mb-3">
-        <li class="nav-item">
-            <a class="nav-link @(_activeTab == "all" ? "active" : "")" href="javascript:void(0)" @onclick='() => SetTab("all")'>
-                All (@_totalSkins.ToString("N0"))
-            </a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link @(_activeTab == "sold" ? "active" : "")" href="javascript:void(0)" @onclick='() => SetTab("sold")'>
-                Sold (@_soldSkins.ToString("N0"))
-            </a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link @(_activeTab == "unsold" ? "active" : "")" href="javascript:void(0)" @onclick='() => SetTab("unsold")'>
-                Unsold (@_unsoldSkins.ToString("N0"))
-            </a>
-        </li>
-    </ul>
-
     @if (!_skins.Any())
     {
-        <div class="alert alert-info">No skins found.</div>
+        <div class="alert alert-info">No sold skins found.</div>
     }
     else
     {
@@ -91,45 +56,38 @@ else
             <table class="table table-striped table-sm">
                 <thead class="table-dark">
                     <tr>
+                        <th>Lot</th>
                         <th>Box</th>
                         <th>Barcode</th>
                         <th>Farmer</th>
-                        <th>Farm</th>
                         <th>Sales Type</th>
                         <th>Gender</th>
                         <th>Group</th>
                         <th>Size</th>
                         <th>Color</th>
                         <th>Quality</th>
-                        <th>Clarity</th>
-                        <th>Status</th>
+                        <th>Broker</th>
+                        <th>Buyer</th>
+                        <th>Price (EUR)</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach (var skin in _skins)
                     {
                         <tr>
+                            <td>@skin.LotNumber</td>
                             <td>@skin.BoxNumber</td>
                             <td>@skin.Barcode</td>
                             <td>@skin.Farmer</td>
-                            <td>@skin.Farm</td>
                             <td>@skin.SalesType</td>
                             <td>@skin.Gender</td>
                             <td>@skin.Group</td>
                             <td>@skin.Size</td>
                             <td>@skin.Color</td>
                             <td>@skin.Quality</td>
-                            <td>@skin.Clarity</td>
-                            <td>
-                                @if (skin.IsSold)
-                                {
-                                    <span class="badge bg-success">Sold</span>
-                                }
-                                else
-                                {
-                                    <span class="badge bg-warning text-dark">Unsold</span>
-                                }
-                            </td>
+                            <td>@skin.BrokerName</td>
+                            <td>@skin.BuyerName</td>
+                            <td>@skin.PriceEur?.ToString("N2")</td>
                         </tr>
                     }
                 </tbody>
@@ -140,7 +98,7 @@ else
         <nav>
             <div class="d-flex justify-content-between align-items-center">
                 <small class="text-muted">
-                    Showing @(((_page - 1) * _pageSize) + 1)–@(Math.Min(_page * _pageSize, _filteredCount)) of @_filteredCount.ToString("N0")
+                    Showing @(((_page - 1) * _pageSize) + 1)–@(Math.Min(_page * _pageSize, _totalSkins)) of @_totalSkins.ToString("N0")
                 </small>
                 <ul class="pagination mb-0">
                     <li class="page-item @(_page <= 1 ? "disabled" : "")">
@@ -169,14 +127,10 @@ else
 
 @code {
     private bool _loading = true;
-    private string _activeTab = "all";
     private int _page = 1;
     private int _pageSize = 100;
     private int _totalPages;
     private int _totalSkins;
-    private int _soldSkins;
-    private int _unsoldSkins;
-    private int _filteredCount;
     private string _searchText = "";
     private string _activeSearch = "";
     private List<SkinItem> _skins = new();
@@ -192,7 +146,7 @@ else
         StateHasChanged();
         try
         {
-            var url = $"api/skins?filter={_activeTab}&page={_page}&pageSize={_pageSize}";
+            var url = $"api/skins?page={_page}&pageSize={_pageSize}";
             if (!string.IsNullOrEmpty(_activeSearch))
                 url += $"&search={Uri.EscapeDataString(_activeSearch)}";
 
@@ -202,9 +156,6 @@ else
                 var json = await response.Content.ReadAsStringAsync();
                 var doc = JsonDocument.Parse(json);
                 _totalSkins = doc.RootElement.GetProperty("totalSkins").GetInt32();
-                _soldSkins = doc.RootElement.GetProperty("soldSkins").GetInt32();
-                _unsoldSkins = doc.RootElement.GetProperty("unsoldSkins").GetInt32();
-                _filteredCount = doc.RootElement.GetProperty("filteredCount").GetInt32();
                 _page = doc.RootElement.GetProperty("page").GetInt32();
                 _totalPages = doc.RootElement.GetProperty("totalPages").GetInt32();
 
@@ -218,13 +169,6 @@ else
         catch { }
         _loading = false;
         StateHasChanged();
-    }
-
-    private async Task SetTab(string tab)
-    {
-        _activeTab = tab;
-        _page = 1;
-        await LoadSkins();
     }
 
     private async Task GoToPage(int page)
@@ -274,20 +218,16 @@ else
         public long Barcode { get; set; }
         public string? Farmer { get; set; }
         public string? Farm { get; set; }
-        public string? BoxType { get; set; }
-        public string? BoxStatus { get; set; }
         public string? SalesType { get; set; }
         public string? Gender { get; set; }
         public string? Group { get; set; }
         public string? Size { get; set; }
-        public string? HairLength { get; set; }
         public string? Color { get; set; }
         public string? Quality { get; set; }
         public string? Clarity { get; set; }
-        public string? Damages { get; set; }
-        public string? Auction { get; set; }
-        public string? Location { get; set; }
-        public DateTime? LastChangedAt { get; set; }
-        public bool IsSold { get; set; }
+        public string? BrokerName { get; set; }
+        public string? BuyerName { get; set; }
+        public decimal? PriceEur { get; set; }
+        public int? LotNumber { get; set; }
     }
 }
