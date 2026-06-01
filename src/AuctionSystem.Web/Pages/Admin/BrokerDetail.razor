@@ -382,20 +382,43 @@ else
 
     @if (_activeTab == "unsold")
     {
+        @if (!string.IsNullOrEmpty(_unsoldMessage))
+        {
+            <div class="alert @(_unsoldMessageIsError ? "alert-danger" : "alert-success") alert-dismissible">
+                @_unsoldMessage
+                <button type="button" class="btn-close" @onclick="() => _unsoldMessage = null"></button>
+            </div>
+        }
+        @if (_selectedUnsoldIds.Count > 0)
+        {
+            <div class="mb-3 d-flex gap-2">
+                <button class="btn btn-warning" @onclick="MoveToInternalBroker" disabled="@_reassigning">
+                    @if (_reassigning) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                    Move to Internal Broker (999)
+                </button>
+                <button class="btn btn-outline-secondary" @onclick="ReturnToAuction" disabled="@_reassigning">
+                    @if (_reassigning) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                    Return to Auction
+                </button>
+                <span class="align-self-center text-muted">@_selectedUnsoldIds.Count lot(s) selected</span>
+            </div>
+        }
         <div class="card">
             <div class="card-body p-0">
                 <table class="table table-striped table-hover mb-0">
                     <thead class="table-dark">
                         <tr>
+                            <th style="width:40px;"><input type="checkbox" checked="@_allUnsoldSelected" @onchange="ToggleAllUnsold" /></th>
                             <th>Lot #</th><th>Type</th><th>Gender</th><th>Color</th><th>Quality</th><th>Skins</th><th>Price (EUR)</th><th>Hammer Price</th><th>Auction Fee</th><th>Commission</th>
                         </tr>
                     </thead>
                     <tbody>
                         @if (_unsoldLots.Count == 0)
-                        { <tr><td colspan="10" class="text-center text-muted py-4">No unsold lots.</td></tr> }
+                        { <tr><td colspan="11" class="text-center text-muted py-4">No unsold lots.</td></tr> }
                         @foreach (var r in _unsoldLots)
                         {
                             <tr>
+                                <td><input type="checkbox" checked="@_selectedUnsoldIds.Contains(r.Id)" @onchange="() => ToggleUnsoldSelection(r.Id)" /></td>
                                 <td><strong>@r.LotNumber</strong></td>
                                 <td>@(r.SalesType ?? "—")</td><td>@(r.Gender ?? "—")</td><td>@(r.Color ?? "—")</td><td>@(r.Quality ?? "—")</td>
                                 <td>@r.TotalSkins</td><td>€@r.PriceEur.ToString("N2")</td><td>€@((r.TotalSkins * r.PriceEur).ToString("N2"))</td><td>€@CalcAuctionFee(r.TotalSkins, r.PriceEur).ToString("N2")</td><td>€@((r.CommissionAmount ?? 0).ToString("N2"))</td>
@@ -476,6 +499,11 @@ else
     private bool _takebackMessageIsError;
     private string? _brokerTakebackMessage;
     private bool _brokerTakebackMessageIsError;
+    private HashSet<int> _selectedUnsoldIds = new();
+    private bool _allUnsoldSelected => _unsoldLots.Count > 0 && _unsoldLots.All(r => _selectedUnsoldIds.Contains(r.Id));
+    private bool _reassigning;
+    private string? _unsoldMessage;
+    private bool _unsoldMessageIsError;
     private bool _loading = true;
     private BrokerDto? _editDto;
     private string? _message;
@@ -596,6 +624,77 @@ else
             _brokerTakebackMessage = $"Error: {ex.Message}";
             _brokerTakebackMessageIsError = true;
         }
+    }
+
+    private void ToggleUnsoldSelection(int id)
+    {
+        if (!_selectedUnsoldIds.Remove(id)) _selectedUnsoldIds.Add(id);
+    }
+
+    private void ToggleAllUnsold(ChangeEventArgs e)
+    {
+        if ((bool)(e.Value ?? false))
+            _selectedUnsoldIds = _unsoldLots.Select(r => r.Id).ToHashSet();
+        else
+            _selectedUnsoldIds.Clear();
+    }
+
+    private async Task MoveToInternalBroker()
+    {
+        _unsoldMessage = null;
+        if (_selectedUnsoldIds.Count == 0) return;
+        _reassigning = true;
+        try
+        {
+            var resp = await Api.ReassignUnsoldLotsAsync(_selectedUnsoldIds.ToList(), "internal");
+            if (resp.IsSuccessStatusCode)
+            {
+                _unsoldMessage = $"{_selectedUnsoldIds.Count} lot(s) moved to Internal Broker (999).";
+                _unsoldMessageIsError = false;
+                _selectedUnsoldIds.Clear();
+                await LoadData();
+            }
+            else
+            {
+                _unsoldMessage = "Failed to move lots. Please try again.";
+                _unsoldMessageIsError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            _unsoldMessage = $"Error: {ex.Message}";
+            _unsoldMessageIsError = true;
+        }
+        finally { _reassigning = false; }
+    }
+
+    private async Task ReturnToAuction()
+    {
+        _unsoldMessage = null;
+        if (_selectedUnsoldIds.Count == 0) return;
+        _reassigning = true;
+        try
+        {
+            var resp = await Api.ReassignUnsoldLotsAsync(_selectedUnsoldIds.ToList(), "auction");
+            if (resp.IsSuccessStatusCode)
+            {
+                _unsoldMessage = $"{_selectedUnsoldIds.Count} lot(s) returned to auction as unsold.";
+                _unsoldMessageIsError = false;
+                _selectedUnsoldIds.Clear();
+                await LoadData();
+            }
+            else
+            {
+                _unsoldMessage = "Failed to return lots. Please try again.";
+                _unsoldMessageIsError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            _unsoldMessage = $"Error: {ex.Message}";
+            _unsoldMessageIsError = true;
+        }
+        finally { _reassigning = false; }
     }
 
     private void ViewBuyer(int id) => Nav.NavigateTo($"admin/buyers/{id}");

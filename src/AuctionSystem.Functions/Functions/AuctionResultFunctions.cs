@@ -563,6 +563,77 @@ public class AuctionResultFunctions
         return response;
     }
 
+    [Function("ReassignUnsoldLots")]
+    public async Task<HttpResponseData> ReassignUnsoldLots(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auction-results/reassign-unsold")] HttpRequestData req)
+    {
+        var body = await req.ReadFromJsonAsync<ReassignUnsoldRequest>();
+        if (body == null || body.AuctionResultIds == null || body.AuctionResultIds.Count == 0)
+            return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+
+        var results = await _db.AuctionResults
+            .Where(r => body.AuctionResultIds.Contains(r.Id) && r.SoldToBuyerId == null)
+            .ToListAsync();
+
+        if (results.Count == 0)
+        {
+            var resp = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+            resp.Headers.Add("Content-Type", "application/json");
+            await resp.WriteStringAsync(JsonSerializer.Serialize(new { error = "No unsold lots found for given IDs" }, JsonOptions));
+            return resp;
+        }
+
+        int reassigned = 0;
+
+        if (body.Action == "internal")
+        {
+            // Ensure internal broker 999 exists
+            var internalBroker = await _db.Brokers.FirstOrDefaultAsync(b => b.BrokerNumber == "999");
+            if (internalBroker == null)
+            {
+                internalBroker = new Broker
+                {
+                    BrokerNumber = "999",
+                    CompanyName = "Internal",
+                    IsActive = true
+                };
+                _db.Brokers.Add(internalBroker);
+                await _db.SaveChangesAsync();
+            }
+
+            foreach (var result in results)
+            {
+                result.BrokerId = internalBroker.Id;
+                reassigned++;
+            }
+        }
+        else if (body.Action == "auction")
+        {
+            // Return lots to auction as unsold — remove the auction results
+            foreach (var result in results)
+            {
+                var lot = await _db.Lots.FirstOrDefaultAsync(l => l.LotNumber == result.LotNumber);
+                if (lot != null) lot.Status = LotStatus.Unsold;
+                _db.AuctionResults.Remove(result);
+                reassigned++;
+            }
+        }
+        else
+        {
+            var resp = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+            resp.Headers.Add("Content-Type", "application/json");
+            await resp.WriteStringAsync(JsonSerializer.Serialize(new { error = "Invalid action. Use 'internal' or 'auction'." }, JsonOptions));
+            return resp;
+        }
+
+        await _db.SaveChangesAsync();
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(new { action = body.Action, reassigned }, JsonOptions));
+        return response;
+    }
+
     [Function("GetTakebackRequestsByBuyer")]
     public async Task<HttpResponseData> GetTakebacksByBuyer(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "takeback-requests/buyer/{buyerId:int}")] HttpRequestData req, int buyerId)
@@ -833,4 +904,10 @@ public class TakebackRequestBody
 public class TakebackResponseBody
 {
     public bool Approve { get; set; }
+}
+
+public class ReassignUnsoldRequest
+{
+    public List<int> AuctionResultIds { get; set; } = new();
+    public string Action { get; set; } = "";  // "internal" or "auction"
 }
