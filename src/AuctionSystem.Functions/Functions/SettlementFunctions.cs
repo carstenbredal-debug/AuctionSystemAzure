@@ -62,12 +62,23 @@ public class SettlementFunctions
         if (body == null || !Enum.TryParse<InvoiceStatus>(body.Status, true, out var status))
             return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
 
-        var invoice = await _service.UpdateInvoiceStatusAsync(invoiceId, status);
+        var invoice = await _db.Invoices.FirstOrDefaultAsync(i => i.Id == invoiceId);
         if (invoice == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
-        return await CreateJsonResponse(req, new { invoice.Id, Status = invoice.Status.ToString() });
+
+        invoice.Status = status;
+        if (body.ReleaseForShipping)
+        {
+            invoice.ShippingStatus = "Released";
+        }
+        await _db.SaveChangesAsync();
+        return await CreateJsonResponse(req, new { invoice.Id, Status = invoice.Status.ToString(), invoice.ShippingStatus });
     }
 
-    private class UpdateStatusRequest { public string Status { get; set; } = ""; }
+    private class UpdateStatusRequest
+    {
+        public string Status { get; set; } = "";
+        public bool ReleaseForShipping { get; set; }
+    }
 
     [Function("ProcessDownpayment")]
     public async Task<HttpResponseData> ProcessDownpayment(
