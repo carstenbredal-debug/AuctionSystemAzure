@@ -336,7 +336,7 @@ else
             <div class="col-md-2">
                 <div class="card text-center"><div class="card-body">
                     <h5 class="card-title text-muted">Total Value</h5>
-                    <h2>€@(_purchases.Sum(p => p.TotalSkins * p.PriceEur) + _purchases.Sum(p => CalcAuctionFee(p.TotalSkins, p.PriceEur)) + _purchases.Sum(p => p.CommissionAmount ?? 0)).ToString("N2")</h2>
+                    <h2>€@((_purchases.Sum(p => p.TotalSkins * p.PriceEur) + _purchases.Sum(p => CalcAuctionFee(p.TotalSkins, p.PriceEur)) + _purchases.Sum(p => p.CommissionAmount ?? 0)).ToString("N2"))</h2>
                 </div></div>
             </div>
         </div>
