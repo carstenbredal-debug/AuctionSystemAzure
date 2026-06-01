@@ -1,0 +1,159 @@
+@page "/admin/payments"
+@attribute [Authorize(Roles = "Admin")]
+@inject AuctionApiClient Api
+
+<PageTitle>Payments - Admin</PageTitle>
+
+<h3 class="mb-4">Finance — Payments from BC</h3>
+
+<div class="mb-3">
+    <button class="btn btn-primary" @onclick="CheckPayments" disabled="@_loading">
+        @if (_loading)
+        {
+            <span class="spinner-border spinner-border-sm me-1"></span>
+        }
+        Check Payments in BC
+    </button>
+</div>
+
+@if (_error != null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+@if (_result != null)
+{
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">Payment Journals</h5>
+                    <h3>@_result.PaymentJournals.Count</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">Payments Found</h5>
+                    <h3>@_result.TotalPaymentsFound</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">GL Entries</h5>
+                    <h3>@_result.TotalLedgerEntries</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (_result.Payments.Count > 0)
+    {
+        <h5 class="mb-3">Customer Payments</h5>
+        <div class="card mb-4">
+            <div class="card-body p-0">
+                <table class="table table-striped table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Journal</th>
+                            <th>Customer</th>
+                            <th>Posting Date</th>
+                            <th>Document #</th>
+                            <th>Applies To Invoice</th>
+                            <th>Description</th>
+                            <th class="text-end">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in _result.Payments)
+                        {
+                            <tr>
+                                <td>@p.Journal</td>
+                                <td>@p.CustomerName (@p.CustomerNumber)</td>
+                                <td>@p.PostingDate</td>
+                                <td>@p.DocumentNumber</td>
+                                <td>@p.AppliesToInvoiceNumber</td>
+                                <td>@p.Description</td>
+                                <td class="text-end">€@p.Amount.ToString("N2")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    @if (_result.GeneralLedgerEntries.Count > 0)
+    {
+        <h5 class="mb-3">General Ledger Entries (Customer Source)</h5>
+        <div class="card">
+            <div class="card-body p-0">
+                <table class="table table-striped table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Entry #</th>
+                            <th>Posting Date</th>
+                            <th>Document #</th>
+                            <th>Type</th>
+                            <th>Source #</th>
+                            <th>Description</th>
+                            <th class="text-end">Debit</th>
+                            <th class="text-end">Credit</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var e in _result.GeneralLedgerEntries)
+                        {
+                            <tr>
+                                <td>@e.EntryNumber</td>
+                                <td>@e.PostingDate</td>
+                                <td>@e.DocumentNumber</td>
+                                <td>@e.DocumentType</td>
+                                <td>@e.SourceNumber</td>
+                                <td>@e.Description</td>
+                                <td class="text-end">@(e.DebitAmount > 0 ? $"€{e.DebitAmount:N2}" : "—")</td>
+                                <td class="text-end">@(e.CreditAmount > 0 ? $"€{e.CreditAmount:N2}" : "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    @if (_result.TotalPaymentsFound == 0 && _result.TotalLedgerEntries == 0)
+    {
+        <div class="alert alert-info">No payments found in BC.</div>
+    }
+}
+
+@code {
+    private BcPaymentsResponseDto? _result;
+    private bool _loading;
+    private string? _error;
+
+    private async Task CheckPayments()
+    {
+        _loading = true;
+        _error = null;
+        StateHasChanged();
+
+        try
+        {
+            _result = await Api.GetBcPaymentsAsync();
+            if (_result.PaymentJournals.Count == 0 && _result.TotalPaymentsFound == 0 && _result.TotalLedgerEntries == 0)
+            {
+                _error = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to check payments: {ex.Message}";
+        }
+
+        _loading = false;
+    }
+}

@@ -651,3 +651,45 @@ public class BlobConnectionInfoDto
 {
     public bool Configured { get; set; }
 }
+
+public class BcPaymentsResponseDto
+{
+    public List<BcPaymentJournalDto> PaymentJournals { get; set; } = new();
+    public List<BcPaymentEntryDto> Payments { get; set; } = new();
+    public List<BcLedgerEntryDto> GeneralLedgerEntries { get; set; } = new();
+    public int TotalPaymentsFound { get; set; }
+    public int TotalLedgerEntries { get; set; }
+}
+
+public class BcPaymentJournalDto
+{
+    public Guid Id { get; set; }
+    public string Code { get; set; } = "";
+    public string DisplayName { get; set; } = "";
+}
+
+public class BcPaymentEntryDto
+{
+    public string Journal { get; set; } = "";
+    public string CustomerNumber { get; set; } = "";
+    public string CustomerName { get; set; } = "";
+    public string PostingDate { get; set; } = "";
+    public string DocumentNumber { get; set; } = "";
+    public string ExternalDocumentNumber { get; set; } = "";
+    public decimal Amount { get; set; }
+    public string AppliesToInvoiceNumber { get; set; } = "";
+    public string Description { get; set; } = "";
+}
+
+public class BcLedgerEntryDto
+{
+    public int EntryNumber { get; set; }
+    public string PostingDate { get; set; } = "";
+    public string DocumentNumber { get; set; } = "";
+    public string DocumentType { get; set; } = "";
+    public string SourceNumber { get; set; } = "";
+    public string Description { get; set; } = "";
+    public decimal DebitAmount { get; set; }
+    public decimal CreditAmount { get; set; }
+    public decimal Amount { get; set; }
+}
