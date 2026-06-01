@@ -44,6 +44,16 @@ public class SettlementService
         return invoice;
     }
 
+    public async Task<Invoice?> UpdateInvoiceStatusAsync(int invoiceId, InvoiceStatus status)
+    {
+        var invoice = await _db.Invoices.FindAsync(invoiceId);
+        if (invoice == null) return null;
+
+        invoice.Status = status;
+        await _db.SaveChangesAsync();
+        return invoice;
+    }
+
     public async Task<Settlement?> CreateSettlementAsync(int lotId)
     {
         var lot = await _db.Lots.Include(l => l.Farmer)

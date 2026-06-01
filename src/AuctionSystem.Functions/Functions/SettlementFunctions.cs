@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using AuctionSystem.Domain.Data;
 using AuctionSystem.Domain.Entities;
+using AuctionSystem.Domain.Enums;
 using AuctionSystem.Domain.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Azure.Functions.Worker;
@@ -52,6 +53,21 @@ public class SettlementFunctions
         if (invoice == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
         return await CreateJsonResponse(req, invoice);
     }
+
+    [Function("UpdateInvoiceStatus")]
+    public async Task<HttpResponseData> UpdateInvoiceStatus(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "settlements/invoices/{invoiceId:int}/status")] HttpRequestData req, int invoiceId)
+    {
+        var body = await req.ReadFromJsonAsync<UpdateStatusRequest>();
+        if (body == null || !Enum.TryParse<InvoiceStatus>(body.Status, true, out var status))
+            return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+
+        var invoice = await _service.UpdateInvoiceStatusAsync(invoiceId, status);
+        if (invoice == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+        return await CreateJsonResponse(req, new { invoice.Id, Status = invoice.Status.ToString() });
+    }
+
+    private class UpdateStatusRequest { public string Status { get; set; } = ""; }
 
     [Function("CreateSettlement")]
     public async Task<HttpResponseData> CreateSettlement(

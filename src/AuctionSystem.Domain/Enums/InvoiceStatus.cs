@@ -5,6 +5,7 @@ public enum InvoiceStatus
     Draft,
     Issued,
     Sent,
+    Downpayment,
     Paid,
     Overdue,
     Cancelled
