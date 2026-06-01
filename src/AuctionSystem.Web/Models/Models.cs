@@ -195,7 +195,7 @@ public class InvoiceDto
     public decimal Commission { get; set; }
     public decimal Tax { get; set; }
     public decimal TotalAmount { get; set; }
-    public InvoiceStatus Status { get; set; }
+    public string Status { get; set; } = "";
     public DateTime IssuedDate { get; set; }
     public DateTime DueDate { get; set; }
     public DateTime? PaidDate { get; set; }

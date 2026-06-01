@@ -30,7 +30,7 @@
                     <td><strong>@inv.TotalAmount.ToString("N2")</strong></td>
                     <td><span class="badge bg-@GetInvColor(inv.Status)">@inv.Status</span></td>
                     <td>
-                        @if (inv.Status == InvoiceStatus.Issued)
+                        @if (inv.Status == "Issued")
                         {
                             <button class="btn btn-sm btn-success" @onclick="() => MarkPaid(inv.Id)">Mark Paid</button>
                         }
@@ -168,10 +168,10 @@
         await LoadAll();
     }
 
-    private string GetInvColor(InvoiceStatus s) => s switch
+    private string GetInvColor(string s) => s switch
     {
-        InvoiceStatus.Paid => "success",
-        InvoiceStatus.Issued => "warning",
+        "Paid" => "success",
+        "Issued" => "warning",
         _ => "secondary"
     };
 
