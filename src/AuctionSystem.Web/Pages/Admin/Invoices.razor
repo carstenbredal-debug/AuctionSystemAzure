@@ -18,7 +18,7 @@ else
             <div class="card text-center">
                 <div class="card-body">
                     <h5 class="card-title text-muted">Total</h5>
-                    <h2>@_invoices.Count</h2>
+                    <h2>@FilteredInvoices.Count</h2>
                 </div>
             </div>
         </div>
@@ -26,7 +26,7 @@ else
             <div class="card text-center">
                 <div class="card-body">
                     <h5 class="card-title text-muted">Invoices</h5>
-                    <h2>@_invoices.Count(i => !i.IsCreditNote)</h2>
+                    <h2>@FilteredInvoices.Count(i => !i.IsCreditNote)</h2>
                 </div>
             </div>
         </div>
@@ -34,7 +34,7 @@ else
             <div class="card text-center">
                 <div class="card-body">
                     <h5 class="card-title text-muted">Credit Notes</h5>
-                    <h2 class="text-warning">@_invoices.Count(i => i.IsCreditNote)</h2>
+                    <h2 class="text-warning">@FilteredInvoices.Count(i => i.IsCreditNote)</h2>
                 </div>
             </div>
         </div>
@@ -42,7 +42,7 @@ else
             <div class="card text-center">
                 <div class="card-body">
                     <h5 class="card-title text-muted">Total Amount</h5>
-                    <h2>€@_invoices.Where(i => !i.IsCreditNote).Sum(i => i.TotalAmount).ToString("N2")</h2>
+                    <h2>€@FilteredInvoices.Where(i => !i.IsCreditNote).Sum(i => i.TotalAmount).ToString("N2")</h2>
                 </div>
             </div>
         </div>
@@ -50,16 +50,42 @@ else
             <div class="card text-center">
                 <div class="card-body">
                     <h5 class="card-title text-muted">Credit Total</h5>
-                    <h2 class="text-warning">€@_invoices.Where(i => i.IsCreditNote).Sum(i => i.TotalAmount).ToString("N2")</h2>
+                    <h2 class="text-warning">€@FilteredInvoices.Where(i => i.IsCreditNote).Sum(i => i.TotalAmount).ToString("N2")</h2>
                 </div>
             </div>
         </div>
     </div>
 
+    <div class="row mb-3">
+        <div class="col-md-3">
+            <label class="form-label">Broker</label>
+            <select class="form-select" @bind="_selectedBroker">
+                <option value="">All Brokers</option>
+                @foreach (var broker in _brokerNames)
+                {
+                    <option value="@broker">@broker</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Buyer</label>
+            <select class="form-select" @bind="_selectedBuyer">
+                <option value="">All Buyers</option>
+                @foreach (var buyer in _buyerNames)
+                {
+                    <option value="@buyer">@buyer</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+            <button class="btn btn-outline-secondary" @onclick="ClearFilters">Clear Filters</button>
+        </div>
+    </div>
+
     <ul class="nav nav-tabs mb-3">
-        <li class="nav-item"><a class="nav-link @(_tab == "all" ? "active" : "")" href="#" @onclick='() => _tab = "all"' @onclick:preventDefault>All (@_invoices.Count)</a></li>
-        <li class="nav-item"><a class="nav-link @(_tab == "invoices" ? "active" : "")" href="#" @onclick='() => _tab = "invoices"' @onclick:preventDefault>Invoices (@_invoices.Count(i => !i.IsCreditNote))</a></li>
-        <li class="nav-item"><a class="nav-link @(_tab == "credits" ? "active" : "")" href="#" @onclick='() => _tab = "credits"' @onclick:preventDefault>Credit Notes (@_invoices.Count(i => i.IsCreditNote))</a></li>
+        <li class="nav-item"><a class="nav-link @(_tab == "all" ? "active" : "")" href="#" @onclick='() => _tab = "all"' @onclick:preventDefault>All (@FilteredInvoices.Count)</a></li>
+        <li class="nav-item"><a class="nav-link @(_tab == "invoices" ? "active" : "")" href="#" @onclick='() => _tab = "invoices"' @onclick:preventDefault>Invoices (@FilteredInvoices.Count(i => !i.IsCreditNote))</a></li>
+        <li class="nav-item"><a class="nav-link @(_tab == "credits" ? "active" : "")" href="#" @onclick='() => _tab = "credits"' @onclick:preventDefault>Credit Notes (@FilteredInvoices.Count(i => i.IsCreditNote))</a></li>
     </ul>
 
     <div class="card">
@@ -137,18 +163,44 @@ else
     private List<InvoiceSummaryDto> _invoices = new();
     private bool _loading = true;
     private string _tab = "all";
+    private string _selectedBroker = "";
+    private string _selectedBuyer = "";
+    private List<string> _brokerNames = new();
+    private List<string> _buyerNames = new();
 
-    private List<InvoiceSummaryDto> FilteredInvoices => _tab switch
+    private List<InvoiceSummaryDto> FilteredInvoices
     {
-        "invoices" => _invoices.Where(i => !i.IsCreditNote).ToList(),
-        "credits" => _invoices.Where(i => i.IsCreditNote).ToList(),
-        _ => _invoices
-    };
+        get
+        {
+            var result = _invoices.AsEnumerable();
+
+            if (!string.IsNullOrEmpty(_selectedBroker))
+                result = result.Where(i => i.BrokerName == _selectedBroker);
+
+            if (!string.IsNullOrEmpty(_selectedBuyer))
+                result = result.Where(i => i.BuyerName == _selectedBuyer);
+
+            if (_tab == "invoices")
+                result = result.Where(i => !i.IsCreditNote);
+            else if (_tab == "credits")
+                result = result.Where(i => i.IsCreditNote);
+
+            return result.ToList();
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
         _invoices = await Api.GetAllInvoiceSummariesAsync();
+        _brokerNames = _invoices.Where(i => !string.IsNullOrEmpty(i.BrokerName)).Select(i => i.BrokerName!).Distinct().OrderBy(n => n).ToList();
+        _buyerNames = _invoices.Where(i => !string.IsNullOrEmpty(i.BuyerName)).Select(i => i.BuyerName!).Distinct().OrderBy(n => n).ToList();
         _loading = false;
+    }
+
+    private void ClearFilters()
+    {
+        _selectedBroker = "";
+        _selectedBuyer = "";
     }
 
     private string GetStatusColor(string status) => status switch
