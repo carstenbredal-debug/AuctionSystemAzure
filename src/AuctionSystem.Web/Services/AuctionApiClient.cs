@@ -335,6 +335,10 @@ public class AuctionApiClient
     public async Task<List<InvoiceSummaryDto>> GetUnpushedInvoicesAsync()
         => await _http.GetFromJsonAsync<List<InvoiceSummaryDto>>("api/settlements/invoices/unpushed") ?? new();
 
+    // Unpushed credit notes
+    public async Task<List<InvoiceSummaryDto>> GetUnpushedCreditNotesAsync()
+        => await _http.GetFromJsonAsync<List<InvoiceSummaryDto>>("api/settlements/credit-notes/unpushed") ?? new();
+
     // Business Central
     public async Task<BcStatusDto> GetBcStatusAsync()
     {

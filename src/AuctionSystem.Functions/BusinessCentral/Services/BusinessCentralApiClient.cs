@@ -388,6 +388,66 @@ public class BusinessCentralApiClient
         return await PostAsync<BcSalesCreditMemoLine>(url, line);
     }
 
+    public async Task<BcSalesCreditMemo?> PostSalesCreditMemoAsync(Guid companyId, Guid creditMemoId)
+    {
+        await SetAuthHeaderAsync();
+        var url = $"{_options.BaseUrl}/companies({companyId})/salesCreditMemos({creditMemoId})/Microsoft.NAV.post";
+        _logger.LogInformation("POST {Url}", url);
+
+        var response = await _httpClient.PostAsync(url, null);
+        await EnsureSuccessAsync(response);
+
+        try
+        {
+            var fetchUrl = $"{_options.BaseUrl}/companies({companyId})/salesCreditMemos({creditMemoId})";
+            var posted = await GetSingleAsync<BcSalesCreditMemo>(fetchUrl);
+            return posted;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public async Task<BcSalesCreditMemo?> GetSalesCreditMemoByExternalDocAsync(Guid companyId, string externalDocNumber)
+    {
+        var url = $"{_options.BaseUrl}/companies({companyId})/salesCreditMemos?$filter=externalDocumentNumber eq '{externalDocNumber}'";
+        var items = await GetListAsync<BcSalesCreditMemo>(url);
+        return items.FirstOrDefault();
+    }
+
+    public async Task<byte[]?> GetSalesCreditMemoPdfAsync(Guid companyId, Guid creditMemoId)
+    {
+        await SetAuthHeaderAsync();
+        var url = $"{_options.BaseUrl}/companies({companyId})/salesCreditMemos({creditMemoId})/pdfDocument/pdfDocumentContent";
+        _logger.LogInformation("GET {Url} (PDF)", url);
+
+        var response = await _httpClient.GetAsync(url);
+
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        if (bytes.Length >= 4 && bytes[0] == 0x25 && bytes[1] == 0x50 && bytes[2] == 0x44 && bytes[3] == 0x46)
+        {
+            if (!response.IsSuccessStatusCode)
+                _logger.LogInformation("BC returned {Status} for credit memo PDF but body contains valid PDF ({Bytes} bytes)", (int)response.StatusCode, bytes.Length);
+            return bytes;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = System.Text.Encoding.UTF8.GetString(bytes);
+            _logger.LogWarning("Could not download credit memo PDF: {Status} {Body}", (int)response.StatusCode, body);
+            return null;
+        }
+
+        if (bytes.Length == 0)
+        {
+            _logger.LogWarning("PDF response was empty for credit memo {CreditMemoId}", creditMemoId);
+            return null;
+        }
+
+        return bytes;
+    }
+
     // ── HTTP helpers ───────────────────────────────────────────
 
     private async Task SetAuthHeaderAsync()

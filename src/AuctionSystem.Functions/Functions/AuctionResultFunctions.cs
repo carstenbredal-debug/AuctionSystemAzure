@@ -715,10 +715,9 @@ public class AuctionResultFunctions
         var auctionFeePercent = auctionFeeParam != null ? decimal.Parse(auctionFeeParam.Value, CultureInfo.InvariantCulture) : 0m;
         var handlingFeePerSkin = handlingFeeParam != null ? decimal.Parse(handlingFeeParam.Value, CultureInfo.InvariantCulture) : 0m;
 
-        var creditNoteCount = await _db.Invoices.CountAsync(i => i.IsCreditNote);
         var creditNote = new Invoice
         {
-            InvoiceNumber = $"CN-{DateTime.UtcNow:yyyyMMdd}-{creditNoteCount + 1:D5}",
+            InvoiceNumber = "",
             InvoiceDate = DateTime.UtcNow,
             BrokerId = brokerId,
             BuyerId = originalInvoice.BuyerId,
@@ -761,23 +760,19 @@ public class AuctionResultFunctions
         creditNote.Buyer = originalInvoice.Buyer;
         creditNote.OriginalInvoice = originalInvoice;
 
-        var pdfBytes = InvoicePdfService.GeneratePdf(creditNote);
-        creditNote.PdfData = pdfBytes;
-
         _db.Invoices.Add(creditNote);
         await _db.SaveChangesAsync();
 
-        if (_blobStorage != null)
+        // Push to BC as Sales Credit Memo
+        if (_bcSyncService != null)
         {
             try
             {
-                var fileName = $"{creditNote.InvoiceNumber}.pdf";
-                creditNote.PdfUrl = await _blobStorage.UploadPdfAsync(fileName, pdfBytes);
-                await _db.SaveChangesAsync();
+                await _bcSyncService.PushCreditNoteToBcAsync(creditNote);
             }
-            catch (Exception blobEx)
+            catch (Exception bcEx)
             {
-                _logger.LogWarning(blobEx, "Failed to upload credit note PDF to blob storage");
+                _logger.LogError(bcEx, "Failed to push credit note to BC");
             }
         }
 
