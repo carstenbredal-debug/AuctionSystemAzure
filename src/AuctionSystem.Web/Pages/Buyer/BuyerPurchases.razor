@@ -19,7 +19,7 @@ else if (_buyerId == 0)
 else
 {
     <div class="row mb-4">
-        <div class="col-md-3">
+        <div class="col-md-2">
             <div class="card text-center">
                 <div class="card-body">
                     <h5 class="card-title text-muted">Total Lots</h5>
@@ -27,7 +27,7 @@ else
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
             <div class="card text-center">
                 <div class="card-body">
                     <h5 class="card-title text-muted">Total Skins</h5>
@@ -35,19 +35,35 @@ else
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
             <div class="card text-center">
                 <div class="card-body">
-                    <h5 class="card-title text-muted">Total Value</h5>
+                    <h5 class="card-title text-muted">Hammer Price</h5>
                     <h2>€@_purchases.Sum(p => p.TotalSkins * p.PriceEur).ToString("N2")</h2>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
             <div class="card text-center">
                 <div class="card-body">
-                    <h5 class="card-title text-muted">Total Auction Fees</h5>
+                    <h5 class="card-title text-muted">Auction Fees</h5>
                     <h2>€@_purchases.Sum(p => CalcAuctionFee(p.TotalSkins, p.PriceEur)).ToString("N2")</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">Commission</h5>
+                    <h2>€@_purchases.Sum(p => p.CommissionAmount ?? 0).ToString("N2")</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">Total Value</h5>
+                    <h2>€@(_purchases.Sum(p => p.TotalSkins * p.PriceEur) + _purchases.Sum(p => CalcAuctionFee(p.TotalSkins, p.PriceEur)) + _purchases.Sum(p => p.CommissionAmount ?? 0)).ToString("N2")</h2>
                 </div>
             </div>
         </div>
