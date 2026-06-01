@@ -1,7 +1,29 @@
+@font-face {
+    font-family: 'PPPangramSans';
+    src: url('fonts/PPPangramSans-Medium.woff2') format('woff2');
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'PPPangramSans';
+    src: url('fonts/PPPangramSans-Bold.woff2') format('woff2');
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
 html, body {
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-family: 'PPPangramSans', 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif;
     background-color: #fafafa;
     color: #333;
+}
+
+h1, h2, h3, h4, h5, h6,
+button, input, select, textarea,
+a, label, th, td {
+    font-family: 'PPPangramSans', 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
 
 a, .btn-link {
@@ -10,13 +32,13 @@ a, .btn-link {
 
 .btn-primary {
     color: #fff;
-    background-color: #2D1B4E;
-    border-color: #2D1B4E;
+    background-color: #E8501E;
+    border-color: #E8501E;
 }
 
 .btn-primary:hover {
-    background-color: #3d2766;
-    border-color: #3d2766;
+    background-color: #d04518;
+    border-color: #d04518;
 }
 
 .btn-outline-primary {
@@ -39,7 +61,7 @@ a, .btn-link {
 }
 
 h1 {
-    font-weight: 600;
+    font-weight: 700;
     font-size: 1.5rem;
     color: #2D1B4E;
     margin-bottom: 0.25rem;
@@ -49,16 +71,21 @@ h1:focus {
     outline: none;
 }
 
-/* Table styling to match Figma design */
+h3 {
+    font-weight: 700;
+    color: #2D1B4E;
+}
+
+/* Table styling */
 .table-dark {
-    --bs-table-bg: #6B5F5B;
-    --bs-table-border-color: #5a4f4c;
-    --bs-table-striped-bg: #625753;
-    --bs-table-hover-bg: #59504c;
+    --bs-table-bg: #2D1B4E;
+    --bs-table-border-color: #3d2766;
+    --bs-table-striped-bg: #382060;
+    --bs-table-hover-bg: #432870;
 }
 
 .table-dark th {
-    font-weight: 600;
+    font-weight: 700;
     font-size: 0.8rem;
     letter-spacing: 0.5px;
     text-transform: uppercase;
@@ -155,12 +182,13 @@ h1:focus {
 /* Tab styling */
 .nav-tabs .nav-link {
     color: #6B5F5B;
+    font-weight: 500;
 }
 
 .nav-tabs .nav-link.active {
     color: #2D1B4E;
-    font-weight: 600;
-    border-bottom-color: #2D1B4E;
+    font-weight: 700;
+    border-bottom-color: #E8501E;
 }
 
 .nav-tabs .nav-link:hover {
@@ -174,4 +202,27 @@ h1:focus {
 
 p.text-muted {
     font-size: 0.9rem;
+}
+
+/* Action buttons - orange accent */
+.btn-warning {
+    background-color: #E8501E;
+    border-color: #E8501E;
+    color: #fff;
+}
+
+.btn-warning:hover {
+    background-color: #d04518;
+    border-color: #d04518;
+    color: #fff;
+}
+
+.btn-success {
+    background-color: #2D1B4E;
+    border-color: #2D1B4E;
+}
+
+.btn-success:hover {
+    background-color: #3d2766;
+    border-color: #3d2766;
 }
