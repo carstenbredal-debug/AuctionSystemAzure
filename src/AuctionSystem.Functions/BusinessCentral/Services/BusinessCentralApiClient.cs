@@ -518,7 +518,7 @@ public class BusinessCentralApiClient
         {
             var body = await response.Content.ReadAsStringAsync();
             _logger.LogError("BC API error {Status}: {Body}", (int)response.StatusCode, body);
-            response.EnsureSuccessStatusCode();
+            throw new HttpRequestException($"Response status code does not indicate success: {(int)response.StatusCode} ({response.ReasonPhrase}). BC says: {body}");
         }
     }
 }
