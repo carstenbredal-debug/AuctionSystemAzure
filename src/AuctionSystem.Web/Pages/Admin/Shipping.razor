@@ -33,14 +33,7 @@ else
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h5 class="card-title text-muted">Total Value</h5>
-                    <h3>€@_boxes.Sum(b => b.HammerPrice).ToString("N2")</h3>
-                </div>
-            </div>
-        </div>
+
     </div>
 
     <div class="card">
@@ -54,8 +47,6 @@ else
                         <th>Lot #</th>
                         <th>Box #</th>
                         <th>Skins</th>
-                        <th>Price/Skin</th>
-                        <th>Hammer Price</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -68,8 +59,6 @@ else
                             <td>@box.LotNumber</td>
                             <td>@box.BoxNumber</td>
                             <td>@box.Skins</td>
-                            <td>€@box.PricePerSkin.ToString("N2")</td>
-                            <td><strong>€@box.HammerPrice.ToString("N2")</strong></td>
                         </tr>
                     }
                 </tbody>
