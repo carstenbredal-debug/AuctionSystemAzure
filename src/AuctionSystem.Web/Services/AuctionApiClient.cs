@@ -310,6 +310,9 @@ public class AuctionApiClient
         => await _http.PutAsJsonAsync($"api/takeback-requests/{requestId}", new { approve });
 
     // Invoices
+    public async Task<List<InvoiceSummaryDto>> GetAllInvoiceSummariesAsync()
+        => await _http.GetFromJsonAsync<List<InvoiceSummaryDto>>("api/settlements/invoices") ?? new();
+
     public async Task<List<InvoiceSummaryDto>> GetInvoicesByBrokerAsync(int brokerId)
         => await _http.GetFromJsonAsync<List<InvoiceSummaryDto>>($"api/settlements/invoices/broker/{brokerId}") ?? new();
 
