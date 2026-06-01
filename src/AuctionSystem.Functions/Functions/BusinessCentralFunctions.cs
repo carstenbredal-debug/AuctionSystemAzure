@@ -491,6 +491,76 @@ public class BusinessCentralFunctions
         });
     }
 
+    [Function("BcCheckPayments")]
+    public async Task<HttpResponseData> CheckPayments(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "bc/payments")] HttpRequestData req)
+    {
+        if (!EnsureConfigured(out var error))
+            return await JsonResponse(req, error!, HttpStatusCode.BadRequest);
+
+        var companyId = await _bcClient!.ResolveCompanyIdAsync();
+
+        // Get customer payment journals
+        var journals = await _bcClient.GetCustomerPaymentJournalsAsync(companyId);
+
+        var allPayments = new List<object>();
+
+        foreach (var journal in journals)
+        {
+            var payments = await _bcClient.GetCustomerPaymentsAsync(companyId, journal.Id);
+            foreach (var p in payments)
+            {
+                allPayments.Add(new
+                {
+                    journal = journal.DisplayName,
+                    p.CustomerNumber,
+                    p.CustomerName,
+                    p.PostingDate,
+                    p.DocumentNumber,
+                    p.ExternalDocumentNumber,
+                    p.Amount,
+                    p.AppliesToInvoiceNumber,
+                    p.Description
+                });
+            }
+        }
+
+        // Also try to get general ledger entries with source type Customer (payments received)
+        List<object> ledgerPayments = new();
+        try
+        {
+            var entries = await _bcClient.GetCustomerLedgerEntriesAsync(companyId);
+            foreach (var e in entries)
+            {
+                ledgerPayments.Add(new
+                {
+                    e.EntryNumber,
+                    e.PostingDate,
+                    e.DocumentNumber,
+                    e.DocumentType,
+                    e.SourceNumber,
+                    e.Description,
+                    e.DebitAmount,
+                    e.CreditAmount,
+                    e.Amount
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not fetch GL entries for customer payments");
+        }
+
+        return await JsonResponse(req, new
+        {
+            paymentJournals = journals.Select(j => new { j.Id, j.Code, j.DisplayName }),
+            payments = allPayments,
+            generalLedgerEntries = ledgerPayments,
+            totalPaymentsFound = allPayments.Count,
+            totalLedgerEntries = ledgerPayments.Count
+        });
+    }
+
     private bool EnsureConfigured(out object? error)
     {
         if (!_options.IsConfigured || _syncService is null || _bcClient is null)

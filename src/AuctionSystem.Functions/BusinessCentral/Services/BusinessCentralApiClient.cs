@@ -374,6 +374,26 @@ public class BusinessCentralApiClient
         return bytes;
     }
 
+    // ── Customer Payments ─────────────────────────────────────
+
+    public async Task<List<BcCustomerPayment>> GetCustomerPaymentsAsync(Guid companyId, Guid journalId)
+    {
+        var url = $"{_options.BaseUrl}/companies({companyId})/customerPaymentJournals({journalId})/customerPayments?$top=5000";
+        return await GetListAsync<BcCustomerPayment>(url);
+    }
+
+    public async Task<List<BcCustomerPaymentJournal>> GetCustomerPaymentJournalsAsync(Guid companyId)
+    {
+        var url = $"{_options.BaseUrl}/companies({companyId})/customerPaymentJournals";
+        return await GetListAsync<BcCustomerPaymentJournal>(url);
+    }
+
+    public async Task<List<BcCustomerLedgerEntry>> GetCustomerLedgerEntriesAsync(Guid companyId)
+    {
+        var url = $"{_options.BaseUrl}/companies({companyId})/generalLedgerEntries?$filter=sourceType eq 'Customer'&$top=5000&$orderby=postingDate desc";
+        return await GetListAsync<BcCustomerLedgerEntry>(url);
+    }
+
     // ── Sales Credit Memos ─────────────────────────────────────
 
     public async Task<BcSalesCreditMemo> CreateSalesCreditMemoAsync(Guid companyId, BcSalesCreditMemo creditMemo)
