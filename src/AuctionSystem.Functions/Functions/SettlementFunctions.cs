@@ -14,6 +14,7 @@ namespace AuctionSystem.Functions.Functions;
 public class SettlementFunctions
 {
     private readonly AuctionDbContext _db;
+    private readonly CatalogDbContext _catalogDb;
     private readonly SettlementService _service;
     private readonly ILogger<SettlementFunctions> _logger;
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -23,9 +24,10 @@ public class SettlementFunctions
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public SettlementFunctions(AuctionDbContext db, SettlementService service, ILogger<SettlementFunctions> logger)
+    public SettlementFunctions(AuctionDbContext db, CatalogDbContext catalogDb, SettlementService service, ILogger<SettlementFunctions> logger)
     {
         _db = db;
+        _catalogDb = catalogDb;
         _service = service;
         _logger = logger;
     }
@@ -149,29 +151,76 @@ public class SettlementFunctions
                 g => g.Key,
                 g => g.SelectMany(cn => cn.Lines.Select(l => l.LotNumber)).Distinct().ToHashSet());
 
-        // Get uncredited lot numbers for each released invoice
-        var shippingLots = new List<object>();
+        // Get uncredited lot numbers
+        var uncreditedLotNumbers = new List<int>();
+        var lotInvoiceMap = new Dictionary<int, (Invoice Inv, InvoiceLine Line)>();
         foreach (var inv in releasedInvoices)
         {
             var creditedLots = creditedLotsByInvoice.GetValueOrDefault(inv.Id) ?? new HashSet<int>();
             var uncreditedLines = inv.Lines.Where(l => !creditedLots.Contains(l.LotNumber)).ToList();
             foreach (var line in uncreditedLines)
             {
-                shippingLots.Add(new
+                uncreditedLotNumbers.Add(line.LotNumber);
+                lotInvoiceMap[line.LotNumber] = (inv, line);
+            }
+        }
+
+        // Get box numbers from catalog lots
+        var catalogLots = await _catalogDb.CatalogLots
+            .Where(cl => uncreditedLotNumbers.Contains(cl.LotNumber))
+            .Select(cl => new { cl.LotNumber, cl.IncludedBoxNumbers })
+            .ToListAsync();
+
+        // Get box skins count from boxes view
+        var allBoxNumbers = catalogLots
+            .Where(cl => !string.IsNullOrEmpty(cl.IncludedBoxNumbers))
+            .SelectMany(cl => cl.IncludedBoxNumbers!.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(b => int.TryParse(b.Trim(), out var n) ? n : 0).Where(n => n > 0))
+            .Distinct().ToList();
+
+        var boxSkins = new Dictionary<int, int>();
+        if (allBoxNumbers.Count > 0)
+        {
+            var boxData = await _catalogDb.Database
+                .SqlQueryRaw<BoxSkinCount>("SELECT BoxNumber, Skins FROM dbo.boxes WHERE BoxNumber IN (" +
+                    string.Join(",", allBoxNumbers) + ")")
+                .ToListAsync();
+            foreach (var b in boxData)
+                boxSkins[b.BoxNumber] = b.Skins;
+        }
+
+        // Build shipping boxes response
+        var shippingBoxes = new List<object>();
+        foreach (var cl in catalogLots)
+        {
+            if (string.IsNullOrEmpty(cl.IncludedBoxNumbers)) continue;
+            if (!lotInvoiceMap.TryGetValue(cl.LotNumber, out var info)) continue;
+
+            foreach (var boxStr in cl.IncludedBoxNumbers.Split(',', StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (!int.TryParse(boxStr.Trim(), out var boxNumber) || boxNumber <= 0) continue;
+                shippingBoxes.Add(new
                 {
-                    InvoiceId = inv.Id,
-                    inv.InvoiceNumber,
-                    BrokerName = inv.Broker?.CompanyName,
-                    BuyerName = inv.Buyer?.Name,
-                    line.LotNumber,
-                    line.Skins,
-                    line.PricePerSkin,
-                    HammerPrice = line.HammerPrice
+                    InvoiceId = info.Inv.Id,
+                    info.Inv.InvoiceNumber,
+                    BrokerName = info.Inv.Broker?.CompanyName,
+                    BuyerName = info.Inv.Buyer?.Name,
+                    LotNumber = cl.LotNumber,
+                    BoxNumber = boxNumber,
+                    Skins = boxSkins.GetValueOrDefault(boxNumber, 0),
+                    info.Line.PricePerSkin,
+                    HammerPrice = info.Line.HammerPrice
                 });
             }
         }
 
-        return await CreateJsonResponse(req, shippingLots);
+        return await CreateJsonResponse(req, shippingBoxes);
+    }
+
+    private class BoxSkinCount
+    {
+        public int BoxNumber { get; set; }
+        public int Skins { get; set; }
     }
 
     [Function("CreateSettlement")]
