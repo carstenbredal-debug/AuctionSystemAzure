@@ -257,9 +257,10 @@ else if (_activeTab == "unsold")
             @_message
             @if (_lastInvoiceId != null)
             {
-                <a href="@Api.GetInvoicePdfUrl(_lastInvoiceId.Value)" target="_blank" class="btn btn-sm btn-outline-dark ms-2">📄 Download Invoice PDF</a>
+                var invoicePdfLink = !string.IsNullOrEmpty(_lastInvoicePdfUrl) ? _lastInvoicePdfUrl : Api.GetInvoicePdfUrl(_lastInvoiceId.Value);
+                <a href="@invoicePdfLink" target="_blank" class="btn btn-sm btn-outline-dark ms-2">📄 Download Invoice PDF</a>
             }
-            <button type="button" class="btn-close" @onclick="() => { _message = null; _lastInvoiceId = null; }"></button>
+            <button type="button" class="btn-close" @onclick="() => { _message = null; _lastInvoiceId = null; _lastInvoicePdfUrl = null; }"></button>
         </div>
     }
 
@@ -515,6 +516,7 @@ else if (_activeTab == "takeback")
     private string? _message;
     private bool _messageIsError;
     private int? _lastInvoiceId;
+    private string? _lastInvoicePdfUrl;
     private int? _lastCreditNoteId;
     private Dictionary<int, InvoiceLinkDto> _invoiceLinks = new();
     private string? _takebackMessage;
@@ -605,6 +607,7 @@ else if (_activeTab == "takeback")
                 if (json?.InvoiceId != null)
                 {
                     _lastInvoiceId = json.InvoiceId;
+                    _lastInvoicePdfUrl = json.PdfUrl;
                     _message += " Invoice generated.";
                 }
                 _messageIsError = false;
@@ -717,6 +720,7 @@ else if (_activeTab == "takeback")
     {
         public int SoldCount { get; set; }
         public int? InvoiceId { get; set; }
+        public string? PdfUrl { get; set; }
     }
 
     private class TakebackResponse

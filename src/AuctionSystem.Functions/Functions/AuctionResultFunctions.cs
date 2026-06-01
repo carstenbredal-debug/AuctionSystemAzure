@@ -420,9 +420,16 @@ public class AuctionResultFunctions
             }
         }
 
+        string? pdfUrl = null;
+        if (invoiceId != null)
+        {
+            var inv = await _db.Invoices.FindAsync(invoiceId);
+            pdfUrl = inv?.PdfUrl;
+        }
+
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
-        await response.WriteStringAsync(JsonSerializer.Serialize(new { soldCount = results.Count, invoiceId }, JsonOptions));
+        await response.WriteStringAsync(JsonSerializer.Serialize(new { soldCount = results.Count, invoiceId, pdfUrl }, JsonOptions));
         return response;
     }
 
