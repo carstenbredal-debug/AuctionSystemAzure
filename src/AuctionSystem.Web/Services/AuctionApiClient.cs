@@ -137,6 +137,9 @@ public class AuctionApiClient
     public async Task MarkInvoicePaidAsync(int invoiceId)
         => await _http.PutAsync($"api/settlements/invoices/{invoiceId}/paid", null);
 
+    public async Task<HttpResponseMessage> UpdateInvoiceStatusAsync(int invoiceId, string status)
+        => await _http.PutAsJsonAsync($"api/settlements/invoices/{invoiceId}/status", new { status });
+
     public async Task<SettlementDto?> CreateSettlementAsync(int lotId)
     {
         var resp = await _http.PostAsJsonAsync("api/settlements/create", lotId);

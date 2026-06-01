@@ -104,13 +104,14 @@ else
                         <th>Total</th>
                         <th>Date</th>
                         <th>Status</th>
+                        <th>Actions</th>
                         <th>PDF</th>
                     </tr>
                 </thead>
                 <tbody>
                     @if (FilteredInvoices.Count == 0)
                     {
-                        <tr><td colspan="12" class="text-center text-muted py-4">No invoices found.</td></tr>
+                        <tr><td colspan="13" class="text-center text-muted py-4">No invoices found.</td></tr>
                     }
                     @foreach (var inv in FilteredInvoices)
                     {
@@ -142,6 +143,21 @@ else
                             <td>@inv.InvoiceDate.ToString("d")</td>
                             <td><span class="badge bg-@GetStatusColor(inv.Status)">@inv.Status</span></td>
                             <td>
+                                @if (!inv.IsCreditNote && inv.Status != "Paid")
+                                {
+                                    var invId = inv.Id;
+                                    @if (inv.Status != "Downpayment")
+                                    {
+                                        <button class="btn btn-sm btn-outline-info me-1" @onclick="() => SetStatus(invId, StatusDownpayment)" disabled="@_updatingId.HasValue">Downpayment</button>
+                                    }
+                                    <button class="btn btn-sm btn-outline-success" @onclick="() => SetStatus(invId, StatusPaid)" disabled="@_updatingId.HasValue">Fully Paid</button>
+                                }
+                                else if (inv.Status == "Paid")
+                                {
+                                    <span class="text-success">Paid</span>
+                                }
+                            </td>
+                            <td>
                                 @if (!string.IsNullOrEmpty(inv.PdfUrl))
                                 {
                                     <a href="@inv.PdfUrl" target="_blank" class="btn btn-sm btn-outline-primary">PDF</a>
@@ -160,6 +176,9 @@ else
 }
 
 @code {
+    private const string StatusDownpayment = "Downpayment";
+    private const string StatusPaid = "Paid";
+
     private List<InvoiceSummaryDto> _invoices = new();
     private bool _loading = true;
     private string _tab = "all";
@@ -167,6 +186,7 @@ else
     private string _selectedBuyer = "";
     private List<string> _brokerNames = new();
     private List<string> _buyerNames = new();
+    private int? _updatingId;
 
     private List<InvoiceSummaryDto> FilteredInvoices
     {
@@ -203,10 +223,23 @@ else
         _selectedBuyer = "";
     }
 
+    private async Task SetStatus(int invoiceId, string status)
+    {
+        _updatingId = invoiceId;
+        var resp = await Api.UpdateInvoiceStatusAsync(invoiceId, status);
+        if (resp.IsSuccessStatusCode)
+        {
+            var inv = _invoices.FirstOrDefault(i => i.Id == invoiceId);
+            if (inv != null) inv.Status = status;
+        }
+        _updatingId = null;
+    }
+
     private string GetStatusColor(string status) => status switch
     {
         "Paid" => "success",
         "Issued" => "info",
+        "Downpayment" => "info",
         "Overdue" => "danger",
         _ => "secondary"
     };
