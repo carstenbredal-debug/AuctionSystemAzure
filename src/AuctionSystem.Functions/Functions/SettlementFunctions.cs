@@ -129,16 +129,51 @@ public class SettlementFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements/invoices")] HttpRequestData req)
     {
         var invoices = await _db.Invoices
+            .Include(i => i.Lines)
+            .Include(i => i.Broker)
+            .Include(i => i.Buyer)
+            .Include(i => i.OriginalInvoice)
             .OrderByDescending(i => i.InvoiceDate)
-            .Select(i => new
+            .ToListAsync();
+
+        // Build credit note lookup: original invoice ID -> list of credited lot numbers
+        var creditNotesByOriginal = invoices
+            .Where(i => i.IsCreditNote && i.OriginalInvoiceId != null)
+            .GroupBy(i => i.OriginalInvoiceId!.Value)
+            .ToDictionary(
+                g => g.Key,
+                g => new {
+                    Amount = g.Sum(cn => cn.TotalAmount),
+                    LotNumbers = g.SelectMany(cn => cn.Lines.Select(l => l.LotNumber)).Distinct().ToHashSet()
+                });
+
+        var result = invoices.Select(i =>
+        {
+            var creditInfo = !i.IsCreditNote && creditNotesByOriginal.TryGetValue(i.Id, out var info) ? info : null;
+            var invoiceLotNumbers = i.Lines.Select(l => l.LotNumber).Distinct().ToList();
+            var uncreditedLots = creditInfo != null
+                ? invoiceLotNumbers.Where(ln => !creditInfo.LotNumbers.Contains(ln)).ToList()
+                : (i.IsCreditNote ? new List<int>() : invoiceLotNumbers);
+
+            return new
             {
                 i.Id, i.InvoiceNumber, i.InvoiceDate, i.SubTotal, i.AuctionFee, i.Commission,
                 i.TotalAmount, i.Currency, Status = i.Status.ToString(),
-                BrokerName = i.Broker.CompanyName, BuyerName = i.Buyer.Name, LinesCount = i.Lines.Count,
-                i.IsCreditNote, OriginalInvoiceNumber = i.OriginalInvoice != null ? i.OriginalInvoice.InvoiceNumber : null,
-                i.PdfUrl, i.BcInvoiceNumber
-            }).ToListAsync();
-        return await CreateJsonResponse(req, invoices);
+                BrokerName = i.Broker?.CompanyName, BuyerName = i.Buyer?.Name, LinesCount = i.Lines.Count,
+                i.IsCreditNote, OriginalInvoiceNumber = i.OriginalInvoice?.InvoiceNumber,
+                i.PdfUrl, i.BcInvoiceNumber,
+                CreditedAmount = creditInfo?.Amount ?? 0m,
+                CreditedLots = creditInfo?.LotNumbers.Count ?? 0,
+                UncreditedLotNumbers = uncreditedLots,
+                Lots = i.Lines.Select(l => new
+                {
+                    l.LotNumber, l.Description, l.Skins, l.PricePerSkin, SubTotal = l.HammerPrice,
+                    IsCredited = creditInfo?.LotNumbers.Contains(l.LotNumber) ?? false
+                }).ToList()
+            };
+        }).ToList();
+
+        return await CreateJsonResponse(req, result);
     }
 
     [Function("GetInvoicesByBrokerAndBuyer")]
