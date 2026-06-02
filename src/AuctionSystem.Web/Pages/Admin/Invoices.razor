@@ -432,6 +432,8 @@ else
     {
         _showShippingConfirm = false;
         _updatingId = _dpInvoiceId;
+        _bcError = null;
+        _bcSuccess = null;
         var resp = await Api.ProcessDownpaymentAsync(_dpInvoiceId, _dpAmount, _dpIsPercentage, releaseForShipping);
         if (resp.IsSuccessStatusCode)
         {
@@ -441,6 +443,21 @@ else
                 inv.Status = "Downpayment";
                 if (releaseForShipping) inv.ShippingStatus = "Released";
             }
+            try
+            {
+                var json = await resp.Content.ReadFromJsonAsync<BcStatusResponse>();
+                if (!string.IsNullOrEmpty(json?.BcPaymentError))
+                    _bcError = $"Downpayment recorded locally, but BC payment application failed: {json.BcPaymentError}";
+                else if (!string.IsNullOrEmpty(json?.BcPaymentSuccess))
+                    _bcSuccess = $"Downpayment recorded. BC: {json.BcPaymentSuccess}";
+                else
+                    _bcSuccess = "Downpayment recorded.";
+            }
+            catch { _bcSuccess = "Downpayment recorded."; }
+        }
+        else
+        {
+            _bcError = $"Failed to process downpayment (HTTP {(int)resp.StatusCode}).";
         }
         _updatingId = null;
     }
@@ -468,14 +485,16 @@ else
                 if (releaseForShipping) inv.ShippingStatus = "Released";
             }
 
-            // Check for BC payment error in response
+            // Check for BC payment result in response
             try
             {
                 var json = await resp.Content.ReadFromJsonAsync<BcStatusResponse>();
                 if (!string.IsNullOrEmpty(json?.BcPaymentError))
-                    _bcError = $"Invoice marked as Paid locally, but BC payment failed: {json.BcPaymentError}";
+                    _bcError = $"Invoice marked as Paid locally, but BC payment application failed: {json.BcPaymentError}";
+                else if (!string.IsNullOrEmpty(json?.BcPaymentSuccess))
+                    _bcSuccess = $"Invoice marked as Paid. BC: {json.BcPaymentSuccess}";
                 else
-                    _bcSuccess = "Invoice marked as Paid. Payment line created in BC journal (post journal in BC to finalize).";
+                    _bcSuccess = "Invoice marked as Paid.";
             }
             catch { _bcSuccess = "Invoice marked as Paid."; }
         }
@@ -489,6 +508,7 @@ else
     private class BcStatusResponse
     {
         public string? BcPaymentError { get; set; }
+        public string? BcPaymentSuccess { get; set; }
     }
 
     private void ToggleLots(int invoiceId)
