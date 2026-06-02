@@ -10,5 +10,6 @@ public enum InvoiceStatus
     Overdue,
     Cancelled,
     PartiallyCredited,
-    FullyCredited
+    FullyCredited,
+    Alloted
 }

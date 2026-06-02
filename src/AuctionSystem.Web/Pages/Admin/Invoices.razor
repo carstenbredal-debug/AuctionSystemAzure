@@ -382,7 +382,7 @@ else
     private string _selectedStatus = "";
     private List<string> _brokerNames = new();
     private List<string> _buyerNames = new();
-    private List<string> _statusOptions = new() { "Issued", "Downpayment", "Paid", "Partially Credited", "Fully Credited" };
+    private List<string> _statusOptions = new() { "Issued", "Downpayment", "Paid", "Partially Credited", "Fully Credited", "Alloted" };
     private int? _updatingId;
     private int? _expandedInvoiceId;
 
@@ -656,6 +656,7 @@ else
         "Partially Credited" => "warning",
         "Issued" => "info",
         "Downpayment" => "info",
+        "Alloted" => "success",
         "Overdue" => "danger",
         _ => "secondary"
     };

@@ -286,6 +286,9 @@ public class SettlementFunctions
 
                 if (result.ResultStatus != "Error")
                 {
+                    // Mark the credit note as alloted (applied in BC)
+                    cn.Status = Domain.Enums.InvoiceStatus.Alloted;
+
                     // Update original invoice status based on credited lots
                     var originalLotCount = await _db.Invoices
                         .Where(i => i.Id == originalInvoice.Id)
