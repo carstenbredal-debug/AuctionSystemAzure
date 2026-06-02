@@ -420,6 +420,28 @@ public class BusinessCentralApiClient
         return await GetListAsync<BcCustomerLedgerEntry>(url);
     }
 
+    public async Task<List<BcCustomerLedgerEntry>> GetCustomerLedgerEntriesByCustomerAsync(Guid companyId, string customerNo, string documentType = "Payment", bool openOnly = true)
+    {
+        var filter = $"customerNo eq '{customerNo}' and documentType eq '{documentType}'";
+        if (openOnly)
+            filter += " and open eq true";
+        var url = $"{_options.CustomApiBaseUrl}/companies({companyId})/customerLedgerEntries?$filter={Uri.EscapeDataString(filter)}";
+        return await GetListAsync<BcCustomerLedgerEntry>(url);
+    }
+
+    public async Task<BcPaymentApplication> ApplyPaymentToInvoiceAsync(Guid companyId, string customerNo, int paymentEntryNo, string invoiceDocumentNo, decimal amountToApply = 0)
+    {
+        var url = $"{_options.CustomApiBaseUrl}/companies({companyId})/paymentApplications";
+        var payload = new BcPaymentApplication
+        {
+            CustomerNo = customerNo,
+            PaymentEntryNo = paymentEntryNo,
+            InvoiceDocumentNo = invoiceDocumentNo,
+            AmountToApply = amountToApply
+        };
+        return await PostAsync(url, payload);
+    }
+
     public async Task<List<BcGeneralLedgerEntry>> GetGeneralLedgerEntriesAsync(Guid companyId, int top = 500)
     {
         var url = $"{_options.BaseUrl}/companies({companyId})/generalLedgerEntries?$top={top}&$orderby=postingDate desc";

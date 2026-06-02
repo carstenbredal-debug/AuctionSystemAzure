@@ -78,22 +78,23 @@ public class SettlementFunctions
         }
         await _db.SaveChangesAsync();
 
-        // When marked as Paid, post payment in BC to close the invoice
+        // When marked as Paid, apply existing payment in BC to close the invoice
         string? bcPaymentError = null;
+        string? bcPaymentSuccess = null;
         if (status == InvoiceStatus.Paid && _bcClient != null && !string.IsNullOrEmpty(invoice.BcInvoiceNumber))
         {
             try
             {
-                await PostPaymentToBcAsync(invoice);
+                bcPaymentSuccess = await ApplyPaymentToBcAsync(invoice);
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to post payment to BC for invoice {Id}", invoice.Id);
+                _logger.LogWarning(ex, "Failed to apply payment in BC for invoice {Id}", invoice.Id);
                 bcPaymentError = ex.Message;
             }
         }
 
-        return await CreateJsonResponse(req, new { invoice.Id, Status = invoice.Status.ToString(), invoice.ShippingStatus, bcPaymentError });
+        return await CreateJsonResponse(req, new { invoice.Id, Status = invoice.Status.ToString(), invoice.ShippingStatus, bcPaymentError, bcPaymentSuccess });
     }
 
     private class UpdateStatusRequest
@@ -137,7 +138,24 @@ public class SettlementFunctions
         }
 
         await _db.SaveChangesAsync();
-        return await CreateJsonResponse(req, new { invoice.Id, Status = invoice.Status.ToString(), invoice.ShippingStatus, invoice.DownpaymentAmount, invoice.DownpaymentPercentage });
+
+        // Apply partial payment in BC
+        string? bcPaymentError = null;
+        string? bcPaymentSuccess = null;
+        if (_bcClient != null && !string.IsNullOrEmpty(invoice.BcInvoiceNumber))
+        {
+            try
+            {
+                bcPaymentSuccess = await ApplyPaymentToBcAsync(invoice, amount);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to apply partial payment in BC for invoice {Id}", invoice.Id);
+                bcPaymentError = ex.Message;
+            }
+        }
+
+        return await CreateJsonResponse(req, new { invoice.Id, Status = invoice.Status.ToString(), invoice.ShippingStatus, invoice.DownpaymentAmount, invoice.DownpaymentPercentage, bcPaymentError, bcPaymentSuccess });
     }
 
     private class DownpaymentRequest
@@ -464,33 +482,41 @@ public class SettlementFunctions
         return await CreateJsonResponse(req, settlement);
     }
 
-    private async Task PostPaymentToBcAsync(Invoice invoice)
+    private async Task<string> ApplyPaymentToBcAsync(Invoice invoice, decimal? partialAmount = null)
     {
         var companyId = await _bcClient!.ResolveCompanyIdAsync();
-
-        // Get the default payment journal
-        var journals = await _bcClient.GetCustomerPaymentJournalsAsync(companyId);
-        var journal = journals.FirstOrDefault();
-        if (journal == null)
-            throw new InvalidOperationException("No customer payment journal found in BC");
 
         // Find the buyer's BC customer number
         var buyer = await _db.Buyers.FirstOrDefaultAsync(b => b.Id == invoice.BuyerId);
         var customerNumber = buyer?.BuyerNumber?.ToString() ?? "";
 
-        // Create payment line applying to the BC invoice
-        var payment = new BcCustomerPayment
-        {
-            CustomerNumber = customerNumber,
-            Amount = invoice.TotalAmount,
-            PostingDate = DateTime.UtcNow.ToString("yyyy-MM-dd"),
-            AppliesToInvoiceNumber = invoice.BcInvoiceNumber!,
-            Description = $"Payment for {invoice.BcInvoiceNumber}"
-        };
+        if (string.IsNullOrEmpty(customerNumber))
+            throw new InvalidOperationException("Buyer has no customer number for BC lookup");
 
-        await _bcClient.CreateCustomerPaymentAsync(companyId, journal.Id, payment);
+        // Find open payment entries for this customer
+        var payments = await _bcClient.GetCustomerLedgerEntriesByCustomerAsync(companyId, customerNumber, "Payment", true);
+        if (payments.Count == 0)
+            throw new InvalidOperationException($"No open payment found for customer {customerNumber} in BC");
 
-        _logger.LogInformation("Created payment line in BC journal for invoice {BcNumber}, amount {Amount}. Journal must be posted manually in BC.", invoice.BcInvoiceNumber, invoice.TotalAmount);
+        // Use the first open payment entry
+        var paymentEntry = payments.First();
+
+        // Apply the payment to the invoice via the custom API
+        var amountToApply = partialAmount ?? 0; // 0 means full invoice amount (handled by AL)
+        var result = await _bcClient.ApplyPaymentToInvoiceAsync(
+            companyId,
+            customerNumber,
+            paymentEntry.EntryNo,
+            invoice.BcInvoiceNumber!,
+            amountToApply);
+
+        if (result.ResultStatus == "Error")
+            throw new InvalidOperationException($"BC payment application failed: {result.ResultMessage}");
+
+        _logger.LogInformation("Applied payment entry #{EntryNo} to invoice {BcNumber}, amount {Amount}",
+            paymentEntry.EntryNo, invoice.BcInvoiceNumber, result.AmountToApply);
+
+        return result.ResultMessage;
     }
 
     private static async Task<HttpResponseData> CreateJsonResponse<T>(

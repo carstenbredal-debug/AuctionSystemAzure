@@ -1,4 +1,4 @@
-page 50100 "Customer Ledger Entries API"
+page 50150 "Customer Ledger Entries API"
 {
     APIPublisher = 'auctionSystem';
     APIGroup = 'integration';
@@ -17,22 +17,22 @@ page 50100 "Customer Ledger Entries API"
         {
             repeater(Group)
             {
-                field(entryNo; "Entry No.") { }
-                field(postingDate; "Posting Date") { }
-                field(documentType; "Document Type") { }
-                field(documentNo; "Document No.") { }
-                field(customerNo; "Customer No.") { }
-                field(customerName; "Customer Name") { }
-                field(description; Description) { }
-                field(currencyCode; "Currency Code") { }
-                field(amount; Amount) { }
-                field(remainingAmount; "Remaining Amount") { }
-                field(originalAmount; "Original Amount") { }
-                field(open; Open) { }
-                field(dueDate; "Due Date") { }
-                field(closedByEntryNo; "Closed by Entry No.") { }
-                field(closedAtDate; "Closed at Date") { }
-                field(externalDocumentNo; "External Document No.") { }
+                field(entryNo; Rec."Entry No.") { }
+                field(postingDate; Rec."Posting Date") { }
+                field(documentType; Rec."Document Type") { }
+                field(documentNo; Rec."Document No.") { }
+                field(customerNo; Rec."Customer No.") { }
+                field(customerName; Rec."Customer Name") { }
+                field(description; Rec.Description) { }
+                field(currencyCode; Rec."Currency Code") { }
+                field(amount; Rec.Amount) { }
+                field(remainingAmount; Rec."Remaining Amount") { }
+                field(originalAmount; Rec."Original Amount") { }
+                field(open; Rec.Open) { }
+                field(dueDate; Rec."Due Date") { }
+                field(closedByEntryNo; Rec."Closed by Entry No.") { }
+                field(closedAtDate; Rec."Closed at Date") { }
+                field(externalDocumentNo; Rec."External Document No.") { }
             }
         }
     }
