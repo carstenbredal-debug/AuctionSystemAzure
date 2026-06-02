@@ -74,31 +74,7 @@ else
             </div>
         </div>
 
-        @if (_showGroupForm)
-        {
-            <div class="card border-primary mb-4">
-                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                    <strong>@(_editingGroupOrder != null ? "Edit Group" : "Add Group")</strong>
-                    <button type="button" class="btn-close btn-close-white" @onclick="() => _showGroupForm = false"></button>
-                </div>
-                <div class="card-body">
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="form-label">Column Name <span class="text-danger">*</span></label>
-                            <input class="form-control" @bind="_newGroupName" placeholder="e.g. Gender" />
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Order</label>
-                            <input type="number" class="form-control" @bind="_newGroupOrder" />
-                        </div>
-                    </div>
-                    <div class="mt-3">
-                        <button class="btn btn-primary" @onclick="SaveGroupOrder">Save</button>
-                        <button class="btn btn-secondary ms-2" @onclick="() => _showGroupForm = false">Cancel</button>
-                    </div>
-                </div>
-            </div>
-        }
+
     }
     else if (_activeTab == "sizerules")
     {
@@ -161,143 +137,68 @@ else
             </div>
         </div>
 
-        @if (_showSizeForm)
-        {
-            <div class="card border-primary mb-4">
-                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                    <strong>@(_editingSizeRule?.RuleID > 0 ? "Edit Rule" : "Add Rule")</strong>
-                    <button type="button" class="btn-close btn-close-white" @onclick="() => _showSizeForm = false"></button>
-                </div>
-                <div class="card-body">
-                    <div class="row g-3">
-                        <div class="col-md-3">
-                            <label class="form-label">Gender</label>
-                            <input class="form-control" @bind="_editingSizeRule!.Gender" />
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Size</label>
-                            <input class="form-control" @bind="_editingSizeRule!.Size" />
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Max Boxes</label>
-                            <input type="number" class="form-control" @bind="_editingSizeRule!.MaxBoxes" />
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Max Skins/Box</label>
-                            <input type="number" class="form-control" @bind="_editingSizeRule!.MaxSkinsPerBox" />
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Showlot Skins</label>
-                            <input type="number" class="form-control" @bind="_editingSizeRule!.ShowlotSkins" />
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Max Lot Size (excl showlot)</label>
-                            <input type="number" class="form-control" @bind="_editingSizeRule!.MaxLotSizeExclShowlot" />
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Max Lot Size (incl showlot)</label>
-                            <input type="number" class="form-control" @bind="_editingSizeRule!.MaxLotSizeInclShowlot" />
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">Priority</label>
-                            <input type="number" class="form-control" @bind="_editingSizeRule!.Priority" />
-                        </div>
-                        <div class="col-md-1 d-flex align-items-end">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" @bind="_editingSizeRule!.IsActive" id="sizeRuleActive" />
-                                <label class="form-check-label" for="sizeRuleActive">Active</label>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="mt-3">
-                        <button class="btn btn-primary" @onclick="SaveSizeRule">Save</button>
-                        <button class="btn btn-secondary ms-2" @onclick="() => _showSizeForm = false">Cancel</button>
-                    </div>
-                </div>
-            </div>
-        }
+
     }
     else if (_activeTab == "sortorder")
     {
-        @* ── Lot Sort Order (grouped by ColumnName) ── *@
+        @* ── Lot Sort Order (sub-tabs per group) ── *@
         <div class="d-flex justify-content-end mb-3">
             <button class="btn btn-sm btn-primary" @onclick="ShowAddSortOrder">Add Sort Value</button>
         </div>
-
-        @if (_showSortForm)
-        {
-            <div class="card border-primary mb-4">
-                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                    <strong>@(_editingSortOrder != null ? "Edit Sort Value" : "Add Sort Value")</strong>
-                    <button type="button" class="btn-close btn-close-white" @onclick="() => _showSortForm = false"></button>
-                </div>
-                <div class="card-body">
-                    <div class="row g-3">
-                        <div class="col-md-4">
-                            <label class="form-label">Group (Column Name) <span class="text-danger">*</span></label>
-                            <input class="form-control" @bind="_newSortColumnName" placeholder="e.g. Gender" list="sortGroupSuggestions" />
-                            <datalist id="sortGroupSuggestions">
-                                @foreach (var g in _sortGroups)
-                                {
-                                    <option value="@g" />
-                                }
-                            </datalist>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Value <span class="text-danger">*</span></label>
-                            <input class="form-control" @bind="_newSortValue" placeholder="e.g. Male" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Sort Order</label>
-                            <input type="number" class="form-control" @bind="_newSortOrder" />
-                        </div>
-                    </div>
-                    <div class="mt-3">
-                        <button class="btn btn-primary" @onclick="SaveSortOrder">Save</button>
-                        <button class="btn btn-secondary ms-2" @onclick="() => _showSortForm = false">Cancel</button>
-                    </div>
-                </div>
-            </div>
-        }
 
         @if (_sortGroups.Count == 0)
         {
             <div class="text-center text-muted py-4">No sort orders configured.</div>
         }
-
-        @foreach (var group in _sortGroups)
+        else
         {
-            var groupItems = _sortOrders.Where(s => s.ColumnName == group).OrderBy(s => s.SortOrder).ToList();
-            <div class="card mb-3">
-                <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                    <strong>@group</strong>
-                    <span class="badge bg-dark">@groupItems.Count values</span>
-                </div>
-                <div class="card-body p-0">
-                    <table class="table table-striped table-hover mb-0">
-                        <thead>
-                            <tr>
-                                        <th>Order</th>
-                                <th>Value</th>
-                                <th style="width:150px;">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var item in groupItems)
-                            {
+            <ul class="nav nav-pills mb-3">
+                @foreach (var group in _sortGroups)
+                {
+                    <li class="nav-item">
+                        <button class="nav-link @(_activeSortGroup == group ? "active" : "")" @onclick="() => _activeSortGroup = group">@group</button>
+                    </li>
+                }
+            </ul>
+
+            @if (_activeSortGroup != null)
+            {
+                var groupItems = _sortOrders.Where(s => s.ColumnName == _activeSortGroup).OrderBy(s => s.SortOrder).ToList();
+                <div class="card mb-3">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                        <strong>@_activeSortGroup</strong>
+                        <span class="badge bg-dark">@groupItems.Count values</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <table class="table table-striped table-hover mb-0">
+                            <thead>
                                 <tr>
-                                    <td><span class="badge bg-secondary">@item.SortOrder</span></td>
-                                    <td>@item.Value</td>
-                                    <td>
-                                        <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => EditSortOrder(item)">Edit</button>
-                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteSortOrder(item)">Delete</button>
-                                    </td>
+                                    <th>Order</th>
+                                    <th>Value</th>
+                                    <th style="width:150px;">Actions</th>
                                 </tr>
-                            }
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                @if (groupItems.Count == 0)
+                                {
+                                    <tr><td colspan="3" class="text-center text-muted py-4">No values in this group.</td></tr>
+                                }
+                                @foreach (var item in groupItems)
+                                {
+                                    <tr>
+                                        <td><span class="badge bg-secondary">@item.SortOrder</span></td>
+                                        <td>@item.Value</td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => EditSortOrder(item)">Edit</button>
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteSortOrder(item)">Delete</button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-            </div>
+            }
         }
     }
     else if (_activeTab == "catalognumber")
@@ -353,46 +254,180 @@ else
             </div>
         </div>
 
-        @if (_showCatalogForm)
-        {
-            <div class="card border-primary mb-4">
-                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                    <strong>@(_editingCatalogRule?.CatalogNumberRuleID > 0 ? "Edit Rule" : "Add Rule")</strong>
+
+    }
+}
+
+@* ── Modal Popups ── *@
+
+@if (_showGroupForm)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,0.5)">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">@(_editingGroupOrder != null ? "Edit Group" : "Add Group")</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="() => _showGroupForm = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Column Name <span class="text-danger">*</span></label>
+                        <input class="form-control" @bind="_newGroupName" placeholder="e.g. Gender" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Order</label>
+                        <input type="number" class="form-control" @bind="_newGroupOrder" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => _showGroupForm = false">Cancel</button>
+                    <button class="btn btn-primary" @onclick="SaveGroupOrder">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showSizeForm)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,0.5)">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">@(_editingSizeRule?.RuleID > 0 ? "Edit Rule" : "Add Rule")</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="() => _showSizeForm = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Gender</label>
+                            <input class="form-control" @bind="_editingSizeRule!.Gender" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Size</label>
+                            <input class="form-control" @bind="_editingSizeRule!.Size" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Max Boxes</label>
+                            <input type="number" class="form-control" @bind="_editingSizeRule!.MaxBoxes" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Max Skins/Box</label>
+                            <input type="number" class="form-control" @bind="_editingSizeRule!.MaxSkinsPerBox" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Showlot Skins</label>
+                            <input type="number" class="form-control" @bind="_editingSizeRule!.ShowlotSkins" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Max Lot Size (excl showlot)</label>
+                            <input type="number" class="form-control" @bind="_editingSizeRule!.MaxLotSizeExclShowlot" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Max Lot Size (incl showlot)</label>
+                            <input type="number" class="form-control" @bind="_editingSizeRule!.MaxLotSizeInclShowlot" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Priority</label>
+                            <input type="number" class="form-control" @bind="_editingSizeRule!.Priority" />
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" @bind="_editingSizeRule!.IsActive" id="sizeRuleActive" />
+                                <label class="form-check-label" for="sizeRuleActive">Active</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => _showSizeForm = false">Cancel</button>
+                    <button class="btn btn-primary" @onclick="SaveSizeRule">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showSortForm)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,0.5)">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">@(_editingSortOrder != null ? "Edit Sort Value" : "Add Sort Value")</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="() => _showSortForm = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Group (Column Name) <span class="text-danger">*</span></label>
+                        <input class="form-control" @bind="_newSortColumnName" placeholder="e.g. Gender" list="sortGroupSuggestions" />
+                        <datalist id="sortGroupSuggestions">
+                            @foreach (var g in _sortGroups)
+                            {
+                                <option value="@g" />
+                            }
+                        </datalist>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Value <span class="text-danger">*</span></label>
+                        <input class="form-control" @bind="_newSortValue" placeholder="e.g. Male" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Sort Order</label>
+                        <input type="number" class="form-control" @bind="_newSortOrder" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => _showSortForm = false">Cancel</button>
+                    <button class="btn btn-primary" @onclick="SaveSortOrder">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showCatalogForm)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,0.5)">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">@(_editingCatalogRule?.CatalogNumberRuleID > 0 ? "Edit Rule" : "Add Rule")</h5>
                     <button type="button" class="btn-close btn-close-white" @onclick="() => _showCatalogForm = false"></button>
                 </div>
-                <div class="card-body">
+                <div class="modal-body">
                     <div class="row g-3">
-                        <div class="col-md-3">
+                        <div class="col-md-6">
                             <label class="form-label">Sales Type</label>
                             <input class="form-control" @bind="_editingCatalogRule!.SalesType" />
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-6">
                             <label class="form-label">Gender</label>
                             <input class="form-control" @bind="_editingCatalogRule!.Gender" />
                         </div>
-                        <div class="col-md-2">
+                        <div class="col-md-4">
                             <label class="form-label">Group</label>
                             <input class="form-control" @bind="_editingCatalogRule!.Group" />
                         </div>
-                        <div class="col-md-2">
+                        <div class="col-md-4">
                             <label class="form-label">Start Number</label>
                             <input type="number" class="form-control" @bind="_editingCatalogRule!.StartNumber" />
                         </div>
-                        <div class="col-md-2 d-flex align-items-end">
+                        <div class="col-md-4 d-flex align-items-end">
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox" @bind="_editingCatalogRule!.IsActive" id="catalogRuleActive" />
                                 <label class="form-check-label" for="catalogRuleActive">Active</label>
                             </div>
                         </div>
                     </div>
-                    <div class="mt-3">
-                        <button class="btn btn-primary" @onclick="SaveCatalogRule">Save</button>
-                        <button class="btn btn-secondary ms-2" @onclick="() => _showCatalogForm = false">Cancel</button>
-                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => _showCatalogForm = false">Cancel</button>
+                    <button class="btn btn-primary" @onclick="SaveCatalogRule">Save</button>
                 </div>
             </div>
-        }
-    }
+        </div>
+    </div>
 }
 
 @code {
@@ -416,6 +451,7 @@ else
     // Lot Sort Order
     private List<LotSortOrderDto> _sortOrders = new();
     private List<string> _sortGroups = new();
+    private string? _activeSortGroup;
     private bool _showSortForm;
     private string _newSortColumnName = "";
     private string _newSortValue = "";
@@ -439,6 +475,8 @@ else
         _sizeRules = await Api.GetLotSizeRulesAsync();
         _sortOrders = await Api.GetLotSortOrdersAsync();
         _sortGroups = _sortOrders.Select(s => s.ColumnName).Distinct().OrderBy(s => s).ToList();
+        if (_activeSortGroup == null || !_sortGroups.Contains(_activeSortGroup))
+            _activeSortGroup = _sortGroups.FirstOrDefault();
         _catalogRules = await Api.GetCatalogNumberRulesAsync();
     }
 
@@ -617,6 +655,8 @@ else
         _editingSortOrder = null;
         _sortOrders = await Api.GetLotSortOrdersAsync();
         _sortGroups = _sortOrders.Select(s => s.ColumnName).Distinct().OrderBy(s => s).ToList();
+        if (_activeSortGroup == null || !_sortGroups.Contains(_activeSortGroup))
+            _activeSortGroup = _sortGroups.FirstOrDefault();
     }
 
     private async Task DeleteSortOrder(LotSortOrderDto item)
@@ -626,6 +666,8 @@ else
         _messageIsError = false;
         _sortOrders = await Api.GetLotSortOrdersAsync();
         _sortGroups = _sortOrders.Select(s => s.ColumnName).Distinct().OrderBy(s => s).ToList();
+        if (_activeSortGroup == null || !_sortGroups.Contains(_activeSortGroup))
+            _activeSortGroup = _sortGroups.FirstOrDefault();
     }
 
     // ── Catalog Number Rules ──
