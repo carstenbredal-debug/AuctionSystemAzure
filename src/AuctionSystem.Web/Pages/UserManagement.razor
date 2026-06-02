@@ -704,12 +704,80 @@ else
             BuyerId = user.BuyerId,
             IsActive = user.IsActive
         };
-        _brokerForm = new BrokerDto { IsActive = true };
-        _farmerForm = new FarmerDto();
-        _buyerForm = new BuyerDto();
+
+        // Load linked entity data so dropdowns show the saved values
+        if (user.BrokerId.HasValue)
+        {
+            var broker = _brokers.FirstOrDefault(b => b.Id == user.BrokerId.Value);
+            _brokerForm = broker != null ? CloneBroker(broker) : new BrokerDto { IsActive = true };
+        }
+        else
+        {
+            _brokerForm = new BrokerDto { IsActive = true };
+        }
+
+        if (user.FarmerId.HasValue)
+        {
+            var farmer = _farmers.FirstOrDefault(f => f.Id == user.FarmerId.Value);
+            _farmerForm = farmer != null ? CloneFarmer(farmer) : new FarmerDto();
+        }
+        else
+        {
+            _farmerForm = new FarmerDto();
+        }
+
+        if (user.BuyerId.HasValue)
+        {
+            var buyer = _buyers.FirstOrDefault(b => b.Id == user.BuyerId.Value);
+            _buyerForm = buyer != null ? CloneBuyer(buyer) : new BuyerDto();
+        }
+        else
+        {
+            _buyerForm = new BuyerDto();
+        }
+
         _showForm = true;
         _message = null;
     }
+
+    private static BrokerDto CloneBroker(BrokerDto src) => new()
+    {
+        Id = src.Id, BrokerNumber = src.BrokerNumber, CompanyName = src.CompanyName, CompanyName2 = src.CompanyName2,
+        SearchName = src.SearchName, ContactPerson = src.ContactPerson, AddressLine1 = src.AddressLine1,
+        AddressLine2 = src.AddressLine2, Country = src.Country, PostalCode = src.PostalCode, City = src.City,
+        ContactPhone = src.ContactPhone, MobilePhone = src.MobilePhone, ContactEmail = src.ContactEmail,
+        HomePage = src.HomePage, VatRegistrationNo = src.VatRegistrationNo, RegistrationNo = src.RegistrationNo,
+        CustomerGroup = src.CustomerGroup, SalesPerson = src.SalesPerson, PaymentTerm = src.PaymentTerm,
+        PaymentMethod = src.PaymentMethod, Currency = src.Currency, Language = src.Language,
+        GenBusPostingGroup = src.GenBusPostingGroup, VatBusPostingGroup = src.VatBusPostingGroup,
+        CustomerPostingGroup = src.CustomerPostingGroup, CreditLimit = src.CreditLimit, Blocked = src.Blocked,
+        IsActive = src.IsActive
+    };
+
+    private static FarmerDto CloneFarmer(FarmerDto src) => new()
+    {
+        Id = src.Id, FarmerNumber = src.FarmerNumber, Name = src.Name,
+        ContactName = src.ContactName, AddressLine1 = src.AddressLine1, AddressLine2 = src.AddressLine2,
+        Country = src.Country, PostalCode = src.PostalCode, City = src.City,
+        ContactPhone = src.ContactPhone, MobilePhone = src.MobilePhone, ContactEmail = src.ContactEmail,
+        HomePage = src.HomePage, VatRegistrationNo = src.VatRegistrationNo, RegistrationNo = src.RegistrationNo,
+        GenBusPostingGroup = src.GenBusPostingGroup, VatBusPostingGroup = src.VatBusPostingGroup,
+        VendorPostingGroup = src.VendorPostingGroup, PaymentTerm = src.PaymentTerm,
+        PaymentMethod = src.PaymentMethod, Currency = src.Currency
+    };
+
+    private static BuyerDto CloneBuyer(BuyerDto src) => new()
+    {
+        Id = src.Id, BuyerNumber = src.BuyerNumber, Name = src.Name, Name2 = src.Name2,
+        SearchName = src.SearchName, ContactName = src.ContactName, AddressLine1 = src.AddressLine1,
+        AddressLine2 = src.AddressLine2, Country = src.Country, PostalCode = src.PostalCode, City = src.City,
+        ContactPhone = src.ContactPhone, MobilePhone = src.MobilePhone, ContactEmail = src.ContactEmail,
+        HomePage = src.HomePage, VatRegistrationNo = src.VatRegistrationNo, RegistrationNo = src.RegistrationNo,
+        CustomerGroup = src.CustomerGroup, SalesPerson = src.SalesPerson, PaymentTerm = src.PaymentTerm,
+        PaymentMethod = src.PaymentMethod, Currency = src.Currency, Language = src.Language,
+        GenBusPostingGroup = src.GenBusPostingGroup, VatBusPostingGroup = src.VatBusPostingGroup,
+        CustomerPostingGroup = src.CustomerPostingGroup
+    };
 
     private async Task SaveUser()
     {
