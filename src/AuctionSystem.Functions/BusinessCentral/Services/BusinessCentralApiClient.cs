@@ -394,8 +394,7 @@ public class BusinessCentralApiClient
         var url = $"{_options.BaseUrl}/companies({companyId})/customerPaymentJournals({journalId})/customerPayments";
         _logger.LogInformation("POST {Url}", url);
 
-        var options = new System.Text.Json.JsonSerializerOptions { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault };
-        var json = System.Text.Json.JsonSerializer.Serialize(payment, options);
+        var json = System.Text.Json.JsonSerializer.Serialize(payment);
         var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
 
         var response = await _httpClient.PostAsync(url, content);
