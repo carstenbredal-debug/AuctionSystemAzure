@@ -8,5 +8,7 @@ public enum InvoiceStatus
     Downpayment,
     Paid,
     Overdue,
-    Cancelled
+    Cancelled,
+    PartiallyCredited,
+    FullyCredited
 }

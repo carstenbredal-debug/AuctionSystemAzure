@@ -284,6 +284,29 @@ public class SettlementFunctions
                     creditMemoEntry.EntryNo,
                     originalInvoice.BcInvoiceNumber!);
 
+                if (result.ResultStatus != "Error")
+                {
+                    // Update original invoice status based on credited lots
+                    var originalLotCount = await _db.Invoices
+                        .Where(i => i.Id == originalInvoice.Id)
+                        .SelectMany(i => i.Lines)
+                        .CountAsync();
+
+                    var creditedLotCount = await _db.Invoices
+                        .Where(i => i.OriginalInvoiceId == originalInvoice.Id && i.IsCreditNote)
+                        .SelectMany(i => i.Lines)
+                        .Select(l => l.LotNumber)
+                        .Distinct()
+                        .CountAsync();
+
+                    if (originalLotCount > 0 && creditedLotCount >= originalLotCount)
+                        originalInvoice.Status = Domain.Enums.InvoiceStatus.FullyCredited;
+                    else if (creditedLotCount > 0)
+                        originalInvoice.Status = Domain.Enums.InvoiceStatus.PartiallyCredited;
+
+                    await _db.SaveChangesAsync();
+                }
+
                 results.Add(new
                 {
                     creditNote = cn.BcInvoiceNumber,
@@ -299,6 +322,43 @@ public class SettlementFunctions
         }
 
         return await CreateJsonResponse(req, new { totalCreditNotes = creditNotes.Count, results });
+    }
+
+    [Function("RecalculateCreditStatuses")]
+    public async Task<HttpResponseData> RecalculateCreditStatuses(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "settlements/recalculate-credit-statuses")] HttpRequestData req)
+    {
+        // Find all invoices that have credit notes against them
+        var invoicesWithCredits = await _db.Invoices
+            .Include(i => i.Lines)
+            .Where(i => !i.IsCreditNote && _db.Invoices.Any(cn => cn.OriginalInvoiceId == i.Id && cn.IsCreditNote))
+            .ToListAsync();
+
+        var updated = new List<object>();
+
+        foreach (var invoice in invoicesWithCredits)
+        {
+            var originalLotNumbers = invoice.Lines.Select(l => l.LotNumber).ToList();
+
+            var creditedLotNumbers = await _db.Invoices
+                .Where(cn => cn.OriginalInvoiceId == invoice.Id && cn.IsCreditNote)
+                .SelectMany(cn => cn.Lines)
+                .Select(l => l.LotNumber)
+                .Distinct()
+                .ToListAsync();
+
+            var oldStatus = invoice.Status;
+            if (originalLotNumbers.Count > 0 && creditedLotNumbers.Count >= originalLotNumbers.Count)
+                invoice.Status = Domain.Enums.InvoiceStatus.FullyCredited;
+            else if (creditedLotNumbers.Count > 0)
+                invoice.Status = Domain.Enums.InvoiceStatus.PartiallyCredited;
+
+            if (invoice.Status != oldStatus)
+                updated.Add(new { invoice = invoice.InvoiceNumber, oldStatus = oldStatus.ToString(), newStatus = invoice.Status.ToString(), originalLots = originalLotNumbers.Count, creditedLots = creditedLotNumbers.Count });
+        }
+
+        await _db.SaveChangesAsync();
+        return await CreateJsonResponse(req, new { updatedCount = updated.Count, updated });
     }
 
     [Function("GetShippingBoxes")]

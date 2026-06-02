@@ -478,10 +478,33 @@ public class BusinessCentralSyncService
                 originalInvoice.BcInvoiceNumber!);
 
             if (result.ResultStatus == "Error")
+            {
                 _logger.LogWarning("Credit note {Id}: BC application failed — {Msg}", creditNote.Id, result.ResultMessage);
+            }
             else
+            {
                 _logger.LogInformation("Credit note {Id}: applied to invoice {InvNo} in BC — {Msg}",
                     creditNote.Id, originalInvoice.BcInvoiceNumber, result.ResultMessage);
+
+                // Update original invoice status based on credited lots
+                var originalLotNumbers = await _db.Set<Domain.Entities.InvoiceLine>()
+                    .Where(l => l.InvoiceId == originalInvoice.Id)
+                    .Select(l => l.LotNumber)
+                    .ToListAsync();
+
+                var creditedLotNumbers = await _db.Set<Domain.Entities.InvoiceLine>()
+                    .Where(l => l.Invoice.OriginalInvoiceId == originalInvoice.Id && l.Invoice.IsCreditNote)
+                    .Select(l => l.LotNumber)
+                    .Distinct()
+                    .ToListAsync();
+
+                if (originalLotNumbers.Count > 0 && creditedLotNumbers.Count >= originalLotNumbers.Count)
+                    originalInvoice.Status = Domain.Enums.InvoiceStatus.FullyCredited;
+                else if (creditedLotNumbers.Count > 0)
+                    originalInvoice.Status = Domain.Enums.InvoiceStatus.PartiallyCredited;
+
+                await _db.SaveChangesAsync();
+            }
         }
         catch (Exception ex)
         {
