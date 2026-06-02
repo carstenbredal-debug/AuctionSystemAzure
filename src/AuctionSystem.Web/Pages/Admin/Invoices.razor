@@ -7,6 +7,21 @@
 <h1>Invoices</h1>
 <p class="text-muted">All invoices and credit notes across all brokers and buyers.</p>
 
+@if (!string.IsNullOrEmpty(_bcError))
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        @_bcError
+        <button type="button" class="btn-close" @onclick="() => _bcError = null"></button>
+    </div>
+}
+@if (!string.IsNullOrEmpty(_bcSuccess))
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        @_bcSuccess
+        <button type="button" class="btn-close" @onclick="() => _bcSuccess = null"></button>
+    </div>
+}
+
 @if (_loading)
 {
     <p><em>Loading...</em></p>
@@ -343,6 +358,10 @@ else
     private bool _showFullyPaidShippingConfirm;
     private int _fpInvoiceId;
 
+    // BC feedback
+    private string? _bcError;
+    private string? _bcSuccess;
+
     private List<InvoiceSummaryDto> FilteredInvoices
     {
         get
@@ -436,6 +455,8 @@ else
     {
         _showFullyPaidShippingConfirm = false;
         _updatingId = _fpInvoiceId;
+        _bcError = null;
+        _bcSuccess = null;
 
         var resp = await Api.UpdateInvoiceStatusAsync(_fpInvoiceId, StatusPaid, releaseForShipping);
         if (resp.IsSuccessStatusCode)
@@ -446,8 +467,28 @@ else
                 inv.Status = StatusPaid;
                 if (releaseForShipping) inv.ShippingStatus = "Released";
             }
+
+            // Check for BC payment error in response
+            try
+            {
+                var json = await resp.Content.ReadFromJsonAsync<BcStatusResponse>();
+                if (!string.IsNullOrEmpty(json?.BcPaymentError))
+                    _bcError = $"Invoice marked as Paid locally, but BC payment failed: {json.BcPaymentError}";
+                else
+                    _bcSuccess = "Invoice marked as Paid and payment posted to BC.";
+            }
+            catch { _bcSuccess = "Invoice marked as Paid."; }
+        }
+        else
+        {
+            _bcError = $"Failed to update invoice status (HTTP {(int)resp.StatusCode}).";
         }
         _updatingId = null;
+    }
+
+    private class BcStatusResponse
+    {
+        public string? BcPaymentError { get; set; }
     }
 
     private void ToggleLots(int invoiceId)
