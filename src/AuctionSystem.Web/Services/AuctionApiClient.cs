@@ -140,6 +140,15 @@ public class AuctionApiClient
     public async Task<HttpResponseMessage> UpdateInvoiceStatusAsync(int invoiceId, string status, bool releaseForShipping = false)
         => await _http.PutAsJsonAsync($"api/settlements/invoices/{invoiceId}/status", new { status, releaseForShipping });
 
+    public async Task<BcBalanceCheckDto?> CheckBcPaymentBalanceAsync(int invoiceId)
+    {
+        try
+        {
+            return await _http.GetFromJsonAsync<BcBalanceCheckDto>($"api/settlements/invoices/{invoiceId}/bc-balance");
+        }
+        catch { return null; }
+    }
+
     public async Task<HttpResponseMessage> ProcessDownpaymentAsync(int invoiceId, decimal amount, bool isPercentage, bool releaseForShipping)
         => await _http.PostAsJsonAsync($"api/settlements/invoices/{invoiceId}/downpayment", new { amount, isPercentage, releaseForShipping });
 
@@ -457,6 +466,18 @@ public class AuctionApiClient
         catch
         {
             return new() { Message = "Failed to run consistency check" };
+        }
+    }
+
+    public async Task<BcPaymentConsistencyDto> GetBcPaymentConsistencyCheckAsync()
+    {
+        try
+        {
+            return await _http.GetFromJsonAsync<BcPaymentConsistencyDto>("api/bc/payment-consistency-check") ?? new();
+        }
+        catch (Exception ex)
+        {
+            return new() { Message = $"Failed to run payment consistency check: {ex.Message}" };
         }
     }
 

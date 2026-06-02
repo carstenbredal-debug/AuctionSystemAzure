@@ -300,6 +300,64 @@ else
         }
     </div>
 
+    <!-- Payment Status Check -->
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <strong>Payment Status Check</strong>
+            <button class="btn btn-sm btn-outline-primary" @onclick="RunPaymentCheck" disabled="@_checkingPayments">
+                @if (_checkingPayments) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                Run Check
+            </button>
+        </div>
+        @if (_paymentResult is not null)
+        {
+            <div class="card-body">
+                <p class="mb-2">
+                    Checked: <strong>@_paymentResult.TotalChecked</strong> invoices —
+                    @if (_paymentResult.Mismatches == 0)
+                    {
+                        <span class="text-success">All consistent</span>
+                    }
+                    else
+                    {
+                        <span class="text-danger">@_paymentResult.Mismatches mismatch(es)</span>
+                    }
+                </p>
+                <div class="table-responsive">
+                    <table class="table table-striped table-sm mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>BC Invoice #</th>
+                                <th>Buyer</th>
+                                <th>Local Status</th>
+                                <th>BC Status</th>
+                                <th>Invoice Amount</th>
+                                <th>BC Remaining</th>
+                                <th>Open Payment</th>
+                                <th>Issue</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var inv in _paymentResult.Invoices)
+                            {
+                                <tr class="@(inv.Issue != null ? "table-warning" : "")">
+                                    <td>@inv.BcInvoiceNumber</td>
+                                    <td>@inv.BuyerNumber @inv.BuyerName</td>
+                                    <td><span class="badge @GetLocalStatusBadge(inv.LocalStatus)">@inv.LocalStatus</span></td>
+                                    <td><span class="badge @(inv.BcStatus == "Closed" ? "bg-success" : inv.BcStatus == "Open" ? "bg-warning" : "bg-secondary")">@inv.BcStatus</span></td>
+                                    <td>@inv.InvoiceAmount.ToString("N2")</td>
+                                    <td>@inv.BcRemainingAmount.ToString("N2")</td>
+                                    <td>@(inv.OpenPaymentAvailable > 0 ? inv.OpenPaymentAvailable.ToString("N2") : "—")</td>
+                                    <td>@(inv.Issue ?? "—")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    </div>
+
     <!-- Sync Results -->
     @if (_syncResults.Count > 0)
     {
@@ -369,6 +427,8 @@ else
     private List<BcSyncResultDto> _syncResults = new();
     private bool _checkingConsistency;
     private BcConsistencyCheckDto? _consistencyResult;
+    private bool _checkingPayments;
+    private BcPaymentConsistencyDto? _paymentResult;
     private List<InvoiceSummaryDto> _unpushedInvoices = new();
     private bool _loadingUnpushed;
     private List<InvoiceSummaryDto> _unpushedCreditNotes = new();
@@ -518,6 +578,24 @@ else
 
         _checkingConsistency = false;
     }
+
+    private async Task RunPaymentCheck()
+    {
+        _checkingPayments = true;
+        StateHasChanged();
+
+        _paymentResult = await Api.GetBcPaymentConsistencyCheckAsync();
+
+        _checkingPayments = false;
+    }
+
+    private string GetLocalStatusBadge(string status) => status switch
+    {
+        "Paid" => "bg-success",
+        "Downpayment" => "bg-info",
+        "Issued" => "bg-primary",
+        _ => "bg-secondary"
+    };
 
     private async Task LoadUnpushedInvoices()
     {
