@@ -4,6 +4,8 @@ using AuctionSystem.Domain.Data;
 using AuctionSystem.Domain.Entities;
 using AuctionSystem.Domain.Enums;
 using AuctionSystem.Domain.Services;
+using AuctionSystem.Functions.BusinessCentral.Models;
+using AuctionSystem.Functions.BusinessCentral.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
@@ -16,6 +18,7 @@ public class SettlementFunctions
     private readonly AuctionDbContext _db;
     private readonly CatalogDbContext _catalogDb;
     private readonly SettlementService _service;
+    private readonly BusinessCentralApiClient? _bcClient;
     private readonly ILogger<SettlementFunctions> _logger;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -24,12 +27,13 @@ public class SettlementFunctions
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public SettlementFunctions(AuctionDbContext db, CatalogDbContext catalogDb, SettlementService service, ILogger<SettlementFunctions> logger)
+    public SettlementFunctions(AuctionDbContext db, CatalogDbContext catalogDb, SettlementService service, ILogger<SettlementFunctions> logger, BusinessCentralApiClient? bcClient = null)
     {
         _db = db;
         _catalogDb = catalogDb;
         _service = service;
         _logger = logger;
+        _bcClient = bcClient;
     }
 
     [Function("GetInvoicesByBroker")]
@@ -73,7 +77,23 @@ public class SettlementFunctions
             invoice.ShippingStatus = "Released";
         }
         await _db.SaveChangesAsync();
-        return await CreateJsonResponse(req, new { invoice.Id, Status = invoice.Status.ToString(), invoice.ShippingStatus });
+
+        // When marked as Paid, post payment in BC to close the invoice
+        string? bcPaymentError = null;
+        if (status == InvoiceStatus.Paid && _bcClient != null && !string.IsNullOrEmpty(invoice.BcInvoiceNumber))
+        {
+            try
+            {
+                await PostPaymentToBcAsync(invoice);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to post payment to BC for invoice {Id}", invoice.Id);
+                bcPaymentError = ex.Message;
+            }
+        }
+
+        return await CreateJsonResponse(req, new { invoice.Id, Status = invoice.Status.ToString(), invoice.ShippingStatus, bcPaymentError });
     }
 
     private class UpdateStatusRequest
@@ -442,6 +462,38 @@ public class SettlementFunctions
         var settlement = await _service.MarkSettlementCompletedAsync(settlementId);
         if (settlement == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
         return await CreateJsonResponse(req, settlement);
+    }
+
+    private async Task PostPaymentToBcAsync(Invoice invoice)
+    {
+        var companyId = await _bcClient!.ResolveCompanyIdAsync();
+
+        // Get the default payment journal
+        var journals = await _bcClient.GetCustomerPaymentJournalsAsync(companyId);
+        var journal = journals.FirstOrDefault();
+        if (journal == null)
+            throw new InvalidOperationException("No customer payment journal found in BC");
+
+        // Find the buyer's BC customer number
+        var buyer = await _db.Buyers.FirstOrDefaultAsync(b => b.Id == invoice.BuyerId);
+        var customerNumber = buyer?.BuyerNumber?.ToString() ?? "";
+
+        // Create payment line applying to the BC invoice
+        var payment = new BcCustomerPayment
+        {
+            CustomerNumber = customerNumber,
+            Amount = invoice.TotalAmount,
+            PostingDate = DateTime.UtcNow.ToString("yyyy-MM-dd"),
+            AppliesToInvoiceNumber = invoice.BcInvoiceNumber!,
+            Description = $"Payment for {invoice.BcInvoiceNumber}"
+        };
+
+        await _bcClient.CreateCustomerPaymentAsync(companyId, journal.Id, payment);
+
+        // Post the journal to finalize the payment
+        await _bcClient.PostCustomerPaymentJournalAsync(companyId, journal.Id);
+
+        _logger.LogInformation("Posted payment to BC for invoice {BcNumber}, amount {Amount}", invoice.BcInvoiceNumber, invoice.TotalAmount);
     }
 
     private static async Task<HttpResponseData> CreateJsonResponse<T>(
