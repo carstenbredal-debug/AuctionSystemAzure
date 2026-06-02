@@ -4,7 +4,7 @@ public enum AuctionStatus { Draft, Active, Closed }
 public enum LotStatus { Pending, Active, Sold, Unsold, Withdrawn, Broker }
 public enum BidStatus { Active, Outbid, Winning, Won, Cancelled }
 public enum AllocationStatus { Pending, Allocated, Delivered, Cancelled }
-public enum InvoiceStatus { Draft, Issued, Sent, Paid, Overdue, Cancelled }
+public enum InvoiceStatus { Draft, Issued, Sent, Paid, Overdue, Cancelled, PartiallyCredited, FullyCredited }
 public enum SettlementStatus { Pending, InvoiceGenerated, PaymentReceived, SettledWithFarmer, Completed, Disputed }
 
 public class AuctionDto
