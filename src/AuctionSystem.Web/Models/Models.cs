@@ -752,6 +752,26 @@ public class BcCustomerLedgerEntryDto
     public string ExternalDocumentNo { get; set; } = "";
 }
 
+public class BcBuyerBalancesResponseDto
+{
+    public List<BcBuyerBalanceDto> Buyers { get; set; } = new();
+    public string LastChecked { get; set; } = "";
+}
+
+public class BcBuyerBalanceDto
+{
+    public string CustomerNo { get; set; } = "";
+    public string CustomerName { get; set; } = "";
+    public string? BuyerName { get; set; }
+    public decimal TotalInvoiced { get; set; }
+    public decimal TotalCredited { get; set; }
+    public decimal TotalPayments { get; set; }
+    public decimal OpenInvoiceRemaining { get; set; }
+    public decimal UnallocatedPayment { get; set; }
+    public int OpenInvoiceCount { get; set; }
+    public int OpenPaymentCount { get; set; }
+}
+
 public class BcGlEntryDto
 {
     public int EntryNumber { get; set; }

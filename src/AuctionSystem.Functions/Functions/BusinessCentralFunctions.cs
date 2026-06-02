@@ -745,6 +745,63 @@ public class BusinessCentralFunctions
         });
     }
 
+    [Function("BcBuyerBalances")]
+    public async Task<HttpResponseData> GetBuyerBalances(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "bc/buyer-balances")] HttpRequestData req)
+    {
+        if (!EnsureConfigured(out var error))
+            return await JsonResponse(req, error!, HttpStatusCode.BadRequest);
+
+        var companyId = await _bcClient!.ResolveCompanyIdAsync();
+
+        // Get all customer ledger entries from BC
+        var allEntries = await _bcClient.GetCustomerLedgerEntriesAsync(companyId);
+
+        // Get all buyers from our system to map customer numbers to buyer names
+        var buyers = await _db.Buyers.ToListAsync();
+        var buyerMap = buyers.ToDictionary(b => b.BuyerNumber, b => b.Name);
+
+        // Group by customer and calculate balances
+        var customerGroups = allEntries
+            .GroupBy(e => e.CustomerNo)
+            .Select(g =>
+            {
+                var invoiceEntries = g.Where(e => e.DocumentType.Equals("Invoice", StringComparison.OrdinalIgnoreCase)).ToList();
+                var creditMemoEntries = g.Where(e => e.DocumentType.Equals("Credit Memo", StringComparison.OrdinalIgnoreCase)).ToList();
+                var paymentEntries = g.Where(e => e.DocumentType.Equals("Payment", StringComparison.OrdinalIgnoreCase)).ToList();
+
+                // Open payment remaining is negative — its absolute value is the unallocated amount
+                var openPaymentRemaining = paymentEntries.Where(e => e.Open).Sum(e => e.RemainingAmount);
+                var totalPayments = paymentEntries.Sum(e => Math.Abs(e.OriginalAmount));
+                var totalInvoiced = invoiceEntries.Sum(e => e.OriginalAmount);
+                var totalCredited = creditMemoEntries.Sum(e => Math.Abs(e.OriginalAmount));
+                var openInvoiceRemaining = invoiceEntries.Where(e => e.Open).Sum(e => e.RemainingAmount);
+
+                return new
+                {
+                    customerNo = g.Key,
+                    customerName = g.First().CustomerName,
+                    buyerName = buyerMap.TryGetValue(g.Key, out var name) ? name : null,
+                    totalInvoiced,
+                    totalCredited,
+                    totalPayments,
+                    openInvoiceRemaining,
+                    unallocatedPayment = Math.Abs(openPaymentRemaining),
+                    openInvoiceCount = invoiceEntries.Count(e => e.Open),
+                    openPaymentCount = paymentEntries.Count(e => e.Open)
+                };
+            })
+            .Where(c => c.totalPayments > 0 || c.totalInvoiced > 0)
+            .OrderBy(c => c.customerNo)
+            .ToList();
+
+        return await JsonResponse(req, new
+        {
+            buyers = customerGroups,
+            lastChecked = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss UTC")
+        });
+    }
+
     private bool EnsureConfigured(out object? error)
     {
         if (!_options.IsConfigured || _syncService is null || _bcClient is null)

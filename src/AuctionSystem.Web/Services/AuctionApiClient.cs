@@ -426,6 +426,18 @@ public class AuctionApiClient
         }
     }
 
+    public async Task<BcBuyerBalancesResponseDto> GetBcBuyerBalancesAsync()
+    {
+        try
+        {
+            return await _http.GetFromJsonAsync<BcBuyerBalancesResponseDto>("api/bc/buyer-balances") ?? new();
+        }
+        catch
+        {
+            return new();
+        }
+    }
+
     public async Task<List<BcSyncResultDto>?> SyncAllAsync()
     {
         var resp = await _http.PostAsync("api/bc/sync/all", null);
