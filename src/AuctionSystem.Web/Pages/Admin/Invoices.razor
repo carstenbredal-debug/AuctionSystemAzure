@@ -174,12 +174,16 @@ else
                                 <span class="badge bg-@GetStatusColor(creditStatus)">@creditStatus</span>
                             </td>
                             <td>
-                                @if (!inv.IsCreditNote && inv.Status != "Paid" && inv.Status != "ReleasedToShip" && creditStatus != "Fully Credited")
+                                @if (!inv.IsCreditNote && inv.Status != "Paid" && creditStatus != "Fully Credited")
                                 {
                                     var invId = inv.Id;
                                     @if (inv.Status == "Downpayment")
                                     {
                                         <span class="text-info me-1">Partial Paid</span>
+                                    }
+                                    @if (inv.Status == "ReleasedToShip")
+                                    {
+                                        <span class="badge bg-primary me-1">Released to Ship</span>
                                     }
                                     <button class="btn btn-sm btn-outline-info me-1" @onclick="() => OpenDownpaymentPopup(invId)" disabled="@_updatingId.HasValue">Partial Payment</button>
                                     <button class="btn btn-sm btn-outline-success" @onclick="() => OpenFullyPaidPopup(invId)" disabled="@_updatingId.HasValue">Fully Paid</button>
@@ -191,10 +195,6 @@ else
                                     {
                                         <span class="badge bg-primary ms-1">Shipped</span>
                                     }
-                                }
-                                else if (inv.Status == "ReleasedToShip")
-                                {
-                                    <span class="badge bg-primary">Released to Ship</span>
                                 }
                             </td>
                             <td>
