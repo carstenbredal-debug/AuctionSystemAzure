@@ -660,6 +660,13 @@ public class AuctionApiClient
         return resp.IsSuccessStatusCode;
     }
 
+    public async Task<LotGroupOrderDto?> UpdateLotGroupOrderAsync(string columnName, LotGroupOrderDto dto)
+    {
+        var resp = await _http.PutAsJsonAsync($"api/sales-order-setup/lot-group-orders/{Uri.EscapeDataString(columnName)}", dto);
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<LotGroupOrderDto>();
+    }
+
     public async Task DeleteLotGroupOrderAsync(string columnName)
         => await _http.DeleteAsync($"api/sales-order-setup/lot-group-orders/{Uri.EscapeDataString(columnName)}");
 
@@ -699,6 +706,13 @@ public class AuctionApiClient
     {
         var resp = await _http.PutAsJsonAsync("api/sales-order-setup/lot-sort-orders/reorder", items);
         return resp.IsSuccessStatusCode;
+    }
+
+    public async Task<LotSortOrderDto?> UpdateLotSortOrderAsync(string columnName, string value, LotSortOrderDto dto)
+    {
+        var resp = await _http.PutAsJsonAsync($"api/sales-order-setup/lot-sort-orders/{Uri.EscapeDataString(columnName)}/{Uri.EscapeDataString(value)}", dto);
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<LotSortOrderDto>();
     }
 
     public async Task DeleteLotSortOrderAsync(string columnName, string value)
