@@ -656,7 +656,8 @@ public class BcPaymentsResponseDto
 {
     public List<BcPaymentJournalDto> PaymentJournals { get; set; } = new();
     public List<BcPaymentEntryDto> Payments { get; set; } = new();
-    public List<BcLedgerEntryDto> GeneralLedgerEntries { get; set; } = new();
+    public List<BcLedgerEntryDto> CustomerLedgerEntries { get; set; } = new();
+    public List<BcLedgerEntryDto> PaymentEntries { get; set; } = new();
     public int TotalPaymentsFound { get; set; }
     public int TotalLedgerEntries { get; set; }
 }
@@ -687,9 +688,12 @@ public class BcLedgerEntryDto
     public string PostingDate { get; set; } = "";
     public string DocumentNumber { get; set; } = "";
     public string DocumentType { get; set; } = "";
-    public string SourceNumber { get; set; } = "";
+    public string CustomerNumber { get; set; } = "";
+    public string CustomerName { get; set; } = "";
     public string Description { get; set; } = "";
     public decimal DebitAmount { get; set; }
     public decimal CreditAmount { get; set; }
+    public decimal RemainingAmount { get; set; }
     public decimal Amount { get; set; }
+    public bool Open { get; set; }
 }

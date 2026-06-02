@@ -19,11 +19,11 @@ public class BcCustomerLedgerEntry
     [JsonPropertyName("documentType")]
     public string DocumentType { get; set; } = string.Empty;
 
-    [JsonPropertyName("sourceNumber")]
-    public string SourceNumber { get; set; } = string.Empty;
+    [JsonPropertyName("customerNumber")]
+    public string CustomerNumber { get; set; } = string.Empty;
 
-    [JsonPropertyName("sourceType")]
-    public string SourceType { get; set; } = string.Empty;
+    [JsonPropertyName("customerName")]
+    public string CustomerName { get; set; } = string.Empty;
 
     [JsonPropertyName("description")]
     public string Description { get; set; } = string.Empty;
@@ -34,8 +34,14 @@ public class BcCustomerLedgerEntry
     [JsonPropertyName("creditAmount")]
     public decimal CreditAmount { get; set; }
 
+    [JsonPropertyName("remainingAmount")]
+    public decimal RemainingAmount { get; set; }
+
     [JsonPropertyName("amount")]
     public decimal Amount { get; set; }
+
+    [JsonPropertyName("open")]
+    public bool Open { get; set; }
 
     [JsonPropertyName("lastModifiedDateTime")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

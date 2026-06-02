@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 using AuctionSystem.Domain.Data;
 using AuctionSystem.Domain.Entities;
 using AuctionSystem.Functions.BusinessCentral.Configuration;
+using AuctionSystem.Functions.BusinessCentral.Models;
 using AuctionSystem.Functions.BusinessCentral.Services;
 using AuctionSystem.Functions.Services;
 using Microsoft.EntityFrameworkCore;
@@ -525,39 +526,58 @@ public class BusinessCentralFunctions
             }
         }
 
-        // Also try to get general ledger entries with source type Customer (payments received)
-        List<object> ledgerPayments = new();
+        // Get customer ledger entries (posted payments, invoices, credit memos)
+        var allLedgerEntries = new List<BcCustomerLedgerEntry>();
         try
         {
-            var entries = await _bcClient.GetCustomerLedgerEntriesAsync(companyId);
-            foreach (var e in entries)
-            {
-                ledgerPayments.Add(new
-                {
-                    e.EntryNumber,
-                    e.PostingDate,
-                    e.DocumentNumber,
-                    e.DocumentType,
-                    e.SourceNumber,
-                    e.Description,
-                    e.DebitAmount,
-                    e.CreditAmount,
-                    e.Amount
-                });
-            }
+            allLedgerEntries = await _bcClient.GetCustomerLedgerEntriesAsync(companyId);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Could not fetch GL entries for customer payments");
+            _logger.LogWarning(ex, "Could not fetch customer ledger entries");
         }
+
+        // Filter to just payment entries
+        var paymentLedgerEntries = allLedgerEntries
+            .Where(e => e.DocumentType.Equals("Payment", StringComparison.OrdinalIgnoreCase))
+            .Select(e => new
+            {
+                e.EntryNumber,
+                e.PostingDate,
+                e.DocumentNumber,
+                e.CustomerNumber,
+                e.CustomerName,
+                e.Description,
+                e.DebitAmount,
+                e.CreditAmount,
+                e.RemainingAmount,
+                e.Amount,
+                e.Open
+            })
+            .ToList();
 
         return await JsonResponse(req, new
         {
             paymentJournals = journals.Select(j => new { j.Id, j.Code, j.DisplayName }),
             payments = allPayments,
-            generalLedgerEntries = ledgerPayments,
-            totalPaymentsFound = allPayments.Count,
-            totalLedgerEntries = ledgerPayments.Count
+            customerLedgerEntries = allLedgerEntries.Select(e => new
+            {
+                e.EntryNumber,
+                e.PostingDate,
+                e.DocumentNumber,
+                e.DocumentType,
+                e.CustomerNumber,
+                e.CustomerName,
+                e.Description,
+                e.DebitAmount,
+                e.CreditAmount,
+                e.RemainingAmount,
+                e.Amount,
+                e.Open
+            }),
+            paymentEntries = paymentLedgerEntries,
+            totalPaymentsFound = allPayments.Count + paymentLedgerEntries.Count,
+            totalLedgerEntries = allLedgerEntries.Count
         });
     }
 
