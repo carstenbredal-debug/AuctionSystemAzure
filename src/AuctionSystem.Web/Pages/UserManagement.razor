@@ -628,6 +628,8 @@ else
     private List<BcPostingGroupDto> _bcCustomerPostingGroups = new();
     private List<BcPostingGroupDto> _bcVendorPostingGroups = new();
     private List<BcPaymentTermDto> _bcPaymentTerms = new();
+    private List<BcVendorDto> _bcVendors = new();
+    private List<BcCustomerDto> _bcCustomers = new();
 
     private string SelectedRole
     {
@@ -678,6 +680,8 @@ else
         _bcCustomerPostingGroups = await Api.GetBcCustomerPostingGroupsAsync();
         _bcVendorPostingGroups = await Api.GetBcVendorPostingGroupsAsync();
         _bcPaymentTerms = await Api.GetBcPaymentTermsAsync();
+        try { _bcVendors = await Api.GetBcVendorsAsync(); } catch { }
+        try { _bcCustomers = await Api.GetBcCustomersAsync(); } catch { }
     }
 
     private void ShowAddForm()
@@ -705,11 +709,27 @@ else
             IsActive = user.IsActive
         };
 
-        // Load linked entity data so dropdowns show the saved values
+        // Load linked entity data and overlay BC values for posting groups, credit limit, etc.
         if (user.BrokerId.HasValue)
         {
             var broker = _brokers.FirstOrDefault(b => b.Id == user.BrokerId.Value);
             _brokerForm = broker != null ? CloneBroker(broker) : new BrokerDto { IsActive = true };
+            // Overlay with BC vendor data (source of truth for posting groups, credit limit)
+            if (broker != null)
+            {
+                var bcVendor = _bcVendors.FirstOrDefault(v => v.Number == broker.BrokerNumber);
+                if (bcVendor != null)
+                {
+                    _brokerForm.GenBusPostingGroup = bcVendor.GenBusPostingGroup;
+                    _brokerForm.VatBusPostingGroup = bcVendor.VatBusPostingGroup;
+                    _brokerForm.CustomerPostingGroup = bcVendor.VendorPostingGroup;
+                    _brokerForm.Currency = bcVendor.CurrencyCode;
+                    _brokerForm.PaymentTerm = bcVendor.PaymentTermsCode;
+                    _brokerForm.PaymentMethod = bcVendor.PaymentMethodCode;
+                    _brokerForm.VatRegistrationNo = bcVendor.VatRegistrationNo;
+                    _brokerForm.Blocked = bcVendor.Blocked;
+                }
+            }
         }
         else
         {
@@ -720,6 +740,21 @@ else
         {
             var farmer = _farmers.FirstOrDefault(f => f.Id == user.FarmerId.Value);
             _farmerForm = farmer != null ? CloneFarmer(farmer) : new FarmerDto();
+            // Overlay with BC vendor data
+            if (farmer != null)
+            {
+                var bcVendor = _bcVendors.FirstOrDefault(v => v.Number == farmer.FarmerNumber);
+                if (bcVendor != null)
+                {
+                    _farmerForm.GenBusPostingGroup = bcVendor.GenBusPostingGroup;
+                    _farmerForm.VatBusPostingGroup = bcVendor.VatBusPostingGroup;
+                    _farmerForm.VendorPostingGroup = bcVendor.VendorPostingGroup;
+                    _farmerForm.Currency = bcVendor.CurrencyCode;
+                    _farmerForm.PaymentTerm = bcVendor.PaymentTermsCode;
+                    _farmerForm.PaymentMethod = bcVendor.PaymentMethodCode;
+                    _farmerForm.VatRegistrationNo = bcVendor.VatRegistrationNo;
+                }
+            }
         }
         else
         {
@@ -730,6 +765,23 @@ else
         {
             var buyer = _buyers.FirstOrDefault(b => b.Id == user.BuyerId.Value);
             _buyerForm = buyer != null ? CloneBuyer(buyer) : new BuyerDto();
+            // Overlay with BC customer data (source of truth for posting groups, credit limit)
+            if (buyer != null)
+            {
+                var bcCustomer = _bcCustomers.FirstOrDefault(c => c.Number == buyer.BuyerNumber);
+                if (bcCustomer != null)
+                {
+                    _buyerForm.GenBusPostingGroup = bcCustomer.GenBusPostingGroup;
+                    _buyerForm.VatBusPostingGroup = bcCustomer.VatBusPostingGroup;
+                    _buyerForm.CustomerPostingGroup = bcCustomer.CustomerPostingGroup;
+                    _buyerForm.CreditLimit = bcCustomer.CreditLimit;
+                    _buyerForm.Currency = bcCustomer.CurrencyCode;
+                    _buyerForm.PaymentTerm = bcCustomer.PaymentTermsCode;
+                    _buyerForm.PaymentMethod = bcCustomer.PaymentMethodCode;
+                    _buyerForm.VatRegistrationNo = bcCustomer.VatRegistrationNo;
+                    _buyerForm.Blocked = bcCustomer.Blocked;
+                }
+            }
         }
         else
         {
