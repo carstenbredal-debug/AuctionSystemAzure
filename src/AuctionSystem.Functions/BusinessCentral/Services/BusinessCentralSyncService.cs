@@ -486,6 +486,9 @@ public class BusinessCentralSyncService
                 _logger.LogInformation("Credit note {Id}: applied to invoice {InvNo} in BC — {Msg}",
                     creditNote.Id, originalInvoice.BcInvoiceNumber, result.ResultMessage);
 
+                // Mark the credit note as alloted (applied in BC)
+                creditNote.Status = Domain.Enums.InvoiceStatus.Alloted;
+
                 // Update original invoice status based on credited lots
                 var originalLotNumbers = await _db.Set<Domain.Entities.InvoiceLine>()
                     .Where(l => l.InvoiceId == originalInvoice.Id)
