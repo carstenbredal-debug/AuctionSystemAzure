@@ -11,5 +11,6 @@ public enum InvoiceStatus
     Cancelled,
     PartiallyCredited,
     FullyCredited,
-    Alloted
+    Alloted,
+    ReleasedToShip
 }

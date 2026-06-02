@@ -589,7 +589,18 @@ else
             }
             else
             {
-                _takebackMessage = "Failed to request takeback. Please try again.";
+                try
+                {
+                    var errorJson = await resp.Content.ReadFromJsonAsync<TakebackErrorResponse>();
+                    if (errorJson?.Error == "Lot Sold")
+                        _takebackMessage = $"Lot Sold — {errorJson.Message}";
+                    else
+                        _takebackMessage = "Failed to request takeback. Please try again.";
+                }
+                catch
+                {
+                    _takebackMessage = "Failed to request takeback. Please try again.";
+                }
                 _takebackMessageIsError = true;
             }
         }
@@ -599,6 +610,12 @@ else
             _takebackMessageIsError = true;
         }
         finally { _requestingTakeback = false; }
+    }
+
+    private class TakebackErrorResponse
+    {
+        public string? Error { get; set; }
+        public string? Message { get; set; }
     }
 
     private async Task RespondTakeback(int requestId, bool approve)

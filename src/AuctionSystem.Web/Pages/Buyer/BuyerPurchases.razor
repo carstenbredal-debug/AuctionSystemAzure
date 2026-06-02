@@ -309,7 +309,18 @@ else
             }
             else
             {
-                _returnMessage = "Failed to request return. Please try again.";
+                try
+                {
+                    var errorJson = await resp.Content.ReadFromJsonAsync<ReturnErrorResponse>();
+                    if (errorJson?.Error == "Lot Sold")
+                        _returnMessage = $"Lot Sold — {errorJson.Message}";
+                    else
+                        _returnMessage = "Failed to request return. Please try again.";
+                }
+                catch
+                {
+                    _returnMessage = "Failed to request return. Please try again.";
+                }
                 _returnMessageIsError = true;
             }
         }
@@ -322,6 +333,12 @@ else
         {
             _requestingReturn = false;
         }
+    }
+
+    private class ReturnErrorResponse
+    {
+        public string? Error { get; set; }
+        public string? Message { get; set; }
     }
 
     private async Task RespondTakeback(int requestId, bool approve)

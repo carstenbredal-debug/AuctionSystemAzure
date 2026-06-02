@@ -174,7 +174,7 @@ else
                                 <span class="badge bg-@GetStatusColor(creditStatus)">@creditStatus</span>
                             </td>
                             <td>
-                                @if (!inv.IsCreditNote && inv.Status != "Paid" && inv.Status != "Downpayment")
+                                @if (!inv.IsCreditNote && inv.Status != "Paid" && inv.Status != "Downpayment" && inv.Status != "ReleasedToShip")
                                 {
                                     var invId = inv.Id;
                                     <button class="btn btn-sm btn-outline-info me-1" @onclick="() => OpenDownpaymentPopup(invId)" disabled="@_updatingId.HasValue">Downpayment</button>
@@ -195,6 +195,10 @@ else
                                     {
                                         <span class="badge bg-primary ms-1">Shipped</span>
                                     }
+                                }
+                                else if (inv.Status == "ReleasedToShip")
+                                {
+                                    <span class="badge bg-primary">Released to Ship</span>
                                 }
                             </td>
                             <td>
@@ -382,7 +386,7 @@ else
     private string _selectedStatus = "";
     private List<string> _brokerNames = new();
     private List<string> _buyerNames = new();
-    private List<string> _statusOptions = new() { "Issued", "Downpayment", "Paid", "Partially Credited", "Fully Credited", "Alloted" };
+    private List<string> _statusOptions = new() { "Issued", "Downpayment", "Paid", "Released to Ship", "Partially Credited", "Fully Credited", "Alloted" };
     private int? _updatingId;
     private int? _expandedInvoiceId;
 
@@ -524,7 +528,7 @@ else
             var inv = _invoices.FirstOrDefault(i => i.Id == _dpInvoiceId);
             if (inv != null)
             {
-                inv.Status = "Downpayment";
+                inv.Status = releaseForShipping ? "ReleasedToShip" : "Downpayment";
                 if (releaseForShipping) inv.ShippingStatus = "Released";
             }
             try
@@ -606,7 +610,7 @@ else
             var inv = _invoices.FirstOrDefault(i => i.Id == _fpInvoiceId);
             if (inv != null)
             {
-                inv.Status = StatusPaid;
+                inv.Status = releaseForShipping ? "ReleasedToShip" : StatusPaid;
                 if (releaseForShipping) inv.ShippingStatus = "Released";
             }
 
@@ -643,11 +647,19 @@ else
 
     private string GetCreditStatus(InvoiceSummaryDto inv)
     {
-        if (inv.IsCreditNote) return inv.Status;
-        if (inv.CreditedLots == 0) return inv.Status;
+        if (inv.IsCreditNote) return FormatStatus(inv.Status);
+        if (inv.CreditedLots == 0) return FormatStatus(inv.Status);
         if (inv.UncreditedLotNumbers.Count == 0) return "Fully Credited";
         return "Partially Credited";
     }
+
+    private string FormatStatus(string status) => status switch
+    {
+        "ReleasedToShip" => "Released to Ship",
+        "PartiallyCredited" => "Partially Credited",
+        "FullyCredited" => "Fully Credited",
+        _ => status
+    };
 
     private string GetStatusColor(string status) => status switch
     {
@@ -657,6 +669,7 @@ else
         "Issued" => "info",
         "Downpayment" => "info",
         "Alloted" => "success",
+        "Released to Ship" => "primary",
         "Overdue" => "danger",
         _ => "secondary"
     };
