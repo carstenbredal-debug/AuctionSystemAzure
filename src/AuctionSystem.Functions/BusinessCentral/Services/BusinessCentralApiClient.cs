@@ -442,6 +442,20 @@ public class BusinessCentralApiClient
         return await PostAsync(url, payload);
     }
 
+    public async Task<BcPaymentApplication> ApplyCreditMemoToInvoiceAsync(Guid companyId, string customerNo, int creditMemoEntryNo, string invoiceDocumentNo, decimal amountToApply = 0)
+    {
+        var url = $"{_options.CustomApiBaseUrl}/companies({companyId})/paymentApplications";
+        var payload = new BcPaymentApplication
+        {
+            CustomerNo = customerNo,
+            PaymentEntryNo = creditMemoEntryNo,
+            InvoiceDocumentNo = invoiceDocumentNo,
+            AmountToApply = amountToApply,
+            SourceDocumentType = "CreditMemo"
+        };
+        return await PostAsync(url, payload);
+    }
+
     public async Task<List<BcGeneralLedgerEntry>> GetGeneralLedgerEntriesAsync(Guid companyId, int top = 500)
     {
         var url = $"{_options.BaseUrl}/companies({companyId})/generalLedgerEntries?$top={top}&$orderby=postingDate desc";

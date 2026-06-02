@@ -33,6 +33,10 @@ table 50150 "Payment Application Buffer"
         {
             DataClassification = SystemMetadata;
         }
+        field(8; SourceDocumentType; Text[20])
+        {
+            DataClassification = SystemMetadata;
+        }
     }
 
     keys
