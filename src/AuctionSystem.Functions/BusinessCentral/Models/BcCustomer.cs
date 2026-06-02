@@ -81,6 +81,14 @@ public class BcCustomer
     [JsonPropertyName("vatRegistrationNo")]
     public string VatRegistrationNo { get; set; } = string.Empty;
 
+    [JsonPropertyName("balance")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public decimal Balance { get; set; }
+
+    [JsonPropertyName("overdueAmount")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public decimal OverdueAmount { get; set; }
+
     [JsonPropertyName("lastModifiedDateTime")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public DateTimeOffset? LastModifiedDateTime { get; set; }

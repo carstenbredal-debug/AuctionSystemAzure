@@ -394,6 +394,18 @@ public class BusinessCentralApiClient
         return await GetListAsync<BcCustomerLedgerEntry>(url);
     }
 
+    public async Task<List<BcGeneralLedgerEntry>> GetGeneralLedgerEntriesAsync(Guid companyId, int top = 500)
+    {
+        var url = $"{_options.BaseUrl}/companies({companyId})/generalLedgerEntries?$top={top}&$orderby=postingDate desc";
+        return await GetListAsync<BcGeneralLedgerEntry>(url);
+    }
+
+    public async Task<List<BcCustomerBalance>> GetCustomerBalancesAsync(Guid companyId)
+    {
+        var url = $"{_options.BaseUrl}/companies({companyId})/customers?$top=5000&$select=id,number,displayName,balance,overdueAmount,currencyCode";
+        return await GetListAsync<BcCustomerBalance>(url);
+    }
+
     // ── Sales Credit Memos ─────────────────────────────────────
 
     public async Task<BcSalesCreditMemo> CreateSalesCreditMemoAsync(Guid companyId, BcSalesCreditMemo creditMemo)
