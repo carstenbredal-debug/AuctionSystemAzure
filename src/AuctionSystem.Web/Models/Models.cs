@@ -255,6 +255,7 @@ public class BrokerCustomerRequestDto
     public BrokerDto? Broker { get; set; }
     public int BuyerId { get; set; }
     public BuyerDto? Buyer { get; set; }
+    public string InitiatedBy { get; set; } = "Broker";
     public CustomerRequestStatus Status { get; set; }
     public DateTime RequestedAt { get; set; }
     public DateTime? RespondedAt { get; set; }

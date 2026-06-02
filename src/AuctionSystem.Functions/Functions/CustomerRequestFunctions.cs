@@ -62,6 +62,16 @@ public class CustomerRequestFunctions
             .FirstOrDefaultAsync(r => r.BrokerId == brokerId && r.BuyerId == dto.BuyerId);
         if (existing != null)
         {
+            if (existing.Status == CustomerRequestStatus.Declined)
+            {
+                existing.Status = CustomerRequestStatus.Pending;
+                existing.InitiatedBy = "Broker";
+                existing.RequestedAt = DateTime.UtcNow;
+                existing.RespondedAt = null;
+                await _db.SaveChangesAsync();
+                var refreshed = await _db.BrokerCustomerRequests.Include(r => r.Buyer).FirstAsync(r => r.Id == existing.Id);
+                return await CreateJsonResponse(req, refreshed, System.Net.HttpStatusCode.Created);
+            }
             var errorResp = req.CreateResponse(System.Net.HttpStatusCode.Conflict);
             await errorResp.WriteStringAsync("A request for this customer already exists.");
             return errorResp;
@@ -71,6 +81,7 @@ public class CustomerRequestFunctions
         {
             BrokerId = brokerId,
             BuyerId = dto.BuyerId,
+            InitiatedBy = "Broker",
             Status = CustomerRequestStatus.Pending
         };
 
@@ -137,6 +148,16 @@ public class CustomerRequestFunctions
             .FirstOrDefaultAsync(r => r.BrokerId == dto.BrokerId && r.BuyerId == buyerId);
         if (existing != null)
         {
+            if (existing.Status == CustomerRequestStatus.Declined)
+            {
+                existing.Status = CustomerRequestStatus.Pending;
+                existing.InitiatedBy = "Buyer";
+                existing.RequestedAt = DateTime.UtcNow;
+                existing.RespondedAt = null;
+                await _db.SaveChangesAsync();
+                var refreshed = await _db.BrokerCustomerRequests.Include(r => r.Broker).FirstAsync(r => r.Id == existing.Id);
+                return await CreateJsonResponse(req, refreshed, System.Net.HttpStatusCode.Created);
+            }
             var errorResp = req.CreateResponse(System.Net.HttpStatusCode.Conflict);
             await errorResp.WriteStringAsync("A request for this broker already exists.");
             return errorResp;
@@ -146,6 +167,7 @@ public class CustomerRequestFunctions
         {
             BrokerId = dto.BrokerId,
             BuyerId = buyerId,
+            InitiatedBy = "Buyer",
             Status = CustomerRequestStatus.Pending
         };
 

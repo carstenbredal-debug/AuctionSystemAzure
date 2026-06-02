@@ -7,7 +7,7 @@
 <PageTitle>Customers - Broker Portal</PageTitle>
 
 <h1>Customers</h1>
-<p class="text-muted">Select a customer from the system to send them an invitation. They must approve before they appear as your customer.</p>
+<p class="text-muted">Select a customer from the system to send them an invitation, or approve incoming connection requests from buyers.</p>
 
 @if (_loading)
 {
@@ -51,6 +51,43 @@ else
             </div>
         </div>
     </div>
+
+    @if (_buyerPendingRequests.Any())
+    {
+        <div class="card mb-4 border-warning">
+            <div class="card-header bg-warning text-dark">
+                <strong>Pending Connection Requests from Buyers</strong> <span class="badge bg-dark">@_buyerPendingRequests.Count</span>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Number</th>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Requested</th>
+                            <th style="width: 200px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var req in _buyerPendingRequests)
+                        {
+                            <tr>
+                                <td>@(req.Buyer?.BuyerNumber ?? "\u2014")</td>
+                                <td><strong>@(req.Buyer?.Name ?? "\u2014")</strong></td>
+                                <td>@(req.Buyer?.ContactEmail ?? "\u2014")</td>
+                                <td>@req.RequestedAt.ToString("g")</td>
+                                <td>
+                                    <button class="btn btn-sm btn-success me-1" @onclick="() => RespondToRequest(req, true)" @onclick:stopPropagation="true">Approve</button>
+                                    <button class="btn btn-sm btn-danger" @onclick="() => RespondToRequest(req, false)" @onclick:stopPropagation="true">Decline</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
 
     <div class="card">
         <div class="card-header">
@@ -109,6 +146,7 @@ else
     private int _selectedBuyerId;
 
     private List<BrokerCustomerRequestDto> _requests = new();
+    private List<BrokerCustomerRequestDto> _buyerPendingRequests = new();
     private List<BuyerDto> _allBuyers = new();
     private List<BuyerDto> _availableBuyers = new();
 
@@ -131,10 +169,16 @@ else
 
     private async Task LoadData()
     {
-        _requests = await Api.GetCustomerRequestsByBrokerAsync(_brokerId);
+        var allRequests = await Api.GetCustomerRequestsByBrokerAsync(_brokerId);
+        _buyerPendingRequests = allRequests
+            .Where(r => r.Status == CustomerRequestStatus.Pending && r.InitiatedBy == "Buyer")
+            .ToList();
+        _requests = allRequests
+            .Where(r => !(r.Status == CustomerRequestStatus.Pending && r.InitiatedBy == "Buyer"))
+            .ToList();
         _allBuyers = await Api.GetAllBuyersAsync();
 
-        var requestedBuyerIds = _requests.Select(r => r.BuyerId).ToHashSet();
+        var requestedBuyerIds = allRequests.Select(r => r.BuyerId).ToHashSet();
         _availableBuyers = _allBuyers
             .Where(b => !requestedBuyerIds.Contains(b.Id))
             .OrderBy(b => b.Name)
@@ -167,6 +211,25 @@ else
         await Api.DeleteCustomerRequestAsync(req.Id);
         _message = $"Invitation to '{req.Buyer?.Name}' cancelled.";
         _messageIsError = false;
+        await LoadData();
+    }
+
+    private async Task RespondToRequest(BrokerCustomerRequestDto req, bool approve)
+    {
+        var result = await Api.RespondToCustomerRequestAsync(req.Id, approve);
+        var buyerName = req.Buyer?.Name ?? $"Buyer {req.BuyerId}";
+        if (result != null)
+        {
+            _message = approve
+                ? $"Connection with '{buyerName}' approved."
+                : $"Connection request from '{buyerName}' declined.";
+            _messageIsError = false;
+        }
+        else
+        {
+            _message = "Failed to respond to the request.";
+            _messageIsError = true;
+        }
         await LoadData();
     }
 

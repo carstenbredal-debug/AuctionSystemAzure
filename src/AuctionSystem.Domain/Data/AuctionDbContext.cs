@@ -158,6 +158,7 @@ public class AuctionDbContext : DbContext
             e.HasIndex(r => new { r.BrokerId, r.BuyerId }).IsUnique();
             e.HasOne(r => r.Broker).WithMany().HasForeignKey(r => r.BrokerId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(r => r.Buyer).WithMany().HasForeignKey(r => r.BuyerId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(r => r.InitiatedBy).HasMaxLength(10).HasDefaultValue("Broker");
         });
 
         modelBuilder.Entity<SystemParameter>(e =>
