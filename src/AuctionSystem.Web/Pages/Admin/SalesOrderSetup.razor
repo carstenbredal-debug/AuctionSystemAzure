@@ -48,7 +48,6 @@ else
                 <table class="table table-striped table-hover mb-0">
                     <thead class="table-dark">
                         <tr>
-                            <th style="width:50px;"></th>
                             <th>Order</th>
                             <th>Column Name</th>
                             <th style="width:150px;">Actions</th>
@@ -57,21 +56,16 @@ else
                     <tbody>
                         @if (_groupOrders.Count == 0)
                         {
-                            <tr><td colspan="4" class="text-center text-muted py-4">No groups configured.</td></tr>
+                            <tr><td colspan="3" class="text-center text-muted py-4">No groups configured.</td></tr>
                         }
                         @foreach (var item in _groupOrders)
                         {
-                            <tr draggable="true"
-                                @ondragstart="() => DragStartGroup(item)"
-                                @ondragover:preventDefault
-                                @ondrop="() => DropGroup(item)"
-                                class="@(_dragGroupItem == item ? "table-active" : "")"
-                                style="cursor: grab;">
-                                <td class="text-center text-muted">☰</td>
+                            <tr>
                                 <td><span class="badge bg-secondary">@item.GroupOrder</span></td>
                                 <td><strong>@item.ColumnName</strong></td>
                                 <td>
-                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteGroupOrder(item)" @onclick:stopPropagation="true">Delete</button>
+                                    <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => EditGroupOrder(item)">Edit</button>
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteGroupOrder(item)">Delete</button>
                                 </td>
                             </tr>
                         }
@@ -84,7 +78,7 @@ else
         {
             <div class="card border-primary mb-4">
                 <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                    <strong>Add Group</strong>
+                    <strong>@(_editingGroupOrder != null ? "Edit Group" : "Add Group")</strong>
                     <button type="button" class="btn-close btn-close-white" @onclick="() => _showGroupForm = false"></button>
                 </div>
                 <div class="card-body">
@@ -234,7 +228,7 @@ else
         {
             <div class="card border-primary mb-4">
                 <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                    <strong>Add Sort Value</strong>
+                    <strong>@(_editingSortOrder != null ? "Edit Sort Value" : "Add Sort Value")</strong>
                     <button type="button" class="btn-close btn-close-white" @onclick="() => _showSortForm = false"></button>
                 </div>
                 <div class="card-body">
@@ -283,26 +277,20 @@ else
                     <table class="table table-striped table-hover mb-0">
                         <thead>
                             <tr>
-                                <th style="width:50px;"></th>
-                                <th>Order</th>
+                                        <th>Order</th>
                                 <th>Value</th>
-                                <th style="width:100px;">Actions</th>
+                                <th style="width:150px;">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach (var item in groupItems)
                             {
-                                <tr draggable="true"
-                                    @ondragstart="() => DragStartSort(item)"
-                                    @ondragover:preventDefault
-                                    @ondrop="() => DropSort(item)"
-                                    class="@(_dragSortItem == item ? "table-active" : "")"
-                                    style="cursor: grab;">
-                                    <td class="text-center text-muted">☰</td>
+                                <tr>
                                     <td><span class="badge bg-secondary">@item.SortOrder</span></td>
                                     <td>@item.Value</td>
                                     <td>
-                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteSortOrder(item)" @onclick:stopPropagation="true">Delete</button>
+                                        <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => EditSortOrder(item)">Edit</button>
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteSortOrder(item)">Delete</button>
                                     </td>
                                 </tr>
                             }
@@ -418,7 +406,7 @@ else
     private bool _showGroupForm;
     private string _newGroupName = "";
     private int _newGroupOrder;
-    private LotGroupOrderDto? _dragGroupItem;
+    private LotGroupOrderDto? _editingGroupOrder;
 
     // Lot Size Rules
     private List<LotSizeRuleDto> _sizeRules = new();
@@ -432,7 +420,7 @@ else
     private string _newSortColumnName = "";
     private string _newSortValue = "";
     private int _newSortOrder;
-    private LotSortOrderDto? _dragSortItem;
+    private LotSortOrderDto? _editingSortOrder;
 
     // Catalog Number Rules
     private List<CatalogNumberRuleDto> _catalogRules = new();
@@ -458,27 +446,48 @@ else
 
     private void ShowAddGroupOrder()
     {
+        _editingGroupOrder = null;
         _newGroupName = "";
         _newGroupOrder = _groupOrders.Count > 0 ? _groupOrders.Max(g => g.GroupOrder) + 1 : 1;
+        _showGroupForm = true;
+    }
+
+    private void EditGroupOrder(LotGroupOrderDto item)
+    {
+        _editingGroupOrder = item;
+        _newGroupName = item.ColumnName;
+        _newGroupOrder = item.GroupOrder;
         _showGroupForm = true;
     }
 
     private async Task SaveGroupOrder()
     {
         if (string.IsNullOrWhiteSpace(_newGroupName)) return;
-        var result = await Api.CreateLotGroupOrderAsync(new LotGroupOrderDto { ColumnName = _newGroupName.Trim(), GroupOrder = _newGroupOrder });
-        if (result != null)
+
+        if (_editingGroupOrder != null)
         {
-            _message = $"Group '{_newGroupName}' added.";
-            _messageIsError = false;
-            _showGroupForm = false;
-            _groupOrders = await Api.GetLotGroupOrdersAsync();
+            var result = await Api.UpdateLotGroupOrderAsync(_editingGroupOrder.ColumnName, new LotGroupOrderDto { ColumnName = _editingGroupOrder.ColumnName, GroupOrder = _newGroupOrder });
+            _message = result != null ? "Group updated." : "Failed to update group.";
+            _messageIsError = result == null;
         }
         else
         {
-            _message = "Failed to add group (may already exist).";
-            _messageIsError = true;
+            var result = await Api.CreateLotGroupOrderAsync(new LotGroupOrderDto { ColumnName = _newGroupName.Trim(), GroupOrder = _newGroupOrder });
+            if (result != null)
+            {
+                _message = $"Group '{_newGroupName}' added.";
+                _messageIsError = false;
+            }
+            else
+            {
+                _message = "Failed to add group (may already exist).";
+                _messageIsError = true;
+            }
         }
+
+        _showGroupForm = false;
+        _editingGroupOrder = null;
+        _groupOrders = await Api.GetLotGroupOrdersAsync();
     }
 
     private async Task DeleteGroupOrder(LotGroupOrderDto item)
@@ -487,27 +496,6 @@ else
         _message = $"Group '{item.ColumnName}' deleted.";
         _messageIsError = false;
         _groupOrders = await Api.GetLotGroupOrdersAsync();
-    }
-
-    private void DragStartGroup(LotGroupOrderDto item) => _dragGroupItem = item;
-
-    private async Task DropGroup(LotGroupOrderDto target)
-    {
-        if (_dragGroupItem == null || _dragGroupItem == target) return;
-
-        var list = _groupOrders.ToList();
-        list.Remove(_dragGroupItem);
-        var idx = list.IndexOf(target);
-        list.Insert(idx, _dragGroupItem);
-
-        for (int i = 0; i < list.Count; i++)
-            list[i].GroupOrder = i + 1;
-
-        _dragGroupItem = null;
-        _groupOrders = list;
-        StateHasChanged();
-
-        await Api.ReorderLotGroupOrdersAsync(list);
     }
 
     // ── Lot Size Rules ──
@@ -569,9 +557,19 @@ else
 
     private void ShowAddSortOrder()
     {
+        _editingSortOrder = null;
         _newSortColumnName = "";
         _newSortValue = "";
         _newSortOrder = 0;
+        _showSortForm = true;
+    }
+
+    private void EditSortOrder(LotSortOrderDto item)
+    {
+        _editingSortOrder = item;
+        _newSortColumnName = item.ColumnName;
+        _newSortValue = item.Value;
+        _newSortOrder = item.SortOrder;
         _showSortForm = true;
     }
 
@@ -579,30 +577,46 @@ else
     {
         if (string.IsNullOrWhiteSpace(_newSortColumnName) || string.IsNullOrWhiteSpace(_newSortValue)) return;
 
-        var groupItems = _sortOrders.Where(s => s.ColumnName == _newSortColumnName.Trim()).ToList();
-        if (_newSortOrder == 0)
-            _newSortOrder = groupItems.Count > 0 ? groupItems.Max(s => s.SortOrder) + 1 : 1;
-
-        var result = await Api.CreateLotSortOrderAsync(new LotSortOrderDto
+        if (_editingSortOrder != null)
         {
-            ColumnName = _newSortColumnName.Trim(),
-            Value = _newSortValue.Trim(),
-            SortOrder = _newSortOrder
-        });
-
-        if (result != null)
-        {
-            _message = $"Value '{_newSortValue}' added to '{_newSortColumnName}'.";
-            _messageIsError = false;
-            _showSortForm = false;
-            _sortOrders = await Api.GetLotSortOrdersAsync();
-            _sortGroups = _sortOrders.Select(s => s.ColumnName).Distinct().OrderBy(s => s).ToList();
+            var result = await Api.UpdateLotSortOrderAsync(_editingSortOrder.ColumnName, _editingSortOrder.Value, new LotSortOrderDto
+            {
+                ColumnName = _editingSortOrder.ColumnName,
+                Value = _editingSortOrder.Value,
+                SortOrder = _newSortOrder
+            });
+            _message = result != null ? "Sort order updated." : "Failed to update sort order.";
+            _messageIsError = result == null;
         }
         else
         {
-            _message = "Failed to add (value may already exist in that group).";
-            _messageIsError = true;
+            var groupItems = _sortOrders.Where(s => s.ColumnName == _newSortColumnName.Trim()).ToList();
+            if (_newSortOrder == 0)
+                _newSortOrder = groupItems.Count > 0 ? groupItems.Max(s => s.SortOrder) + 1 : 1;
+
+            var result = await Api.CreateLotSortOrderAsync(new LotSortOrderDto
+            {
+                ColumnName = _newSortColumnName.Trim(),
+                Value = _newSortValue.Trim(),
+                SortOrder = _newSortOrder
+            });
+
+            if (result != null)
+            {
+                _message = $"Value '{_newSortValue}' added to '{_newSortColumnName}'.";
+                _messageIsError = false;
+            }
+            else
+            {
+                _message = "Failed to add (value may already exist in that group).";
+                _messageIsError = true;
+            }
         }
+
+        _showSortForm = false;
+        _editingSortOrder = null;
+        _sortOrders = await Api.GetLotSortOrdersAsync();
+        _sortGroups = _sortOrders.Select(s => s.ColumnName).Distinct().OrderBy(s => s).ToList();
     }
 
     private async Task DeleteSortOrder(LotSortOrderDto item)
@@ -612,31 +626,6 @@ else
         _messageIsError = false;
         _sortOrders = await Api.GetLotSortOrdersAsync();
         _sortGroups = _sortOrders.Select(s => s.ColumnName).Distinct().OrderBy(s => s).ToList();
-    }
-
-    private void DragStartSort(LotSortOrderDto item) => _dragSortItem = item;
-
-    private async Task DropSort(LotSortOrderDto target)
-    {
-        if (_dragSortItem == null || _dragSortItem == target) return;
-        if (_dragSortItem.ColumnName != target.ColumnName) return;
-
-        var group = _dragSortItem.ColumnName;
-        var list = _sortOrders.Where(s => s.ColumnName == group).OrderBy(s => s.SortOrder).ToList();
-        list.Remove(_dragSortItem);
-        var idx = list.IndexOf(target);
-        list.Insert(idx, _dragSortItem);
-
-        for (int i = 0; i < list.Count; i++)
-            list[i].SortOrder = i + 1;
-
-        _dragSortItem = null;
-
-        var allOther = _sortOrders.Where(s => s.ColumnName != group).ToList();
-        _sortOrders = allOther.Concat(list).ToList();
-        StateHasChanged();
-
-        await Api.ReorderLotSortOrdersAsync(list);
     }
 
     // ── Catalog Number Rules ──
