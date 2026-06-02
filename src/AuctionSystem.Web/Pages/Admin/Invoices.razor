@@ -92,6 +92,16 @@ else
                 }
             </select>
         </div>
+        <div class="col-md-3">
+            <label class="form-label">Status</label>
+            <select class="form-select" @bind="_selectedStatus">
+                <option value="">All Statuses</option>
+                @foreach (var status in _statusOptions)
+                {
+                    <option value="@status">@status</option>
+                }
+            </select>
+        </div>
         <div class="col-md-3 d-flex align-items-end">
             <button class="btn btn-outline-secondary" @onclick="ClearFilters">Clear Filters</button>
         </div>
@@ -369,8 +379,10 @@ else
     private string _tab = "all";
     private string _selectedBroker = "";
     private string _selectedBuyer = "";
+    private string _selectedStatus = "";
     private List<string> _brokerNames = new();
     private List<string> _buyerNames = new();
+    private List<string> _statusOptions = new() { "Issued", "Downpayment", "Paid", "Partially Credited", "Fully Credited" };
     private int? _updatingId;
     private int? _expandedInvoiceId;
 
@@ -408,6 +420,9 @@ else
             if (!string.IsNullOrEmpty(_selectedBuyer))
                 result = result.Where(i => i.BuyerName == _selectedBuyer);
 
+            if (!string.IsNullOrEmpty(_selectedStatus))
+                result = result.Where(i => GetCreditStatus(i) == _selectedStatus);
+
             if (_tab == "invoices")
                 result = result.Where(i => !i.IsCreditNote);
             else if (_tab == "credits")
@@ -429,6 +444,7 @@ else
     {
         _selectedBroker = "";
         _selectedBuyer = "";
+        _selectedStatus = "";
     }
 
     private async Task SetStatus(int invoiceId, string status)
