@@ -24,35 +24,19 @@
 @if (_result != null)
 {
     <div class="row mb-4">
-        <div class="col-md-3">
+        <div class="col-md-6">
             <div class="card text-center">
                 <div class="card-body">
-                    <h5 class="card-title text-muted">Paid Invoices</h5>
-                    <h3>@_result.TotalPaidInvoices</h3>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h5 class="card-title text-muted">Ledger Payments</h5>
+                    <h5 class="card-title text-muted">Customer Ledger Entries</h5>
                     <h3>@_result.TotalCustomerLedgerEntries</h3>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-6">
             <div class="card text-center">
                 <div class="card-body">
                     <h5 class="card-title text-muted">GL Payment Entries</h5>
                     <h3>@_result.TotalGlPaymentEntries</h3>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h5 class="card-title text-muted">Journal Payments</h5>
-                    <h3>@_result.TotalJournalPayments</h3>
                 </div>
             </div>
         </div>
@@ -68,76 +52,6 @@
     {
         <div class="alert alert-warning">
             <strong>GL entries error:</strong> @_result.GlError
-        </div>
-    }
-
-    @* Customer Balances *@
-    @if (_result.CustomerBalances.Count > 0)
-    {
-        <h5 class="mb-3">Customer Balances</h5>
-        <div class="card mb-4">
-            <div class="card-body p-0">
-                <table class="table table-striped table-hover mb-0">
-                    <thead class="table-dark">
-                        <tr>
-                            <th>Customer #</th>
-                            <th>Name</th>
-                            <th>Currency</th>
-                            <th class="text-end">Balance (Outstanding)</th>
-                            <th class="text-end">Overdue</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var c in _result.CustomerBalances)
-                        {
-                            <tr>
-                                <td>@c.Number</td>
-                                <td>@c.DisplayName</td>
-                                <td>@(string.IsNullOrEmpty(c.CurrencyCode) ? "EUR" : c.CurrencyCode)</td>
-                                <td class="text-end">€@c.Balance.ToString("N2")</td>
-                                <td class="text-end">€@c.OverdueAmount.ToString("N2")</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    }
-
-    @* Paid Invoices *@
-    @if (_result.PaidInvoices.Count > 0)
-    {
-        <h5 class="mb-3">Paid Invoices</h5>
-        <div class="card mb-4">
-            <div class="card-body p-0">
-                <table class="table table-striped table-hover mb-0">
-                    <thead class="table-dark">
-                        <tr>
-                            <th>Invoice #</th>
-                            <th>Ext. Doc #</th>
-                            <th>Customer</th>
-                            <th>Invoice Date</th>
-                            <th>Status</th>
-                            <th class="text-end">Amount</th>
-                            <th class="text-end">Remaining</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var inv in _result.PaidInvoices)
-                        {
-                            <tr class="table-success">
-                                <td>@inv.Number</td>
-                                <td>@inv.ExternalDocumentNumber</td>
-                                <td>@inv.CustomerName (@inv.CustomerNumber)</td>
-                                <td>@inv.InvoiceDate</td>
-                                <td><span class="badge bg-success">@inv.Status</span></td>
-                                <td class="text-end">€@inv.TotalAmountIncludingTax.ToString("N2")</td>
-                                <td class="text-end">€@inv.RemainingAmount.ToString("N2")</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
         </div>
     }
 
@@ -217,44 +131,7 @@
         </div>
     }
 
-    @* All Invoice Statuses *@
-    @if (_result.AllInvoiceStatuses.Count > 0)
-    {
-        <h5 class="mb-3">All BC Invoices (Status)</h5>
-        <div class="card mb-4">
-            <div class="card-body p-0">
-                <table class="table table-striped table-hover mb-0">
-                    <thead class="table-dark">
-                        <tr>
-                            <th>Invoice #</th>
-                            <th>Ext. Doc #</th>
-                            <th>Customer</th>
-                            <th>Date</th>
-                            <th>Status</th>
-                            <th class="text-end">Total</th>
-                            <th class="text-end">Remaining</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var inv in _result.AllInvoiceStatuses)
-                        {
-                            <tr class="@(inv.Status == "Paid" ? "table-success" : "")">
-                                <td>@inv.Number</td>
-                                <td>@inv.ExternalDocumentNumber</td>
-                                <td>@inv.CustomerName (@inv.CustomerNumber)</td>
-                                <td>@inv.InvoiceDate</td>
-                                <td><span class="badge @(inv.Status == "Paid" ? "bg-success" : inv.Status == "Open" ? "bg-warning text-dark" : "bg-secondary")">@inv.Status</span></td>
-                                <td class="text-end">€@inv.TotalAmountIncludingTax.ToString("N2")</td>
-                                <td class="text-end">€@inv.RemainingAmount.ToString("N2")</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    }
-
-    @if (_result.TotalPaidInvoices == 0 && _result.TotalCustomerLedgerEntries == 0 && _result.TotalGlPaymentEntries == 0 && _result.CustomerBalances.All(c => c.Balance == 0))
+    @if (_result.TotalCustomerLedgerEntries == 0 && _result.TotalGlPaymentEntries == 0)
     {
         <div class="alert alert-info">No payment activity detected in BC.</div>
     }
