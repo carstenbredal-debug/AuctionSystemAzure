@@ -703,4 +703,25 @@ public class AuctionApiClient
 
     public async Task DeleteLotSortOrderAsync(string columnName, string value)
         => await _http.DeleteAsync($"api/sales-order-setup/lot-sort-orders/{Uri.EscapeDataString(columnName)}/{Uri.EscapeDataString(value)}");
+
+    // Sales Order Setup — Catalog Number Rules
+    public async Task<List<CatalogNumberRuleDto>> GetCatalogNumberRulesAsync()
+        => await _http.GetFromJsonAsync<List<CatalogNumberRuleDto>>("api/sales-order-setup/catalog-number-rules") ?? new();
+
+    public async Task<CatalogNumberRuleDto?> CreateCatalogNumberRuleAsync(CatalogNumberRuleDto dto)
+    {
+        var resp = await _http.PostAsJsonAsync("api/sales-order-setup/catalog-number-rules", dto);
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<CatalogNumberRuleDto>();
+    }
+
+    public async Task<CatalogNumberRuleDto?> UpdateCatalogNumberRuleAsync(int id, CatalogNumberRuleDto dto)
+    {
+        var resp = await _http.PutAsJsonAsync($"api/sales-order-setup/catalog-number-rules/{id}", dto);
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<CatalogNumberRuleDto>();
+    }
+
+    public async Task DeleteCatalogNumberRuleAsync(int id)
+        => await _http.DeleteAsync($"api/sales-order-setup/catalog-number-rules/{id}");
 }
