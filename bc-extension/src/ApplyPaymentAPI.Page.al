@@ -78,23 +78,31 @@ page 50151 "Apply Payment API"
 
         InvoiceEntry.CalcFields("Remaining Amount");
 
-        // Determine amount to apply
+        // Determine amount to apply (always positive for calculation)
         ApplyingAmount := Rec.AmountToApply;
         if ApplyingAmount = 0 then
-            ApplyingAmount := InvoiceEntry."Remaining Amount";
+            ApplyingAmount := Abs(InvoiceEntry."Remaining Amount");
 
-        // Cap at available payment remaining
+        // Cap at available source remaining
         if ApplyingAmount > Abs(PaymentEntry."Remaining Amount") then
             ApplyingAmount := Abs(PaymentEntry."Remaining Amount");
 
         // Set application on invoice entry
+        // Invoice has positive remaining; Amount to Apply must match the sign of remaining to close
         InvoiceEntry."Applies-to ID" := CopyStr(UserId(), 1, 50);
-        InvoiceEntry."Amount to Apply" := -ApplyingAmount;
+        if InvoiceEntry."Remaining Amount" > 0 then
+            InvoiceEntry."Amount to Apply" := ApplyingAmount
+        else
+            InvoiceEntry."Amount to Apply" := -ApplyingAmount;
         InvoiceEntry.Modify(true);
 
-        // Set application on payment entry
+        // Set application on payment/credit memo entry
+        // Payment/Credit Memo has negative remaining; Amount to Apply must match the sign of remaining
         PaymentEntry."Applies-to ID" := CopyStr(UserId(), 1, 50);
-        PaymentEntry."Amount to Apply" := ApplyingAmount;
+        if PaymentEntry."Remaining Amount" < 0 then
+            PaymentEntry."Amount to Apply" := -ApplyingAmount
+        else
+            PaymentEntry."Amount to Apply" := ApplyingAmount;
         PaymentEntry.Modify(true);
 
         // Post the application
