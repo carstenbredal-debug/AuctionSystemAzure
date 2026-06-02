@@ -388,6 +388,33 @@ public class BusinessCentralApiClient
         return await GetListAsync<BcCustomerPaymentJournal>(url);
     }
 
+    public async Task<BcCustomerPayment> CreateCustomerPaymentAsync(Guid companyId, Guid journalId, BcCustomerPayment payment)
+    {
+        await SetAuthHeaderAsync();
+        var url = $"{_options.BaseUrl}/companies({companyId})/customerPaymentJournals({journalId})/customerPayments";
+        _logger.LogInformation("POST {Url}", url);
+
+        var options = new System.Text.Json.JsonSerializerOptions { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault };
+        var json = System.Text.Json.JsonSerializer.Serialize(payment, options);
+        var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+
+        var response = await _httpClient.PostAsync(url, content);
+        await EnsureSuccessAsync(response);
+
+        var result = await response.Content.ReadFromJsonAsync<BcCustomerPayment>();
+        return result!;
+    }
+
+    public async Task PostCustomerPaymentJournalAsync(Guid companyId, Guid journalId)
+    {
+        await SetAuthHeaderAsync();
+        var url = $"{_options.BaseUrl}/companies({companyId})/customerPaymentJournals({journalId})/Microsoft.NAV.post";
+        _logger.LogInformation("POST {Url}", url);
+
+        var response = await _httpClient.PostAsync(url, null);
+        await EnsureSuccessAsync(response);
+    }
+
     public async Task<List<BcCustomerLedgerEntry>> GetCustomerLedgerEntriesAsync(Guid companyId)
     {
         var url = $"{_options.BaseUrl}/companies({companyId})/customerLedgerEntries?$top=5000&$orderby=postingDate desc";
