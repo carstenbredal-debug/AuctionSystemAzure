@@ -435,6 +435,58 @@ public class BusinessCentralSyncService
 
         _logger.LogInformation("Created and posted BC sales credit memo {BcNumber} (customer={Customer})",
             creditNote.InvoiceNumber, buyer.BuyerNumber);
+
+        // Apply credit memo against original invoice in BC
+        await TryApplyCreditMemoToInvoiceAsync(companyId, creditNote, buyer.BuyerNumber);
+    }
+
+    private async Task TryApplyCreditMemoToInvoiceAsync(Guid companyId, Invoice creditNote, string buyerNumber)
+    {
+        try
+        {
+            // Get original invoice's BC number
+            var originalInvoice = creditNote.OriginalInvoice
+                ?? (creditNote.OriginalInvoiceId.HasValue
+                    ? await _db.Invoices.FindAsync(creditNote.OriginalInvoiceId.Value)
+                    : null);
+
+            if (originalInvoice == null || string.IsNullOrEmpty(originalInvoice.BcInvoiceNumber))
+            {
+                _logger.LogWarning("Credit note {Id}: cannot apply to invoice — original invoice not found or not pushed to BC", creditNote.Id);
+                return;
+            }
+
+            // Find the credit memo entry in BC ledger
+            var creditMemoEntries = await _bcClient.GetCustomerLedgerEntriesByCustomerAsync(
+                companyId, buyerNumber, "Credit Memo", true);
+
+            var creditMemoEntry = creditMemoEntries
+                .FirstOrDefault(e => e.DocumentNo == creditNote.BcInvoiceNumber);
+
+            if (creditMemoEntry == null)
+            {
+                _logger.LogWarning("Credit note {Id}: credit memo entry not found in BC ledger for {BcNumber}",
+                    creditNote.Id, creditNote.BcInvoiceNumber);
+                return;
+            }
+
+            // Apply the credit memo to the original invoice
+            var result = await _bcClient.ApplyCreditMemoToInvoiceAsync(
+                companyId,
+                buyerNumber,
+                creditMemoEntry.EntryNo,
+                originalInvoice.BcInvoiceNumber!);
+
+            if (result.ResultStatus == "Error")
+                _logger.LogWarning("Credit note {Id}: BC application failed — {Msg}", creditNote.Id, result.ResultMessage);
+            else
+                _logger.LogInformation("Credit note {Id}: applied to invoice {InvNo} in BC — {Msg}",
+                    creditNote.Id, originalInvoice.BcInvoiceNumber, result.ResultMessage);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Credit note {Id}: failed to apply credit memo in BC", creditNote.Id);
+        }
     }
 
     /// <summary>

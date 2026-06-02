@@ -27,6 +27,7 @@ page 50151 "Apply Payment API"
                 field(amountToApply; Rec.AmountToApply) { }
                 field(resultStatus; Rec.ResultStatus) { }
                 field(resultMessage; Rec.ResultMessage) { }
+                field(sourceDocumentType; Rec.SourceDocumentType) { }
             }
         }
     }
@@ -39,17 +40,20 @@ page 50151 "Apply Payment API"
         ApplyUnapplyParameters: Record "Apply Unapply Parameters";
         ApplyingAmount: Decimal;
     begin
-        // Find the payment entry
+        // Find the source entry (payment or credit memo)
         if Rec.PaymentEntryNo <> 0 then begin
             PaymentEntry.Get(Rec.PaymentEntryNo);
         end else begin
-            // Find by customer number - get the first open payment
+            // Find by customer number - get the first open entry of the specified type
             PaymentEntry.SetRange("Customer No.", Rec.CustomerNo);
-            PaymentEntry.SetRange("Document Type", PaymentEntry."Document Type"::Payment);
+            if (Rec.SourceDocumentType = 'CreditMemo') or (Rec.SourceDocumentType = 'Credit Memo') then
+                PaymentEntry.SetRange("Document Type", PaymentEntry."Document Type"::"Credit Memo")
+            else
+                PaymentEntry.SetRange("Document Type", PaymentEntry."Document Type"::Payment);
             PaymentEntry.SetRange(Open, true);
             if not PaymentEntry.FindFirst() then begin
                 Rec.ResultStatus := 'Error';
-                Rec.ResultMessage := 'No open payment found for customer ' + Rec.CustomerNo;
+                Rec.ResultMessage := 'No open entry found for customer ' + Rec.CustomerNo;
                 exit(true);
             end;
         end;

@@ -22,6 +22,10 @@ public class BcPaymentApplication
     [JsonPropertyName("amountToApply")]
     public decimal AmountToApply { get; set; }
 
+    [JsonPropertyName("sourceDocumentType")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? SourceDocumentType { get; set; }
+
     [JsonPropertyName("resultStatus")]
     public string ResultStatus { get; set; } = string.Empty;
 

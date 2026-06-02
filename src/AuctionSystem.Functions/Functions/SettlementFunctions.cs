@@ -228,6 +228,79 @@ public class SettlementFunctions
         public bool ReleaseForShipping { get; set; }
     }
 
+    [Function("ApplyCreditNotesToBc")]
+    public async Task<HttpResponseData> ApplyCreditNotesToBc(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "settlements/apply-credit-notes")] HttpRequestData req)
+    {
+        if (_bcClient == null)
+            return await CreateJsonResponse(req, new { error = "BC not configured" }, System.Net.HttpStatusCode.ServiceUnavailable);
+
+        var companyId = await _bcClient.ResolveCompanyIdAsync();
+
+        // Get all credit notes that have been pushed to BC and have an original invoice
+        var creditNotes = await _db.Invoices
+            .Include(i => i.Buyer)
+            .Include(i => i.OriginalInvoice)
+            .Where(i => i.IsCreditNote && !string.IsNullOrEmpty(i.BcInvoiceNumber) && i.OriginalInvoiceId != null)
+            .ToListAsync();
+
+        var results = new List<object>();
+
+        foreach (var cn in creditNotes)
+        {
+            var originalInvoice = cn.OriginalInvoice;
+            if (originalInvoice == null || string.IsNullOrEmpty(originalInvoice.BcInvoiceNumber))
+            {
+                results.Add(new { creditNote = cn.BcInvoiceNumber, status = "Skipped", reason = "Original invoice not pushed to BC" });
+                continue;
+            }
+
+            var buyerNo = cn.Buyer?.BuyerNumber ?? "";
+            if (string.IsNullOrEmpty(buyerNo))
+            {
+                results.Add(new { creditNote = cn.BcInvoiceNumber, status = "Skipped", reason = "No buyer number" });
+                continue;
+            }
+
+            try
+            {
+                // Find the credit memo entry in BC
+                var creditMemoEntries = await _bcClient.GetCustomerLedgerEntriesByCustomerAsync(
+                    companyId, buyerNo, "Credit Memo", true);
+
+                var creditMemoEntry = creditMemoEntries
+                    .FirstOrDefault(e => e.DocumentNo == cn.BcInvoiceNumber);
+
+                if (creditMemoEntry == null)
+                {
+                    results.Add(new { creditNote = cn.BcInvoiceNumber, status = "Skipped", reason = "Credit memo entry not found in BC (may already be applied)" });
+                    continue;
+                }
+
+                // Apply it to the original invoice
+                var result = await _bcClient.ApplyCreditMemoToInvoiceAsync(
+                    companyId,
+                    buyerNo,
+                    creditMemoEntry.EntryNo,
+                    originalInvoice.BcInvoiceNumber!);
+
+                results.Add(new
+                {
+                    creditNote = cn.BcInvoiceNumber,
+                    originalInvoice = originalInvoice.BcInvoiceNumber,
+                    status = result.ResultStatus,
+                    message = result.ResultMessage
+                });
+            }
+            catch (Exception ex)
+            {
+                results.Add(new { creditNote = cn.BcInvoiceNumber, status = "Error", reason = ex.Message });
+            }
+        }
+
+        return await CreateJsonResponse(req, new { totalCreditNotes = creditNotes.Count, results });
+    }
+
     [Function("GetShippingBoxes")]
     public async Task<HttpResponseData> GetShippingBoxes(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "shipping/boxes")] HttpRequestData req)
