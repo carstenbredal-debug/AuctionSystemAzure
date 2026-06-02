@@ -468,7 +468,7 @@ public class BusinessCentralFunctions
             else if (localStatus == "Issued" && bcStatus == "Closed")
                 issue = "Still Issued locally but already Closed in BC";
             else if (localStatus == "Downpayment" && bcStatus == "Closed")
-                issue = "Downpayment locally but fully Closed in BC";
+                issue = "Partial Payment locally but fully Closed in BC";
 
             results.Add(new
             {

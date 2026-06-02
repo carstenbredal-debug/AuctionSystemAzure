@@ -643,11 +643,15 @@ else
             {
                 try
                 {
-                    var errorJson = await resp.Content.ReadFromJsonAsync<ReturnErrorResponse>();
+                    var errorJson = await resp.Content.ReadFromJsonAsync<TakebackErrorResponse>();
                     if (errorJson?.Error == "Lot Sold")
+                    {
                         _returnMessage = $"Lot Sold — {errorJson.Message}";
+                    }
                     else
+                    {
                         _returnMessage = "Failed to request return. Please try again.";
+                    }
                 }
                 catch
                 {
@@ -664,7 +668,7 @@ else
         finally { _requestingReturn = false; }
     }
 
-    private class ReturnErrorResponse
+    private class TakebackErrorResponse
     {
         public string? Error { get; set; }
         public string? Message { get; set; }

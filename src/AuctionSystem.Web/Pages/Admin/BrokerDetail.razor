@@ -593,9 +593,13 @@ else
                 {
                     var errorJson = await resp.Content.ReadFromJsonAsync<TakebackErrorResponse>();
                     if (errorJson?.Error == "Lot Sold")
+                    {
                         _takebackMessage = $"Lot Sold — {errorJson.Message}";
+                    }
                     else
+                    {
                         _takebackMessage = "Failed to request takeback. Please try again.";
+                    }
                 }
                 catch
                 {

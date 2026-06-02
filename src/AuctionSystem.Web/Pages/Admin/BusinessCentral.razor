@@ -592,7 +592,7 @@ else
     private string GetLocalStatusBadge(string status) => status switch
     {
         "Paid" => "bg-success",
-        "Downpayment" => "bg-info",
+        "Downpayment" => "bg-info", // Displayed as "Partial Payment"
         "Issued" => "bg-primary",
         _ => "bg-secondary"
     };
