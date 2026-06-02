@@ -846,3 +846,13 @@ public class LotSortOrderDto
     public string Value { get; set; } = string.Empty;
     public int SortOrder { get; set; }
 }
+
+public class CatalogNumberRuleDto
+{
+    public int CatalogNumberRuleID { get; set; }
+    public string? SalesType { get; set; }
+    public string? Gender { get; set; }
+    public string? Group { get; set; }
+    public int StartNumber { get; set; }
+    public bool IsActive { get; set; }
+}

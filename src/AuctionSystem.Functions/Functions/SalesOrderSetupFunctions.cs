@@ -206,6 +206,59 @@ public class SalesOrderSetupFunctions
         return req.CreateResponse(System.Net.HttpStatusCode.NoContent);
     }
 
+    // ── Catalog Number Rule ───────────────────────────────────────
+
+    [Function("GetCatalogNumberRules")]
+    public async Task<HttpResponseData> GetCatalogNumberRules(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "sales-order-setup/catalog-number-rules")] HttpRequestData req)
+    {
+        var items = await _db.CatalogNumberRules.OrderBy(r => r.SalesType).ThenBy(r => r.Gender).ThenBy(r => r.Group).ToListAsync();
+        return await CreateJsonResponse(req, items);
+    }
+
+    [Function("CreateCatalogNumberRule")]
+    public async Task<HttpResponseData> CreateCatalogNumberRule(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "sales-order-setup/catalog-number-rules")] HttpRequestData req)
+    {
+        var dto = await req.ReadFromJsonAsync<CatalogNumberRule>();
+        if (dto == null) return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+
+        dto.CatalogNumberRuleID = 0;
+        _db.CatalogNumberRules.Add(dto);
+        await _db.SaveChangesAsync();
+        return await CreateJsonResponse(req, dto, System.Net.HttpStatusCode.Created);
+    }
+
+    [Function("UpdateCatalogNumberRule")]
+    public async Task<HttpResponseData> UpdateCatalogNumberRule(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "sales-order-setup/catalog-number-rules/{id:int}")] HttpRequestData req, int id)
+    {
+        var dto = await req.ReadFromJsonAsync<CatalogNumberRule>();
+        if (dto == null) return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+
+        var item = await _db.CatalogNumberRules.FindAsync(id);
+        if (item == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        item.SalesType = dto.SalesType;
+        item.Gender = dto.Gender;
+        item.Group = dto.Group;
+        item.StartNumber = dto.StartNumber;
+        item.IsActive = dto.IsActive;
+        await _db.SaveChangesAsync();
+        return await CreateJsonResponse(req, item);
+    }
+
+    [Function("DeleteCatalogNumberRule")]
+    public async Task<HttpResponseData> DeleteCatalogNumberRule(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "sales-order-setup/catalog-number-rules/{id:int}")] HttpRequestData req, int id)
+    {
+        var item = await _db.CatalogNumberRules.FindAsync(id);
+        if (item == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+        _db.CatalogNumberRules.Remove(item);
+        await _db.SaveChangesAsync();
+        return req.CreateResponse(System.Net.HttpStatusCode.NoContent);
+    }
+
     private static async Task<HttpResponseData> CreateJsonResponse<T>(
         HttpRequestData req, T data, System.Net.HttpStatusCode status = System.Net.HttpStatusCode.OK)
     {

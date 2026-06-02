@@ -12,6 +12,7 @@ public class CatalogDbContext : DbContext
     public DbSet<LotGroupOrder> LotGroupOrders => Set<LotGroupOrder>();
     public DbSet<LotSizeRule> LotSizeRules => Set<LotSizeRule>();
     public DbSet<LotSortOrder> LotSortOrders => Set<LotSortOrder>();
+    public DbSet<CatalogNumberRule> CatalogNumberRules => Set<CatalogNumberRule>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -58,6 +59,15 @@ public class CatalogDbContext : DbContext
             e.HasKey(s => new { s.ColumnName, s.Value });
             e.Property(s => s.ColumnName).HasMaxLength(50);
             e.Property(s => s.Value).HasMaxLength(100);
+        });
+
+        modelBuilder.Entity<CatalogNumberRule>(e =>
+        {
+            e.ToTable("catalognumberrule", "dbo");
+            e.HasKey(r => r.CatalogNumberRuleID);
+            e.Property(r => r.SalesType).HasMaxLength(50);
+            e.Property(r => r.Gender).HasMaxLength(50);
+            e.Property(r => r.Group).HasMaxLength(50);
         });
     }
 }
