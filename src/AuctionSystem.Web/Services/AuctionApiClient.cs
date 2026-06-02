@@ -708,9 +708,9 @@ public class AuctionApiClient
         return resp.IsSuccessStatusCode;
     }
 
-    public async Task<LotSortOrderDto?> UpdateLotSortOrderAsync(string columnName, string value, LotSortOrderDto dto)
+    public async Task<LotSortOrderDto?> UpdateLotSortOrderAsync(LotSortOrderDto dto)
     {
-        var resp = await _http.PutAsJsonAsync($"api/sales-order-setup/lot-sort-orders/{Uri.EscapeDataString(columnName)}/{Uri.EscapeDataString(value)}", dto);
+        var resp = await _http.PutAsJsonAsync("api/sales-order-setup/lot-sort-orders/update", dto);
         if (!resp.IsSuccessStatusCode) return null;
         return await resp.Content.ReadFromJsonAsync<LotSortOrderDto>();
     }
