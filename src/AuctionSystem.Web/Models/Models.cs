@@ -818,3 +818,31 @@ public class BcGlEntryDto
     public decimal DebitAmount { get; set; }
     public decimal CreditAmount { get; set; }
 }
+
+// Sales Order Setup
+public class LotGroupOrderDto
+{
+    public string ColumnName { get; set; } = string.Empty;
+    public int GroupOrder { get; set; }
+}
+
+public class LotSizeRuleDto
+{
+    public int RuleID { get; set; }
+    public string? Gender { get; set; }
+    public string? Size { get; set; }
+    public int MaxBoxes { get; set; }
+    public int MaxSkinsPerBox { get; set; }
+    public int ShowlotSkins { get; set; }
+    public int MaxLotSizeExclShowlot { get; set; }
+    public int MaxLotSizeInclShowlot { get; set; }
+    public int Priority { get; set; }
+    public bool IsActive { get; set; }
+}
+
+public class LotSortOrderDto
+{
+    public string ColumnName { get; set; } = string.Empty;
+    public string Value { get; set; } = string.Empty;
+    public int SortOrder { get; set; }
+}

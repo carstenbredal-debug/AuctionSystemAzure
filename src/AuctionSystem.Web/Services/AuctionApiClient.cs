@@ -642,4 +642,65 @@ public class AuctionApiClient
             url += $"?auctionId={auctionId.Value}";
         return await _http.GetFromJsonAsync<List<AuctionTransactionSummaryDto>>(url) ?? new();
     }
+
+    // Sales Order Setup — Lot Group Orders
+    public async Task<List<LotGroupOrderDto>> GetLotGroupOrdersAsync()
+        => await _http.GetFromJsonAsync<List<LotGroupOrderDto>>("api/sales-order-setup/lot-group-orders") ?? new();
+
+    public async Task<LotGroupOrderDto?> CreateLotGroupOrderAsync(LotGroupOrderDto dto)
+    {
+        var resp = await _http.PostAsJsonAsync("api/sales-order-setup/lot-group-orders", dto);
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<LotGroupOrderDto>();
+    }
+
+    public async Task<bool> ReorderLotGroupOrdersAsync(List<LotGroupOrderDto> items)
+    {
+        var resp = await _http.PutAsJsonAsync("api/sales-order-setup/lot-group-orders/reorder", items);
+        return resp.IsSuccessStatusCode;
+    }
+
+    public async Task DeleteLotGroupOrderAsync(string columnName)
+        => await _http.DeleteAsync($"api/sales-order-setup/lot-group-orders/{Uri.EscapeDataString(columnName)}");
+
+    // Sales Order Setup — Lot Size Rules
+    public async Task<List<LotSizeRuleDto>> GetLotSizeRulesAsync()
+        => await _http.GetFromJsonAsync<List<LotSizeRuleDto>>("api/sales-order-setup/lot-size-rules") ?? new();
+
+    public async Task<LotSizeRuleDto?> CreateLotSizeRuleAsync(LotSizeRuleDto dto)
+    {
+        var resp = await _http.PostAsJsonAsync("api/sales-order-setup/lot-size-rules", dto);
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<LotSizeRuleDto>();
+    }
+
+    public async Task<LotSizeRuleDto?> UpdateLotSizeRuleAsync(int id, LotSizeRuleDto dto)
+    {
+        var resp = await _http.PutAsJsonAsync($"api/sales-order-setup/lot-size-rules/{id}", dto);
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<LotSizeRuleDto>();
+    }
+
+    public async Task DeleteLotSizeRuleAsync(int id)
+        => await _http.DeleteAsync($"api/sales-order-setup/lot-size-rules/{id}");
+
+    // Sales Order Setup — Lot Sort Orders
+    public async Task<List<LotSortOrderDto>> GetLotSortOrdersAsync()
+        => await _http.GetFromJsonAsync<List<LotSortOrderDto>>("api/sales-order-setup/lot-sort-orders") ?? new();
+
+    public async Task<LotSortOrderDto?> CreateLotSortOrderAsync(LotSortOrderDto dto)
+    {
+        var resp = await _http.PostAsJsonAsync("api/sales-order-setup/lot-sort-orders", dto);
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<LotSortOrderDto>();
+    }
+
+    public async Task<bool> ReorderLotSortOrdersAsync(List<LotSortOrderDto> items)
+    {
+        var resp = await _http.PutAsJsonAsync("api/sales-order-setup/lot-sort-orders/reorder", items);
+        return resp.IsSuccessStatusCode;
+    }
+
+    public async Task DeleteLotSortOrderAsync(string columnName, string value)
+        => await _http.DeleteAsync($"api/sales-order-setup/lot-sort-orders/{Uri.EscapeDataString(columnName)}/{Uri.EscapeDataString(value)}");
 }
