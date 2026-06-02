@@ -615,6 +615,40 @@ public class BcConsistencyMismatchDto
     public string Bc { get; set; } = "";
 }
 
+public class BcBalanceCheckDto
+{
+    public bool Available { get; set; }
+    public string? Reason { get; set; }
+    public decimal AvailableAmount { get; set; }
+    public decimal InvoiceAmount { get; set; }
+    public bool Sufficient { get; set; }
+    public string BuyerNumber { get; set; } = "";
+    public string BuyerName { get; set; } = "";
+    public int OpenPaymentCount { get; set; }
+}
+
+public class BcPaymentConsistencyDto
+{
+    public string Message { get; set; } = "";
+    public int TotalChecked { get; set; }
+    public int Mismatches { get; set; }
+    public List<BcPaymentInvoiceStatusDto> Invoices { get; set; } = new();
+}
+
+public class BcPaymentInvoiceStatusDto
+{
+    public int InvoiceId { get; set; }
+    public string BcInvoiceNumber { get; set; } = "";
+    public string BuyerNumber { get; set; } = "";
+    public string BuyerName { get; set; } = "";
+    public string LocalStatus { get; set; } = "";
+    public string BcStatus { get; set; } = "";
+    public decimal InvoiceAmount { get; set; }
+    public decimal BcRemainingAmount { get; set; }
+    public decimal OpenPaymentAvailable { get; set; }
+    public string? Issue { get; set; }
+}
+
 public class ConnectionsInfoDto
 {
     public BcConnectionInfoDto BusinessCentral { get; set; } = new();

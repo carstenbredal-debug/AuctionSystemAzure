@@ -97,6 +97,65 @@ public class SettlementFunctions
         return await CreateJsonResponse(req, new { invoice.Id, Status = invoice.Status.ToString(), invoice.ShippingStatus, bcPaymentError, bcPaymentSuccess });
     }
 
+    [Function("CheckBcPaymentBalance")]
+    public async Task<HttpResponseData> CheckBcPaymentBalance(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements/invoices/{invoiceId:int}/bc-balance")] HttpRequestData req, int invoiceId)
+    {
+        var invoice = await _db.Invoices.Include(i => i.Buyer).FirstOrDefaultAsync(i => i.Id == invoiceId);
+        if (invoice == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        if (_bcClient == null || string.IsNullOrEmpty(invoice.BcInvoiceNumber))
+        {
+            return await CreateJsonResponse(req, new
+            {
+                available = false,
+                reason = "BC not configured or invoice not pushed to BC",
+                availableAmount = 0m,
+                invoiceAmount = invoice.TotalAmount
+            });
+        }
+
+        var buyerNo = invoice.Buyer?.BuyerNumber ?? "";
+        if (string.IsNullOrEmpty(buyerNo))
+        {
+            return await CreateJsonResponse(req, new
+            {
+                available = false,
+                reason = "Buyer has no customer number",
+                availableAmount = 0m,
+                invoiceAmount = invoice.TotalAmount
+            });
+        }
+
+        try
+        {
+            var companyId = await _bcClient.ResolveCompanyIdAsync();
+            var payments = await _bcClient.GetCustomerLedgerEntriesByCustomerAsync(companyId, buyerNo, "Payment", true);
+            var totalAvailable = payments.Sum(p => Math.Abs(p.RemainingAmount));
+
+            return await CreateJsonResponse(req, new
+            {
+                available = true,
+                availableAmount = totalAvailable,
+                invoiceAmount = invoice.TotalAmount,
+                sufficient = totalAvailable >= invoice.TotalAmount,
+                buyerNumber = buyerNo,
+                buyerName = invoice.Buyer?.Name ?? "",
+                openPaymentCount = payments.Count
+            });
+        }
+        catch (Exception ex)
+        {
+            return await CreateJsonResponse(req, new
+            {
+                available = false,
+                reason = $"Failed to check BC: {ex.Message}",
+                availableAmount = 0m,
+                invoiceAmount = invoice.TotalAmount
+            });
+        }
+    }
+
     private class UpdateStatusRequest
     {
         public string Status { get; set; } = "";

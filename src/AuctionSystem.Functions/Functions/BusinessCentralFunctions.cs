@@ -415,6 +415,87 @@ public class BusinessCentralFunctions
         });
     }
 
+    [Function("BcPaymentConsistencyCheck")]
+    public async Task<HttpResponseData> PaymentConsistencyCheck(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "bc/payment-consistency-check")] HttpRequestData req)
+    {
+        if (!EnsureConfigured(out var err))
+            return await JsonResponse(req, err!, HttpStatusCode.ServiceUnavailable);
+
+        var companyId = await _bcClient!.ResolveCompanyIdAsync();
+
+        // Get all invoices that have been pushed to BC (have a BcInvoiceNumber)
+        var invoices = await _db.Invoices
+            .Include(i => i.Buyer)
+            .Where(i => !string.IsNullOrEmpty(i.BcInvoiceNumber))
+            .ToListAsync();
+
+        // Get all customer ledger entries from BC
+        var allLedgerEntries = await _bcClient.GetCustomerLedgerEntriesAsync(companyId);
+
+        // Build lookup: document number -> ledger entry
+        var invoiceLedgerEntries = allLedgerEntries
+            .Where(e => e.DocumentType == "Invoice")
+            .GroupBy(e => e.DocumentNo)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        var paymentLedgerEntries = allLedgerEntries
+            .Where(e => e.DocumentType == "Payment" && e.Open)
+            .GroupBy(e => e.CustomerNo)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var results = new List<object>();
+
+        foreach (var invoice in invoices)
+        {
+            var bcInvNo = invoice.BcInvoiceNumber!;
+            var localStatus = invoice.Status.ToString();
+            var buyerNo = invoice.Buyer?.BuyerNumber ?? "";
+
+            // Check BC ledger for this invoice
+            var bcEntry = invoiceLedgerEntries.GetValueOrDefault(bcInvNo);
+            var bcStatus = bcEntry == null ? "Not Found" : (bcEntry.Open ? "Open" : "Closed");
+            var bcRemaining = bcEntry?.RemainingAmount ?? 0;
+
+            // Check for open payments on this customer
+            var openPayments = paymentLedgerEntries.GetValueOrDefault(buyerNo) ?? new List<BcCustomerLedgerEntry>();
+            var totalOpenPayment = openPayments.Sum(p => Math.Abs(p.RemainingAmount));
+
+            // Determine mismatch
+            string? issue = null;
+            if (localStatus == "Paid" && bcStatus == "Open")
+                issue = "Marked Paid locally but still Open in BC";
+            else if (localStatus == "Issued" && bcStatus == "Closed")
+                issue = "Still Issued locally but already Closed in BC";
+            else if (localStatus == "Downpayment" && bcStatus == "Closed")
+                issue = "Downpayment locally but fully Closed in BC";
+
+            results.Add(new
+            {
+                invoiceId = invoice.Id,
+                bcInvoiceNumber = bcInvNo,
+                buyerNumber = buyerNo,
+                buyerName = invoice.Buyer?.Name ?? "",
+                localStatus,
+                bcStatus,
+                invoiceAmount = invoice.TotalAmount,
+                bcRemainingAmount = bcRemaining,
+                openPaymentAvailable = totalOpenPayment,
+                issue
+            });
+        }
+
+        var mismatches = results.Where(r => ((dynamic)r).issue != null).ToList();
+
+        return await JsonResponse(req, new
+        {
+            message = mismatches.Count == 0 ? "All payment statuses consistent" : $"{mismatches.Count} mismatch(es) found",
+            totalChecked = invoices.Count,
+            mismatches = mismatches.Count,
+            invoices = results
+        });
+    }
+
     [Function("DiagConnections")]
     public async Task<HttpResponseData> GetConnections(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "diag/connections")] HttpRequestData req)

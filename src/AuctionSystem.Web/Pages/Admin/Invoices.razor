@@ -333,6 +333,33 @@ else
     </div>
 }
 
+@if (_showInsufficientBalancePopup)
+{
+    <div class="modal d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Insufficient BC Balance</h5>
+                    <button type="button" class="btn-close" @onclick="CancelInsufficientBalance"></button>
+                </div>
+                <div class="modal-body">
+                    <p>The available payment balance in BC is <strong>less than the required amount</strong>.</p>
+                    <table class="table table-sm mb-3">
+                        <tr><td>Required amount:</td><td class="text-end"><strong>@_bcInvoiceAmount.ToString("N2") €</strong></td></tr>
+                        <tr><td>Available in BC:</td><td class="text-end"><strong>@_bcAvailableAmount.ToString("N2") €</strong></td></tr>
+                        <tr class="table-warning"><td>Shortfall:</td><td class="text-end"><strong>@((_bcInvoiceAmount - _bcAvailableAmount).ToString("N2")) €</strong></td></tr>
+                    </table>
+                    <p>Do you want to apply the available <strong>@_bcAvailableAmount.ToString("N2") €</strong> to this invoice?</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CancelInsufficientBalance">No — Cancel</button>
+                    <button class="btn btn-warning" @onclick="ConfirmApplyAvailable">Yes — Apply @_bcAvailableAmount.ToString("N2") €</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private const string StatusDownpayment = "Downpayment";
     private const string StatusPaid = "Paid";
@@ -357,6 +384,13 @@ else
     // Fully Paid popup state
     private bool _showFullyPaidShippingConfirm;
     private int _fpInvoiceId;
+
+    // Balance check state
+    private bool _checkingBalance;
+    private bool _showInsufficientBalancePopup;
+    private decimal _bcAvailableAmount;
+    private decimal _bcInvoiceAmount;
+    private string _balanceContext = ""; // "fullypaid" or "downpayment"
 
     // BC feedback
     private string? _bcError;
@@ -422,10 +456,44 @@ else
         _showDownpaymentPopup = false;
     }
 
-    private void ConfirmDownpayment()
+    private async Task ConfirmDownpayment()
     {
         _showDownpaymentPopup = false;
-        _showShippingConfirm = true;
+        _bcError = null;
+        _bcSuccess = null;
+        _checkingBalance = true;
+        _updatingId = _dpInvoiceId;
+        StateHasChanged();
+
+        var balance = await Api.CheckBcPaymentBalanceAsync(_dpInvoiceId);
+        _checkingBalance = false;
+        _updatingId = null;
+
+        if (balance == null || !balance.Available)
+        {
+            // BC check failed or not configured — proceed without check
+            _showShippingConfirm = true;
+        }
+        else
+        {
+            // Calculate actual amount entered
+            var inv = _invoices.FirstOrDefault(i => i.Id == _dpInvoiceId);
+            var actualAmount = _dpIsPercentage && inv != null ? inv.TotalAmount * _dpAmount / 100 : _dpAmount;
+
+            if (balance.AvailableAmount >= actualAmount)
+            {
+                // Enough balance — proceed
+                _showShippingConfirm = true;
+            }
+            else
+            {
+                // Insufficient balance
+                _bcAvailableAmount = balance.AvailableAmount;
+                _bcInvoiceAmount = actualAmount;
+                _balanceContext = "downpayment";
+                _showInsufficientBalancePopup = true;
+            }
+        }
     }
 
     private async Task SubmitDownpayment(bool releaseForShipping)
@@ -462,10 +530,51 @@ else
         _updatingId = null;
     }
 
-    private void OpenFullyPaidPopup(int invoiceId)
+    private async Task OpenFullyPaidPopup(int invoiceId)
     {
         _fpInvoiceId = invoiceId;
-        _showFullyPaidShippingConfirm = true;
+        _bcError = null;
+        _bcSuccess = null;
+        _checkingBalance = true;
+        _updatingId = invoiceId;
+        StateHasChanged();
+
+        var balance = await Api.CheckBcPaymentBalanceAsync(invoiceId);
+        _checkingBalance = false;
+        _updatingId = null;
+
+        if (balance == null || !balance.Available)
+        {
+            // BC check failed or not configured — proceed without check
+            _showFullyPaidShippingConfirm = true;
+        }
+        else if (balance.Sufficient)
+        {
+            // Enough balance — proceed to shipping confirmation
+            _showFullyPaidShippingConfirm = true;
+        }
+        else
+        {
+            // Insufficient balance — show popup with available amount
+            _bcAvailableAmount = balance.AvailableAmount;
+            _bcInvoiceAmount = balance.InvoiceAmount;
+            _balanceContext = "fullypaid";
+            _showInsufficientBalancePopup = true;
+        }
+    }
+
+    private void ConfirmApplyAvailable()
+    {
+        _showInsufficientBalancePopup = false;
+        if (_balanceContext == "fullypaid")
+            _showFullyPaidShippingConfirm = true;
+        else
+            _showShippingConfirm = true;
+    }
+
+    private void CancelInsufficientBalance()
+    {
+        _showInsufficientBalancePopup = false;
     }
 
     private async Task SubmitFullyPaid(bool releaseForShipping)
