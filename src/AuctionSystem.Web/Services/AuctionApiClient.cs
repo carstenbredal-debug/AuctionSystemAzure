@@ -149,6 +149,17 @@ public class AuctionApiClient
         catch { return null; }
     }
 
+    public async Task<BcInvoiceRemainingDto?> CheckBcInvoiceRemainingAsync(int invoiceId)
+    {
+        try
+        {
+            var resp = await _http.PostAsync($"api/settlements/invoices/{invoiceId}/check-bc-remaining", null);
+            resp.EnsureSuccessStatusCode();
+            return await resp.Content.ReadFromJsonAsync<BcInvoiceRemainingDto>();
+        }
+        catch { return null; }
+    }
+
     public async Task<HttpResponseMessage> ProcessDownpaymentAsync(int invoiceId, decimal amount, bool isPercentage, bool releaseForShipping)
         => await _http.PostAsJsonAsync($"api/settlements/invoices/{invoiceId}/downpayment", new { amount, isPercentage, releaseForShipping });
 

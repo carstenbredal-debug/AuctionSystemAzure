@@ -653,6 +653,14 @@ public class BcBalanceCheckDto
     public int OpenPaymentCount { get; set; }
 }
 
+public class BcInvoiceRemainingDto
+{
+    public bool FullyPaidInBc { get; set; }
+    public decimal RemainingAmount { get; set; }
+    public string? Status { get; set; }
+    public string? Reason { get; set; }
+}
+
 public class BcPaymentConsistencyDto
 {
     public string Message { get; set; } = "";
