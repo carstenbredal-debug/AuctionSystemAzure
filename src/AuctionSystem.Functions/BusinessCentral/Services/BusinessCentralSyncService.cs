@@ -183,7 +183,7 @@ public class BusinessCentralSyncService
                     continue;
                 }
 
-                var extDoc = !string.IsNullOrEmpty(invoice.InvoiceNumber) ? invoice.InvoiceNumber : $"AUC-{invoice.Id}";
+                var extDoc = !string.IsNullOrEmpty(invoice.ExternalDocumentNumber) ? invoice.ExternalDocumentNumber : $"AUC-{invoice.Id}";
                 var bcInvoice = new BcSalesInvoice
                 {
                     ExternalDocumentNumber = extDoc,
@@ -525,7 +525,7 @@ public class BusinessCentralSyncService
         var companyId = await _bcClient.ResolveCompanyIdAsync();
 
         // Check if already pushed (by BC reference or external doc)
-        var extDocRef = !string.IsNullOrEmpty(invoice.InvoiceNumber) ? invoice.InvoiceNumber : $"AUC-{invoice.Id}";
+        var extDocRef = !string.IsNullOrEmpty(invoice.ExternalDocumentNumber) ? invoice.ExternalDocumentNumber : $"AUC-{invoice.Id}";
         if (!string.IsNullOrEmpty(invoice.BcInvoiceNumber))
         {
             _logger.LogInformation("Invoice {Id} already pushed to BC as {Number}", invoice.Id, invoice.BcInvoiceNumber);
