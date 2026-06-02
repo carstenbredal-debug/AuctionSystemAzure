@@ -472,6 +472,29 @@ public class AuctionResultFunctions
             .Where(r => body.AuctionResultIds.Contains(r.Id) && r.SoldToBuyerId != null)
             .ToListAsync();
 
+        // Check if any of these lots are on a released shipping list
+        var resultLotNumbers = results.Select(r => r.LotNumber).ToList();
+        var shippedLotNumbers = await _db.Invoices
+            .Where(i => i.ShippingStatus == "Released" && !i.IsCreditNote)
+            .SelectMany(i => i.Lines)
+            .Where(l => resultLotNumbers.Contains(l.LotNumber))
+            .Select(l => l.LotNumber)
+            .Distinct()
+            .ToListAsync();
+
+        if (shippedLotNumbers.Count > 0)
+        {
+            var errorResp = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+            errorResp.Headers.Add("Content-Type", "application/json");
+            await errorResp.WriteStringAsync(JsonSerializer.Serialize(new
+            {
+                error = "Lot Sold",
+                message = $"Cannot take back lot(s) {string.Join(", ", shippedLotNumbers)} — already released to ship.",
+                shippedLotNumbers
+            }, JsonOptions));
+            return errorResp;
+        }
+
         var created = new List<TakebackRequest>();
         var takenBackResultIds = new List<int>();
         foreach (var result in results)
@@ -540,6 +563,29 @@ public class AuctionResultFunctions
         var results = await _db.AuctionResults
             .Where(r => body.AuctionResultIds.Contains(r.Id) && r.SoldToBuyerId != null)
             .ToListAsync();
+
+        // Check if any of these lots are on a released shipping list
+        var buyerResultLotNumbers = results.Select(r => r.LotNumber).ToList();
+        var buyerShippedLotNumbers = await _db.Invoices
+            .Where(i => i.ShippingStatus == "Released" && !i.IsCreditNote)
+            .SelectMany(i => i.Lines)
+            .Where(l => buyerResultLotNumbers.Contains(l.LotNumber))
+            .Select(l => l.LotNumber)
+            .Distinct()
+            .ToListAsync();
+
+        if (buyerShippedLotNumbers.Count > 0)
+        {
+            var errorResp = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+            errorResp.Headers.Add("Content-Type", "application/json");
+            await errorResp.WriteStringAsync(JsonSerializer.Serialize(new
+            {
+                error = "Lot Sold",
+                message = $"Cannot request return for lot(s) {string.Join(", ", buyerShippedLotNumbers)} — already released to ship.",
+                shippedLotNumbers = buyerShippedLotNumbers
+            }, JsonOptions));
+            return errorResp;
+        }
 
         var created = new List<TakebackRequest>();
         foreach (var result in results)
