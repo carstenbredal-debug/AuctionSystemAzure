@@ -181,12 +181,13 @@ public class SalesOrderSetupFunctions
 
     [Function("UpdateLotSortOrder")]
     public async Task<HttpResponseData> UpdateLotSortOrder(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "sales-order-setup/lot-sort-orders/{columnName}/{value}")] HttpRequestData req, string columnName, string value)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "sales-order-setup/lot-sort-orders/update")] HttpRequestData req)
     {
         var dto = await req.ReadFromJsonAsync<LotSortOrder>();
-        if (dto == null) return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+        if (dto == null || string.IsNullOrWhiteSpace(dto.ColumnName) || string.IsNullOrWhiteSpace(dto.Value))
+            return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
 
-        var item = await _db.LotSortOrders.FindAsync(columnName, value);
+        var item = await _db.LotSortOrders.FindAsync(dto.ColumnName, dto.Value);
         if (item == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
 
         item.SortOrder = dto.SortOrder;
