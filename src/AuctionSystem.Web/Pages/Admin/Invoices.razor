@@ -174,7 +174,7 @@ else
                                 <span class="badge bg-@GetStatusColor(creditStatus)">@creditStatus</span>
                             </td>
                             <td>
-                                @if (!inv.IsCreditNote && inv.Status != "Paid" && inv.Status != "Downpayment" && inv.Status != "ReleasedToShip")
+                                @if (!inv.IsCreditNote && inv.Status != "Paid" && inv.Status != "Downpayment" && inv.Status != "ReleasedToShip" && creditStatus != "Fully Credited")
                                 {
                                     var invId = inv.Id;
                                     <button class="btn btn-sm btn-outline-info me-1" @onclick="() => OpenDownpaymentPopup(invId)" disabled="@_updatingId.HasValue">Partial Payment</button>
