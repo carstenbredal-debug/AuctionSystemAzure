@@ -161,6 +161,40 @@ public class SettlementFunctions
         }
     }
 
+    [Function("CheckBcInvoiceRemaining")]
+    public async Task<HttpResponseData> CheckBcInvoiceRemaining(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "settlements/invoices/{invoiceId:int}/check-bc-remaining")] HttpRequestData req, int invoiceId)
+    {
+        var invoice = await _db.Invoices.Include(i => i.Buyer).FirstOrDefaultAsync(i => i.Id == invoiceId);
+        if (invoice == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        if (_bcClient == null || string.IsNullOrEmpty(invoice.BcInvoiceNumber))
+            return await CreateJsonResponse(req, new { fullyPaidInBc = false, reason = "BC not configured" });
+
+        try
+        {
+            var companyId = await _bcClient.ResolveCompanyIdAsync();
+            var invoices = await _bcClient.GetSalesInvoicesAsync(companyId, 5000);
+            var bcInvoice = invoices.FirstOrDefault(i => i.Number == invoice.BcInvoiceNumber);
+
+            if (bcInvoice == null)
+                return await CreateJsonResponse(req, new { fullyPaidInBc = false, reason = "Invoice not found in BC" });
+
+            if (bcInvoice.RemainingAmount == 0 || bcInvoice.Status == "Paid")
+            {
+                invoice.Status = Domain.Enums.InvoiceStatus.Paid;
+                await _db.SaveChangesAsync();
+                return await CreateJsonResponse(req, new { fullyPaidInBc = true, remainingAmount = bcInvoice.RemainingAmount, status = "Paid" });
+            }
+
+            return await CreateJsonResponse(req, new { fullyPaidInBc = false, remainingAmount = bcInvoice.RemainingAmount, status = bcInvoice.Status });
+        }
+        catch (Exception ex)
+        {
+            return await CreateJsonResponse(req, new { fullyPaidInBc = false, reason = $"BC check failed: {ex.Message}" });
+        }
+    }
+
     private class UpdateStatusRequest
     {
         public string Status { get; set; } = "";

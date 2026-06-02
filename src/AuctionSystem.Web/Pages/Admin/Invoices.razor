@@ -485,26 +485,31 @@ else
         _checkingBalance = false;
         _updatingId = null;
 
+        // Skip shipping question if already released to ship
+        var dpInv = _invoices.FirstOrDefault(i => i.Id == _dpInvoiceId);
+        var alreadyShipped = dpInv?.Status == "ReleasedToShip";
+
         if (balance == null || !balance.Available)
         {
-            // BC check failed or not configured — proceed without check
-            _showShippingConfirm = true;
+            if (alreadyShipped)
+                await SubmitDownpayment(true);
+            else
+                _showShippingConfirm = true;
         }
         else
         {
-            // Calculate actual amount entered
-            var inv = _invoices.FirstOrDefault(i => i.Id == _dpInvoiceId);
             var isPercentage = _dpAmountType == "percentage";
-            var actualAmount = isPercentage && inv != null ? inv.TotalAmount * _dpAmount / 100 : _dpAmount;
+            var actualAmount = isPercentage && dpInv != null ? dpInv.TotalAmount * _dpAmount / 100 : _dpAmount;
 
             if (balance.AvailableAmount >= actualAmount)
             {
-                // Enough balance — proceed
-                _showShippingConfirm = true;
+                if (alreadyShipped)
+                    await SubmitDownpayment(true);
+                else
+                    _showShippingConfirm = true;
             }
             else
             {
-                // Insufficient balance
                 _bcAvailableAmount = balance.AvailableAmount;
                 _bcInvoiceAmount = actualAmount;
                 _balanceContext = "downpayment";
@@ -539,6 +544,9 @@ else
                     _bcSuccess = "Partial payment recorded.";
             }
             catch { _bcSuccess = "Partial payment recorded."; }
+
+            // Check BC remaining — if fully paid in BC, update status
+            await CheckAndMarkPaidIfZeroBalance(_dpInvoiceId);
         }
         else
         {
@@ -560,19 +568,26 @@ else
         _checkingBalance = false;
         _updatingId = null;
 
+        // Skip shipping question if already released to ship
+        var fpInv = _invoices.FirstOrDefault(i => i.Id == invoiceId);
+        var fpAlreadyShipped = fpInv?.Status == "ReleasedToShip";
+
         if (balance == null || !balance.Available)
         {
-            // BC check failed or not configured — proceed without check
-            _showFullyPaidShippingConfirm = true;
+            if (fpAlreadyShipped)
+                await SubmitFullyPaid(true);
+            else
+                _showFullyPaidShippingConfirm = true;
         }
         else if (balance.Sufficient)
         {
-            // Enough balance — proceed to shipping confirmation
-            _showFullyPaidShippingConfirm = true;
+            if (fpAlreadyShipped)
+                await SubmitFullyPaid(true);
+            else
+                _showFullyPaidShippingConfirm = true;
         }
         else
         {
-            // Insufficient balance — show popup with available amount
             _bcAvailableAmount = balance.AvailableAmount;
             _bcInvoiceAmount = balance.InvoiceAmount;
             _balanceContext = "fullypaid";
@@ -580,13 +595,26 @@ else
         }
     }
 
-    private void ConfirmApplyAvailable()
+    private async Task ConfirmApplyAvailable()
     {
         _showInsufficientBalancePopup = false;
+        // Skip shipping question if already released to ship
         if (_balanceContext == "fullypaid")
-            _showFullyPaidShippingConfirm = true;
+        {
+            var fpInv = _invoices.FirstOrDefault(i => i.Id == _fpInvoiceId);
+            if (fpInv?.Status == "ReleasedToShip")
+                await SubmitFullyPaid(true);
+            else
+                _showFullyPaidShippingConfirm = true;
+        }
         else
-            _showShippingConfirm = true;
+        {
+            var dpInv = _invoices.FirstOrDefault(i => i.Id == _dpInvoiceId);
+            if (dpInv?.Status == "ReleasedToShip")
+                await SubmitDownpayment(true);
+            else
+                _showShippingConfirm = true;
+        }
     }
 
     private void CancelInsufficientBalance()
@@ -623,12 +651,33 @@ else
                     _bcSuccess = "Invoice marked as Paid.";
             }
             catch { _bcSuccess = "Invoice marked as Paid."; }
+
+            // Check BC remaining — if fully paid in BC, update status
+            await CheckAndMarkPaidIfZeroBalance(_fpInvoiceId);
         }
         else
         {
             _bcError = $"Failed to update invoice status (HTTP {(int)resp.StatusCode}).";
         }
         _updatingId = null;
+    }
+
+    private async Task CheckAndMarkPaidIfZeroBalance(int invoiceId)
+    {
+        try
+        {
+            var remaining = await Api.CheckBcInvoiceRemainingAsync(invoiceId);
+            if (remaining?.FullyPaidInBc == true)
+            {
+                var inv = _invoices.FirstOrDefault(i => i.Id == invoiceId);
+                if (inv != null)
+                {
+                    inv.Status = "Paid";
+                    _bcSuccess = "Invoice fully paid in BC — status updated to Paid.";
+                }
+            }
+        }
+        catch { /* non-critical — don't block the user */ }
     }
 
     private class BcStatusResponse
