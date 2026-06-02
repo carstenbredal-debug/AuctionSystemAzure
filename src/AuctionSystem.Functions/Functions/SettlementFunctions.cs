@@ -490,10 +490,7 @@ public class SettlementFunctions
 
         await _bcClient.CreateCustomerPaymentAsync(companyId, journal.Id, payment);
 
-        // Post the journal to finalize the payment
-        await _bcClient.PostCustomerPaymentJournalAsync(companyId, journal.Id);
-
-        _logger.LogInformation("Posted payment to BC for invoice {BcNumber}, amount {Amount}", invoice.BcInvoiceNumber, invoice.TotalAmount);
+        _logger.LogInformation("Created payment line in BC journal for invoice {BcNumber}, amount {Amount}. Journal must be posted manually in BC.", invoice.BcInvoiceNumber, invoice.TotalAmount);
     }
 
     private static async Task<HttpResponseData> CreateJsonResponse<T>(
