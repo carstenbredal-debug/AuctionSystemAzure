@@ -76,6 +76,10 @@ public class SettlementFunctions
         {
             invoice.ShippingStatus = "Released";
         }
+        if (status == InvoiceStatus.Issued)
+        {
+            invoice.ShippingStatus = null;
+        }
         await _db.SaveChangesAsync();
 
         // When marked as Paid, apply existing payment in BC to close the invoice
