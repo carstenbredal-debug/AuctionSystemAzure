@@ -35,6 +35,14 @@
         <div class="col-md-3">
             <div class="card text-center">
                 <div class="card-body">
+                    <h5 class="card-title text-muted">Ledger Payments</h5>
+                    <h3>@_result.TotalCustomerLedgerEntries</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
                     <h5 class="card-title text-muted">GL Payment Entries</h5>
                     <h3>@_result.TotalGlPaymentEntries</h3>
                 </div>
@@ -48,16 +56,14 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h5 class="card-title text-muted">Customers</h5>
-                    <h3>@_result.TotalCustomers</h3>
-                </div>
-            </div>
-        </div>
     </div>
 
+    @if (!string.IsNullOrEmpty(_result.LedgerError))
+    {
+        <div class="alert alert-warning">
+            <strong>Ledger entries error:</strong> @_result.LedgerError
+        </div>
+    }
     @if (!string.IsNullOrEmpty(_result.GlError))
     {
         <div class="alert alert-warning">
@@ -127,6 +133,45 @@
                                 <td><span class="badge bg-success">@inv.Status</span></td>
                                 <td class="text-end">€@inv.TotalAmountIncludingTax.ToString("N2")</td>
                                 <td class="text-end">€@inv.RemainingAmount.ToString("N2")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    @* Customer Ledger Entries *@
+    @if (_result.CustomerLedgerEntries.Count > 0)
+    {
+        <h5 class="mb-3">Customer Ledger Entries — Payments</h5>
+        <div class="card mb-4">
+            <div class="card-body p-0">
+                <table class="table table-striped table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Entry #</th>
+                            <th>Posting Date</th>
+                            <th>Document #</th>
+                            <th>Customer</th>
+                            <th>Description</th>
+                            <th class="text-end">Amount</th>
+                            <th class="text-end">Remaining</th>
+                            <th>Open</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var e in _result.CustomerLedgerEntries)
+                        {
+                            <tr class="@(!e.Open ? "table-success" : "")">
+                                <td>@e.EntryNo</td>
+                                <td>@e.PostingDate</td>
+                                <td>@e.DocumentNo</td>
+                                <td>@e.CustomerName (@e.CustomerNo)</td>
+                                <td>@e.Description</td>
+                                <td class="text-end">€@e.Amount.ToString("N2")</td>
+                                <td class="text-end">€@e.RemainingAmount.ToString("N2")</td>
+                                <td><span class="badge @(e.Open ? "bg-warning text-dark" : "bg-success")">@(e.Open ? "Open" : "Closed")</span></td>
                             </tr>
                         }
                     </tbody>
@@ -209,7 +254,7 @@
         </div>
     }
 
-    @if (_result.TotalPaidInvoices == 0 && _result.TotalGlPaymentEntries == 0 && _result.CustomerBalances.All(c => c.Balance == 0))
+    @if (_result.TotalPaidInvoices == 0 && _result.TotalCustomerLedgerEntries == 0 && _result.TotalGlPaymentEntries == 0 && _result.CustomerBalances.All(c => c.Balance == 0))
     {
         <div class="alert alert-info">No payment activity detected in BC.</div>
     }

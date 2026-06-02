@@ -1,0 +1,30 @@
+{
+  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "name": "Auction System Integration",
+  "publisher": "AuctionSystem",
+  "version": "1.1.0.0",
+  "brief": "Custom API pages for Auction System integration",
+  "description": "Exposes Customer Ledger Entries and other BC data via custom API for the Auction System portal.",
+  "privacyStatement": "",
+  "EULA": "",
+  "help": "",
+  "url": "",
+  "logo": "",
+  "dependencies": [],
+  "screenshots": [],
+  "platform": "23.0.0.0",
+  "application": "23.0.0.0",
+  "idRanges": [
+    {
+      "from": 50100,
+      "to": 50199
+    }
+  ],
+  "runtime": "12.0",
+  "target": "Cloud",
+  "resourceExposurePolicy": {
+    "allowDebugging": true,
+    "allowDownloadingSource": true,
+    "includeSourceInSymbolFile": true
+  }
+}

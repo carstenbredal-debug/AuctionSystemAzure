@@ -658,11 +658,14 @@ public class BcPaymentsResponseDto
     public List<BcPaymentEntryDto> JournalPayments { get; set; } = new();
     public List<BcPaidInvoiceDto> PaidInvoices { get; set; } = new();
     public List<BcPaidInvoiceDto> AllInvoiceStatuses { get; set; } = new();
+    public List<BcCustomerLedgerEntryDto> CustomerLedgerEntries { get; set; } = new();
+    public string? LedgerError { get; set; }
     public List<BcGlEntryDto> GlPaymentEntries { get; set; } = new();
     public string? GlError { get; set; }
     public int TotalCustomers { get; set; }
     public int TotalJournalPayments { get; set; }
     public int TotalPaidInvoices { get; set; }
+    public int TotalCustomerLedgerEntries { get; set; }
     public int TotalGlPaymentEntries { get; set; }
 }
 
@@ -698,6 +701,21 @@ public class BcPaymentEntryDto
     public decimal Amount { get; set; }
     public string AppliesToInvoiceNumber { get; set; } = "";
     public string Description { get; set; } = "";
+}
+
+public class BcCustomerLedgerEntryDto
+{
+    public int EntryNo { get; set; }
+    public string PostingDate { get; set; } = "";
+    public string DocumentNo { get; set; } = "";
+    public string DocumentType { get; set; } = "";
+    public string CustomerNo { get; set; } = "";
+    public string CustomerName { get; set; } = "";
+    public string Description { get; set; } = "";
+    public decimal Amount { get; set; }
+    public decimal RemainingAmount { get; set; }
+    public bool Open { get; set; }
+    public string ExternalDocumentNo { get; set; } = "";
 }
 
 public class BcGlEntryDto

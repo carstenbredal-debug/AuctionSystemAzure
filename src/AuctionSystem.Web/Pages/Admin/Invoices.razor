@@ -475,7 +475,7 @@ else
                 if (!string.IsNullOrEmpty(json?.BcPaymentError))
                     _bcError = $"Invoice marked as Paid locally, but BC payment failed: {json.BcPaymentError}";
                 else
-                    _bcSuccess = "Invoice marked as Paid and payment posted to BC.";
+                    _bcSuccess = "Invoice marked as Paid. Payment line created in BC journal (post journal in BC to finalize).";
             }
             catch { _bcSuccess = "Invoice marked as Paid."; }
         }
