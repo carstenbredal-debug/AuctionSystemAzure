@@ -654,14 +654,25 @@ public class BlobConnectionInfoDto
 
 public class BcPaymentsResponseDto
 {
-    public List<BcPaymentJournalDto> PaymentJournals { get; set; } = new();
-    public List<BcPaymentEntryDto> Payments { get; set; } = new();
+    public List<BcCustomerBalanceDto> CustomerBalances { get; set; } = new();
+    public List<BcPaymentEntryDto> JournalPayments { get; set; } = new();
     public List<BcPaidInvoiceDto> PaidInvoices { get; set; } = new();
-    public List<BcLedgerEntryDto> CustomerLedgerEntries { get; set; } = new();
-    public List<BcLedgerEntryDto> PaymentEntries { get; set; } = new();
-    public int TotalPaymentsFound { get; set; }
-    public int TotalLedgerEntries { get; set; }
-    public string? LedgerError { get; set; }
+    public List<BcPaidInvoiceDto> AllInvoiceStatuses { get; set; } = new();
+    public List<BcGlEntryDto> GlPaymentEntries { get; set; } = new();
+    public string? GlError { get; set; }
+    public int TotalCustomers { get; set; }
+    public int TotalJournalPayments { get; set; }
+    public int TotalPaidInvoices { get; set; }
+    public int TotalGlPaymentEntries { get; set; }
+}
+
+public class BcCustomerBalanceDto
+{
+    public string Number { get; set; } = "";
+    public string DisplayName { get; set; } = "";
+    public decimal Balance { get; set; }
+    public decimal OverdueAmount { get; set; }
+    public string CurrencyCode { get; set; } = "";
 }
 
 public class BcPaidInvoiceDto
@@ -671,15 +682,9 @@ public class BcPaidInvoiceDto
     public string CustomerNumber { get; set; } = "";
     public string CustomerName { get; set; } = "";
     public decimal TotalAmountIncludingTax { get; set; }
+    public decimal RemainingAmount { get; set; }
     public string InvoiceDate { get; set; } = "";
     public string Status { get; set; } = "";
-}
-
-public class BcPaymentJournalDto
-{
-    public Guid Id { get; set; }
-    public string Code { get; set; } = "";
-    public string DisplayName { get; set; } = "";
 }
 
 public class BcPaymentEntryDto
@@ -695,18 +700,14 @@ public class BcPaymentEntryDto
     public string Description { get; set; } = "";
 }
 
-public class BcLedgerEntryDto
+public class BcGlEntryDto
 {
     public int EntryNumber { get; set; }
     public string PostingDate { get; set; } = "";
     public string DocumentNumber { get; set; } = "";
     public string DocumentType { get; set; } = "";
-    public string CustomerNumber { get; set; } = "";
-    public string CustomerName { get; set; } = "";
+    public string AccountNumber { get; set; } = "";
     public string Description { get; set; } = "";
     public decimal DebitAmount { get; set; }
     public decimal CreditAmount { get; set; }
-    public decimal RemainingAmount { get; set; }
-    public decimal Amount { get; set; }
-    public bool Open { get; set; }
 }

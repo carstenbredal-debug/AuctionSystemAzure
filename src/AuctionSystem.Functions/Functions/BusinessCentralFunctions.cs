@@ -501,17 +501,37 @@ public class BusinessCentralFunctions
 
         var companyId = await _bcClient!.ResolveCompanyIdAsync();
 
-        // Get customer payment journals
+        // 1. Get customer balances from standard API — shows outstanding amounts
+        var customerBalances = new List<object>();
+        try
+        {
+            var customers = await _bcClient.GetCustomerBalancesAsync(companyId);
+            foreach (var c in customers)
+            {
+                customerBalances.Add(new
+                {
+                    c.Number,
+                    c.DisplayName,
+                    c.Balance,
+                    c.OverdueAmount,
+                    c.CurrencyCode
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not fetch customers for balance check");
+        }
+
+        // 2. Get customer payment journals (unposted draft payments)
         var journals = await _bcClient.GetCustomerPaymentJournalsAsync(companyId);
-
-        var allPayments = new List<object>();
-
+        var journalPayments = new List<object>();
         foreach (var journal in journals)
         {
             var payments = await _bcClient.GetCustomerPaymentsAsync(companyId, journal.Id);
             foreach (var p in payments)
             {
-                allPayments.Add(new
+                journalPayments.Add(new
                 {
                     journal = journal.DisplayName,
                     p.CustomerNumber,
@@ -526,36 +546,40 @@ public class BusinessCentralFunctions
             }
         }
 
-        // Get customer ledger entries (posted payments, invoices, credit memos)
-        var allLedgerEntries = new List<BcCustomerLedgerEntry>();
-        string? ledgerError = null;
-        try
-        {
-            allLedgerEntries = await _bcClient.GetCustomerLedgerEntriesAsync(companyId);
-        }
-        catch (Exception ex)
-        {
-            ledgerError = ex.Message;
-            _logger.LogWarning(ex, "Could not fetch customer ledger entries");
-        }
-
-        // Also check posted sales invoices for payment status
+        // 3. Check posted sales invoices for payment status
         var paidInvoices = new List<object>();
+        var allInvoiceStatuses = new List<object>();
         try
         {
             var invoices = await _bcClient.GetSalesInvoicesAsync(companyId, 5000);
-            foreach (var inv in invoices.Where(i => i.Status == "Paid"))
+            foreach (var inv in invoices)
             {
-                paidInvoices.Add(new
+                allInvoiceStatuses.Add(new
                 {
                     inv.Number,
                     inv.ExternalDocumentNumber,
                     inv.CustomerNumber,
                     inv.CustomerName,
                     inv.TotalAmountIncludingTax,
+                    inv.RemainingAmount,
                     inv.InvoiceDate,
                     inv.Status
                 });
+
+                if (inv.Status == "Paid" || inv.RemainingAmount == 0)
+                {
+                    paidInvoices.Add(new
+                    {
+                        inv.Number,
+                        inv.ExternalDocumentNumber,
+                        inv.CustomerNumber,
+                        inv.CustomerName,
+                        inv.TotalAmountIncludingTax,
+                        inv.RemainingAmount,
+                        inv.InvoiceDate,
+                        inv.Status
+                    });
+                }
             }
         }
         catch (Exception ex)
@@ -563,49 +587,46 @@ public class BusinessCentralFunctions
             _logger.LogWarning(ex, "Could not fetch sales invoices for payment status");
         }
 
-        // Filter to just payment entries
-        var paymentLedgerEntries = allLedgerEntries
-            .Where(e => e.DocumentType.Equals("Payment", StringComparison.OrdinalIgnoreCase))
-            .Select(e => new
+        // 4. Get general ledger entries (to find payment postings)
+        var glPaymentEntries = new List<object>();
+        string? glError = null;
+        try
+        {
+            var glEntries = await _bcClient.GetGeneralLedgerEntriesAsync(companyId, 1000);
+            foreach (var e in glEntries.Where(e =>
+                e.DocumentType.Equals("Payment", StringComparison.OrdinalIgnoreCase)))
             {
-                e.EntryNumber,
-                e.PostingDate,
-                e.DocumentNumber,
-                e.CustomerNumber,
-                e.CustomerName,
-                e.Description,
-                e.DebitAmount,
-                e.CreditAmount,
-                e.RemainingAmount,
-                e.Amount,
-                e.Open
-            })
-            .ToList();
+                glPaymentEntries.Add(new
+                {
+                    e.EntryNumber,
+                    e.PostingDate,
+                    e.DocumentNumber,
+                    e.DocumentType,
+                    e.AccountNumber,
+                    e.Description,
+                    e.DebitAmount,
+                    e.CreditAmount
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            glError = ex.Message;
+            _logger.LogWarning(ex, "Could not fetch general ledger entries");
+        }
 
         return await JsonResponse(req, new
         {
-            paymentJournals = journals.Select(j => new { j.Id, j.Code, j.DisplayName }),
-            payments = allPayments,
+            customerBalances,
+            journalPayments,
             paidInvoices,
-            customerLedgerEntries = allLedgerEntries.Select(e => new
-            {
-                e.EntryNumber,
-                e.PostingDate,
-                e.DocumentNumber,
-                e.DocumentType,
-                e.CustomerNumber,
-                e.CustomerName,
-                e.Description,
-                e.DebitAmount,
-                e.CreditAmount,
-                e.RemainingAmount,
-                e.Amount,
-                e.Open
-            }),
-            paymentEntries = paymentLedgerEntries,
-            totalPaymentsFound = allPayments.Count + paymentLedgerEntries.Count,
-            totalLedgerEntries = allLedgerEntries.Count,
-            ledgerError
+            allInvoiceStatuses,
+            glPaymentEntries,
+            glError,
+            totalCustomers = customerBalances.Count,
+            totalJournalPayments = journalPayments.Count,
+            totalPaidInvoices = paidInvoices.Count,
+            totalGlPaymentEntries = glPaymentEntries.Count
         });
     }
 
