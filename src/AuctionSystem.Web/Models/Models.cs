@@ -488,6 +488,32 @@ public class BcCustomerDto
     public string Country { get; set; } = "";
     public string Email { get; set; } = "";
     public string CurrencyCode { get; set; } = "";
+    public decimal CreditLimit { get; set; }
+    public string Blocked { get; set; } = "";
+    public string GenBusPostingGroup { get; set; } = "";
+    public string VatBusPostingGroup { get; set; } = "";
+    public string CustomerPostingGroup { get; set; } = "";
+    public string PaymentTermsCode { get; set; } = "";
+    public string PaymentMethodCode { get; set; } = "";
+    public string VatRegistrationNo { get; set; } = "";
+}
+
+public class BcVendorDto
+{
+    public Guid Id { get; set; }
+    public string Number { get; set; } = "";
+    public string DisplayName { get; set; } = "";
+    public string City { get; set; } = "";
+    public string Country { get; set; } = "";
+    public string Email { get; set; } = "";
+    public string CurrencyCode { get; set; } = "";
+    public string Blocked { get; set; } = "";
+    public string GenBusPostingGroup { get; set; } = "";
+    public string VatBusPostingGroup { get; set; } = "";
+    public string VendorPostingGroup { get; set; } = "";
+    public string PaymentTermsCode { get; set; } = "";
+    public string PaymentMethodCode { get; set; } = "";
+    public string VatRegistrationNo { get; set; } = "";
 }
 
 public class BcCountryRegionDto
