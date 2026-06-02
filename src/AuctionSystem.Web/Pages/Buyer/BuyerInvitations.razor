@@ -51,11 +51,11 @@ else
         </div>
     </div>
 
-    @if (_pendingRequests.Any())
+    @if (_brokerInitiatedPending.Any())
     {
         <div class="card mb-4 border-warning">
             <div class="card-header bg-warning text-dark">
-                <strong>Pending Invitations</strong> <span class="badge bg-dark">@_pendingRequests.Count</span>
+                <strong>Pending Invitations from Brokers</strong> <span class="badge bg-dark">@_brokerInitiatedPending.Count</span>
             </div>
             <div class="card-body p-0">
                 <table class="table table-hover mb-0">
@@ -67,7 +67,7 @@ else
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var req in _pendingRequests)
+                        @foreach (var req in _brokerInitiatedPending)
                         {
                             <tr>
                                 <td><strong>@(req.Broker?.CompanyName ?? $"Broker {req.BrokerId}")</strong></td>
@@ -83,9 +83,40 @@ else
             </div>
         </div>
     }
-    else
+
+    @if (_buyerInitiatedPending.Any())
     {
-        <div class="alert alert-info">No pending invitations.</div>
+        <div class="card mb-4 border-info">
+            <div class="card-header bg-info text-white">
+                <strong>Your Pending Requests</strong> <span class="badge bg-dark">@_buyerInitiatedPending.Count</span>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Broker</th>
+                            <th>Requested</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var req in _buyerInitiatedPending)
+                        {
+                            <tr>
+                                <td><strong>@(req.Broker?.CompanyName ?? $"Broker {req.BrokerId}")</strong></td>
+                                <td>@req.RequestedAt.ToString("g")</td>
+                                <td><span class="badge bg-warning text-dark">Awaiting broker approval</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    @if (!_brokerInitiatedPending.Any() && !_buyerInitiatedPending.Any())
+    {
+        <div class="alert alert-info">No pending invitations or requests.</div>
     }
 
     @if (_approvedRequests.Any())
@@ -126,7 +157,8 @@ else
     private bool _messageIsError;
     private int _selectedBrokerId;
 
-    private List<BrokerCustomerRequestDto> _pendingRequests = new();
+    private List<BrokerCustomerRequestDto> _brokerInitiatedPending = new();
+    private List<BrokerCustomerRequestDto> _buyerInitiatedPending = new();
     private List<BrokerCustomerRequestDto> _approvedRequests = new();
     private List<BrokerDto> _availableBrokers = new();
 
@@ -150,7 +182,9 @@ else
     private async Task LoadData()
     {
         var allRequests = await Api.GetCustomerRequestsByBuyerAsync(_buyerId);
-        _pendingRequests = allRequests.Where(r => r.Status == CustomerRequestStatus.Pending).ToList();
+        var pending = allRequests.Where(r => r.Status == CustomerRequestStatus.Pending).ToList();
+        _brokerInitiatedPending = pending.Where(r => r.InitiatedBy == "Broker").ToList();
+        _buyerInitiatedPending = pending.Where(r => r.InitiatedBy == "Buyer").ToList();
         _approvedRequests = allRequests.Where(r => r.Status == CustomerRequestStatus.Approved).ToList();
 
         var allBrokers = await Api.GetBrokersAsync();

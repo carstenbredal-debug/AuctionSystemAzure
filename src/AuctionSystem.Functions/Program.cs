@@ -204,6 +204,11 @@ using (var scope = host.Services.CreateScope())
                 CREATE INDEX IX_AuctionTransactions_BrokerId ON auction.AuctionTransactions(BrokerId);
             END
         ");
+        // BrokerCustomerRequests: add InitiatedBy column
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.BrokerCustomerRequests') AND name = 'InitiatedBy')
+                ALTER TABLE auction.BrokerCustomerRequests ADD InitiatedBy nvarchar(10) NOT NULL DEFAULT 'Broker';
+        ");
         db.Database.Migrate();
     }
     catch (Exception ex)
