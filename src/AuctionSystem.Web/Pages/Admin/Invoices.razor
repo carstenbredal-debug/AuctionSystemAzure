@@ -174,15 +174,15 @@ else
                                 <span class="badge bg-@GetStatusColor(creditStatus)">@creditStatus</span>
                             </td>
                             <td>
-                                @if (!inv.IsCreditNote && inv.Status != "Paid" && inv.Status != "Downpayment")
+                                @if (!inv.IsCreditNote && inv.Status != "Paid" && inv.Status != "Downpayment" && inv.Status != "ReleasedToShip")
                                 {
                                     var invId = inv.Id;
-                                    <button class="btn btn-sm btn-outline-info me-1" @onclick="() => OpenDownpaymentPopup(invId)" disabled="@_updatingId.HasValue">Downpayment</button>
+                                    <button class="btn btn-sm btn-outline-info me-1" @onclick="() => OpenDownpaymentPopup(invId)" disabled="@_updatingId.HasValue">Partial Payment</button>
                                     <button class="btn btn-sm btn-outline-success" @onclick="() => OpenFullyPaidPopup(invId)" disabled="@_updatingId.HasValue">Fully Paid</button>
                                 }
                                 else if (inv.Status == "Downpayment")
                                 {
-                                    <span class="text-info">DP Paid</span>
+                                    <span class="text-info">Partial Paid</span>
                                     @if (inv.ShippingStatus == "Released")
                                     {
                                         <span class="badge bg-primary ms-1">Shipped</span>
@@ -195,6 +195,10 @@ else
                                     {
                                         <span class="badge bg-primary ms-1">Shipped</span>
                                     }
+                                }
+                                else if (inv.Status == "ReleasedToShip")
+                                {
+                                    <span class="badge bg-primary">Released to Ship</span>
                                 }
                             </td>
                             <td>
@@ -276,19 +280,19 @@ else
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Process Downpayment</h5>
+                    <h5 class="modal-title">Process Partial Payment</h5>
                     <button type="button" class="btn-close" @onclick="CloseDownpaymentPopup"></button>
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label">Amount Type</label>
-                        <select class="form-select" @bind="_dpIsPercentage">
-                            <option value="true">Percentage (%)</option>
-                            <option value="false">Absolute Amount (€)</option>
+                        <select class="form-select" @bind="_dpAmountType">
+                            <option value="percentage">Percentage (%)</option>
+                            <option value="absolute">Absolute Amount (€)</option>
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">@(_dpIsPercentage ? "Percentage" : "Amount")</label>
+                        <label class="form-label">@(_dpAmountType == "percentage" ? "Percentage" : "Amount")</label>
                         <input type="number" class="form-control" @bind="_dpAmount" step="0.01" />
                     </div>
                 </div>
@@ -382,16 +386,16 @@ else
     private string _selectedStatus = "";
     private List<string> _brokerNames = new();
     private List<string> _buyerNames = new();
-    private List<string> _statusOptions = new() { "Issued", "Downpayment", "Paid", "Partially Credited", "Fully Credited", "Alloted" };
+    private List<string> _statusOptions = new() { "Issued", "Partial Payment", "Paid", "Released to Ship", "Partially Credited", "Fully Credited", "Alloted" };
     private int? _updatingId;
     private int? _expandedInvoiceId;
 
-    // Downpayment popup state
+    // Partial Payment popup state
     private bool _showDownpaymentPopup;
     private bool _showShippingConfirm;
     private int _dpInvoiceId;
     private decimal _dpAmount;
-    private bool _dpIsPercentage = true;
+    private string _dpAmountType = "percentage";
 
     // Fully Paid popup state
     private bool _showFullyPaidShippingConfirm;
@@ -463,7 +467,7 @@ else
     {
         _dpInvoiceId = invoiceId;
         _dpAmount = 0;
-        _dpIsPercentage = true;
+        _dpAmountType = "percentage";
         _showDownpaymentPopup = true;
     }
 
@@ -494,7 +498,8 @@ else
         {
             // Calculate actual amount entered
             var inv = _invoices.FirstOrDefault(i => i.Id == _dpInvoiceId);
-            var actualAmount = _dpIsPercentage && inv != null ? inv.TotalAmount * _dpAmount / 100 : _dpAmount;
+            var isPercentage = _dpAmountType == "percentage";
+            var actualAmount = isPercentage && inv != null ? inv.TotalAmount * _dpAmount / 100 : _dpAmount;
 
             if (balance.AvailableAmount >= actualAmount)
             {
@@ -518,30 +523,30 @@ else
         _updatingId = _dpInvoiceId;
         _bcError = null;
         _bcSuccess = null;
-        var resp = await Api.ProcessDownpaymentAsync(_dpInvoiceId, _dpAmount, _dpIsPercentage, releaseForShipping);
+        var resp = await Api.ProcessDownpaymentAsync(_dpInvoiceId, _dpAmount, _dpAmountType == "percentage", releaseForShipping);
         if (resp.IsSuccessStatusCode)
         {
             var inv = _invoices.FirstOrDefault(i => i.Id == _dpInvoiceId);
             if (inv != null)
             {
-                inv.Status = "Downpayment";
+                inv.Status = releaseForShipping ? "ReleasedToShip" : "Downpayment";
                 if (releaseForShipping) inv.ShippingStatus = "Released";
             }
             try
             {
                 var json = await resp.Content.ReadFromJsonAsync<BcStatusResponse>();
                 if (!string.IsNullOrEmpty(json?.BcPaymentError))
-                    _bcError = $"Downpayment recorded locally, but BC payment application failed: {json.BcPaymentError}";
+                    _bcError = $"Partial payment recorded locally, but BC payment application failed: {json.BcPaymentError}";
                 else if (!string.IsNullOrEmpty(json?.BcPaymentSuccess))
-                    _bcSuccess = $"Downpayment recorded. BC: {json.BcPaymentSuccess}";
+                    _bcSuccess = $"Partial payment recorded. BC: {json.BcPaymentSuccess}";
                 else
-                    _bcSuccess = "Downpayment recorded.";
+                    _bcSuccess = "Partial payment recorded.";
             }
-            catch { _bcSuccess = "Downpayment recorded."; }
+            catch { _bcSuccess = "Partial payment recorded."; }
         }
         else
         {
-            _bcError = $"Failed to process downpayment (HTTP {(int)resp.StatusCode}).";
+            _bcError = $"Failed to process partial payment (HTTP {(int)resp.StatusCode}).";
         }
         _updatingId = null;
     }
@@ -606,7 +611,7 @@ else
             var inv = _invoices.FirstOrDefault(i => i.Id == _fpInvoiceId);
             if (inv != null)
             {
-                inv.Status = StatusPaid;
+                inv.Status = releaseForShipping ? "ReleasedToShip" : StatusPaid;
                 if (releaseForShipping) inv.ShippingStatus = "Released";
             }
 
@@ -643,11 +648,20 @@ else
 
     private string GetCreditStatus(InvoiceSummaryDto inv)
     {
-        if (inv.IsCreditNote) return inv.Status;
-        if (inv.CreditedLots == 0) return inv.Status;
+        if (inv.IsCreditNote) return FormatStatus(inv.Status);
+        if (inv.CreditedLots == 0) return FormatStatus(inv.Status);
         if (inv.UncreditedLotNumbers.Count == 0) return "Fully Credited";
         return "Partially Credited";
     }
+
+    private string FormatStatus(string status) => status switch
+    {
+        "ReleasedToShip" => "Released to Ship",
+        "Downpayment" => "Partial Payment",
+        "PartiallyCredited" => "Partially Credited",
+        "FullyCredited" => "Fully Credited",
+        _ => status
+    };
 
     private string GetStatusColor(string status) => status switch
     {
@@ -655,8 +669,9 @@ else
         "Fully Credited" => "success",
         "Partially Credited" => "warning",
         "Issued" => "info",
-        "Downpayment" => "info",
+        "Partial Payment" => "info",
         "Alloted" => "success",
+        "Released to Ship" => "primary",
         "Overdue" => "danger",
         _ => "secondary"
     };
