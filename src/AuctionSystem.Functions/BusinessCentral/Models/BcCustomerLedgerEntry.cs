@@ -4,23 +4,20 @@ namespace AuctionSystem.Functions.BusinessCentral.Models;
 
 public class BcCustomerLedgerEntry
 {
-    [JsonPropertyName("id")]
-    public Guid Id { get; set; }
-
-    [JsonPropertyName("entryNumber")]
-    public int EntryNumber { get; set; }
+    [JsonPropertyName("entryNo")]
+    public int EntryNo { get; set; }
 
     [JsonPropertyName("postingDate")]
     public string PostingDate { get; set; } = string.Empty;
 
-    [JsonPropertyName("documentNumber")]
-    public string DocumentNumber { get; set; } = string.Empty;
-
     [JsonPropertyName("documentType")]
     public string DocumentType { get; set; } = string.Empty;
 
-    [JsonPropertyName("customerNumber")]
-    public string CustomerNumber { get; set; } = string.Empty;
+    [JsonPropertyName("documentNo")]
+    public string DocumentNo { get; set; } = string.Empty;
+
+    [JsonPropertyName("customerNo")]
+    public string CustomerNo { get; set; } = string.Empty;
 
     [JsonPropertyName("customerName")]
     public string CustomerName { get; set; } = string.Empty;
@@ -28,22 +25,30 @@ public class BcCustomerLedgerEntry
     [JsonPropertyName("description")]
     public string Description { get; set; } = string.Empty;
 
-    [JsonPropertyName("debitAmount")]
-    public decimal DebitAmount { get; set; }
-
-    [JsonPropertyName("creditAmount")]
-    public decimal CreditAmount { get; set; }
-
-    [JsonPropertyName("remainingAmount")]
-    public decimal RemainingAmount { get; set; }
+    [JsonPropertyName("currencyCode")]
+    public string CurrencyCode { get; set; } = string.Empty;
 
     [JsonPropertyName("amount")]
     public decimal Amount { get; set; }
 
+    [JsonPropertyName("remainingAmount")]
+    public decimal RemainingAmount { get; set; }
+
+    [JsonPropertyName("originalAmount")]
+    public decimal OriginalAmount { get; set; }
+
     [JsonPropertyName("open")]
     public bool Open { get; set; }
 
-    [JsonPropertyName("lastModifiedDateTime")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public DateTimeOffset? LastModifiedDateTime { get; set; }
+    [JsonPropertyName("dueDate")]
+    public string DueDate { get; set; } = string.Empty;
+
+    [JsonPropertyName("closedByEntryNo")]
+    public int ClosedByEntryNo { get; set; }
+
+    [JsonPropertyName("closedAtDate")]
+    public string ClosedAtDate { get; set; } = string.Empty;
+
+    [JsonPropertyName("externalDocumentNo")]
+    public string ExternalDocumentNo { get; set; } = string.Empty;
 }

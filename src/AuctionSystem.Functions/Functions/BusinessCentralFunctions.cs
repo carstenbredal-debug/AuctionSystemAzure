@@ -587,7 +587,38 @@ public class BusinessCentralFunctions
             _logger.LogWarning(ex, "Could not fetch sales invoices for payment status");
         }
 
-        // 4. Get general ledger entries (to find payment postings)
+        // 4. Get customer ledger entries via custom API (payments applied to customers)
+        var customerLedgerEntries = new List<object>();
+        string? ledgerError = null;
+        try
+        {
+            var entries = await _bcClient.GetCustomerLedgerEntriesAsync(companyId);
+            foreach (var e in entries.Where(e =>
+                e.DocumentType.Equals("Payment", StringComparison.OrdinalIgnoreCase)))
+            {
+                customerLedgerEntries.Add(new
+                {
+                    e.EntryNo,
+                    e.PostingDate,
+                    e.DocumentNo,
+                    e.DocumentType,
+                    e.CustomerNo,
+                    e.CustomerName,
+                    e.Description,
+                    e.Amount,
+                    e.RemainingAmount,
+                    e.Open,
+                    e.ExternalDocumentNo
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            ledgerError = ex.Message;
+            _logger.LogWarning(ex, "Could not fetch customer ledger entries");
+        }
+
+        // 5. Get general ledger entries (fallback for payment postings)
         var glPaymentEntries = new List<object>();
         string? glError = null;
         try
@@ -621,11 +652,14 @@ public class BusinessCentralFunctions
             journalPayments,
             paidInvoices,
             allInvoiceStatuses,
+            customerLedgerEntries,
+            ledgerError,
             glPaymentEntries,
             glError,
             totalCustomers = customerBalances.Count,
             totalJournalPayments = journalPayments.Count,
             totalPaidInvoices = paidInvoices.Count,
+            totalCustomerLedgerEntries = customerLedgerEntries.Count,
             totalGlPaymentEntries = glPaymentEntries.Count
         });
     }
