@@ -47,6 +47,10 @@ public class BcSalesInvoice
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public decimal TotalAmountIncludingTax { get; set; }
 
+    [JsonPropertyName("remainingAmount")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public decimal RemainingAmount { get; set; }
+
     [JsonPropertyName("lastModifiedDateTime")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public DateTimeOffset? LastModifiedDateTime { get; set; }

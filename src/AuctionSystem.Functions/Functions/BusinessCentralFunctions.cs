@@ -528,13 +528,39 @@ public class BusinessCentralFunctions
 
         // Get customer ledger entries (posted payments, invoices, credit memos)
         var allLedgerEntries = new List<BcCustomerLedgerEntry>();
+        string? ledgerError = null;
         try
         {
             allLedgerEntries = await _bcClient.GetCustomerLedgerEntriesAsync(companyId);
         }
         catch (Exception ex)
         {
+            ledgerError = ex.Message;
             _logger.LogWarning(ex, "Could not fetch customer ledger entries");
+        }
+
+        // Also check posted sales invoices for payment status
+        var paidInvoices = new List<object>();
+        try
+        {
+            var invoices = await _bcClient.GetSalesInvoicesAsync(companyId, 5000);
+            foreach (var inv in invoices.Where(i => i.Status == "Paid"))
+            {
+                paidInvoices.Add(new
+                {
+                    inv.Number,
+                    inv.ExternalDocumentNumber,
+                    inv.CustomerNumber,
+                    inv.CustomerName,
+                    inv.TotalAmountIncludingTax,
+                    inv.InvoiceDate,
+                    inv.Status
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not fetch sales invoices for payment status");
         }
 
         // Filter to just payment entries
@@ -560,6 +586,7 @@ public class BusinessCentralFunctions
         {
             paymentJournals = journals.Select(j => new { j.Id, j.Code, j.DisplayName }),
             payments = allPayments,
+            paidInvoices,
             customerLedgerEntries = allLedgerEntries.Select(e => new
             {
                 e.EntryNumber,
@@ -577,7 +604,8 @@ public class BusinessCentralFunctions
             }),
             paymentEntries = paymentLedgerEntries,
             totalPaymentsFound = allPayments.Count + paymentLedgerEntries.Count,
-            totalLedgerEntries = allLedgerEntries.Count
+            totalLedgerEntries = allLedgerEntries.Count,
+            ledgerError
         });
     }
 
