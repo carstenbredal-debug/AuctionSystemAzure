@@ -121,6 +121,7 @@ else
                         <th>Type</th>
                         <th>Number</th>
                         <th>Broker</th>
+                        <th>Customer No.</th>
                         <th>Buyer</th>
                         <th>Lots</th>
                         <th>Subtotal</th>
@@ -137,7 +138,7 @@ else
                 <tbody>
                     @if (FilteredInvoices.Count == 0)
                     {
-                        <tr><td colspan="14" class="text-center text-muted py-4">No invoices found.</td></tr>
+                        <tr><td colspan="15" class="text-center text-muted py-4">No invoices found.</td></tr>
                     }
                     @foreach (var inv in FilteredInvoices)
                     {
@@ -160,6 +161,7 @@ else
                                 }
                             </td>
                             <td>@(inv.BrokerName ?? "—")</td>
+                            <td>@(inv.BuyerNumber ?? "—")</td>
                             <td>@(inv.BuyerName ?? "—")</td>
                             <td>@inv.LinesCount</td>
                             <td>€@inv.SubTotal.ToString("N2")</td>
@@ -219,7 +221,7 @@ else
                         @if (_expandedInvoiceId == inv.Id && inv.Lots.Any())
                         {
                             <tr>
-                                <td colspan="14" class="p-0">
+                                <td colspan="15" class="p-0">
                                     <table class="table table-sm mb-0 ms-4" style="width: auto;">
                                         <thead>
                                             <tr>
@@ -252,7 +254,7 @@ else
                                                             }
                                                             else
                                                             {
-                                                                <span class="badge bg-success">Not Credited</span>
+                                                                <span class="badge bg-success">Sold</span>
                                                             }
                                                         </td>
                                                     }

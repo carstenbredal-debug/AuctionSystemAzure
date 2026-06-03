@@ -589,7 +589,7 @@ public class SettlementFunctions
             {
                 i.Id, i.InvoiceNumber, i.InvoiceDate, i.SubTotal, i.AuctionFee, i.Commission,
                 i.TotalAmount, i.Currency, Status = i.Status.ToString(),
-                BrokerName = i.Broker?.CompanyName, BuyerName = i.Buyer?.Name, LinesCount = i.Lines.Count,
+                BrokerName = i.Broker?.CompanyName, BuyerName = i.Buyer?.Name, BuyerNumber = i.Buyer?.BuyerNumber, LinesCount = i.Lines.Count,
                 i.IsCreditNote, OriginalInvoiceNumber = i.OriginalInvoice?.InvoiceNumber,
                 i.PdfUrl, i.BcInvoiceNumber, i.ShippingStatus,
                 i.DownpaymentAmount, i.DownpaymentPercentage,
