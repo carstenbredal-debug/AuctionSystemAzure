@@ -647,11 +647,11 @@ public class AuctionApiClient
     public async Task<List<LotGroupOrderDto>> GetLotGroupOrdersAsync()
         => await _http.GetFromJsonAsync<List<LotGroupOrderDto>>("api/sales-order-setup/lot-group-orders") ?? new();
 
-    public async Task<LotGroupOrderDto?> CreateLotGroupOrderAsync(LotGroupOrderDto dto)
+    public async Task<(LotGroupOrderDto? Data, string? Error)> CreateLotGroupOrderAsync(LotGroupOrderDto dto)
     {
         var resp = await _http.PostAsJsonAsync("api/sales-order-setup/lot-group-orders", dto);
-        if (!resp.IsSuccessStatusCode) return null;
-        return await resp.Content.ReadFromJsonAsync<LotGroupOrderDto>();
+        if (!resp.IsSuccessStatusCode) return (null, await GetErrorMessage(resp));
+        return (await resp.Content.ReadFromJsonAsync<LotGroupOrderDto>(), null);
     }
 
     public async Task<bool> ReorderLotGroupOrdersAsync(List<LotGroupOrderDto> items)
@@ -660,46 +660,58 @@ public class AuctionApiClient
         return resp.IsSuccessStatusCode;
     }
 
-    public async Task<LotGroupOrderDto?> UpdateLotGroupOrderAsync(string columnName, LotGroupOrderDto dto)
+    public async Task<(LotGroupOrderDto? Data, string? Error)> UpdateLotGroupOrderAsync(LotGroupOrderDto dto)
     {
-        var resp = await _http.PutAsJsonAsync($"api/sales-order-setup/lot-group-orders/{Uri.EscapeDataString(columnName)}", dto);
-        if (!resp.IsSuccessStatusCode) return null;
-        return await resp.Content.ReadFromJsonAsync<LotGroupOrderDto>();
+        var resp = await _http.PutAsJsonAsync("api/sales-order-setup/lot-group-orders/update", dto);
+        if (!resp.IsSuccessStatusCode) return (null, await GetErrorMessage(resp));
+        return (await resp.Content.ReadFromJsonAsync<LotGroupOrderDto>(), null);
     }
 
-    public async Task DeleteLotGroupOrderAsync(string columnName)
-        => await _http.DeleteAsync($"api/sales-order-setup/lot-group-orders/{Uri.EscapeDataString(columnName)}");
+    public async Task<(bool Success, string? Error)> DeleteLotGroupOrderAsync(LotGroupOrderDto dto)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Delete, "api/sales-order-setup/lot-group-orders/remove")
+        { Content = JsonContent.Create(dto) };
+        var resp = await _http.SendAsync(request);
+        if (!resp.IsSuccessStatusCode) return (false, await GetErrorMessage(resp));
+        return (true, null);
+    }
 
     // Sales Order Setup — Lot Size Rules
     public async Task<List<LotSizeRuleDto>> GetLotSizeRulesAsync()
         => await _http.GetFromJsonAsync<List<LotSizeRuleDto>>("api/sales-order-setup/lot-size-rules") ?? new();
 
-    public async Task<LotSizeRuleDto?> CreateLotSizeRuleAsync(LotSizeRuleDto dto)
+    public async Task<(LotSizeRuleDto? Data, string? Error)> CreateLotSizeRuleAsync(LotSizeRuleDto dto)
     {
         var resp = await _http.PostAsJsonAsync("api/sales-order-setup/lot-size-rules", dto);
-        if (!resp.IsSuccessStatusCode) return null;
-        return await resp.Content.ReadFromJsonAsync<LotSizeRuleDto>();
+        if (!resp.IsSuccessStatusCode) return (null, await GetErrorMessage(resp));
+        return (await resp.Content.ReadFromJsonAsync<LotSizeRuleDto>(), null);
     }
 
-    public async Task<LotSizeRuleDto?> UpdateLotSizeRuleAsync(int id, LotSizeRuleDto dto)
+    public async Task<(LotSizeRuleDto? Data, string? Error)> UpdateLotSizeRuleAsync(LotSizeRuleDto dto)
     {
-        var resp = await _http.PutAsJsonAsync($"api/sales-order-setup/lot-size-rules/{id}", dto);
-        if (!resp.IsSuccessStatusCode) return null;
-        return await resp.Content.ReadFromJsonAsync<LotSizeRuleDto>();
+        var resp = await _http.PutAsJsonAsync("api/sales-order-setup/lot-size-rules/update", dto);
+        if (!resp.IsSuccessStatusCode) return (null, await GetErrorMessage(resp));
+        return (await resp.Content.ReadFromJsonAsync<LotSizeRuleDto>(), null);
     }
 
-    public async Task DeleteLotSizeRuleAsync(int id)
-        => await _http.DeleteAsync($"api/sales-order-setup/lot-size-rules/{id}");
+    public async Task<(bool Success, string? Error)> DeleteLotSizeRuleAsync(LotSizeRuleDto dto)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Delete, "api/sales-order-setup/lot-size-rules/remove")
+        { Content = JsonContent.Create(dto) };
+        var resp = await _http.SendAsync(request);
+        if (!resp.IsSuccessStatusCode) return (false, await GetErrorMessage(resp));
+        return (true, null);
+    }
 
     // Sales Order Setup — Lot Sort Orders
     public async Task<List<LotSortOrderDto>> GetLotSortOrdersAsync()
         => await _http.GetFromJsonAsync<List<LotSortOrderDto>>("api/sales-order-setup/lot-sort-orders") ?? new();
 
-    public async Task<LotSortOrderDto?> CreateLotSortOrderAsync(LotSortOrderDto dto)
+    public async Task<(LotSortOrderDto? Data, string? Error)> CreateLotSortOrderAsync(LotSortOrderDto dto)
     {
         var resp = await _http.PostAsJsonAsync("api/sales-order-setup/lot-sort-orders", dto);
-        if (!resp.IsSuccessStatusCode) return null;
-        return await resp.Content.ReadFromJsonAsync<LotSortOrderDto>();
+        if (!resp.IsSuccessStatusCode) return (null, await GetErrorMessage(resp));
+        return (await resp.Content.ReadFromJsonAsync<LotSortOrderDto>(), null);
     }
 
     public async Task<bool> ReorderLotSortOrdersAsync(List<LotSortOrderDto> items)
@@ -708,34 +720,59 @@ public class AuctionApiClient
         return resp.IsSuccessStatusCode;
     }
 
-    public async Task<LotSortOrderDto?> UpdateLotSortOrderAsync(LotSortOrderDto dto)
+    public async Task<(LotSortOrderDto? Data, string? Error)> UpdateLotSortOrderAsync(LotSortOrderDto dto)
     {
         var resp = await _http.PutAsJsonAsync("api/sales-order-setup/lot-sort-orders/update", dto);
-        if (!resp.IsSuccessStatusCode) return null;
-        return await resp.Content.ReadFromJsonAsync<LotSortOrderDto>();
+        if (!resp.IsSuccessStatusCode) return (null, await GetErrorMessage(resp));
+        return (await resp.Content.ReadFromJsonAsync<LotSortOrderDto>(), null);
     }
 
-    public async Task DeleteLotSortOrderAsync(string columnName, string value)
-        => await _http.DeleteAsync($"api/sales-order-setup/lot-sort-orders/{Uri.EscapeDataString(columnName)}/{Uri.EscapeDataString(value)}");
+    public async Task<(bool Success, string? Error)> DeleteLotSortOrderAsync(LotSortOrderDto dto)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Delete, "api/sales-order-setup/lot-sort-orders/remove")
+        { Content = JsonContent.Create(dto) };
+        var resp = await _http.SendAsync(request);
+        if (!resp.IsSuccessStatusCode) return (false, await GetErrorMessage(resp));
+        return (true, null);
+    }
 
     // Sales Order Setup — Catalog Number Rules
     public async Task<List<CatalogNumberRuleDto>> GetCatalogNumberRulesAsync()
         => await _http.GetFromJsonAsync<List<CatalogNumberRuleDto>>("api/sales-order-setup/catalog-number-rules") ?? new();
 
-    public async Task<CatalogNumberRuleDto?> CreateCatalogNumberRuleAsync(CatalogNumberRuleDto dto)
+    public async Task<(CatalogNumberRuleDto? Data, string? Error)> CreateCatalogNumberRuleAsync(CatalogNumberRuleDto dto)
     {
         var resp = await _http.PostAsJsonAsync("api/sales-order-setup/catalog-number-rules", dto);
-        if (!resp.IsSuccessStatusCode) return null;
-        return await resp.Content.ReadFromJsonAsync<CatalogNumberRuleDto>();
+        if (!resp.IsSuccessStatusCode) return (null, await GetErrorMessage(resp));
+        return (await resp.Content.ReadFromJsonAsync<CatalogNumberRuleDto>(), null);
     }
 
-    public async Task<CatalogNumberRuleDto?> UpdateCatalogNumberRuleAsync(int id, CatalogNumberRuleDto dto)
+    public async Task<(CatalogNumberRuleDto? Data, string? Error)> UpdateCatalogNumberRuleAsync(CatalogNumberRuleDto dto)
     {
-        var resp = await _http.PutAsJsonAsync($"api/sales-order-setup/catalog-number-rules/{id}", dto);
-        if (!resp.IsSuccessStatusCode) return null;
-        return await resp.Content.ReadFromJsonAsync<CatalogNumberRuleDto>();
+        var resp = await _http.PutAsJsonAsync("api/sales-order-setup/catalog-number-rules/update", dto);
+        if (!resp.IsSuccessStatusCode) return (null, await GetErrorMessage(resp));
+        return (await resp.Content.ReadFromJsonAsync<CatalogNumberRuleDto>(), null);
     }
 
-    public async Task DeleteCatalogNumberRuleAsync(int id)
-        => await _http.DeleteAsync($"api/sales-order-setup/catalog-number-rules/{id}");
+    public async Task<(bool Success, string? Error)> DeleteCatalogNumberRuleAsync(CatalogNumberRuleDto dto)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Delete, "api/sales-order-setup/catalog-number-rules/remove")
+        { Content = JsonContent.Create(dto) };
+        var resp = await _http.SendAsync(request);
+        if (!resp.IsSuccessStatusCode) return (false, await GetErrorMessage(resp));
+        return (true, null);
+    }
+
+    private static async Task<string> GetErrorMessage(HttpResponseMessage resp)
+    {
+        try
+        {
+            var body = await resp.Content.ReadAsStringAsync();
+            var doc = System.Text.Json.JsonDocument.Parse(body);
+            if (doc.RootElement.TryGetProperty("error", out var err))
+                return err.GetString() ?? $"HTTP {(int)resp.StatusCode}";
+        }
+        catch { }
+        return $"HTTP {(int)resp.StatusCode}: {resp.ReasonPhrase}";
+    }
 }
