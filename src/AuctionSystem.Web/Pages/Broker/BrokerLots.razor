@@ -615,7 +615,15 @@ else if (_activeTab == "takeback")
                     _lastInvoicePdfUrl = json.PdfUrl;
                     _message += " Invoice generated.";
                 }
-                _messageIsError = false;
+                if (!string.IsNullOrEmpty(json?.BcError))
+                {
+                    _message += $" BC Error: {json.BcError}";
+                    _messageIsError = true;
+                }
+                else
+                {
+                    _messageIsError = false;
+                }
                 _selectedIds.Clear();
                 _selectedBuyerId = 0;
                 _showCommissionModal = false;
@@ -742,6 +750,7 @@ else if (_activeTab == "takeback")
         public int SoldCount { get; set; }
         public int? InvoiceId { get; set; }
         public string? PdfUrl { get; set; }
+        public string? BcError { get; set; }
     }
 
     private class TakebackResponse

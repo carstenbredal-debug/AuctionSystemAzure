@@ -351,6 +351,7 @@ public class AuctionResultFunctions
 
         // Create and push invoice to BC
         int? invoiceId = null;
+        string? bcError = null;
         if (results.Count > 0 && _bcSyncService != null)
         {
             try
@@ -417,6 +418,7 @@ public class AuctionResultFunctions
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to create BC invoice for {Count} lots", results.Count);
+                bcError = ex.Message;
             }
         }
 
@@ -429,7 +431,7 @@ public class AuctionResultFunctions
 
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
-        await response.WriteStringAsync(JsonSerializer.Serialize(new { soldCount = results.Count, invoiceId, pdfUrl }, JsonOptions));
+        await response.WriteStringAsync(JsonSerializer.Serialize(new { soldCount = results.Count, invoiceId, pdfUrl, bcError }, JsonOptions));
         return response;
     }
 

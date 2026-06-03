@@ -184,11 +184,12 @@ public class BusinessCentralSyncService
                 }
 
                 var extDoc = !string.IsNullOrEmpty(invoice.InvoiceNumber) ? invoice.InvoiceNumber : $"AUC-{invoice.Id}";
+                var postingDate = DateTime.UtcNow;
                 var bcInvoice = new BcSalesInvoice
                 {
                     ExternalDocumentNumber = extDoc,
-                    InvoiceDate = invoice.InvoiceDate.ToString("yyyy-MM-dd"),
-                    DueDate = (invoice.PromptDate ?? invoice.InvoiceDate.AddDays(30)).ToString("yyyy-MM-dd"),
+                    InvoiceDate = postingDate.ToString("yyyy-MM-dd"),
+                    DueDate = (invoice.PromptDate ?? postingDate.AddDays(30)).ToString("yyyy-MM-dd"),
                     CustomerId = buyerBcCustomer.Id,
                     CurrencyCode = ""
                 };
@@ -359,7 +360,7 @@ public class BusinessCentralSyncService
         var bcCreditMemo = new BcSalesCreditMemo
         {
             ExternalDocumentNumber = extDocNumber,
-            CreditMemoDate = creditNote.InvoiceDate.ToString("yyyy-MM-dd"),
+            CreditMemoDate = DateTime.UtcNow.ToString("yyyy-MM-dd"),
             CustomerId = buyerBcCustomer.Id,
             CurrencyCode = ""
         };
@@ -558,11 +559,12 @@ public class BusinessCentralSyncService
             return;
         }
 
+        var postingDate = DateTime.UtcNow;
         var bcInvoice = new BcSalesInvoice
         {
             ExternalDocumentNumber = extDocRef,
-            InvoiceDate = invoice.InvoiceDate.ToString("yyyy-MM-dd"),
-            DueDate = (invoice.PromptDate ?? invoice.InvoiceDate.AddDays(30)).ToString("yyyy-MM-dd"),
+            InvoiceDate = postingDate.ToString("yyyy-MM-dd"),
+            DueDate = (invoice.PromptDate ?? postingDate.AddDays(30)).ToString("yyyy-MM-dd"),
             CustomerId = buyerBcCustomer.Id,
             CurrencyCode = ""
         };
