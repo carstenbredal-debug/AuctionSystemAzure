@@ -662,9 +662,13 @@ public class AuctionApiClient
 
     public async Task<(LotGroupOrderDto? Data, string? Error)> UpdateLotGroupOrderAsync(LotGroupOrderDto dto)
     {
-        var resp = await _http.PutAsJsonAsync("api/sales-order-setup/lot-group-orders/update", dto);
-        if (!resp.IsSuccessStatusCode) return (null, await GetErrorMessage(resp));
-        return (await resp.Content.ReadFromJsonAsync<LotGroupOrderDto>(), null);
+        try
+        {
+            var resp = await _http.PutAsJsonAsync("api/sales-order-setup/lot-group-orders/update", dto);
+            if (!resp.IsSuccessStatusCode) return (null, await GetErrorMessage(resp));
+            return (await resp.Content.ReadFromJsonAsync<LotGroupOrderDto>(), null);
+        }
+        catch (Exception ex) { return (null, $"Request failed: {ex.Message}"); }
     }
 
     public async Task<(bool Success, string? Error)> DeleteLotGroupOrderAsync(LotGroupOrderDto dto)
@@ -689,9 +693,13 @@ public class AuctionApiClient
 
     public async Task<(LotSizeRuleDto? Data, string? Error)> UpdateLotSizeRuleAsync(LotSizeRuleDto dto)
     {
-        var resp = await _http.PutAsJsonAsync("api/sales-order-setup/lot-size-rules/update", dto);
-        if (!resp.IsSuccessStatusCode) return (null, await GetErrorMessage(resp));
-        return (await resp.Content.ReadFromJsonAsync<LotSizeRuleDto>(), null);
+        try
+        {
+            var resp = await _http.PutAsJsonAsync("api/sales-order-setup/lot-size-rules/update", dto);
+            if (!resp.IsSuccessStatusCode) return (null, await GetErrorMessage(resp));
+            return (await resp.Content.ReadFromJsonAsync<LotSizeRuleDto>(), null);
+        }
+        catch (Exception ex) { return (null, $"Request failed: {ex.Message}"); }
     }
 
     public async Task<(bool Success, string? Error)> DeleteLotSizeRuleAsync(LotSizeRuleDto dto)
@@ -722,9 +730,13 @@ public class AuctionApiClient
 
     public async Task<(LotSortOrderDto? Data, string? Error)> UpdateLotSortOrderAsync(LotSortOrderDto dto)
     {
-        var resp = await _http.PutAsJsonAsync("api/sales-order-setup/lot-sort-orders/update", dto);
-        if (!resp.IsSuccessStatusCode) return (null, await GetErrorMessage(resp));
-        return (await resp.Content.ReadFromJsonAsync<LotSortOrderDto>(), null);
+        try
+        {
+            var resp = await _http.PutAsJsonAsync("api/sales-order-setup/lot-sort-orders/update", dto);
+            if (!resp.IsSuccessStatusCode) return (null, await GetErrorMessage(resp));
+            return (await resp.Content.ReadFromJsonAsync<LotSortOrderDto>(), null);
+        }
+        catch (Exception ex) { return (null, $"Request failed: {ex.Message}"); }
     }
 
     public async Task<(bool Success, string? Error)> DeleteLotSortOrderAsync(LotSortOrderDto dto)
@@ -749,9 +761,13 @@ public class AuctionApiClient
 
     public async Task<(CatalogNumberRuleDto? Data, string? Error)> UpdateCatalogNumberRuleAsync(CatalogNumberRuleDto dto)
     {
-        var resp = await _http.PutAsJsonAsync("api/sales-order-setup/catalog-number-rules/update", dto);
-        if (!resp.IsSuccessStatusCode) return (null, await GetErrorMessage(resp));
-        return (await resp.Content.ReadFromJsonAsync<CatalogNumberRuleDto>(), null);
+        try
+        {
+            var resp = await _http.PutAsJsonAsync("api/sales-order-setup/catalog-number-rules/update", dto);
+            if (!resp.IsSuccessStatusCode) return (null, await GetErrorMessage(resp));
+            return (await resp.Content.ReadFromJsonAsync<CatalogNumberRuleDto>(), null);
+        }
+        catch (Exception ex) { return (null, $"Request failed: {ex.Message}"); }
     }
 
     public async Task<(bool Success, string? Error)> DeleteCatalogNumberRuleAsync(CatalogNumberRuleDto dto)
