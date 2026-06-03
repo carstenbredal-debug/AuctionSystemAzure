@@ -47,10 +47,10 @@ jobs:
 
       - name: Download BC Symbols
         env:
-          BC_TENANT_ID: ${{ secrets.BC_TENANT_ID }}
-          BC_CLIENT_ID: ${{ secrets.BC_CLIENT_ID }}
-          BC_CLIENT_SECRET: ${{ secrets.BC_CLIENT_SECRET }}
-          BC_ENVIRONMENT: ${{ secrets.BC_ENVIRONMENT }}
+          BC_TENANT_ID: ${{ secrets.BC_TENANT_ID_DEV }}
+          BC_CLIENT_ID: ${{ secrets.BC_CLIENT_ID_DEV }}
+          BC_CLIENT_SECRET: ${{ secrets.BC_CLIENT_SECRET_DEV }}
+          BC_ENVIRONMENT: ${{ secrets.BC_ENVIRONMENT_DEV }}
         run: |
           cd bc-extension
           mkdir -p .alpackages
@@ -83,10 +83,10 @@ jobs:
 
       - name: Deploy to Business Central
         env:
-          BC_TENANT_ID: ${{ secrets.BC_TENANT_ID }}
-          BC_CLIENT_ID: ${{ secrets.BC_CLIENT_ID }}
-          BC_CLIENT_SECRET: ${{ secrets.BC_CLIENT_SECRET }}
-          BC_ENVIRONMENT: ${{ secrets.BC_ENVIRONMENT }}
+          BC_TENANT_ID: ${{ secrets.BC_TENANT_ID_DEV }}
+          BC_CLIENT_ID: ${{ secrets.BC_CLIENT_ID_DEV }}
+          BC_CLIENT_SECRET: ${{ secrets.BC_CLIENT_SECRET_DEV }}
+          BC_ENVIRONMENT: ${{ secrets.BC_ENVIRONMENT_DEV }}
         run: |
           cd bc-extension
           bash deploy.sh AuctionSystemLedgerAPI.app
