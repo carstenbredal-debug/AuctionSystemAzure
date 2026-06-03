@@ -272,7 +272,7 @@ else
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label">Column Name <span class="text-danger">*</span></label>
-                        <input class="form-control" @bind="_newGroupName" placeholder="e.g. Gender" />
+                        <input class="form-control" @bind="_newGroupName" @bind:event="oninput" placeholder="e.g. Gender" />
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Order</label>
@@ -360,7 +360,7 @@ else
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label">Group (Column Name) <span class="text-danger">*</span></label>
-                        <input class="form-control" @bind="_newSortColumnName" placeholder="e.g. Gender" list="sortGroupSuggestions" />
+                        <input class="form-control" @bind="_newSortColumnName" @bind:event="oninput" placeholder="e.g. Gender" list="sortGroupSuggestions" />
                         <datalist id="sortGroupSuggestions">
                             @foreach (var g in _sortGroups)
                             {
@@ -370,7 +370,7 @@ else
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Value <span class="text-danger">*</span></label>
-                        <input class="form-control" @bind="_newSortValue" placeholder="e.g. Male" />
+                        <input class="form-control" @bind="_newSortValue" @bind:event="oninput" placeholder="e.g. Male" />
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Sort Order</label>
@@ -505,7 +505,8 @@ else
 
         if (_editingGroupOrder != null)
         {
-            var (data, error) = await Api.UpdateLotGroupOrderAsync(new LotGroupOrderDto { ColumnName = _editingGroupOrder.ColumnName, GroupOrder = _newGroupOrder });
+            var dto = new LotGroupOrderDto { ColumnName = _newGroupName.Trim(), GroupOrder = _newGroupOrder };
+            var (data, error) = await Api.UpdateLotGroupOrderAsync(dto, _editingGroupOrder.ColumnName);
             _message = data != null ? "Group updated." : $"Failed to update group: {error}";
             _messageIsError = data == null;
         }
@@ -620,13 +621,14 @@ else
 
         if (_editingSortOrder != null)
         {
-            var (data, error) = await Api.UpdateLotSortOrderAsync(new LotSortOrderDto
+            var dto = new LotSortOrderDto
             {
-                ColumnName = _editingSortOrder.ColumnName,
-                Value = _editingSortOrder.Value,
+                ColumnName = _newSortColumnName.Trim(),
+                Value = _newSortValue.Trim(),
                 SortOrder = _newSortOrder
-            });
-            _message = data != null ? $"Sort order updated (sent={_newSortOrder}, original={_editingSortOrder.SortOrder})." : $"Failed to update sort order: {error}";
+            };
+            var (data, error) = await Api.UpdateLotSortOrderAsync(dto, _editingSortOrder.ColumnName, _editingSortOrder.Value);
+            _message = data != null ? "Sort order updated." : $"Failed to update sort order: {error}";
             _messageIsError = data == null;
         }
         else

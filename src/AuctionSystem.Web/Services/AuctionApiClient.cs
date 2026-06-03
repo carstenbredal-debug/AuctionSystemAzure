@@ -660,11 +660,12 @@ public class AuctionApiClient
         return resp.IsSuccessStatusCode;
     }
 
-    public async Task<(LotGroupOrderDto? Data, string? Error)> UpdateLotGroupOrderAsync(LotGroupOrderDto dto)
+    public async Task<(LotGroupOrderDto? Data, string? Error)> UpdateLotGroupOrderAsync(LotGroupOrderDto dto, string? originalColumnName = null)
     {
         try
         {
-            var resp = await _http.PutAsJsonAsync("api/sales-order-setup/lot-group-orders/update", dto);
+            var payload = new { originalColumnName, dto.ColumnName, dto.GroupOrder };
+            var resp = await _http.PutAsJsonAsync("api/sales-order-setup/lot-group-orders/update", payload);
             if (!resp.IsSuccessStatusCode) return (null, await GetErrorMessage(resp));
             return (await resp.Content.ReadFromJsonAsync<LotGroupOrderDto>(), null);
         }
@@ -728,11 +729,12 @@ public class AuctionApiClient
         return resp.IsSuccessStatusCode;
     }
 
-    public async Task<(LotSortOrderDto? Data, string? Error)> UpdateLotSortOrderAsync(LotSortOrderDto dto)
+    public async Task<(LotSortOrderDto? Data, string? Error)> UpdateLotSortOrderAsync(LotSortOrderDto dto, string? originalColumnName = null, string? originalValue = null)
     {
         try
         {
-            var resp = await _http.PutAsJsonAsync("api/sales-order-setup/lot-sort-orders/update", dto);
+            var payload = new { originalColumnName, originalValue, dto.ColumnName, dto.Value, dto.SortOrder };
+            var resp = await _http.PutAsJsonAsync("api/sales-order-setup/lot-sort-orders/update", payload);
             if (!resp.IsSuccessStatusCode) return (null, await GetErrorMessage(resp));
             return (await resp.Content.ReadFromJsonAsync<LotSortOrderDto>(), null);
         }
