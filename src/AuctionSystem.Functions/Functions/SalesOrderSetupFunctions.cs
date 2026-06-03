@@ -20,6 +20,11 @@ public class SalesOrderSetupFunctions
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
+    private static readonly JsonSerializerOptions ReadOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
     public SalesOrderSetupFunctions(CatalogDbContext db, ILogger<SalesOrderSetupFunctions> logger)
     {
         _db = db;
@@ -40,59 +45,103 @@ public class SalesOrderSetupFunctions
     public async Task<HttpResponseData> CreateLotGroupOrder(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "sales-order-setup/lot-group-orders")] HttpRequestData req)
     {
-        var dto = await req.ReadFromJsonAsync<LotGroupOrder>();
-        if (dto == null || string.IsNullOrWhiteSpace(dto.ColumnName))
-            return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+        try
+        {
+            var body = await req.ReadAsStringAsync();
+            var dto = JsonSerializer.Deserialize<LotGroupOrder>(body!, ReadOptions);
+            if (dto == null || string.IsNullOrWhiteSpace(dto.ColumnName))
+                return await CreateErrorResponse(req, "ColumnName is required.", System.Net.HttpStatusCode.BadRequest);
 
-        var existing = await _db.LotGroupOrders.FindAsync(dto.ColumnName);
-        if (existing != null)
-            return req.CreateResponse(System.Net.HttpStatusCode.Conflict);
+            var existing = await _db.LotGroupOrders.FindAsync(dto.ColumnName);
+            if (existing != null)
+                return await CreateErrorResponse(req, $"'{dto.ColumnName}' already exists.", System.Net.HttpStatusCode.Conflict);
 
-        _db.LotGroupOrders.Add(dto);
-        await _db.SaveChangesAsync();
-        return await CreateJsonResponse(req, dto, System.Net.HttpStatusCode.Created);
+            _db.LotGroupOrders.Add(dto);
+            await _db.SaveChangesAsync();
+            return await CreateJsonResponse(req, dto, System.Net.HttpStatusCode.Created);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating lot group order");
+            return await CreateErrorResponse(req, ex.Message);
+        }
     }
 
     [Function("UpdateLotGroupOrder")]
     public async Task<HttpResponseData> UpdateLotGroupOrder(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "sales-order-setup/lot-group-orders/{columnName}")] HttpRequestData req, string columnName)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "sales-order-setup/lot-group-orders/update")] HttpRequestData req)
     {
-        var dto = await req.ReadFromJsonAsync<LotGroupOrder>();
-        if (dto == null) return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+        try
+        {
+            var body = await req.ReadAsStringAsync();
+            var dto = JsonSerializer.Deserialize<LotGroupOrder>(body!, ReadOptions);
+            if (dto == null || string.IsNullOrWhiteSpace(dto.ColumnName))
+                return await CreateErrorResponse(req, "ColumnName is required.", System.Net.HttpStatusCode.BadRequest);
 
-        var item = await _db.LotGroupOrders.FindAsync(columnName);
-        if (item == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+            var item = await _db.LotGroupOrders.FindAsync(dto.ColumnName);
+            if (item == null)
+                return await CreateErrorResponse(req, $"'{dto.ColumnName}' not found.", System.Net.HttpStatusCode.NotFound);
 
-        item.GroupOrder = dto.GroupOrder;
-        await _db.SaveChangesAsync();
-        return await CreateJsonResponse(req, item);
+            item.GroupOrder = dto.GroupOrder;
+            await _db.SaveChangesAsync();
+            return await CreateJsonResponse(req, item);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating lot group order");
+            return await CreateErrorResponse(req, ex.Message);
+        }
     }
 
     [Function("ReorderLotGroupOrders")]
     public async Task<HttpResponseData> ReorderLotGroupOrders(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "sales-order-setup/lot-group-orders/reorder")] HttpRequestData req)
     {
-        var items = await req.ReadFromJsonAsync<List<LotGroupOrder>>();
-        if (items == null) return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
-
-        foreach (var dto in items)
+        try
         {
-            var item = await _db.LotGroupOrders.FindAsync(dto.ColumnName);
-            if (item != null) item.GroupOrder = dto.GroupOrder;
+            var body = await req.ReadAsStringAsync();
+            var items = JsonSerializer.Deserialize<List<LotGroupOrder>>(body!, ReadOptions);
+            if (items == null) return await CreateErrorResponse(req, "Invalid data.", System.Net.HttpStatusCode.BadRequest);
+
+            foreach (var dto in items)
+            {
+                var item = await _db.LotGroupOrders.FindAsync(dto.ColumnName);
+                if (item != null) item.GroupOrder = dto.GroupOrder;
+            }
+            await _db.SaveChangesAsync();
+            return await CreateJsonResponse(req, await _db.LotGroupOrders.OrderBy(g => g.GroupOrder).ToListAsync());
         }
-        await _db.SaveChangesAsync();
-        return await CreateJsonResponse(req, await _db.LotGroupOrders.OrderBy(g => g.GroupOrder).ToListAsync());
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error reordering lot group orders");
+            return await CreateErrorResponse(req, ex.Message);
+        }
     }
 
     [Function("DeleteLotGroupOrder")]
     public async Task<HttpResponseData> DeleteLotGroupOrder(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "sales-order-setup/lot-group-orders/{columnName}")] HttpRequestData req, string columnName)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "sales-order-setup/lot-group-orders/remove")] HttpRequestData req)
     {
-        var item = await _db.LotGroupOrders.FindAsync(columnName);
-        if (item == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
-        _db.LotGroupOrders.Remove(item);
-        await _db.SaveChangesAsync();
-        return req.CreateResponse(System.Net.HttpStatusCode.NoContent);
+        try
+        {
+            var body = await req.ReadAsStringAsync();
+            var dto = JsonSerializer.Deserialize<LotGroupOrder>(body!, ReadOptions);
+            if (dto == null || string.IsNullOrWhiteSpace(dto.ColumnName))
+                return await CreateErrorResponse(req, "ColumnName is required.", System.Net.HttpStatusCode.BadRequest);
+
+            var item = await _db.LotGroupOrders.FindAsync(dto.ColumnName);
+            if (item == null)
+                return await CreateErrorResponse(req, $"'{dto.ColumnName}' not found.", System.Net.HttpStatusCode.NotFound);
+
+            _db.LotGroupOrders.Remove(item);
+            await _db.SaveChangesAsync();
+            return await CreateJsonResponse(req, new { success = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting lot group order");
+            return await CreateErrorResponse(req, ex.Message);
+        }
     }
 
     // ── Lot Size Rule ────────────────────────────────────────────
@@ -109,47 +158,80 @@ public class SalesOrderSetupFunctions
     public async Task<HttpResponseData> CreateLotSizeRule(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "sales-order-setup/lot-size-rules")] HttpRequestData req)
     {
-        var dto = await req.ReadFromJsonAsync<LotSizeRule>();
-        if (dto == null) return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+        try
+        {
+            var body = await req.ReadAsStringAsync();
+            var dto = JsonSerializer.Deserialize<LotSizeRule>(body!, ReadOptions);
+            if (dto == null) return await CreateErrorResponse(req, "Invalid data.", System.Net.HttpStatusCode.BadRequest);
 
-        dto.RuleID = 0;
-        _db.LotSizeRules.Add(dto);
-        await _db.SaveChangesAsync();
-        return await CreateJsonResponse(req, dto, System.Net.HttpStatusCode.Created);
+            dto.RuleID = 0;
+            _db.LotSizeRules.Add(dto);
+            await _db.SaveChangesAsync();
+            return await CreateJsonResponse(req, dto, System.Net.HttpStatusCode.Created);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating lot size rule");
+            return await CreateErrorResponse(req, ex.Message);
+        }
     }
 
     [Function("UpdateLotSizeRule")]
     public async Task<HttpResponseData> UpdateLotSizeRule(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "sales-order-setup/lot-size-rules/{id:int}")] HttpRequestData req, int id)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "sales-order-setup/lot-size-rules/update")] HttpRequestData req)
     {
-        var dto = await req.ReadFromJsonAsync<LotSizeRule>();
-        if (dto == null) return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+        try
+        {
+            var body = await req.ReadAsStringAsync();
+            var dto = JsonSerializer.Deserialize<LotSizeRule>(body!, ReadOptions);
+            if (dto == null) return await CreateErrorResponse(req, "Invalid data.", System.Net.HttpStatusCode.BadRequest);
 
-        var item = await _db.LotSizeRules.FindAsync(id);
-        if (item == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+            var item = await _db.LotSizeRules.FindAsync(dto.RuleID);
+            if (item == null)
+                return await CreateErrorResponse(req, $"Rule {dto.RuleID} not found.", System.Net.HttpStatusCode.NotFound);
 
-        item.Gender = dto.Gender;
-        item.Size = dto.Size;
-        item.MaxBoxes = dto.MaxBoxes;
-        item.MaxSkinsPerBox = dto.MaxSkinsPerBox;
-        item.ShowlotSkins = dto.ShowlotSkins;
-        item.MaxLotSizeExclShowlot = dto.MaxLotSizeExclShowlot;
-        item.MaxLotSizeInclShowlot = dto.MaxLotSizeInclShowlot;
-        item.Priority = dto.Priority;
-        item.IsActive = dto.IsActive;
-        await _db.SaveChangesAsync();
-        return await CreateJsonResponse(req, item);
+            item.Gender = dto.Gender;
+            item.Size = dto.Size;
+            item.MaxBoxes = dto.MaxBoxes;
+            item.MaxSkinsPerBox = dto.MaxSkinsPerBox;
+            item.ShowlotSkins = dto.ShowlotSkins;
+            item.MaxLotSizeExclShowlot = dto.MaxLotSizeExclShowlot;
+            item.MaxLotSizeInclShowlot = dto.MaxLotSizeInclShowlot;
+            item.Priority = dto.Priority;
+            item.IsActive = dto.IsActive;
+            await _db.SaveChangesAsync();
+            return await CreateJsonResponse(req, item);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating lot size rule");
+            return await CreateErrorResponse(req, ex.Message);
+        }
     }
 
     [Function("DeleteLotSizeRule")]
     public async Task<HttpResponseData> DeleteLotSizeRule(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "sales-order-setup/lot-size-rules/{id:int}")] HttpRequestData req, int id)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "sales-order-setup/lot-size-rules/remove")] HttpRequestData req)
     {
-        var item = await _db.LotSizeRules.FindAsync(id);
-        if (item == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
-        _db.LotSizeRules.Remove(item);
-        await _db.SaveChangesAsync();
-        return req.CreateResponse(System.Net.HttpStatusCode.NoContent);
+        try
+        {
+            var body = await req.ReadAsStringAsync();
+            var dto = JsonSerializer.Deserialize<LotSizeRule>(body!, ReadOptions);
+            if (dto == null) return await CreateErrorResponse(req, "Invalid data.", System.Net.HttpStatusCode.BadRequest);
+
+            var item = await _db.LotSizeRules.FindAsync(dto.RuleID);
+            if (item == null)
+                return await CreateErrorResponse(req, $"Rule {dto.RuleID} not found.", System.Net.HttpStatusCode.NotFound);
+
+            _db.LotSizeRules.Remove(item);
+            await _db.SaveChangesAsync();
+            return await CreateJsonResponse(req, new { success = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting lot size rule");
+            return await CreateErrorResponse(req, ex.Message);
+        }
     }
 
     // ── Lot Sort Order ───────────────────────────────────────────
@@ -166,60 +248,103 @@ public class SalesOrderSetupFunctions
     public async Task<HttpResponseData> CreateLotSortOrder(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "sales-order-setup/lot-sort-orders")] HttpRequestData req)
     {
-        var dto = await req.ReadFromJsonAsync<LotSortOrder>();
-        if (dto == null || string.IsNullOrWhiteSpace(dto.ColumnName) || string.IsNullOrWhiteSpace(dto.Value))
-            return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+        try
+        {
+            var body = await req.ReadAsStringAsync();
+            var dto = JsonSerializer.Deserialize<LotSortOrder>(body!, ReadOptions);
+            if (dto == null || string.IsNullOrWhiteSpace(dto.ColumnName) || string.IsNullOrWhiteSpace(dto.Value))
+                return await CreateErrorResponse(req, "ColumnName and Value are required.", System.Net.HttpStatusCode.BadRequest);
 
-        var existing = await _db.LotSortOrders.FindAsync(dto.ColumnName, dto.Value);
-        if (existing != null)
-            return req.CreateResponse(System.Net.HttpStatusCode.Conflict);
+            var existing = await _db.LotSortOrders.FindAsync(dto.ColumnName, dto.Value);
+            if (existing != null)
+                return await CreateErrorResponse(req, $"'{dto.Value}' already exists in '{dto.ColumnName}'.", System.Net.HttpStatusCode.Conflict);
 
-        _db.LotSortOrders.Add(dto);
-        await _db.SaveChangesAsync();
-        return await CreateJsonResponse(req, dto, System.Net.HttpStatusCode.Created);
+            _db.LotSortOrders.Add(dto);
+            await _db.SaveChangesAsync();
+            return await CreateJsonResponse(req, dto, System.Net.HttpStatusCode.Created);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating lot sort order");
+            return await CreateErrorResponse(req, ex.Message);
+        }
     }
 
     [Function("UpdateLotSortOrder")]
     public async Task<HttpResponseData> UpdateLotSortOrder(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "sales-order-setup/lot-sort-orders/update")] HttpRequestData req)
     {
-        var dto = await req.ReadFromJsonAsync<LotSortOrder>();
-        if (dto == null || string.IsNullOrWhiteSpace(dto.ColumnName) || string.IsNullOrWhiteSpace(dto.Value))
-            return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+        try
+        {
+            var body = await req.ReadAsStringAsync();
+            var dto = JsonSerializer.Deserialize<LotSortOrder>(body!, ReadOptions);
+            if (dto == null || string.IsNullOrWhiteSpace(dto.ColumnName) || string.IsNullOrWhiteSpace(dto.Value))
+                return await CreateErrorResponse(req, "ColumnName and Value are required.", System.Net.HttpStatusCode.BadRequest);
 
-        var item = await _db.LotSortOrders.FindAsync(dto.ColumnName, dto.Value);
-        if (item == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+            var item = await _db.LotSortOrders.FindAsync(dto.ColumnName, dto.Value);
+            if (item == null)
+                return await CreateErrorResponse(req, $"'{dto.Value}' not found in '{dto.ColumnName}'.", System.Net.HttpStatusCode.NotFound);
 
-        item.SortOrder = dto.SortOrder;
-        await _db.SaveChangesAsync();
-        return await CreateJsonResponse(req, item);
+            item.SortOrder = dto.SortOrder;
+            await _db.SaveChangesAsync();
+            return await CreateJsonResponse(req, item);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating lot sort order");
+            return await CreateErrorResponse(req, ex.Message);
+        }
     }
 
     [Function("ReorderLotSortOrders")]
     public async Task<HttpResponseData> ReorderLotSortOrders(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "sales-order-setup/lot-sort-orders/reorder")] HttpRequestData req)
     {
-        var items = await req.ReadFromJsonAsync<List<LotSortOrder>>();
-        if (items == null) return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
-
-        foreach (var dto in items)
+        try
         {
-            var item = await _db.LotSortOrders.FindAsync(dto.ColumnName, dto.Value);
-            if (item != null) item.SortOrder = dto.SortOrder;
+            var body = await req.ReadAsStringAsync();
+            var items = JsonSerializer.Deserialize<List<LotSortOrder>>(body!, ReadOptions);
+            if (items == null) return await CreateErrorResponse(req, "Invalid data.", System.Net.HttpStatusCode.BadRequest);
+
+            foreach (var dto in items)
+            {
+                var item = await _db.LotSortOrders.FindAsync(dto.ColumnName, dto.Value);
+                if (item != null) item.SortOrder = dto.SortOrder;
+            }
+            await _db.SaveChangesAsync();
+            return await CreateJsonResponse(req, await _db.LotSortOrders.OrderBy(s => s.ColumnName).ThenBy(s => s.SortOrder).ToListAsync());
         }
-        await _db.SaveChangesAsync();
-        return await CreateJsonResponse(req, await _db.LotSortOrders.OrderBy(s => s.ColumnName).ThenBy(s => s.SortOrder).ToListAsync());
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error reordering lot sort orders");
+            return await CreateErrorResponse(req, ex.Message);
+        }
     }
 
     [Function("DeleteLotSortOrder")]
     public async Task<HttpResponseData> DeleteLotSortOrder(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "sales-order-setup/lot-sort-orders/{columnName}/{value}")] HttpRequestData req, string columnName, string value)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "sales-order-setup/lot-sort-orders/remove")] HttpRequestData req)
     {
-        var item = await _db.LotSortOrders.FindAsync(columnName, value);
-        if (item == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
-        _db.LotSortOrders.Remove(item);
-        await _db.SaveChangesAsync();
-        return req.CreateResponse(System.Net.HttpStatusCode.NoContent);
+        try
+        {
+            var body = await req.ReadAsStringAsync();
+            var dto = JsonSerializer.Deserialize<LotSortOrder>(body!, ReadOptions);
+            if (dto == null || string.IsNullOrWhiteSpace(dto.ColumnName) || string.IsNullOrWhiteSpace(dto.Value))
+                return await CreateErrorResponse(req, "ColumnName and Value are required.", System.Net.HttpStatusCode.BadRequest);
+
+            var item = await _db.LotSortOrders.FindAsync(dto.ColumnName, dto.Value);
+            if (item == null)
+                return await CreateErrorResponse(req, $"'{dto.Value}' not found in '{dto.ColumnName}'.", System.Net.HttpStatusCode.NotFound);
+
+            _db.LotSortOrders.Remove(item);
+            await _db.SaveChangesAsync();
+            return await CreateJsonResponse(req, new { success = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting lot sort order");
+            return await CreateErrorResponse(req, ex.Message);
+        }
     }
 
     // ── Catalog Number Rule ───────────────────────────────────────
@@ -236,43 +361,76 @@ public class SalesOrderSetupFunctions
     public async Task<HttpResponseData> CreateCatalogNumberRule(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "sales-order-setup/catalog-number-rules")] HttpRequestData req)
     {
-        var dto = await req.ReadFromJsonAsync<CatalogNumberRule>();
-        if (dto == null) return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+        try
+        {
+            var body = await req.ReadAsStringAsync();
+            var dto = JsonSerializer.Deserialize<CatalogNumberRule>(body!, ReadOptions);
+            if (dto == null) return await CreateErrorResponse(req, "Invalid data.", System.Net.HttpStatusCode.BadRequest);
 
-        dto.CatalogNumberRuleID = 0;
-        _db.CatalogNumberRules.Add(dto);
-        await _db.SaveChangesAsync();
-        return await CreateJsonResponse(req, dto, System.Net.HttpStatusCode.Created);
+            dto.CatalogNumberRuleID = 0;
+            _db.CatalogNumberRules.Add(dto);
+            await _db.SaveChangesAsync();
+            return await CreateJsonResponse(req, dto, System.Net.HttpStatusCode.Created);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating catalog number rule");
+            return await CreateErrorResponse(req, ex.Message);
+        }
     }
 
     [Function("UpdateCatalogNumberRule")]
     public async Task<HttpResponseData> UpdateCatalogNumberRule(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "sales-order-setup/catalog-number-rules/{id:int}")] HttpRequestData req, int id)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "sales-order-setup/catalog-number-rules/update")] HttpRequestData req)
     {
-        var dto = await req.ReadFromJsonAsync<CatalogNumberRule>();
-        if (dto == null) return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+        try
+        {
+            var body = await req.ReadAsStringAsync();
+            var dto = JsonSerializer.Deserialize<CatalogNumberRule>(body!, ReadOptions);
+            if (dto == null) return await CreateErrorResponse(req, "Invalid data.", System.Net.HttpStatusCode.BadRequest);
 
-        var item = await _db.CatalogNumberRules.FindAsync(id);
-        if (item == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+            var item = await _db.CatalogNumberRules.FindAsync(dto.CatalogNumberRuleID);
+            if (item == null)
+                return await CreateErrorResponse(req, $"Rule {dto.CatalogNumberRuleID} not found.", System.Net.HttpStatusCode.NotFound);
 
-        item.SalesType = dto.SalesType;
-        item.Gender = dto.Gender;
-        item.Group = dto.Group;
-        item.StartNumber = dto.StartNumber;
-        item.IsActive = dto.IsActive;
-        await _db.SaveChangesAsync();
-        return await CreateJsonResponse(req, item);
+            item.SalesType = dto.SalesType;
+            item.Gender = dto.Gender;
+            item.Group = dto.Group;
+            item.StartNumber = dto.StartNumber;
+            item.IsActive = dto.IsActive;
+            await _db.SaveChangesAsync();
+            return await CreateJsonResponse(req, item);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating catalog number rule");
+            return await CreateErrorResponse(req, ex.Message);
+        }
     }
 
     [Function("DeleteCatalogNumberRule")]
     public async Task<HttpResponseData> DeleteCatalogNumberRule(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "sales-order-setup/catalog-number-rules/{id:int}")] HttpRequestData req, int id)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "sales-order-setup/catalog-number-rules/remove")] HttpRequestData req)
     {
-        var item = await _db.CatalogNumberRules.FindAsync(id);
-        if (item == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
-        _db.CatalogNumberRules.Remove(item);
-        await _db.SaveChangesAsync();
-        return req.CreateResponse(System.Net.HttpStatusCode.NoContent);
+        try
+        {
+            var body = await req.ReadAsStringAsync();
+            var dto = JsonSerializer.Deserialize<CatalogNumberRule>(body!, ReadOptions);
+            if (dto == null) return await CreateErrorResponse(req, "Invalid data.", System.Net.HttpStatusCode.BadRequest);
+
+            var item = await _db.CatalogNumberRules.FindAsync(dto.CatalogNumberRuleID);
+            if (item == null)
+                return await CreateErrorResponse(req, $"Rule {dto.CatalogNumberRuleID} not found.", System.Net.HttpStatusCode.NotFound);
+
+            _db.CatalogNumberRules.Remove(item);
+            await _db.SaveChangesAsync();
+            return await CreateJsonResponse(req, new { success = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting catalog number rule");
+            return await CreateErrorResponse(req, ex.Message);
+        }
     }
 
     private static async Task<HttpResponseData> CreateJsonResponse<T>(
@@ -281,6 +439,15 @@ public class SalesOrderSetupFunctions
         var response = req.CreateResponse(status);
         response.Headers.Add("Content-Type", "application/json; charset=utf-8");
         await response.WriteStringAsync(JsonSerializer.Serialize(data, JsonOptions));
+        return response;
+    }
+
+    private static async Task<HttpResponseData> CreateErrorResponse(
+        HttpRequestData req, string message, System.Net.HttpStatusCode status = System.Net.HttpStatusCode.InternalServerError)
+    {
+        var response = req.CreateResponse(status);
+        response.Headers.Add("Content-Type", "application/json; charset=utf-8");
+        await response.WriteStringAsync(JsonSerializer.Serialize(new { error = message }, JsonOptions));
         return response;
     }
 }

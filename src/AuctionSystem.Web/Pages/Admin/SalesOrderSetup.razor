@@ -504,21 +504,21 @@ else
 
         if (_editingGroupOrder != null)
         {
-            var result = await Api.UpdateLotGroupOrderAsync(_editingGroupOrder.ColumnName, new LotGroupOrderDto { ColumnName = _editingGroupOrder.ColumnName, GroupOrder = _newGroupOrder });
-            _message = result != null ? "Group updated." : "Failed to update group.";
-            _messageIsError = result == null;
+            var (data, error) = await Api.UpdateLotGroupOrderAsync(new LotGroupOrderDto { ColumnName = _editingGroupOrder.ColumnName, GroupOrder = _newGroupOrder });
+            _message = data != null ? "Group updated." : $"Failed to update group: {error}";
+            _messageIsError = data == null;
         }
         else
         {
-            var result = await Api.CreateLotGroupOrderAsync(new LotGroupOrderDto { ColumnName = _newGroupName.Trim(), GroupOrder = _newGroupOrder });
-            if (result != null)
+            var (data, error) = await Api.CreateLotGroupOrderAsync(new LotGroupOrderDto { ColumnName = _newGroupName.Trim(), GroupOrder = _newGroupOrder });
+            if (data != null)
             {
                 _message = $"Group '{_newGroupName}' added.";
                 _messageIsError = false;
             }
             else
             {
-                _message = "Failed to add group (may already exist).";
+                _message = $"Failed to add group: {error}";
                 _messageIsError = true;
             }
         }
@@ -530,9 +530,9 @@ else
 
     private async Task DeleteGroupOrder(LotGroupOrderDto item)
     {
-        await Api.DeleteLotGroupOrderAsync(item.ColumnName);
-        _message = $"Group '{item.ColumnName}' deleted.";
-        _messageIsError = false;
+        var (success, error) = await Api.DeleteLotGroupOrderAsync(item);
+        _message = success ? $"Group '{item.ColumnName}' deleted." : $"Failed to delete group: {error}";
+        _messageIsError = !success;
         _groupOrders = await Api.GetLotGroupOrdersAsync();
     }
 
@@ -568,15 +568,15 @@ else
 
         if (_editingSizeRule.RuleID > 0)
         {
-            var result = await Api.UpdateLotSizeRuleAsync(_editingSizeRule.RuleID, _editingSizeRule);
-            _message = result != null ? "Rule updated." : "Failed to update rule.";
-            _messageIsError = result == null;
+            var (data, error) = await Api.UpdateLotSizeRuleAsync(_editingSizeRule);
+            _message = data != null ? "Rule updated." : $"Failed to update rule: {error}";
+            _messageIsError = data == null;
         }
         else
         {
-            var result = await Api.CreateLotSizeRuleAsync(_editingSizeRule);
-            _message = result != null ? "Rule added." : "Failed to add rule.";
-            _messageIsError = result == null;
+            var (data, error) = await Api.CreateLotSizeRuleAsync(_editingSizeRule);
+            _message = data != null ? "Rule added." : $"Failed to add rule: {error}";
+            _messageIsError = data == null;
         }
 
         _showSizeForm = false;
@@ -585,9 +585,9 @@ else
 
     private async Task DeleteSizeRule(LotSizeRuleDto item)
     {
-        await Api.DeleteLotSizeRuleAsync(item.RuleID);
-        _message = "Rule deleted.";
-        _messageIsError = false;
+        var (success, error) = await Api.DeleteLotSizeRuleAsync(item);
+        _message = success ? "Rule deleted." : $"Failed to delete rule: {error}";
+        _messageIsError = !success;
         _sizeRules = await Api.GetLotSizeRulesAsync();
     }
 
@@ -617,14 +617,14 @@ else
 
         if (_editingSortOrder != null)
         {
-            var result = await Api.UpdateLotSortOrderAsync(new LotSortOrderDto
+            var (data, error) = await Api.UpdateLotSortOrderAsync(new LotSortOrderDto
             {
                 ColumnName = _editingSortOrder.ColumnName,
                 Value = _editingSortOrder.Value,
                 SortOrder = _newSortOrder
             });
-            _message = result != null ? "Sort order updated." : "Failed to update sort order.";
-            _messageIsError = result == null;
+            _message = data != null ? "Sort order updated." : $"Failed to update sort order: {error}";
+            _messageIsError = data == null;
         }
         else
         {
@@ -632,21 +632,21 @@ else
             if (_newSortOrder == 0)
                 _newSortOrder = groupItems.Count > 0 ? groupItems.Max(s => s.SortOrder) + 1 : 1;
 
-            var result = await Api.CreateLotSortOrderAsync(new LotSortOrderDto
+            var (data, error) = await Api.CreateLotSortOrderAsync(new LotSortOrderDto
             {
                 ColumnName = _newSortColumnName.Trim(),
                 Value = _newSortValue.Trim(),
                 SortOrder = _newSortOrder
             });
 
-            if (result != null)
+            if (data != null)
             {
                 _message = $"Value '{_newSortValue}' added to '{_newSortColumnName}'.";
                 _messageIsError = false;
             }
             else
             {
-                _message = "Failed to add (value may already exist in that group).";
+                _message = $"Failed to add: {error}";
                 _messageIsError = true;
             }
         }
@@ -661,9 +661,9 @@ else
 
     private async Task DeleteSortOrder(LotSortOrderDto item)
     {
-        await Api.DeleteLotSortOrderAsync(item.ColumnName, item.Value);
-        _message = $"Value '{item.Value}' removed from '{item.ColumnName}'.";
-        _messageIsError = false;
+        var (success, error) = await Api.DeleteLotSortOrderAsync(item);
+        _message = success ? $"Value '{item.Value}' removed from '{item.ColumnName}'." : $"Failed to delete: {error}";
+        _messageIsError = !success;
         _sortOrders = await Api.GetLotSortOrdersAsync();
         _sortGroups = _sortOrders.Select(s => s.ColumnName).Distinct().OrderBy(s => s).ToList();
         if (_activeSortGroup == null || !_sortGroups.Contains(_activeSortGroup))
@@ -698,31 +698,15 @@ else
 
         if (_editingCatalogRule.CatalogNumberRuleID > 0)
         {
-            var updated = await Api.UpdateCatalogNumberRuleAsync(_editingCatalogRule.CatalogNumberRuleID, _editingCatalogRule);
-            if (updated != null)
-            {
-                _message = "Rule updated.";
-                _messageIsError = false;
-            }
-            else
-            {
-                _message = "Failed to update rule.";
-                _messageIsError = true;
-            }
+            var (data, error) = await Api.UpdateCatalogNumberRuleAsync(_editingCatalogRule);
+            _message = data != null ? "Rule updated." : $"Failed to update rule: {error}";
+            _messageIsError = data == null;
         }
         else
         {
-            var created = await Api.CreateCatalogNumberRuleAsync(_editingCatalogRule);
-            if (created != null)
-            {
-                _message = "Rule added.";
-                _messageIsError = false;
-            }
-            else
-            {
-                _message = "Failed to add rule.";
-                _messageIsError = true;
-            }
+            var (data, error) = await Api.CreateCatalogNumberRuleAsync(_editingCatalogRule);
+            _message = data != null ? "Rule added." : $"Failed to add rule: {error}";
+            _messageIsError = data == null;
         }
 
         _showCatalogForm = false;
@@ -731,9 +715,9 @@ else
 
     private async Task DeleteCatalogRule(CatalogNumberRuleDto item)
     {
-        await Api.DeleteCatalogNumberRuleAsync(item.CatalogNumberRuleID);
+        var (success, error) = await Api.DeleteCatalogNumberRuleAsync(item);
+        _message = success ? "Rule deleted." : $"Failed to delete rule: {error}";
+        _messageIsError = !success;
         _catalogRules = await Api.GetCatalogNumberRulesAsync();
-        _message = "Rule deleted.";
-        _messageIsError = false;
     }
 }
