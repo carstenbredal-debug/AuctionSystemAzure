@@ -276,7 +276,7 @@ else
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Order</label>
-                        <input type="number" class="form-control" @bind="_newGroupOrder" />
+                        <input type="number" class="form-control" @bind="_newGroupOrder" @bind:event="oninput" />
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -309,27 +309,27 @@ else
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Max Boxes</label>
-                            <input type="number" class="form-control" @bind="_editingSizeRule!.MaxBoxes" />
+                            <input type="number" class="form-control" @bind="_editingSizeRule!.MaxBoxes" @bind:event="oninput" />
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Max Skins/Box</label>
-                            <input type="number" class="form-control" @bind="_editingSizeRule!.MaxSkinsPerBox" />
+                            <input type="number" class="form-control" @bind="_editingSizeRule!.MaxSkinsPerBox" @bind:event="oninput" />
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Showlot Skins</label>
-                            <input type="number" class="form-control" @bind="_editingSizeRule!.ShowlotSkins" />
+                            <input type="number" class="form-control" @bind="_editingSizeRule!.ShowlotSkins" @bind:event="oninput" />
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Max Lot Size (excl showlot)</label>
-                            <input type="number" class="form-control" @bind="_editingSizeRule!.MaxLotSizeExclShowlot" />
+                            <input type="number" class="form-control" @bind="_editingSizeRule!.MaxLotSizeExclShowlot" @bind:event="oninput" />
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Max Lot Size (incl showlot)</label>
-                            <input type="number" class="form-control" @bind="_editingSizeRule!.MaxLotSizeInclShowlot" />
+                            <input type="number" class="form-control" @bind="_editingSizeRule!.MaxLotSizeInclShowlot" @bind:event="oninput" />
                         </div>
                         <div class="col-md-2">
                             <label class="form-label">Priority</label>
-                            <input type="number" class="form-control" @bind="_editingSizeRule!.Priority" />
+                            <input type="number" class="form-control" @bind="_editingSizeRule!.Priority" @bind:event="oninput" />
                         </div>
                         <div class="col-md-2 d-flex align-items-end">
                             <div class="form-check">
@@ -374,7 +374,7 @@ else
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Sort Order</label>
-                        <input type="number" class="form-control" @bind="_newSortOrder" />
+                        <input type="number" class="form-control" @bind="_newSortOrder" @bind:event="oninput" />
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -411,7 +411,7 @@ else
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Start Number</label>
-                            <input type="number" class="form-control" @bind="_editingCatalogRule!.StartNumber" />
+                            <input type="number" class="form-control" @bind="_editingCatalogRule!.StartNumber" @bind:event="oninput" />
                         </div>
                         <div class="col-md-4 d-flex align-items-end">
                             <div class="form-check">
@@ -626,7 +626,7 @@ else
                 Value = _editingSortOrder.Value,
                 SortOrder = _newSortOrder
             });
-            _message = data != null ? "Sort order updated." : $"Failed to update sort order: {error}";
+            _message = data != null ? $"Sort order updated (sent={_newSortOrder}, original={_editingSortOrder.SortOrder})." : $"Failed to update sort order: {error}";
             _messageIsError = data == null;
         }
         else
