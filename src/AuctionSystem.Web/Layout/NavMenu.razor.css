@@ -16,21 +16,25 @@
 }
 
 .top-row {
-    height: 5rem;
+    height: 6rem;
     background-color: transparent;
+    display: flex;
+    justify-content: center;
 }
 
 .navbar-brand {
     font-size: 1.1rem;
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 0.75rem;
     text-decoration: none;
     color: white;
+    width: 100%;
 }
 
 .brand-logo-img {
-    height: 48px;
+    height: 64px;
     width: auto;
     object-fit: contain;
 }
@@ -42,12 +46,12 @@
     padding-bottom: 0 !important;
     height: auto !important;
     line-height: normal !important;
-    font-size: 0.75rem;
+    font-size: 0.8rem;
     letter-spacing: 1px;
 }
 
 .nav-item {
-    font-size: 0.9rem;
+    font-size: 1rem;
     padding-bottom: 0.25rem;
 }
 
@@ -69,7 +73,7 @@
         align-items: center;
         line-height: 2.5rem;
         width: 100%;
-        font-size: 0.875rem;
+        font-size: 0.95rem;
         padding-left: 0.5rem;
     }
 
