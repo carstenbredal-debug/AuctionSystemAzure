@@ -277,6 +277,7 @@ public class SalesOrderSetupFunctions
         try
         {
             var body = await req.ReadAsStringAsync();
+            _logger.LogInformation("UpdateLotSortOrder body: {Body}", body);
             var dto = JsonSerializer.Deserialize<LotSortOrder>(body!, ReadOptions);
             if (dto == null || string.IsNullOrWhiteSpace(dto.ColumnName) || string.IsNullOrWhiteSpace(dto.Value))
                 return await CreateErrorResponse(req, "ColumnName and Value are required.", System.Net.HttpStatusCode.BadRequest);
@@ -285,9 +286,18 @@ public class SalesOrderSetupFunctions
             if (item == null)
                 return await CreateErrorResponse(req, $"'{dto.Value}' not found in '{dto.ColumnName}'.", System.Net.HttpStatusCode.NotFound);
 
+            var oldSortOrder = item.SortOrder;
             item.SortOrder = dto.SortOrder;
-            await _db.SaveChangesAsync();
-            return await CreateJsonResponse(req, item);
+            var changes = await _db.SaveChangesAsync();
+            _logger.LogInformation("UpdateLotSortOrder: {Col}/{Val} sortOrder {Old}->{New}, changes={Changes}",
+                dto.ColumnName, dto.Value, oldSortOrder, dto.SortOrder, changes);
+            return await CreateJsonResponse(req, new
+            {
+                item.ColumnName,
+                item.Value,
+                item.SortOrder,
+                debug = new { rawBody = body, dtoSortOrder = dto.SortOrder, oldSortOrder, dbChanges = changes }
+            });
         }
         catch (Exception ex)
         {

@@ -500,6 +500,7 @@ else
 
     private async Task SaveGroupOrder()
     {
+        _message = ""; _messageIsError = false;
         if (string.IsNullOrWhiteSpace(_newGroupName)) return;
 
         if (_editingGroupOrder != null)
@@ -564,6 +565,7 @@ else
 
     private async Task SaveSizeRule()
     {
+        _message = ""; _messageIsError = false;
         if (_editingSizeRule == null) return;
 
         if (_editingSizeRule.RuleID > 0)
@@ -613,6 +615,7 @@ else
 
     private async Task SaveSortOrder()
     {
+        _message = ""; _messageIsError = false;
         if (string.IsNullOrWhiteSpace(_newSortColumnName) || string.IsNullOrWhiteSpace(_newSortValue)) return;
 
         if (_editingSortOrder != null)
@@ -694,6 +697,7 @@ else
 
     private async Task SaveCatalogRule()
     {
+        _message = ""; _messageIsError = false;
         if (_editingCatalogRule == null) return;
 
         if (_editingCatalogRule.CatalogNumberRuleID > 0)
