@@ -22,3 +22,9 @@ appsettings.Development.json
 .DS_Store
 Thumbs.db
 temp-output/
+
+## BC Extension build artifacts
+bc-extension/.alpackages/
+bc-extension/.config/
+bc-extension/*.app
+bc-extension/deploy_temp.sh

@@ -1,0 +1,92 @@
+name: Deploy BC Extension
+
+on:
+  push:
+    branches:
+      - dev
+    paths:
+      - 'bc-extension/src/**'
+      - 'bc-extension/app.json'
+
+env:
+  DOTNET_VERSION: '8.0'
+  AL_COMPILER_VERSION: '17.0.34.45391'
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    name: Build and Deploy BC Extension
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET ${{ env.DOTNET_VERSION }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install AL Compiler
+        run: |
+          dotnet tool install --global Microsoft.Dynamics.BusinessCentral.Development.Tools --version ${{ env.AL_COMPILER_VERSION }} || true
+          # Find the AL compiler
+          ALC_PATH=$(find ~/.dotnet/tools/.store -name "alc.dll" -path "*/net8.0/*" 2>/dev/null | head -1)
+          if [ -z "$ALC_PATH" ]; then
+            # Try NuGet package cache
+            ALC_PATH=$(find ~/.nuget/packages/microsoft.dynamics.businesscentral.development.tools -name "alc.dll" -path "*/net8.0/any/*" 2>/dev/null | head -1)
+          fi
+          if [ -z "$ALC_PATH" ]; then
+            echo "AL compiler not found, installing via NuGet..."
+            mkdir -p /tmp/alc
+            cd /tmp/alc
+            dotnet new console --force
+            dotnet add package Microsoft.Dynamics.BusinessCentral.Development.Tools --version ${{ env.AL_COMPILER_VERSION }}
+            dotnet restore
+            ALC_PATH=$(find ~/.nuget/packages/microsoft.dynamics.businesscentral.development.tools -name "alc.dll" -path "*/net8.0/any/*" 2>/dev/null | head -1)
+          fi
+          echo "ALC_PATH=$ALC_PATH" >> $GITHUB_ENV
+          echo "Found AL compiler at: $ALC_PATH"
+
+      - name: Download BC Symbols
+        env:
+          BC_TENANT_ID: ${{ secrets.BC_TENANT_ID }}
+          BC_CLIENT_ID: ${{ secrets.BC_CLIENT_ID }}
+          BC_CLIENT_SECRET: ${{ secrets.BC_CLIENT_SECRET }}
+          BC_ENVIRONMENT: ${{ secrets.BC_ENVIRONMENT }}
+        run: |
+          cd bc-extension
+          mkdir -p .alpackages
+          
+          TOKEN=$(curl -s -X POST "https://login.microsoftonline.com/${BC_TENANT_ID}/oauth2/v2.0/token" \
+            -d "client_id=${BC_CLIENT_ID}" \
+            -d "client_secret=${BC_CLIENT_SECRET}" \
+            -d "scope=https://api.businesscentral.dynamics.com/.default" \
+            -d "grant_type=client_credentials" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+          
+          BC_VERSION=$(python3 -c "import json; print(json.load(open('app.json'))['platform'])")
+          echo "Downloading symbols for BC version $BC_VERSION..."
+          
+          for APP_NAME in "System" "Application" "Base%20Application" "System%20Application"; do
+            CLEAN_NAME=$(echo "$APP_NAME" | sed 's/%20/_/g')
+            echo "  Downloading $CLEAN_NAME..."
+            curl -s -o ".alpackages/${CLEAN_NAME}.app" \
+              -H "Authorization: Bearer $TOKEN" \
+              "https://api.businesscentral.dynamics.com/v2.0/${BC_TENANT_ID}/${BC_ENVIRONMENT}/dev/packages?publisher=Microsoft&appName=${APP_NAME}&versionText=${BC_VERSION}"
+          done
+          
+          ls -la .alpackages/
+
+      - name: Compile AL Extension
+        run: |
+          cd bc-extension
+          echo "Compiling AL extension..."
+          dotnet "${{ env.ALC_PATH }}" /project:. /packagecachepath:.alpackages /out:AuctionSystemLedgerAPI.app
+          ls -la AuctionSystemLedgerAPI.app
+
+      - name: Deploy to Business Central
+        env:
+          BC_TENANT_ID: ${{ secrets.BC_TENANT_ID }}
+          BC_CLIENT_ID: ${{ secrets.BC_CLIENT_ID }}
+          BC_CLIENT_SECRET: ${{ secrets.BC_CLIENT_SECRET }}
+          BC_ENVIRONMENT: ${{ secrets.BC_ENVIRONMENT }}
+        run: |
+          cd bc-extension
+          bash deploy.sh AuctionSystemLedgerAPI.app
