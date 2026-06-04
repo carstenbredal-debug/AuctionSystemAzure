@@ -1,3 +1,4 @@
+// Apply Payment API - applies customer payments to invoices in BC
 page 50151 "Apply Payment API"
 {
     APIPublisher = 'auctionSystem';
