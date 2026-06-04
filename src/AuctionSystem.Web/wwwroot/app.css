@@ -126,21 +126,27 @@ h3 {
 }
 
 .table > tbody > tr {
-    background-color: #E8E3DD;
+    background-color: #E8E3DD !important;
+    --bs-table-bg-type: transparent !important;
+    --bs-table-bg-state: transparent !important;
 }
 
 .table-striped > tbody > tr:nth-of-type(odd) > * {
-    --bs-table-bg-type: transparent;
+    --bs-table-bg-type: transparent !important;
+    background-color: transparent !important;
 }
 
 .table-hover > tbody > tr:hover > * {
-    --bs-table-bg-state: rgba(35, 10, 60, 0.06);
+    --bs-table-bg-state: transparent !important;
 }
 
 /* Credit note row highlight */
 .table .credit-row,
-.table .credit-row > td {
+.table .credit-row > td,
+.table .credit-row > th {
     background-color: #9CC6C8 !important;
+    --bs-table-bg-type: transparent !important;
+    --bs-table-bg-state: transparent !important;
 }
 
 /* ===== Card Styling (Summary Cards) ===== */
