@@ -75,7 +75,7 @@ jobs:
           echo "Downloading symbols from BC environment '${BC_ENVIRONMENT}'..."
           DOWNLOAD_OK=true
           
-          for APP_NAME in "System" "Application" "Base Application" "System Application"; do
+          for APP_NAME in "System" "Application" "Base Application" "System Application" "Business Foundation"; do
             CLEAN_NAME=$(echo "$APP_NAME" | sed 's/ /_/g')
             URL_NAME=$(echo "$APP_NAME" | sed 's/ /%20/g')
             echo "  Downloading $CLEAN_NAME..."
