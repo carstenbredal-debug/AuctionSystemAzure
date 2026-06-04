@@ -91,6 +91,25 @@ public class SettlementFunctions
             try
             {
                 bcPaymentSuccess = await ApplyPaymentToBcAsync(invoice);
+
+                // After application, check if invoice is actually fully paid in BC
+                var buyer = await _db.Buyers.FirstOrDefaultAsync(b => b.Id == invoice.BuyerId);
+                var customerNo = buyer?.BuyerNumber?.ToString() ?? "";
+                if (!string.IsNullOrEmpty(customerNo))
+                {
+                    var companyId = await _bcClient.ResolveCompanyIdAsync();
+                    var entries = await _bcClient.GetCustomerLedgerEntriesByCustomerAsync(companyId, customerNo, "Invoice", false);
+                    var bcEntry = entries.FirstOrDefault(e => e.DocumentNo == invoice.BcInvoiceNumber);
+                    if (bcEntry != null && bcEntry.Open && bcEntry.RemainingAmount > 0)
+                    {
+                        // BC still has a remaining balance — downgrade to Downpayment
+                        invoice.Status = body.ReleaseForShipping ? InvoiceStatus.ReleasedToShip : InvoiceStatus.Downpayment;
+                        await _db.SaveChangesAsync();
+                        _logger.LogInformation("Invoice {Id} still has BC remaining {Remaining}, set status to {Status}",
+                            invoice.Id, bcEntry.RemainingAmount, invoice.Status);
+                        bcPaymentSuccess += $" (Remaining on invoice: {bcEntry.RemainingAmount:N2})";
+                    }
+                }
             }
             catch (Exception ex)
             {

@@ -611,14 +611,33 @@ else
         var resp = await Api.UpdateInvoiceStatusAsync(_fpInvoiceId, StatusPaid, releaseForShipping);
         if (resp.IsSuccessStatusCode)
         {
+            // Read actual status from backend (may be Downpayment if BC had insufficient balance)
             var inv = _invoices.FirstOrDefault(i => i.Id == _fpInvoiceId);
-            if (inv != null)
+            try
             {
-                inv.Status = releaseForShipping ? "ReleasedToShip" : StatusPaid;
-                if (releaseForShipping) inv.ShippingStatus = "Released";
+                var json = await resp.Content.ReadFromJsonAsync<BcStatusResponse>();
+                var actualStatus = json?.Status ?? (releaseForShipping ? "ReleasedToShip" : StatusPaid);
+                if (inv != null)
+                {
+                    inv.Status = actualStatus;
+                    if (releaseForShipping) inv.ShippingStatus = "Released";
+                }
+                if (!string.IsNullOrEmpty(json?.BcPaymentError))
+                    _bcError = $"Invoice marked as {actualStatus} locally, but BC payment application failed: {json.BcPaymentError}";
+                else if (!string.IsNullOrEmpty(json?.BcPaymentSuccess))
+                    _bcSuccess = $"Payment applied. BC: {json.BcPaymentSuccess}";
+                else
+                    _bcSuccess = $"Invoice marked as {actualStatus}.";
             }
-            ParseBcResponse(resp, "Invoice marked as Paid");
-            await CheckAndMarkPaidIfZeroBalance(_fpInvoiceId);
+            catch
+            {
+                if (inv != null)
+                {
+                    inv.Status = releaseForShipping ? "ReleasedToShip" : StatusPaid;
+                    if (releaseForShipping) inv.ShippingStatus = "Released";
+                }
+                _bcSuccess = "Invoice status updated.";
+            }
         }
         else
         {
@@ -647,6 +666,7 @@ else
 
     private class BcStatusResponse
     {
+        public string? Status { get; set; }
         public string? BcPaymentError { get; set; }
         public string? BcPaymentSuccess { get; set; }
     }
