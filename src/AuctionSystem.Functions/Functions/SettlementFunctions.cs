@@ -583,6 +583,24 @@ public class SettlementFunctions
             .OrderByDescending(i => i.InvoiceDate)
             .ToListAsync();
 
+        // Fetch BC remaining amounts in bulk
+        var bcRemainingMap = new Dictionary<string, decimal>();
+        if (_bcClient != null)
+        {
+            try
+            {
+                var companyId = await _bcClient.ResolveCompanyIdAsync();
+                var bcInvoices = await _bcClient.GetSalesInvoicesAsync(companyId, 5000);
+                foreach (var bci in bcInvoices)
+                    if (!string.IsNullOrEmpty(bci.Number))
+                        bcRemainingMap[bci.Number] = bci.RemainingAmount;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to fetch BC remaining amounts");
+            }
+        }
+
         // Build credit note lookup: original invoice ID -> list of credited lot numbers
         var creditNotesByOriginal = invoices
             .Where(i => i.IsCreditNote && i.OriginalInvoiceId != null)
@@ -602,6 +620,10 @@ public class SettlementFunctions
                 ? invoiceLotNumbers.Where(ln => !creditInfo.LotNumbers.Contains(ln)).ToList()
                 : (i.IsCreditNote ? new List<int>() : invoiceLotNumbers);
 
+            decimal? remainingBalance = null;
+            if (!string.IsNullOrEmpty(i.BcInvoiceNumber) && bcRemainingMap.TryGetValue(i.BcInvoiceNumber, out var rem))
+                remainingBalance = rem;
+
             return new
             {
                 i.Id, i.InvoiceNumber, i.InvoiceDate, i.SubTotal, i.AuctionFee, i.Commission,
@@ -610,6 +632,7 @@ public class SettlementFunctions
                 i.IsCreditNote, OriginalInvoiceNumber = i.OriginalInvoice?.InvoiceNumber,
                 i.PdfUrl, i.BcInvoiceNumber, i.ShippingStatus,
                 i.DownpaymentAmount, i.DownpaymentPercentage,
+                RemainingBalance = remainingBalance,
                 CreditedAmount = creditInfo?.Amount ?? 0m,
                 CreditedLots = creditInfo?.LotNumbers.Count ?? 0,
                 UncreditedLotNumbers = uncreditedLots,

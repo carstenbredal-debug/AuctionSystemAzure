@@ -790,7 +790,7 @@ public class BusinessCentralFunctions
     {
         if (localStatus == "Paid" && bcStatus == "Open") return "Marked Paid locally but still Open in BC";
         if (localStatus == "Issued" && bcStatus == "Closed") return "Still Issued locally but already Closed in BC";
-        if (localStatus == "Downpayment" && bcStatus == "Closed") return "Partial Payment locally but fully Closed in BC";
+        if (localStatus == "Downpayment" && bcStatus == "Closed") return "Partially Paid locally but fully Closed in BC";
         return null;
     }
 

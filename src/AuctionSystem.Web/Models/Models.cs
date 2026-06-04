@@ -395,6 +395,7 @@ public class InvoiceSummaryDto
     public string? ShippingStatus { get; set; }
     public decimal? DownpaymentAmount { get; set; }
     public decimal? DownpaymentPercentage { get; set; }
+    public decimal? RemainingBalance { get; set; }
     public decimal CreditedAmount { get; set; }
     public int CreditedLots { get; set; }
     public List<int> UncreditedLotNumbers { get; set; } = new();

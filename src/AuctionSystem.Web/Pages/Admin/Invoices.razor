@@ -118,6 +118,7 @@ else
                         <th>Auction Fee</th>
                         <th>Commission</th>
                         <th>Total</th>
+                        <th>Remaining</th>
                         <th>Date</th>
                         <th>Status</th>
                         <th>Actions</th>
@@ -128,7 +129,7 @@ else
                 <tbody>
                     @if (GetFilteredInvoices().Count == 0)
                     {
-                        <tr><td colspan="15" class="text-center text-muted py-4">No invoices found.</td></tr>
+                        <tr><td colspan="16" class="text-center text-muted py-4">No invoices found.</td></tr>
                     }
                     @foreach (var inv in GetFilteredInvoices())
                     {
@@ -158,6 +159,16 @@ else
                             <td>€@inv.AuctionFee.ToString("N2")</td>
                             <td>€@inv.Commission.ToString("N2")</td>
                             <td><strong>€@inv.TotalAmount.ToString("N2")</strong></td>
+                            <td>
+                                @if (inv.RemainingBalance.HasValue)
+                                {
+                                    <span class="@(inv.RemainingBalance.Value > 0 ? "text-danger" : "text-success")">€@inv.RemainingBalance.Value.ToString("N2")</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                            </td>
                             <td>@inv.InvoiceDate.ToString("d")</td>
                             <td>
                                 @{
@@ -171,7 +182,7 @@ else
                                     var invId = inv.Id;
                                     @if (inv.Status == "Downpayment")
                                     {
-                                        <span class="text-info me-1">Partial Paid</span>
+                                        <span class="text-info me-1">Partially Paid</span>
                                     }
                                     @if (inv.Status == "ReleasedToShip")
                                     {
@@ -687,7 +698,7 @@ else
     private string FormatStatus(string status) => status switch
     {
         "ReleasedToShip" => "Released to Ship",
-        "Downpayment" => "Partial Payment",
+        "Downpayment" => "Partially Paid",
         "PartiallyCredited" => "Partially Credited",
         "FullyCredited" => "Fully Credited",
         _ => status
@@ -699,7 +710,7 @@ else
         "Fully Credited" => "success",
         "Partially Credited" => "warning",
         "Issued" => "info",
-        "Partial Payment" => "info",
+        "Partially Paid" => "info",
         "Alloted" => "success",
         "Released to Ship" => "primary",
         "Overdue" => "danger",
