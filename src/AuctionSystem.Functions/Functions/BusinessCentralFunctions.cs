@@ -807,6 +807,35 @@ public class BusinessCentralFunctions
         });
     }
 
+    [Function("BcCustomerEntries")]
+    public async Task<HttpResponseData> GetCustomerEntries(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "bc/customer-entries/{customerNo}")] HttpRequestData req, string customerNo)
+    {
+        if (!EnsureConfigured(out var error))
+            return await JsonResponse(req, error!, HttpStatusCode.BadRequest);
+
+        var companyId = await _bcClient!.ResolveCompanyIdAsync();
+        var allEntries = await _bcClient.GetCustomerLedgerEntriesAsync(companyId);
+        var customerEntries = allEntries.Where(e => e.CustomerNo == customerNo).ToList();
+
+        return await JsonResponse(req, new
+        {
+            customerNo,
+            totalEntries = customerEntries.Count,
+            entries = customerEntries.Select(e => new
+            {
+                e.EntryNo,
+                e.PostingDate,
+                e.DocumentType,
+                e.DocumentNo,
+                e.Description,
+                e.OriginalAmount,
+                e.RemainingAmount,
+                e.Open
+            }).OrderByDescending(e => e.PostingDate).ToList()
+        });
+    }
+
     private static bool IsDocType(string actual, string expected)
     {
         if (string.IsNullOrEmpty(actual)) return false;
