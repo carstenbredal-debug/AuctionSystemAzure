@@ -601,6 +601,36 @@ public class SettlementFunctions
             }
         }
 
+        // Auto-correct status mismatches: Paid locally but BC still has remaining, or vice versa
+        if (bcRemainingMap.Count > 0)
+        {
+            var needsSave = false;
+            foreach (var inv in invoices.Where(i => !i.IsCreditNote && !string.IsNullOrEmpty(i.BcInvoiceNumber)))
+            {
+                if (!bcRemainingMap.TryGetValue(inv.BcInvoiceNumber!, out var bcRemaining)) continue;
+
+                if (inv.Status == InvoiceStatus.Paid && bcRemaining > 0)
+                {
+                    inv.Status = InvoiceStatus.Downpayment;
+                    needsSave = true;
+                    _logger.LogInformation("Auto-corrected invoice {Id} ({Num}) from Paid to Downpayment — BC remaining: {Rem}",
+                        inv.Id, inv.BcInvoiceNumber, bcRemaining);
+                }
+                else if (inv.Status == InvoiceStatus.Downpayment && bcRemaining == 0)
+                {
+                    inv.Status = InvoiceStatus.Paid;
+                    needsSave = true;
+                    _logger.LogInformation("Auto-corrected invoice {Id} ({Num}) from Downpayment to Paid — BC remaining: 0",
+                        inv.Id, inv.BcInvoiceNumber);
+                }
+            }
+            if (needsSave)
+            {
+                try { await _db.SaveChangesAsync(); }
+                catch (Exception ex) { _logger.LogWarning(ex, "Failed to save auto-corrected invoice statuses"); }
+            }
+        }
+
         // Build credit note lookup: original invoice ID -> list of credited lot numbers
         var creditNotesByOriginal = invoices
             .Where(i => i.IsCreditNote && i.OriginalInvoiceId != null)
