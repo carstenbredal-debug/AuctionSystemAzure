@@ -766,9 +766,9 @@ public class BusinessCentralFunctions
             .GroupBy(e => e.CustomerNo)
             .Select(g =>
             {
-                var invoiceEntries = g.Where(e => e.DocumentType.Equals("Invoice", StringComparison.OrdinalIgnoreCase)).ToList();
-                var creditMemoEntries = g.Where(e => e.DocumentType.Equals("Credit Memo", StringComparison.OrdinalIgnoreCase)).ToList();
-                var paymentEntries = g.Where(e => e.DocumentType.Equals("Payment", StringComparison.OrdinalIgnoreCase)).ToList();
+                var invoiceEntries = g.Where(e => IsDocType(e.DocumentType, "Invoice")).ToList();
+                var creditMemoEntries = g.Where(e => IsDocType(e.DocumentType, "Credit Memo")).ToList();
+                var paymentEntries = g.Where(e => IsDocType(e.DocumentType, "Payment")).ToList();
 
                 // Open payment remaining is negative — its absolute value is the unallocated amount
                 var openPaymentRemaining = paymentEntries.Where(e => e.Open).Sum(e => e.RemainingAmount);
@@ -795,11 +795,27 @@ public class BusinessCentralFunctions
             .OrderBy(c => c.customerNo)
             .ToList();
 
+        // Include distinct document types for diagnostics
+        var documentTypes = allEntries.Select(e => e.DocumentType).Distinct().ToList();
+
         return await JsonResponse(req, new
         {
             buyers = customerGroups,
-            lastChecked = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss UTC")
+            lastChecked = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss UTC"),
+            totalEntries = allEntries.Count,
+            documentTypes
         });
+    }
+
+    private static bool IsDocType(string actual, string expected)
+    {
+        if (string.IsNullOrEmpty(actual)) return false;
+        // Exact match (case insensitive)
+        if (actual.Equals(expected, StringComparison.OrdinalIgnoreCase)) return true;
+        // Handle BC returning without spaces (e.g., "CreditMemo" instead of "Credit Memo")
+        var normalized = actual.Replace(" ", "").Replace("_", "");
+        var expectedNormalized = expected.Replace(" ", "").Replace("_", "");
+        return normalized.Equals(expectedNormalized, StringComparison.OrdinalIgnoreCase);
     }
 
     private bool EnsureConfigured(out object? error)
