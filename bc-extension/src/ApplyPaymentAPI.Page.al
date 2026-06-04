@@ -40,6 +40,7 @@ page 50151 "Apply Payment API"
         CustEntryApplyPostedEntries: Codeunit "CustEntry-Apply Posted Entries";
         ApplyUnapplyParameters: Record "Apply Unapply Parameters";
         ApplyingAmount: Decimal;
+        PostingDateToUse: Date;
     begin
         // Find the source entry (payment or credit memo)
         if Rec.PaymentEntryNo <> 0 then begin
@@ -106,15 +107,20 @@ page 50151 "Apply Payment API"
             PaymentEntry."Amount to Apply" := ApplyingAmount;
         PaymentEntry.Modify(true);
 
-        // Post the application — always use today's date to avoid
-        // "posting date must not be before the Cust. Ledger Entry" error
-        // Today is guaranteed to be >= all historical posting dates and within allowed period
+        // Determine posting date: use the latest date among Today, payment, and invoice
+        PostingDateToUse := Today;
+        if PaymentEntry."Posting Date" > PostingDateToUse then
+            PostingDateToUse := PaymentEntry."Posting Date";
+        if InvoiceEntry."Posting Date" > PostingDateToUse then
+            PostingDateToUse := InvoiceEntry."Posting Date";
+
+        // Post the application
         ApplyUnapplyParameters."Document No." := PaymentEntry."Document No.";
-        ApplyUnapplyParameters."Posting Date" := Today;
+        ApplyUnapplyParameters."Posting Date" := PostingDateToUse;
         CustEntryApplyPostedEntries.Apply(PaymentEntry, ApplyUnapplyParameters);
 
         Rec.ResultStatus := 'Success';
-        Rec.ResultMessage := 'Applied ' + Format(ApplyingAmount) + ' to invoice ' + Rec.InvoiceDocumentNo;
+        Rec.ResultMessage := 'v1.0.0.5 Applied ' + Format(ApplyingAmount) + ' to invoice ' + Rec.InvoiceDocumentNo + ' (date=' + Format(PostingDateToUse) + ')';
         Rec.AmountToApply := ApplyingAmount;
         exit(true);
     end;
