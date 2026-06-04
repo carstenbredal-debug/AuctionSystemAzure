@@ -145,24 +145,35 @@ h3 {
 
 .table-striped > tbody > tr:nth-of-type(odd) > * {
     --bs-table-bg-type: transparent !important;
+    --bs-table-bg-state: transparent !important;
+    --bs-table-accent-bg: transparent !important;
     background-color: #E8E3DD !important;
 }
 
 .table-striped > tbody > tr:nth-of-type(even) > * {
     --bs-table-bg-type: transparent !important;
+    --bs-table-bg-state: transparent !important;
+    --bs-table-accent-bg: transparent !important;
     background-color: #E8E3DD !important;
 }
 
 .table-hover > tbody > tr:hover > * {
     --bs-table-bg-state: transparent !important;
+    --bs-table-accent-bg: transparent !important;
+    background-color: #E8E3DD !important;
 }
 
-/* Credit note row highlight */
+/* Credit note row highlight — must override all striping/hover */
 .table .credit-row > td,
-.table .credit-row > th {
+.table .credit-row > th,
+.table-striped > tbody > tr.credit-row:nth-of-type(odd) > *,
+.table-striped > tbody > tr.credit-row:nth-of-type(even) > *,
+.table-hover > tbody > tr.credit-row:hover > *,
+.table > tbody > tr.credit-row > td {
     background-color: #9CC6C8 !important;
     --bs-table-bg-type: transparent !important;
     --bs-table-bg-state: transparent !important;
+    --bs-table-accent-bg: transparent !important;
     --bs-table-bg: transparent !important;
 }
 
