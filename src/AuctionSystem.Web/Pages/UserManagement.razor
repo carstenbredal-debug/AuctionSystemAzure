@@ -709,87 +709,87 @@ else
             IsActive = user.IsActive
         };
 
-        // Load linked entity data and overlay BC values for posting groups, credit limit, etc.
-        if (user.BrokerId.HasValue)
-        {
-            var broker = _brokers.FirstOrDefault(b => b.Id == user.BrokerId.Value);
-            _brokerForm = broker != null ? CloneBroker(broker) : new BrokerDto { IsActive = true };
-            // Overlay with BC vendor data (source of truth for posting groups, credit limit)
-            if (broker != null)
-            {
-                var bcVendor = _bcVendors.FirstOrDefault(v => v.Number == broker.BrokerNumber);
-                if (bcVendor != null)
-                {
-                    _brokerForm.GenBusPostingGroup = bcVendor.GenBusPostingGroup;
-                    _brokerForm.VatBusPostingGroup = bcVendor.VatBusPostingGroup;
-                    _brokerForm.CustomerPostingGroup = bcVendor.VendorPostingGroup;
-                    _brokerForm.Currency = bcVendor.CurrencyCode;
-                    _brokerForm.PaymentTerm = bcVendor.PaymentTermsCode;
-                    _brokerForm.PaymentMethod = bcVendor.PaymentMethodCode;
-                    _brokerForm.VatRegistrationNo = bcVendor.VatRegistrationNo;
-                    _brokerForm.Blocked = bcVendor.Blocked;
-                }
-            }
-        }
-        else
-        {
-            _brokerForm = new BrokerDto { IsActive = true };
-        }
-
-        if (user.FarmerId.HasValue)
-        {
-            var farmer = _farmers.FirstOrDefault(f => f.Id == user.FarmerId.Value);
-            _farmerForm = farmer != null ? CloneFarmer(farmer) : new FarmerDto();
-            // Overlay with BC vendor data
-            if (farmer != null)
-            {
-                var bcVendor = _bcVendors.FirstOrDefault(v => v.Number == farmer.FarmerNumber);
-                if (bcVendor != null)
-                {
-                    _farmerForm.GenBusPostingGroup = bcVendor.GenBusPostingGroup;
-                    _farmerForm.VatBusPostingGroup = bcVendor.VatBusPostingGroup;
-                    _farmerForm.VendorPostingGroup = bcVendor.VendorPostingGroup;
-                    _farmerForm.Currency = bcVendor.CurrencyCode;
-                    _farmerForm.PaymentTerm = bcVendor.PaymentTermsCode;
-                    _farmerForm.PaymentMethod = bcVendor.PaymentMethodCode;
-                    _farmerForm.VatRegistrationNo = bcVendor.VatRegistrationNo;
-                }
-            }
-        }
-        else
-        {
-            _farmerForm = new FarmerDto();
-        }
-
-        if (user.BuyerId.HasValue)
-        {
-            var buyer = _buyers.FirstOrDefault(b => b.Id == user.BuyerId.Value);
-            _buyerForm = buyer != null ? CloneBuyer(buyer) : new BuyerDto();
-            // Overlay with BC customer data (source of truth for posting groups, credit limit)
-            if (buyer != null)
-            {
-                var bcCustomer = _bcCustomers.FirstOrDefault(c => c.Number == buyer.BuyerNumber);
-                if (bcCustomer != null)
-                {
-                    _buyerForm.GenBusPostingGroup = bcCustomer.GenBusPostingGroup;
-                    _buyerForm.VatBusPostingGroup = bcCustomer.VatBusPostingGroup;
-                    _buyerForm.CustomerPostingGroup = bcCustomer.CustomerPostingGroup;
-                    _buyerForm.CreditLimit = bcCustomer.CreditLimit;
-                    _buyerForm.Currency = bcCustomer.CurrencyCode;
-                    _buyerForm.PaymentTerm = bcCustomer.PaymentTermsCode;
-                    _buyerForm.PaymentMethod = bcCustomer.PaymentMethodCode;
-                    _buyerForm.VatRegistrationNo = bcCustomer.VatRegistrationNo;
-                    _buyerForm.Blocked = bcCustomer.Blocked;
-                }
-            }
-        }
-        else
-        {
-            _buyerForm = new BuyerDto();
-        }
+        _brokerForm = LoadBrokerFormForEdit(user);
+        _farmerForm = LoadFarmerFormForEdit(user);
+        _buyerForm = LoadBuyerFormForEdit(user);
 
         _showForm = true;
         _message = null;
+    }
+
+    private BrokerDto LoadBrokerFormForEdit(AppUserDto user)
+    {
+        if (!user.BrokerId.HasValue)
+            return new BrokerDto { IsActive = true };
+
+        var broker = _brokers.FirstOrDefault(b => b.Id == user.BrokerId.Value);
+        if (broker == null)
+            return new BrokerDto { IsActive = true };
+
+        var form = CloneBroker(broker);
+        var bcVendor = _bcVendors.FirstOrDefault(v => v.Number == broker.BrokerNumber);
+        if (bcVendor != null)
+        {
+            form.GenBusPostingGroup = bcVendor.GenBusPostingGroup;
+            form.VatBusPostingGroup = bcVendor.VatBusPostingGroup;
+            form.CustomerPostingGroup = bcVendor.VendorPostingGroup;
+            form.Currency = bcVendor.CurrencyCode;
+            form.PaymentTerm = bcVendor.PaymentTermsCode;
+            form.PaymentMethod = bcVendor.PaymentMethodCode;
+            form.VatRegistrationNo = bcVendor.VatRegistrationNo;
+            form.Blocked = bcVendor.Blocked;
+        }
+        return form;
+    }
+
+    private FarmerDto LoadFarmerFormForEdit(AppUserDto user)
+    {
+        if (!user.FarmerId.HasValue)
+            return new FarmerDto();
+
+        var farmer = _farmers.FirstOrDefault(f => f.Id == user.FarmerId.Value);
+        if (farmer == null)
+            return new FarmerDto();
+
+        var form = CloneFarmer(farmer);
+        var bcVendor = _bcVendors.FirstOrDefault(v => v.Number == farmer.FarmerNumber);
+        if (bcVendor != null)
+        {
+            form.GenBusPostingGroup = bcVendor.GenBusPostingGroup;
+            form.VatBusPostingGroup = bcVendor.VatBusPostingGroup;
+            form.VendorPostingGroup = bcVendor.VendorPostingGroup;
+            form.Currency = bcVendor.CurrencyCode;
+            form.PaymentTerm = bcVendor.PaymentTermsCode;
+            form.PaymentMethod = bcVendor.PaymentMethodCode;
+            form.VatRegistrationNo = bcVendor.VatRegistrationNo;
+        }
+        return form;
+    }
+
+    private BuyerDto LoadBuyerFormForEdit(AppUserDto user)
+    {
+        if (!user.BuyerId.HasValue)
+            return new BuyerDto();
+
+        var buyer = _buyers.FirstOrDefault(b => b.Id == user.BuyerId.Value);
+        if (buyer == null)
+            return new BuyerDto();
+
+        var form = CloneBuyer(buyer);
+        var bcCustomer = _bcCustomers.FirstOrDefault(c => c.Number == buyer.BuyerNumber);
+        if (bcCustomer != null)
+        {
+            form.GenBusPostingGroup = bcCustomer.GenBusPostingGroup;
+            form.VatBusPostingGroup = bcCustomer.VatBusPostingGroup;
+            form.CustomerPostingGroup = bcCustomer.CustomerPostingGroup;
+            form.CreditLimit = bcCustomer.CreditLimit;
+            form.Currency = bcCustomer.CurrencyCode;
+            form.PaymentTerm = bcCustomer.PaymentTermsCode;
+            form.PaymentMethod = bcCustomer.PaymentMethodCode;
+            form.VatRegistrationNo = bcCustomer.VatRegistrationNo;
+            form.Blocked = bcCustomer.Blocked;
+        }
+        return form;
     }
 
     private static BrokerDto CloneBroker(BrokerDto src) => new()
@@ -840,101 +840,73 @@ else
             string.IsNullOrWhiteSpace(_editingUser.DisplayName) ||
             string.IsNullOrWhiteSpace(_editingUser.Role))
         {
-            _message = "Please fill in all required fields (Azure AD Object ID, Email, Display Name, Role).";
-            _messageIsError = true;
+            SetError("Please fill in all required fields (Azure AD Object ID, Email, Display Name, Role).");
             return;
         }
 
-        // For new users, create the linked entity first
-        if (_editingUser.Id == 0)
-        {
-            if (_editingUser.Role == "Broker")
-            {
-                if (string.IsNullOrWhiteSpace(_brokerForm.CompanyName) || string.IsNullOrWhiteSpace(_brokerForm.BrokerNumber))
-                {
-                    _message = "Broker Name and Broker Number are required.";
-                    _messageIsError = true;
-                    return;
-                }
-                var broker = await Api.CreateBrokerAsync(_brokerForm);
-                if (broker == null)
-                {
-                    _message = "Failed to create broker.";
-                    _messageIsError = true;
-                    return;
-                }
-                _editingUser.BrokerId = broker.Id;
-            }
-            else if (_editingUser.Role == "Farmer")
-            {
-                if (string.IsNullOrWhiteSpace(_farmerForm.FarmerNumber) || string.IsNullOrWhiteSpace(_farmerForm.Name))
-                {
-                    _message = "Farmer Number and Name are required.";
-                    _messageIsError = true;
-                    return;
-                }
-                var farmer = await Api.CreateFarmerAsync(_farmerForm);
-                if (farmer == null)
-                {
-                    _message = "Failed to create farmer.";
-                    _messageIsError = true;
-                    return;
-                }
-                _editingUser.FarmerId = farmer.Id;
-            }
-            else if (_editingUser.Role == "Buyer")
-            {
-                if (string.IsNullOrWhiteSpace(_buyerForm.BuyerNumber) || string.IsNullOrWhiteSpace(_buyerForm.Name))
-                {
-                    _message = "Buyer Number and Name are required.";
-                    _messageIsError = true;
-                    return;
-                }
-                var buyer = await Api.CreateBuyerAsync(0, _buyerForm);
-                if (buyer == null)
-                {
-                    _message = "Failed to create buyer.";
-                    _messageIsError = true;
-                    return;
-                }
-                _editingUser.BuyerId = buyer.Id;
-            }
-        }
+        if (_editingUser.Id == 0 && !await CreateLinkedEntityForNewUser())
+            return;
 
-        if (_editingUser.Id > 0)
-        {
-            var result = await Api.UpdateUserAsync(_editingUser.Id, _editingUser);
-            if (result != null)
-            {
-                _message = $"User '{_editingUser.DisplayName}' updated successfully.";
-                _messageIsError = false;
-            }
-            else
-            {
-                _message = "Failed to update user. Please check the details and try again.";
-                _messageIsError = true;
-                return;
-            }
-        }
-        else
-        {
-            var result = await Api.CreateUserAsync(_editingUser);
-            if (result != null)
-            {
-                _message = $"User '{_editingUser.DisplayName}' created with role '{_editingUser.Role}'.";
-                _messageIsError = false;
-            }
-            else
-            {
-                _message = "Failed to create user. The Azure AD Object ID may already be in use.";
-                _messageIsError = true;
-                return;
-            }
-        }
+        if (!await PersistUser())
+            return;
 
         _showForm = false;
         _editingUser = null;
         await LoadData();
+    }
+
+    private async Task<bool> CreateLinkedEntityForNewUser()
+    {
+        switch (_editingUser!.Role)
+        {
+            case "Broker":
+                if (string.IsNullOrWhiteSpace(_brokerForm.CompanyName) || string.IsNullOrWhiteSpace(_brokerForm.BrokerNumber))
+                { SetError("Broker Name and Broker Number are required."); return false; }
+                var broker = await Api.CreateBrokerAsync(_brokerForm);
+                if (broker == null) { SetError("Failed to create broker."); return false; }
+                _editingUser.BrokerId = broker.Id;
+                break;
+            case "Farmer":
+                if (string.IsNullOrWhiteSpace(_farmerForm.FarmerNumber) || string.IsNullOrWhiteSpace(_farmerForm.Name))
+                { SetError("Farmer Number and Name are required."); return false; }
+                var farmer = await Api.CreateFarmerAsync(_farmerForm);
+                if (farmer == null) { SetError("Failed to create farmer."); return false; }
+                _editingUser.FarmerId = farmer.Id;
+                break;
+            case "Buyer":
+                if (string.IsNullOrWhiteSpace(_buyerForm.BuyerNumber) || string.IsNullOrWhiteSpace(_buyerForm.Name))
+                { SetError("Buyer Number and Name are required."); return false; }
+                var buyer = await Api.CreateBuyerAsync(0, _buyerForm);
+                if (buyer == null) { SetError("Failed to create buyer."); return false; }
+                _editingUser.BuyerId = buyer.Id;
+                break;
+        }
+        return true;
+    }
+
+    private async Task<bool> PersistUser()
+    {
+        if (_editingUser!.Id > 0)
+        {
+            var result = await Api.UpdateUserAsync(_editingUser.Id, _editingUser);
+            if (result == null) { SetError("Failed to update user. Please check the details and try again."); return false; }
+            _message = $"User '{_editingUser.DisplayName}' updated successfully.";
+            _messageIsError = false;
+        }
+        else
+        {
+            var result = await Api.CreateUserAsync(_editingUser);
+            if (result == null) { SetError("Failed to create user. The Azure AD Object ID may already be in use."); return false; }
+            _message = $"User '{_editingUser.DisplayName}' created with role '{_editingUser.Role}'.";
+            _messageIsError = false;
+        }
+        return true;
+    }
+
+    private void SetError(string msg)
+    {
+        _message = msg;
+        _messageIsError = true;
     }
 
     private void CancelForm()

@@ -34,7 +34,7 @@ else
             <div class="card text-center">
                 <div class="section-body p-3">
                     <h5 class="card-title text-muted">Total Boxes</h5>
-                    <h3>@FilteredBoxes.Count</h3>
+                    <h3>@GetFilteredBoxes().Count</h3>
                 </div>
             </div>
         </div>
@@ -42,7 +42,7 @@ else
             <div class="card text-center">
                 <div class="section-body p-3">
                     <h5 class="card-title text-muted">Total Skins</h5>
-                    <h3>@FilteredBoxes.Sum(b => b.Skins)</h3>
+                    <h3>@GetFilteredBoxes().Sum(b => b.Skins)</h3>
                 </div>
             </div>
         </div>
@@ -62,7 +62,7 @@ else
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var box in FilteredBoxes)
+                    @foreach (var box in GetFilteredBoxes())
                     {
                         <tr>
                             <td>@box.InvoiceNumber</td>
@@ -85,7 +85,7 @@ else
     private string _selectedBuyer = "";
     private List<string> _buyerNames = new();
 
-    private List<ShippingBoxDto> FilteredBoxes =>
+    private List<ShippingBoxDto> GetFilteredBoxes() =>
         string.IsNullOrEmpty(_selectedBuyer)
             ? _boxes
             : _boxes.Where(b => b.BuyerName == _selectedBuyer).ToList();

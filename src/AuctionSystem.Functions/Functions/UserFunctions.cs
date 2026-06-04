@@ -6,14 +6,12 @@ using AuctionSystem.Domain.Enums;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 
 namespace AuctionSystem.Functions.Functions;
 
 public class UserFunctions
 {
     private readonly AuctionDbContext _db;
-    private readonly ILogger<UserFunctions> _logger;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -21,10 +19,9 @@ public class UserFunctions
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public UserFunctions(AuctionDbContext db, ILogger<UserFunctions> logger)
+    public UserFunctions(AuctionDbContext db)
     {
         _db = db;
-        _logger = logger;
     }
 
     [Function("GetCurrentUser")]

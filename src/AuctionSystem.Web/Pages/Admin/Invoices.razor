@@ -32,31 +32,31 @@ else
         <div class="col-md-2">
             <div class="summary-card">
                 <div class="card-title">Total</div>
-                <div class="card-value">@FilteredInvoices.Count</div>
+                <div class="card-value">@GetFilteredInvoices().Count</div>
             </div>
         </div>
         <div class="col-md-2">
             <div class="summary-card">
                 <div class="card-title">Invoices</div>
-                <div class="card-value">@FilteredInvoices.Count(i => !i.IsCreditNote)</div>
+                <div class="card-value">@GetFilteredInvoices().Count(i => !i.IsCreditNote)</div>
             </div>
         </div>
         <div class="col-md-2">
             <div class="summary-card">
                 <div class="card-title">Credit Notes</div>
-                <div class="card-value">@FilteredInvoices.Count(i => i.IsCreditNote)</div>
+                <div class="card-value">@GetFilteredInvoices().Count(i => i.IsCreditNote)</div>
             </div>
         </div>
         <div class="col-md-3">
             <div class="summary-card">
                 <div class="card-title">Total Amount</div>
-                <div class="card-value">€@FilteredInvoices.Where(i => !i.IsCreditNote).Sum(i => i.TotalAmount).ToString("N2")</div>
+                <div class="card-value">€@GetFilteredInvoices().Where(i => !i.IsCreditNote).Sum(i => i.TotalAmount).ToString("N2")</div>
             </div>
         </div>
         <div class="col-md-3">
             <div class="summary-card">
                 <div class="card-title">Credit Total</div>
-                <div class="card-value">€@FilteredInvoices.Where(i => i.IsCreditNote).Sum(i => i.TotalAmount).ToString("N2")</div>
+                <div class="card-value">€@GetFilteredInvoices().Where(i => i.IsCreditNote).Sum(i => i.TotalAmount).ToString("N2")</div>
             </div>
         </div>
     </div>
@@ -98,9 +98,9 @@ else
     </div>
 
     <ul class="nav nav-tabs mb-3">
-        <li class="nav-item"><a class="nav-link @(_tab == "all" ? "active" : "")" href="#" @onclick='() => _tab = "all"' @onclick:preventDefault>All (@FilteredInvoices.Count)</a></li>
-        <li class="nav-item"><a class="nav-link @(_tab == "invoices" ? "active" : "")" href="#" @onclick='() => _tab = "invoices"' @onclick:preventDefault>Invoices (@FilteredInvoices.Count(i => !i.IsCreditNote))</a></li>
-        <li class="nav-item"><a class="nav-link @(_tab == "credits" ? "active" : "")" href="#" @onclick='() => _tab = "credits"' @onclick:preventDefault>Credit Notes (@FilteredInvoices.Count(i => i.IsCreditNote))</a></li>
+        <li class="nav-item"><a class="nav-link @(_tab == "all" ? "active" : "")" href="#" @onclick='() => _tab = "all"' @onclick:preventDefault>All (@GetFilteredInvoices().Count)</a></li>
+        <li class="nav-item"><a class="nav-link @(_tab == "invoices" ? "active" : "")" href="#" @onclick='() => _tab = "invoices"' @onclick:preventDefault>Invoices (@GetFilteredInvoices().Count(i => !i.IsCreditNote))</a></li>
+        <li class="nav-item"><a class="nav-link @(_tab == "credits" ? "active" : "")" href="#" @onclick='() => _tab = "credits"' @onclick:preventDefault>Credit Notes (@GetFilteredInvoices().Count(i => i.IsCreditNote))</a></li>
     </ul>
 
     <div class="section-container">
@@ -126,11 +126,11 @@ else
                     </tr>
                 </thead>
                 <tbody>
-                    @if (FilteredInvoices.Count == 0)
+                    @if (GetFilteredInvoices().Count == 0)
                     {
                         <tr><td colspan="15" class="text-center text-muted py-4">No invoices found.</td></tr>
                     }
-                    @foreach (var inv in FilteredInvoices)
+                    @foreach (var inv in GetFilteredInvoices())
                     {
                         <tr class="@(inv.IsCreditNote ? "credit-row" : "")">
                             <td>
@@ -398,7 +398,6 @@ else
     private int _fpInvoiceId;
 
     // Balance check state
-    private bool _checkingBalance;
     private bool _showInsufficientBalancePopup;
     private decimal _bcAvailableAmount;
     private decimal _bcInvoiceAmount;
@@ -408,28 +407,25 @@ else
     private string? _bcError;
     private string? _bcSuccess;
 
-    private List<InvoiceSummaryDto> FilteredInvoices
+    private List<InvoiceSummaryDto> GetFilteredInvoices()
     {
-        get
-        {
-            var result = _invoices.AsEnumerable();
+        var result = _invoices.AsEnumerable();
 
-            if (!string.IsNullOrEmpty(_selectedBroker))
-                result = result.Where(i => i.BrokerName == _selectedBroker);
+        if (!string.IsNullOrEmpty(_selectedBroker))
+            result = result.Where(i => i.BrokerName == _selectedBroker);
 
-            if (!string.IsNullOrEmpty(_selectedBuyer))
-                result = result.Where(i => i.BuyerName == _selectedBuyer);
+        if (!string.IsNullOrEmpty(_selectedBuyer))
+            result = result.Where(i => i.BuyerName == _selectedBuyer);
 
-            if (!string.IsNullOrEmpty(_selectedStatus))
-                result = result.Where(i => GetCreditStatus(i) == _selectedStatus);
+        if (!string.IsNullOrEmpty(_selectedStatus))
+            result = result.Where(i => GetCreditStatus(i) == _selectedStatus);
 
-            if (_tab == "invoices")
-                result = result.Where(i => !i.IsCreditNote);
-            else if (_tab == "credits")
-                result = result.Where(i => i.IsCreditNote);
+        if (_tab == "invoices")
+            result = result.Where(i => !i.IsCreditNote);
+        else if (_tab == "credits")
+            result = result.Where(i => i.IsCreditNote);
 
-            return result.ToList();
-        }
+        return result.ToList();
     }
 
     protected override async Task OnInitializedAsync()
@@ -477,12 +473,10 @@ else
         _showDownpaymentPopup = false;
         _bcError = null;
         _bcSuccess = null;
-        _checkingBalance = true;
         _updatingId = _dpInvoiceId;
         StateHasChanged();
 
         var balance = await Api.CheckBcPaymentBalanceAsync(_dpInvoiceId);
-        _checkingBalance = false;
         _updatingId = null;
 
         // Skip shipping question if already released to ship
@@ -561,12 +555,10 @@ else
         _fpInvoiceId = invoiceId;
         _bcError = null;
         _bcSuccess = null;
-        _checkingBalance = true;
         _updatingId = invoiceId;
         StateHasChanged();
 
         var balance = await Api.CheckBcPaymentBalanceAsync(invoiceId);
-        _checkingBalance = false;
         _updatingId = null;
 
         // Skip shipping question if already released to ship

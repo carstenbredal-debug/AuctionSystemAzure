@@ -47,12 +47,12 @@ else
         </li>
         <li class="nav-item">
             <button class="nav-link @(_activeTab == "sold" ? "active" : "")" @onclick='() => _activeTab = "sold"'>
-                Invoiced Lots <span class="badge bg-secondary ms-1">@_soldLots.Count</span>
+                Invoiced Lots <span class="badge bg-secondary ms-1">@GetSoldLots().Count</span>
             </button>
         </li>
         <li class="nav-item">
             <button class="nav-link @(_activeTab == "unsold" ? "active" : "")" @onclick='() => _activeTab = "unsold"'>
-                Un-Invoiced Lots <span class="badge bg-secondary ms-1">@_unsoldLots.Count</span>
+                Un-Invoiced Lots <span class="badge bg-secondary ms-1">@GetUnsoldLots().Count</span>
             </button>
         </li>
         <li class="nav-item">
@@ -288,13 +288,13 @@ else
             <div class="col-md-3">
                 <div class="card text-center"><div class="section-body p-3">
                     <h5 class="card-title text-muted">Invoiced</h5>
-                    <h2>€@_soldLots.Sum(r => r.TotalSkins * r.PriceEur).ToString("N2")</h2>
+                    <h2>€@GetSoldLots().Sum(r => r.TotalSkins * r.PriceEur).ToString("N2")</h2>
                 </div></div>
             </div>
             <div class="col-md-3">
                 <div class="card text-center"><div class="section-body p-3">
                     <h5 class="card-title text-muted">Un-Invoiced</h5>
-                    <h2>€@_unsoldLots.Sum(r => r.TotalSkins * r.PriceEur).ToString("N2")</h2>
+                    <h2>€@GetUnsoldLots().Sum(r => r.TotalSkins * r.PriceEur).ToString("N2")</h2>
                 </div></div>
             </div>
             <div class="col-md-3">
@@ -339,7 +339,7 @@ else
                 <button type="button" class="btn-close" @onclick="() => _takebackMessage = null"></button>
             </div>
         }
-        @if (_soldLots.Count > 0)
+        @if (GetSoldLots().Count > 0)
         {
             <div class="section-container mb-3">
                 <div class="card-body d-flex align-items-center gap-3">
@@ -361,9 +361,9 @@ else
                         </tr>
                     </thead>
                     <tbody>
-                        @if (_soldLots.Count == 0)
+                        @if (GetSoldLots().Count == 0)
                         { <tr><td colspan="13" class="text-center text-muted py-4">No sold lots.</td></tr> }
-                        @foreach (var r in _soldLots)
+                        @foreach (var r in GetSoldLots())
                         {
                             <tr>
                                 <td><input type="checkbox" checked="@_selectedSoldIds.Contains(r.Id)" @onchange="() => ToggleSoldSelection(r.Id)" /></td>
@@ -413,9 +413,9 @@ else
                         </tr>
                     </thead>
                     <tbody>
-                        @if (_unsoldLots.Count == 0)
+                        @if (GetUnsoldLots().Count == 0)
                         { <tr><td colspan="11" class="text-center text-muted py-4">No unsold lots.</td></tr> }
-                        @foreach (var r in _unsoldLots)
+                        @foreach (var r in GetUnsoldLots())
                         {
                             <tr>
                                 <td><input type="checkbox" checked="@_selectedUnsoldIds.Contains(r.Id)" @onchange="() => ToggleUnsoldSelection(r.Id)" /></td>
@@ -484,23 +484,22 @@ else
     [Parameter] public int BrokerId { get; set; }
 
     private BrokerDto? _broker;
-    private List<BrokerCustomerRequestDto> _customerRequests = new();
     private List<BuyerDto> _linkedBuyers = new();
     private List<AuctionResultDto> _allResults = new();
-    private List<AuctionResultDto> _soldLots => _allResults.Where(r => r.SoldToBuyerId != null).ToList();
-    private List<AuctionResultDto> _unsoldLots => _allResults.Where(r => r.SoldToBuyerId == null).ToList();
+    private List<AuctionResultDto> GetSoldLots() => _allResults.Where(r => r.SoldToBuyerId != null).ToList();
+    private List<AuctionResultDto> GetUnsoldLots() => _allResults.Where(r => r.SoldToBuyerId == null).ToList();
     private List<TakebackRequestDto> _takebackRequests = new();
     private decimal _auctionFeePercent;
     private decimal _handlingFeePerSkin;
     private HashSet<int> _selectedSoldIds = new();
-    private bool _allSoldSelected => _soldLots.Count > 0 && _soldLots.All(r => _selectedSoldIds.Contains(r.Id));
+    private bool _allSoldSelected => GetSoldLots().Count > 0 && GetSoldLots().All(r => _selectedSoldIds.Contains(r.Id));
     private bool _requestingTakeback;
     private string? _takebackMessage;
     private bool _takebackMessageIsError;
     private string? _brokerTakebackMessage;
     private bool _brokerTakebackMessageIsError;
     private HashSet<int> _selectedUnsoldIds = new();
-    private bool _allUnsoldSelected => _unsoldLots.Count > 0 && _unsoldLots.All(r => _selectedUnsoldIds.Contains(r.Id));
+    private bool _allUnsoldSelected => GetUnsoldLots().Count > 0 && GetUnsoldLots().All(r => _selectedUnsoldIds.Contains(r.Id));
     private bool _reassigning;
     private string? _unsoldMessage;
     private bool _unsoldMessageIsError;
@@ -528,7 +527,6 @@ else
         _broker = allBrokers.FirstOrDefault(b => b.Id == BrokerId);
         if (_broker != null)
         {
-            _customerRequests = await Api.GetCustomerRequestsByBrokerAsync(BrokerId);
             _linkedBuyers = await Api.GetBuyersByBrokerAsync(BrokerId);
             _allResults = await Api.GetAuctionResultsByBrokerAsync(BrokerId);
             _takebackRequests = await Api.GetTakebackRequestsByBrokerAsync(BrokerId);
@@ -567,7 +565,7 @@ else
     private void ToggleAllSold(ChangeEventArgs e)
     {
         if ((bool)(e.Value ?? false))
-            _selectedSoldIds = _soldLots.Select(r => r.Id).ToHashSet();
+            _selectedSoldIds = GetSoldLots().Select(r => r.Id).ToHashSet();
         else
             _selectedSoldIds.Clear();
     }
@@ -655,7 +653,7 @@ else
     private void ToggleAllUnsold(ChangeEventArgs e)
     {
         if ((bool)(e.Value ?? false))
-            _selectedUnsoldIds = _unsoldLots.Select(r => r.Id).ToHashSet();
+            _selectedUnsoldIds = GetUnsoldLots().Select(r => r.Id).ToHashSet();
         else
             _selectedUnsoldIds.Clear();
     }

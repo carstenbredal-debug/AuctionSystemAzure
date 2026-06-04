@@ -5,14 +5,12 @@ using AuctionSystem.Domain.Entities;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 
 namespace AuctionSystem.Functions.Functions;
 
 public class ParameterFunctions
 {
     private readonly AuctionDbContext _db;
-    private readonly ILogger<ParameterFunctions> _logger;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -20,10 +18,9 @@ public class ParameterFunctions
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public ParameterFunctions(AuctionDbContext db, ILogger<ParameterFunctions> logger)
+    public ParameterFunctions(AuctionDbContext db)
     {
         _db = db;
-        _logger = logger;
     }
 
     [Function("GetParameters")]

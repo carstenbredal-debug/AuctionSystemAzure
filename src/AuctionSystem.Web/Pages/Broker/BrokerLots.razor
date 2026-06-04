@@ -22,13 +22,13 @@
         <div class="col-md-3">
             <div class="summary-card">
                 <div class="card-title">Invoiced</div>
-                <div class="card-value">€@_soldLots.Sum(r => r.TotalSkins * r.PriceEur).ToString("N2")</div>
+                <div class="card-value">€@GetSoldLots().Sum(r => r.TotalSkins * r.PriceEur).ToString("N2")</div>
             </div>
         </div>
         <div class="col-md-3">
             <div class="summary-card">
                 <div class="card-title">Un-Invoiced</div>
-                <div class="card-value">€@_unsoldLots.Sum(r => r.TotalSkins * r.PriceEur).ToString("N2")</div>
+                <div class="card-value">€@GetUnsoldLots().Sum(r => r.TotalSkins * r.PriceEur).ToString("N2")</div>
             </div>
         </div>
         <div class="col-md-3">
@@ -48,12 +48,12 @@
     </li>
     <li class="nav-item">
         <a class="nav-link @(_activeTab == "sold" ? "active" : "")" href="javascript:void(0)" @onclick='() => _activeTab = "sold"'>
-            Invoiced Lots <span class="badge bg-secondary">@_soldLots.Count</span>
+            Invoiced Lots <span class="badge bg-secondary">@GetSoldLots().Count</span>
         </a>
     </li>
     <li class="nav-item">
         <a class="nav-link @(_activeTab == "unsold" ? "active" : "")" href="javascript:void(0)" @onclick='() => _activeTab = "unsold"'>
-            Un-Invoiced Lots <span class="badge bg-secondary">@_unsoldLots.Count</span>
+            Un-Invoiced Lots <span class="badge bg-secondary">@GetUnsoldLots().Count</span>
         </a>
     </li>
     <li class="nav-item">
@@ -162,7 +162,7 @@ else if (_activeTab == "sold")
         </div>
     }
 
-    @if (_soldLots.Count > 0)
+    @if (GetSoldLots().Count > 0)
     {
         <div class="section-container mb-3">
             <div class="card-body d-flex align-items-center gap-3">
@@ -205,11 +205,11 @@ else if (_activeTab == "sold")
                     </tr>
                 </thead>
                 <tbody>
-                    @if (_soldLots.Count == 0)
+                    @if (GetSoldLots().Count == 0)
                     {
                         <tr><td colspan="14" class="text-center text-muted py-4">No lots sold yet.</td></tr>
                     }
-                    @foreach (var r in _soldLots)
+                    @foreach (var r in GetSoldLots())
                     {
                         var link = _invoiceLinks.GetValueOrDefault(r.Id);
                         <tr>
@@ -260,7 +260,7 @@ else if (_activeTab == "unsold")
         </div>
     }
 
-    @if (_unsoldLots.Count > 0)
+    @if (GetUnsoldLots().Count > 0)
     {
         <div class="section-container mb-3">
             <div class="card-body d-flex align-items-center gap-3">
@@ -306,11 +306,11 @@ else if (_activeTab == "unsold")
                     </tr>
                 </thead>
                 <tbody>
-                    @if (_unsoldLots.Count == 0)
+                    @if (GetUnsoldLots().Count == 0)
                     {
                         <tr><td colspan="14" class="text-center text-muted py-4">All lots have been sold.</td></tr>
                     }
-                    @foreach (var r in _unsoldLots)
+                    @foreach (var r in GetUnsoldLots())
                     {
                         var link = _invoiceLinks.GetValueOrDefault(r.Id);
                         <tr>
@@ -460,7 +460,7 @@ else if (_activeTab == "takeback")
                     </div>
                     @if (_commissionType == "percentage" && _commissionValue > 0)
                     {
-                        var selectedLots = _unsoldLots.Where(r => _selectedIds.Contains(r.Id)).ToList();
+                        var selectedLots = GetUnsoldLots().Where(r => _selectedIds.Contains(r.Id)).ToList();
                         var totalHammer = selectedLots.Sum(r => (decimal)r.TotalSkins * r.PriceEur);
                         var totalCommission = totalHammer * _commissionValue / 100m;
                         <div class="alert alert-info">
@@ -491,8 +491,8 @@ else if (_activeTab == "takeback")
 
 @code {
     private List<AuctionResultDto> _allResults = new();
-    private List<AuctionResultDto> _soldLots => _allResults.Where(r => r.SoldToBuyerId != null).ToList();
-    private List<AuctionResultDto> _unsoldLots => _allResults.Where(r => r.SoldToBuyerId == null).ToList();
+    private List<AuctionResultDto> GetSoldLots() => _allResults.Where(r => r.SoldToBuyerId != null).ToList();
+    private List<AuctionResultDto> GetUnsoldLots() => _allResults.Where(r => r.SoldToBuyerId == null).ToList();
     private List<BuyerDto> _buyers = new();
     private List<TakebackRequestDto> _pendingTakebacks = new();
     private decimal _auctionFeePercent;
@@ -518,8 +518,8 @@ else if (_activeTab == "takeback")
     private bool _takebackMessageIsError;
     private string? _brokerTakebackMessage;
     private bool _brokerTakebackMessageIsError;
-    private bool _allSelected => _unsoldLots.Count > 0 && _unsoldLots.All(r => _selectedIds.Contains(r.Id));
-    private bool _allSoldSelected => _soldLots.Count > 0 && _soldLots.All(r => _selectedSoldIds.Contains(r.Id));
+    private bool _allSelected => GetUnsoldLots().Count > 0 && GetUnsoldLots().All(r => _selectedIds.Contains(r.Id));
+    private bool _allSoldSelected => GetSoldLots().Count > 0 && GetSoldLots().All(r => _selectedSoldIds.Contains(r.Id));
     private int _brokerId;
 
     protected override async Task OnInitializedAsync()
@@ -574,7 +574,7 @@ else if (_activeTab == "takeback")
     private void ToggleAll(ChangeEventArgs e)
     {
         if ((bool)(e.Value ?? false))
-            _selectedIds = _unsoldLots.Select(r => r.Id).ToHashSet();
+            _selectedIds = GetUnsoldLots().Select(r => r.Id).ToHashSet();
         else
             _selectedIds.Clear();
     }
@@ -652,7 +652,7 @@ else if (_activeTab == "takeback")
     private void ToggleAllSold(ChangeEventArgs e)
     {
         if ((bool)(e.Value ?? false))
-            _selectedSoldIds = _soldLots.Select(r => r.Id).ToHashSet();
+            _selectedSoldIds = GetSoldLots().Select(r => r.Id).ToHashSet();
         else
             _selectedSoldIds.Clear();
     }

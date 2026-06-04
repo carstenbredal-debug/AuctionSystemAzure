@@ -5,14 +5,12 @@ using AuctionSystem.Domain.Enums;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 
 namespace AuctionSystem.Functions.Functions;
 
 public class AuctionTransactionFunctions
 {
     private readonly AuctionDbContext _db;
-    private readonly ILogger<AuctionTransactionFunctions> _logger;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -21,10 +19,9 @@ public class AuctionTransactionFunctions
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
 
-    public AuctionTransactionFunctions(AuctionDbContext db, ILogger<AuctionTransactionFunctions> logger)
+    public AuctionTransactionFunctions(AuctionDbContext db)
     {
         _db = db;
-        _logger = logger;
     }
 
     [Function("GetAuctionTransactions")]

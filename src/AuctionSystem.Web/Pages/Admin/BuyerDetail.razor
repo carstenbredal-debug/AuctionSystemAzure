@@ -541,7 +541,6 @@ else
     [Parameter] public int BuyerId { get; set; }
 
     private BuyerDto? _buyer;
-    private List<BrokerCustomerRequestDto> _requests = new();
     private List<AuctionResultDto> _purchases = new();
     private List<TakebackRequestDto> _takebackRequests = new();
     private List<BrokerDto> _allBrokers = new();
@@ -580,7 +579,6 @@ else
         _allBrokers = await Api.GetBrokersAsync();
         if (_buyer != null)
         {
-            _requests = await Api.GetCustomerRequestsByBuyerAsync(BuyerId);
             _purchases = await Api.GetAuctionResultsByBuyerAsync(BuyerId);
             _takebackRequests = await Api.GetTakebackRequestsByBuyerAsync(BuyerId);
             _buyerInvoices = await Api.GetInvoicesByBuyerAsync(BuyerId);

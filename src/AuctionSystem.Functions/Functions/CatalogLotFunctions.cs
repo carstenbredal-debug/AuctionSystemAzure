@@ -4,7 +4,6 @@ using AuctionSystem.Domain.Data;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 
 namespace AuctionSystem.Functions.Functions;
 
@@ -12,7 +11,6 @@ public class CatalogLotFunctions
 {
     private readonly CatalogDbContext _catalogDb;
     private readonly AuctionDbContext _auctionDb;
-    private readonly ILogger<CatalogLotFunctions> _logger;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -20,11 +18,10 @@ public class CatalogLotFunctions
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public CatalogLotFunctions(CatalogDbContext catalogDb, AuctionDbContext auctionDb, ILogger<CatalogLotFunctions> logger)
+    public CatalogLotFunctions(CatalogDbContext catalogDb, AuctionDbContext auctionDb)
     {
         _catalogDb = catalogDb;
         _auctionDb = auctionDb;
-        _logger = logger;
     }
 
     [Function("GetCatalogLots")]

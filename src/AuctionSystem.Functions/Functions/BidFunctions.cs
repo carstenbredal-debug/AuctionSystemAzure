@@ -4,14 +4,12 @@ using AuctionSystem.Domain.Entities;
 using AuctionSystem.Domain.Services;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
-using Microsoft.Extensions.Logging;
 
 namespace AuctionSystem.Functions.Functions;
 
 public class BidFunctions
 {
     private readonly BidService _bidService;
-    private readonly ILogger<BidFunctions> _logger;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -19,10 +17,9 @@ public class BidFunctions
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public BidFunctions(BidService bidService, ILogger<BidFunctions> logger)
+    public BidFunctions(BidService bidService)
     {
         _bidService = bidService;
-        _logger = logger;
     }
 
     [Function("PlaceBid")]
