@@ -3,6 +3,7 @@
 @using System.Net.Http.Json
 @inject AuctionApiClient Api
 @inject AuthenticationStateProvider AuthState
+@inject IJSRuntime JS
 
 <PageTitle>Lots - Broker Portal</PageTitle>
 
@@ -69,8 +70,9 @@
 else if (_activeTab == "purchased")
 {
     <div class="section-container">
-        <div class="section-header">
-            All Purchased Lots
+        <div class="section-header d-flex justify-content-between align-items-center">
+            <span>All Purchased Lots</span>
+            <button class="btn btn-sm btn-outline-light" @onclick="ExportPurchasedToExcel">📥 Export to Excel</button>
         </div>
         <div class="section-body">
             <table class="table table-striped table-hover mb-0">
@@ -758,5 +760,29 @@ else if (_activeTab == "takeback")
     {
         public string? Error { get; set; }
         public string? Message { get; set; }
+    }
+
+    private async Task ExportPurchasedToExcel()
+    {
+        var headers = new[] { "Lot #", "Type", "Gender", "Group", "Color", "Quality", "Size", "Skins", "Boxes", "Price (EUR)", "Hammer Price", "Auction Fee", "Commission", "Status" };
+        var rows = _allResults.Select(r => new object[]
+        {
+            r.LotNumber,
+            r.SalesType ?? "",
+            r.Gender ?? "",
+            r.Group ?? "",
+            r.Color ?? "",
+            r.Quality ?? "",
+            r.Size ?? "",
+            r.TotalSkins,
+            r.BoxCount,
+            r.PriceEur,
+            r.TotalSkins * r.PriceEur,
+            CalcAuctionFee(r.TotalSkins, r.PriceEur),
+            r.CommissionAmount ?? 0m,
+            r.SoldToBuyerId != null ? "Invoiced" : "Un-Invoiced"
+        }).ToArray();
+
+        await JS.InvokeVoidAsync("exportToExcel", $"PurchasedLots_{DateTime.Now:yyyyMMdd}.xlsx", "Purchased Lots", headers, rows);
     }
 }

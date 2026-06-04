@@ -22,6 +22,16 @@
         <a href="" class="reload">Reload</a>
         <a class="dismiss">X</a>
     </div>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <script>
+        window.exportToExcel = function (fileName, sheetName, headers, rows) {
+            var ws_data = [headers].concat(rows);
+            var ws = XLSX.utils.aoa_to_sheet(ws_data);
+            var wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, sheetName);
+            XLSX.writeFile(wb, fileName);
+        };
+    </script>
     <script src="_framework/blazor.webassembly.js"></script>
 </body>
 </html>
