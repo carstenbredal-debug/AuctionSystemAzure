@@ -479,37 +479,37 @@ else
         var balance = await Api.CheckBcPaymentBalanceAsync(_dpInvoiceId);
         _updatingId = null;
 
-        // Skip shipping question if already released to ship
         var dpInv = _invoices.FirstOrDefault(i => i.Id == _dpInvoiceId);
         var alreadyShipped = dpInv?.Status == "ReleasedToShip";
 
         if (balance == null || !balance.Available)
         {
-            if (alreadyShipped)
-                await SubmitDownpayment(true);
-            else
-                _showShippingConfirm = true;
+            await ProceedWithDownpayment(alreadyShipped);
+            return;
+        }
+
+        var isPercentage = _dpAmountType == "percentage";
+        var actualAmount = isPercentage && dpInv != null ? dpInv.TotalAmount * _dpAmount / 100 : _dpAmount;
+
+        if (balance.AvailableAmount >= actualAmount)
+        {
+            await ProceedWithDownpayment(alreadyShipped);
         }
         else
         {
-            var isPercentage = _dpAmountType == "percentage";
-            var actualAmount = isPercentage && dpInv != null ? dpInv.TotalAmount * _dpAmount / 100 : _dpAmount;
-
-            if (balance.AvailableAmount >= actualAmount)
-            {
-                if (alreadyShipped)
-                    await SubmitDownpayment(true);
-                else
-                    _showShippingConfirm = true;
-            }
-            else
-            {
-                _bcAvailableAmount = balance.AvailableAmount;
-                _bcInvoiceAmount = actualAmount;
-                _balanceContext = "downpayment";
-                _showInsufficientBalancePopup = true;
-            }
+            _bcAvailableAmount = balance.AvailableAmount;
+            _bcInvoiceAmount = actualAmount;
+            _balanceContext = "downpayment";
+            _showInsufficientBalancePopup = true;
         }
+    }
+
+    private async Task ProceedWithDownpayment(bool alreadyShipped)
+    {
+        if (alreadyShipped)
+            await SubmitDownpayment(true);
+        else
+            _showShippingConfirm = true;
     }
 
     private async Task SubmitDownpayment(bool releaseForShipping)
@@ -528,19 +528,7 @@ else
                 inv.Status = releaseForShipping ? "ReleasedToShip" : "Downpayment";
                 if (releaseForShipping) inv.ShippingStatus = "Released";
             }
-            try
-            {
-                var json = await resp.Content.ReadFromJsonAsync<BcStatusResponse>();
-                if (!string.IsNullOrEmpty(json?.BcPaymentError))
-                    _bcError = $"Partial payment recorded locally, but BC payment application failed: {json.BcPaymentError}";
-                else if (!string.IsNullOrEmpty(json?.BcPaymentSuccess))
-                    _bcSuccess = $"Partial payment recorded. BC: {json.BcPaymentSuccess}";
-                else
-                    _bcSuccess = "Partial payment recorded.";
-            }
-            catch { _bcSuccess = "Partial payment recorded."; }
-
-            // Check BC remaining — if fully paid in BC, update status
+            ParseBcResponse(resp, "Partial payment recorded");
             await CheckAndMarkPaidIfZeroBalance(_dpInvoiceId);
         }
         else
@@ -561,23 +549,12 @@ else
         var balance = await Api.CheckBcPaymentBalanceAsync(invoiceId);
         _updatingId = null;
 
-        // Skip shipping question if already released to ship
         var fpInv = _invoices.FirstOrDefault(i => i.Id == invoiceId);
         var fpAlreadyShipped = fpInv?.Status == "ReleasedToShip";
 
-        if (balance == null || !balance.Available)
+        if (balance == null || !balance.Available || balance.Sufficient)
         {
-            if (fpAlreadyShipped)
-                await SubmitFullyPaid(true);
-            else
-                _showFullyPaidShippingConfirm = true;
-        }
-        else if (balance.Sufficient)
-        {
-            if (fpAlreadyShipped)
-                await SubmitFullyPaid(true);
-            else
-                _showFullyPaidShippingConfirm = true;
+            await ProceedWithFullyPaid(fpAlreadyShipped);
         }
         else
         {
@@ -586,6 +563,14 @@ else
             _balanceContext = "fullypaid";
             _showInsufficientBalancePopup = true;
         }
+    }
+
+    private async Task ProceedWithFullyPaid(bool alreadyShipped)
+    {
+        if (alreadyShipped)
+            await SubmitFullyPaid(true);
+        else
+            _showFullyPaidShippingConfirm = true;
     }
 
     private async Task ConfirmApplyAvailable()
@@ -632,21 +617,7 @@ else
                 inv.Status = releaseForShipping ? "ReleasedToShip" : StatusPaid;
                 if (releaseForShipping) inv.ShippingStatus = "Released";
             }
-
-            // Check for BC payment result in response
-            try
-            {
-                var json = await resp.Content.ReadFromJsonAsync<BcStatusResponse>();
-                if (!string.IsNullOrEmpty(json?.BcPaymentError))
-                    _bcError = $"Invoice marked as Paid locally, but BC payment application failed: {json.BcPaymentError}";
-                else if (!string.IsNullOrEmpty(json?.BcPaymentSuccess))
-                    _bcSuccess = $"Invoice marked as Paid. BC: {json.BcPaymentSuccess}";
-                else
-                    _bcSuccess = "Invoice marked as Paid.";
-            }
-            catch { _bcSuccess = "Invoice marked as Paid."; }
-
-            // Check BC remaining — if fully paid in BC, update status
+            ParseBcResponse(resp, "Invoice marked as Paid");
             await CheckAndMarkPaidIfZeroBalance(_fpInvoiceId);
         }
         else
@@ -714,4 +685,19 @@ else
         "Overdue" => "danger",
         _ => "secondary"
     };
+
+    private async void ParseBcResponse(HttpResponseMessage resp, string successPrefix)
+    {
+        try
+        {
+            var json = await resp.Content.ReadFromJsonAsync<BcStatusResponse>();
+            if (!string.IsNullOrEmpty(json?.BcPaymentError))
+                _bcError = $"{successPrefix} locally, but BC payment application failed: {json.BcPaymentError}";
+            else if (!string.IsNullOrEmpty(json?.BcPaymentSuccess))
+                _bcSuccess = $"{successPrefix}. BC: {json.BcPaymentSuccess}";
+            else
+                _bcSuccess = $"{successPrefix}.";
+        }
+        catch { _bcSuccess = $"{successPrefix}."; }
+    }
 }

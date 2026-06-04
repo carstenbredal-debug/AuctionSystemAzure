@@ -601,31 +601,7 @@ else if (_activeTab == "takeback")
         {
             var resp = await Api.SellLotsToBuyerAsync(_selectedIds.ToList(), _selectedBuyerId, _commissionType, _commissionValue);
             if (resp.IsSuccessStatusCode)
-            {
-                var buyer = _buyers.FirstOrDefault(b => b.Id == _selectedBuyerId);
-                var json = await resp.Content.ReadFromJsonAsync<SellResponse>();
-                _message = $"{_selectedIds.Count} lot(s) sold to {buyer?.Name ?? "buyer"}.";
-                if (json?.InvoiceId != null)
-                {
-                    _lastInvoiceId = json.InvoiceId;
-                    _lastInvoicePdfUrl = json.PdfUrl;
-                    _message += " Invoice generated.";
-                }
-                if (!string.IsNullOrEmpty(json?.BcError))
-                {
-                    _message += $" BC Error: {json.BcError}";
-                    _messageIsError = true;
-                }
-                else
-                {
-                    _messageIsError = false;
-                }
-                _selectedIds.Clear();
-                _selectedBuyerId = 0;
-                _showCommissionModal = false;
-                _allResults = await Api.GetAuctionResultsByBrokerAsync(_brokerId);
-                _invoiceLinks = await Api.GetInvoiceLinksForBrokerAsync(_brokerId);
-            }
+                await HandleSellSuccess(resp);
             else
             {
                 _message = "Failed to sell lots. Please try again.";
@@ -641,6 +617,27 @@ else if (_activeTab == "takeback")
         {
             _selling = false;
         }
+    }
+
+    private async Task HandleSellSuccess(HttpResponseMessage resp)
+    {
+        var buyer = _buyers.FirstOrDefault(b => b.Id == _selectedBuyerId);
+        var json = await resp.Content.ReadFromJsonAsync<SellResponse>();
+        _message = $"{_selectedIds.Count} lot(s) sold to {buyer?.Name ?? "buyer"}.";
+        if (json?.InvoiceId != null)
+        {
+            _lastInvoiceId = json.InvoiceId;
+            _lastInvoicePdfUrl = json.PdfUrl;
+            _message += " Invoice generated.";
+        }
+        _messageIsError = !string.IsNullOrEmpty(json?.BcError);
+        if (_messageIsError) _message += $" BC Error: {json!.BcError}";
+
+        _selectedIds.Clear();
+        _selectedBuyerId = 0;
+        _showCommissionModal = false;
+        _allResults = await Api.GetAuctionResultsByBrokerAsync(_brokerId);
+        _invoiceLinks = await Api.GetInvoiceLinksForBrokerAsync(_brokerId);
     }
 
     private void ToggleSoldSelection(int id)

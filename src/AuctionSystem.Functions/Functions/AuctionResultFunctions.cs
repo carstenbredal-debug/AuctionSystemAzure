@@ -349,78 +349,10 @@ public class AuctionResultFunctions
 
         await _db.SaveChangesAsync();
 
-        // Create and push invoice to BC
         int? invoiceId = null;
         string? bcError = null;
         if (results.Count > 0 && _bcSyncService != null)
-        {
-            try
-            {
-                var brokerId = results.First().BrokerId;
-                var auctionFeeParam = await _db.SystemParameters.FirstOrDefaultAsync(p => p.Key == "AuctionFee");
-                var handlingFeeParam = await _db.SystemParameters.FirstOrDefaultAsync(p => p.Key == "HandlingFee");
-                var auctionFeePercent = auctionFeeParam != null ? decimal.Parse(auctionFeeParam.Value, CultureInfo.InvariantCulture) : 0m;
-                var handlingFeePerSkin = handlingFeeParam != null ? decimal.Parse(handlingFeeParam.Value, CultureInfo.InvariantCulture) : 0m;
-
-                var invoice = new Invoice
-                {
-                    InvoiceNumber = "",
-                    InvoiceDate = DateTime.UtcNow,
-                    BrokerId = brokerId,
-                    BuyerId = body.BuyerId,
-                    Status = InvoiceStatus.Issued
-                };
-
-                decimal subTotal = 0;
-                decimal totalAuctionFee = 0;
-                decimal totalCommission = 0;
-
-                foreach (var r in results)
-                {
-                    var hammerPrice = r.TotalSkins * r.PriceEur;
-                    var handlingFee = r.TotalSkins * handlingFeePerSkin;
-                    var lotAuctionFee = (hammerPrice + handlingFee) * auctionFeePercent / 100m;
-                    var description = string.Join(", ", new[] { r.SalesType, r.Gender, r.Group, r.Color, r.Quality, r.Size }.Where(s => !string.IsNullOrEmpty(s)));
-
-                    invoice.Lines.Add(new InvoiceLine
-                    {
-                        LotNumber = r.LotNumber,
-                        Description = description,
-                        Skins = r.TotalSkins,
-                        PricePerSkin = r.PriceEur,
-                        HammerPrice = hammerPrice,
-                        AuctionResultId = r.Id
-                    });
-
-                    subTotal += hammerPrice;
-                    totalAuctionFee += lotAuctionFee;
-                    totalCommission += r.CommissionAmount ?? 0;
-                }
-
-                invoice.SubTotal = subTotal;
-                invoice.AuctionFee = totalAuctionFee;
-                invoice.Commission = totalCommission;
-                invoice.TotalAmount = subTotal + totalAuctionFee + totalCommission;
-                invoice.Buyer = buyer;
-
-                _db.Invoices.Add(invoice);
-                await _db.SaveChangesAsync();
-                invoiceId = invoice.Id;
-
-                // Push to BC — BC assigns the invoice number and PDF
-                await _bcSyncService.PushInvoiceToBcAsync(invoice);
-                // InvoiceNumber is now set from BC (e.g. SI-100017)
-                invoice.InvoiceNumber = invoice.BcInvoiceNumber ?? "";
-                await _db.SaveChangesAsync();
-
-                _logger.LogInformation("Invoice {Number} created and posted in BC", invoice.InvoiceNumber);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to create BC invoice for {Count} lots", results.Count);
-                bcError = ex.Message;
-            }
-        }
+            (invoiceId, bcError) = await CreateAndPushInvoiceAsync(results, body.BuyerId, buyer);
 
         string? pdfUrl = null;
         if (invoiceId != null)
@@ -433,6 +365,74 @@ public class AuctionResultFunctions
         response.Headers.Add("Content-Type", "application/json");
         await response.WriteStringAsync(JsonSerializer.Serialize(new { soldCount = results.Count, invoiceId, pdfUrl, bcError }, JsonOptions));
         return response;
+    }
+
+    private async Task<(int? InvoiceId, string? BcError)> CreateAndPushInvoiceAsync(List<AuctionResult> results, int buyerId, Buyer buyer)
+    {
+        try
+        {
+            var brokerId = results.First().BrokerId;
+            var auctionFeeParam = await _db.SystemParameters.FirstOrDefaultAsync(p => p.Key == "AuctionFee");
+            var handlingFeeParam = await _db.SystemParameters.FirstOrDefaultAsync(p => p.Key == "HandlingFee");
+            var auctionFeePercent = auctionFeeParam != null ? decimal.Parse(auctionFeeParam.Value, CultureInfo.InvariantCulture) : 0m;
+            var handlingFeePerSkin = handlingFeeParam != null ? decimal.Parse(handlingFeeParam.Value, CultureInfo.InvariantCulture) : 0m;
+
+            var invoice = new Invoice
+            {
+                InvoiceNumber = "",
+                InvoiceDate = DateTime.UtcNow,
+                BrokerId = brokerId,
+                BuyerId = buyerId,
+                Status = InvoiceStatus.Issued
+            };
+
+            decimal subTotal = 0;
+            decimal totalAuctionFee = 0;
+            decimal totalCommission = 0;
+
+            foreach (var r in results)
+            {
+                var hammerPrice = r.TotalSkins * r.PriceEur;
+                var handlingFee = r.TotalSkins * handlingFeePerSkin;
+                var lotAuctionFee = (hammerPrice + handlingFee) * auctionFeePercent / 100m;
+                var description = string.Join(", ", new[] { r.SalesType, r.Gender, r.Group, r.Color, r.Quality, r.Size }.Where(s => !string.IsNullOrEmpty(s)));
+
+                invoice.Lines.Add(new InvoiceLine
+                {
+                    LotNumber = r.LotNumber,
+                    Description = description,
+                    Skins = r.TotalSkins,
+                    PricePerSkin = r.PriceEur,
+                    HammerPrice = hammerPrice,
+                    AuctionResultId = r.Id
+                });
+
+                subTotal += hammerPrice;
+                totalAuctionFee += lotAuctionFee;
+                totalCommission += r.CommissionAmount ?? 0;
+            }
+
+            invoice.SubTotal = subTotal;
+            invoice.AuctionFee = totalAuctionFee;
+            invoice.Commission = totalCommission;
+            invoice.TotalAmount = subTotal + totalAuctionFee + totalCommission;
+            invoice.Buyer = buyer;
+
+            _db.Invoices.Add(invoice);
+            await _db.SaveChangesAsync();
+
+            await _bcSyncService!.PushInvoiceToBcAsync(invoice);
+            invoice.InvoiceNumber = invoice.BcInvoiceNumber ?? "";
+            await _db.SaveChangesAsync();
+
+            _logger.LogInformation("Invoice {Number} created and posted in BC", invoice.InvoiceNumber);
+            return (invoice.Id, null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create BC invoice for {Count} lots", results.Count);
+            return (null, ex.Message);
+        }
     }
 
     [Function("GetAuctionResultsByBuyer")]
