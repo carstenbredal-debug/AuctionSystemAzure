@@ -108,32 +108,49 @@ h3 {
     --bs-table-hover-bg: #8a8a84;
 }
 
+.table {
+    border-collapse: separate;
+    border-spacing: 0;
+    border: 8px solid #FFFFFF;
+    --bs-table-bg: transparent;
+}
+
 .table-dark th {
     font-weight: 700;
     font-size: 0.75rem;
     letter-spacing: 0.5px;
     text-transform: uppercase;
     padding: 0.65rem 1rem;
-    border-bottom: 4px solid #FFFFFF !important;
+    border: none !important;
     color: #FFFFFF;
+    background-color: #95958F !important;
+}
+
+.table > thead {
+    border-bottom: 8px solid #FFFFFF;
 }
 
 .table th, .table td {
     vertical-align: middle;
     padding: 0.6rem 1rem;
-    border-color: #FFFFFF !important;
-    border-width: 2px 4px;
+    border: 2px solid #FFFFFF !important;
 }
 
-.table > tbody > tr {
+.table > tbody > tr > td {
     background-color: #E8E3DD !important;
     --bs-table-bg-type: transparent !important;
     --bs-table-bg-state: transparent !important;
+    --bs-table-bg: transparent !important;
 }
 
 .table-striped > tbody > tr:nth-of-type(odd) > * {
     --bs-table-bg-type: transparent !important;
-    background-color: transparent !important;
+    background-color: #E8E3DD !important;
+}
+
+.table-striped > tbody > tr:nth-of-type(even) > * {
+    --bs-table-bg-type: transparent !important;
+    background-color: #E8E3DD !important;
 }
 
 .table-hover > tbody > tr:hover > * {
@@ -141,12 +158,12 @@ h3 {
 }
 
 /* Credit note row highlight */
-.table .credit-row,
 .table .credit-row > td,
 .table .credit-row > th {
     background-color: #9CC6C8 !important;
     --bs-table-bg-type: transparent !important;
     --bs-table-bg-state: transparent !important;
+    --bs-table-bg: transparent !important;
 }
 
 /* ===== Card Styling (Summary Cards) ===== */
@@ -202,11 +219,12 @@ h3 {
 }
 
 .section-header {
-    background-color: #230A3C;
-    color: #FFFFFF;
+    background-color: #FFFFFF;
+    color: #000000;
     padding: 0.75rem 1.25rem;
     font-weight: 700;
     font-size: 0.95rem;
+    border-bottom: 1px solid #E8E3DD;
 }
 
 .section-body {
