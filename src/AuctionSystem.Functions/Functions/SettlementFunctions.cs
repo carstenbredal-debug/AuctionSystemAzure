@@ -728,6 +728,16 @@ public class SettlementFunctions
         if (string.IsNullOrEmpty(customerNumber))
             throw new InvalidOperationException("Buyer has no customer number for BC lookup");
 
+        // Check if this invoice is already fully paid in BC (remaining = 0 or not open)
+        var invoiceEntries = await _bcClient.GetCustomerLedgerEntriesByCustomerAsync(companyId, customerNumber, "Invoice", false);
+        var bcInvoiceEntry = invoiceEntries.FirstOrDefault(e => e.DocumentNo == invoice.BcInvoiceNumber);
+        if (bcInvoiceEntry != null && !bcInvoiceEntry.Open)
+        {
+            _logger.LogInformation("Invoice {BcNumber} is already closed in BC (remaining={Remaining}), skipping payment application",
+                invoice.BcInvoiceNumber, bcInvoiceEntry.RemainingAmount);
+            return $"Invoice already fully paid in BC (no application needed).";
+        }
+
         // Find open payment entries for this customer
         var payments = await _bcClient.GetCustomerLedgerEntriesByCustomerAsync(companyId, customerNumber, "Payment", true);
         if (payments.Count == 0)

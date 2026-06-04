@@ -187,8 +187,16 @@ else
                                     {
                                         <span class="badge bg-primary me-1">Released to Ship</span>
                                     }
-                                    <button class="btn btn-sm btn-outline-info me-1" @onclick="() => OpenDownpaymentPopup(invId)" disabled="@_updatingId.HasValue">Partial Payment</button>
-                                    <button class="btn btn-sm btn-outline-success" @onclick="() => OpenFullyPaidPopup(invId)" disabled="@_updatingId.HasValue">Fully Paid</button>
+                                    @if (_updatingId == invId)
+                                    {
+                                        <span class="spinner-border spinner-border-sm text-primary me-2" role="status"></span>
+                                        <span class="text-muted">Processing...</span>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-sm btn-outline-info me-1" @onclick="() => OpenDownpaymentPopup(invId)" disabled="@_updatingId.HasValue">Partial Payment</button>
+                                        <button class="btn btn-sm btn-outline-success" @onclick="() => OpenFullyPaidPopup(invId)" disabled="@_updatingId.HasValue">Fully Paid</button>
+                                    }
                                 }
                                 else if (inv.Status == "Paid")
                                 {
@@ -526,6 +534,7 @@ else
         _updatingId = _dpInvoiceId;
         _bcError = null;
         _bcSuccess = null;
+        StateHasChanged();
         var resp = await Api.ProcessDownpaymentAsync(_dpInvoiceId, _dpAmount, _dpAmountType == "percentage", releaseForShipping);
         if (resp.IsSuccessStatusCode)
         {
@@ -630,6 +639,7 @@ else
         _updatingId = _fpInvoiceId;
         _bcError = null;
         _bcSuccess = null;
+        StateHasChanged();
 
         var resp = await Api.UpdateInvoiceStatusAsync(_fpInvoiceId, StatusPaid, releaseForShipping);
         if (resp.IsSuccessStatusCode)
