@@ -121,19 +121,25 @@ h3 {
 .table th, .table td {
     vertical-align: middle;
     padding: 0.6rem 1rem;
+    border-color: #FFFFFF !important;
+}
+
+.table > tbody > tr {
+    background-color: #E8E3DD;
 }
 
 .table-striped > tbody > tr:nth-of-type(odd) > * {
-    --bs-table-bg-type: rgba(0, 0, 0, 0.02);
+    --bs-table-bg-type: transparent;
 }
 
 .table-hover > tbody > tr:hover > * {
-    --bs-table-bg-state: rgba(35, 10, 60, 0.04);
+    --bs-table-bg-state: rgba(35, 10, 60, 0.06);
 }
 
 /* Credit note row highlight */
-.table .credit-row {
-    background-color: rgba(156, 198, 200, 0.3) !important;
+.table .credit-row,
+.table .credit-row > td {
+    background-color: #9CC6C8 !important;
 }
 
 /* ===== Card Styling (Summary Cards) ===== */
