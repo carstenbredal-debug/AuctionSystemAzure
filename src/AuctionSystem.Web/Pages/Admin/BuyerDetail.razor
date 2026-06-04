@@ -47,7 +47,7 @@ else
         </li>
         <li class="nav-item">
             <button class="nav-link @(_activeTab == "takeback" ? "active" : "")" @onclick='() => _activeTab = "takeback"'>
-                Takeback <span class="badge bg-@(_takebackRequests.Count(t => t.Status == CustomerRequestStatus.Pending) > 0 ? "warning" : "secondary") ms-1">@_takebackRequests.Count</span>
+                Re-Invoice <span class="badge bg-@(_takebackRequests.Count(t => t.Status == CustomerRequestStatus.Pending) > 0 ? "warning" : "secondary") ms-1">@_takebackRequests.Count</span>
             </button>
         </li>
         <li class="nav-item">
@@ -682,7 +682,7 @@ else
             var resp = await Api.RespondTakebackAsync(requestId, approve);
             if (resp.IsSuccessStatusCode)
             {
-                _takebackMessage = approve ? "Takeback approved. Lot returned." : "Takeback declined.";
+                _takebackMessage = approve ? "Re-Invoice approved. Lot returned." : "Re-Invoice declined.";
                 _takebackMessageIsError = false;
                 await LoadData();
             }

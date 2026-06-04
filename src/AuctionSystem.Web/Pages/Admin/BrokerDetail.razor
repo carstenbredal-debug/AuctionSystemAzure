@@ -47,17 +47,17 @@ else
         </li>
         <li class="nav-item">
             <button class="nav-link @(_activeTab == "sold" ? "active" : "")" @onclick='() => _activeTab = "sold"'>
-                Sold Lots <span class="badge bg-secondary ms-1">@_soldLots.Count</span>
+                Invoiced Lots <span class="badge bg-secondary ms-1">@_soldLots.Count</span>
             </button>
         </li>
         <li class="nav-item">
             <button class="nav-link @(_activeTab == "unsold" ? "active" : "")" @onclick='() => _activeTab = "unsold"'>
-                Unsold Lots <span class="badge bg-secondary ms-1">@_unsoldLots.Count</span>
+                Un-Invoiced Lots <span class="badge bg-secondary ms-1">@_unsoldLots.Count</span>
             </button>
         </li>
         <li class="nav-item">
             <button class="nav-link @(_activeTab == "takeback" ? "active" : "")" @onclick='() => _activeTab = "takeback"'>
-                Takeback <span class="badge bg-@(_takebackRequests.Count(t => t.Status == CustomerRequestStatus.Pending) > 0 ? "warning" : "secondary") ms-1">@_takebackRequests.Count</span>
+                Re-Invoice <span class="badge bg-@(_takebackRequests.Count(t => t.Status == CustomerRequestStatus.Pending) > 0 ? "warning" : "secondary") ms-1">@_takebackRequests.Count</span>
             </button>
         </li>
     </ul>
@@ -287,13 +287,13 @@ else
             </div>
             <div class="col-md-3">
                 <div class="card text-center"><div class="section-body p-3">
-                    <h5 class="card-title text-muted">Sold</h5>
+                    <h5 class="card-title text-muted">Invoiced</h5>
                     <h2>€@_soldLots.Sum(r => r.TotalSkins * r.PriceEur).ToString("N2")</h2>
                 </div></div>
             </div>
             <div class="col-md-3">
                 <div class="card text-center"><div class="section-body p-3">
-                    <h5 class="card-title text-muted">Unsold</h5>
+                    <h5 class="card-title text-muted">Un-Invoiced</h5>
                     <h2>€@_unsoldLots.Sum(r => r.TotalSkins * r.PriceEur).ToString("N2")</h2>
                 </div></div>
             </div>
@@ -343,10 +343,10 @@ else
         {
             <div class="section-container mb-3">
                 <div class="card-body d-flex align-items-center gap-3">
-                    <strong>Takeback selected lots:</strong>
+                    <strong>Re-Invoice selected lots:</strong>
                     <button class="btn btn-warning" @onclick="RequestTakeback" disabled="@(_requestingTakeback || _selectedSoldIds.Count == 0)">
                         @if (_requestingTakeback) { <span class="spinner-border spinner-border-sm me-1"></span> }
-                        Takeback (@_selectedSoldIds.Count)
+                        Re-Invoice (@_selectedSoldIds.Count)
                     </button>
                 </div>
             </div>
@@ -630,7 +630,7 @@ else
             var resp = await Api.RespondTakebackAsync(requestId, approve);
             if (resp.IsSuccessStatusCode)
             {
-                _brokerTakebackMessage = approve ? "Takeback approved. Lot moved back to unsold." : "Takeback declined.";
+                _brokerTakebackMessage = approve ? "Re-Invoice approved. Lot moved back to un-invoiced." : "Re-Invoice declined.";
                 _brokerTakebackMessageIsError = false;
                 await LoadData();
             }

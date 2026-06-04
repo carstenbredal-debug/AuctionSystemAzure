@@ -61,7 +61,7 @@ else
     {
         <div class="section-container mb-4">
             <div class="section-header">
-            Takeback Requests
+            Re-Invoice Requests
         </div>
             <div class="section-body">
                 @if (!string.IsNullOrEmpty(_takebackMessage))
@@ -339,7 +339,7 @@ else
             var resp = await Api.RespondTakebackAsync(requestId, approve);
             if (resp.IsSuccessStatusCode)
             {
-                _takebackMessage = approve ? "Takeback approved. Lot returned to broker." : "Takeback declined.";
+                _takebackMessage = approve ? "Re-Invoice approved. Lot returned to broker." : "Re-Invoice declined.";
                 _takebackMessageIsError = false;
                 await LoadData();
             }

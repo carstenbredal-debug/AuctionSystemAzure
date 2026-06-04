@@ -20,13 +20,13 @@
         </div>
         <div class="col-md-3">
             <div class="summary-card">
-                <div class="card-title">Sold</div>
+                <div class="card-title">Invoiced</div>
                 <div class="card-value">€@_soldLots.Sum(r => r.TotalSkins * r.PriceEur).ToString("N2")</div>
             </div>
         </div>
         <div class="col-md-3">
             <div class="summary-card">
-                <div class="card-title">Unsold</div>
+                <div class="card-title">Un-Invoiced</div>
                 <div class="card-value">€@_unsoldLots.Sum(r => r.TotalSkins * r.PriceEur).ToString("N2")</div>
             </div>
         </div>
@@ -47,17 +47,17 @@
     </li>
     <li class="nav-item">
         <a class="nav-link @(_activeTab == "sold" ? "active" : "")" href="javascript:void(0)" @onclick='() => _activeTab = "sold"'>
-            Sold Lots <span class="badge bg-secondary">@_soldLots.Count</span>
+            Invoiced Lots <span class="badge bg-secondary">@_soldLots.Count</span>
         </a>
     </li>
     <li class="nav-item">
         <a class="nav-link @(_activeTab == "unsold" ? "active" : "")" href="javascript:void(0)" @onclick='() => _activeTab = "unsold"'>
-            Unsold Lots <span class="badge bg-secondary">@_unsoldLots.Count</span>
+            Un-Invoiced Lots <span class="badge bg-secondary">@_unsoldLots.Count</span>
         </a>
     </li>
     <li class="nav-item">
         <a class="nav-link @(_activeTab == "takeback" ? "active" : "")" href="javascript:void(0)" @onclick='() => _activeTab = "takeback"'>
-            Takeback <span class="badge bg-@(_pendingTakebacks.Count > 0 ? "warning" : "secondary")">@_pendingTakebacks.Count</span>
+            Re-Invoice <span class="badge bg-@(_pendingTakebacks.Count > 0 ? "warning" : "secondary")">@_pendingTakebacks.Count</span>
         </a>
     </li>
 </ul>
@@ -118,11 +118,11 @@ else if (_activeTab == "purchased")
                             <td>
                                 @if (r.SoldToBuyerId != null)
                                 {
-                                    <span class="badge bg-success">Sold</span>
+                                    <span class="badge bg-success">Invoiced</span>
                                 }
                                 else
                                 {
-                                    <span class="badge bg-warning">Unsold</span>
+                                    <span class="badge bg-warning">Un-Invoiced</span>
                                 }
                             </td>
                             <td>
@@ -164,13 +164,13 @@ else if (_activeTab == "sold")
     {
         <div class="section-container mb-3">
             <div class="card-body d-flex align-items-center gap-3">
-                <strong>Takeback selected lots:</strong>
+                <strong>Re-Invoice selected lots:</strong>
                 <button class="btn btn-warning" @onclick="RequestTakeback" disabled="@(_requestingTakeback || _selectedSoldIds.Count == 0)">
                     @if (_requestingTakeback)
                     {
                         <span class="spinner-border spinner-border-sm me-1"></span>
                     }
-                    Takeback (@_selectedSoldIds.Count)
+                    Re-Invoice (@_selectedSoldIds.Count)
                 </button>
             </div>
         </div>
@@ -178,7 +178,7 @@ else if (_activeTab == "sold")
 
     <div class="section-container">
         <div class="section-header">
-            Sold Lots
+            Invoiced Lots
         </div>
         <div class="section-body">
             <table class="table table-striped table-hover mb-0">
@@ -279,7 +279,7 @@ else if (_activeTab == "unsold")
 
     <div class="section-container">
         <div class="section-header">
-            Unsold Lots
+            Un-Invoiced Lots
         </div>
         <div class="section-body">
             <table class="table table-striped table-hover mb-0">
@@ -356,7 +356,7 @@ else if (_activeTab == "takeback")
 
     <div class="section-container">
         <div class="section-header">
-            Takeback Requests
+            Re-Invoice Requests
         </div>
         <div class="section-body">
             <table class="table table-striped table-hover mb-0">
@@ -720,7 +720,7 @@ else if (_activeTab == "takeback")
             var resp = await Api.RespondTakebackAsync(requestId, approve);
             if (resp.IsSuccessStatusCode)
             {
-                _brokerTakebackMessage = approve ? "Return approved. Lot moved back to unsold." : "Return request declined.";
+                _brokerTakebackMessage = approve ? "Return approved. Lot moved back to un-invoiced." : "Return request declined.";
                 _brokerTakebackMessageIsError = false;
                 _allResults = await Api.GetAuctionResultsByBrokerAsync(_brokerId);
                 _pendingTakebacks = await Api.GetTakebackRequestsByBrokerAsync(_brokerId);
