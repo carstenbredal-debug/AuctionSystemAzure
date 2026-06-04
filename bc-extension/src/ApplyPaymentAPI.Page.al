@@ -106,13 +106,11 @@ page 50151 "Apply Payment API"
             PaymentEntry."Amount to Apply" := ApplyingAmount;
         PaymentEntry.Modify(true);
 
-        // Post the application — use the later of payment and invoice posting dates
-        // to avoid "posting date must not be before the Cust. Ledger Entry" error
+        // Post the application — always use today's date to avoid
+        // "posting date must not be before the Cust. Ledger Entry" error
+        // Today is guaranteed to be >= all historical posting dates and within allowed period
         ApplyUnapplyParameters."Document No." := PaymentEntry."Document No.";
-        if InvoiceEntry."Posting Date" > PaymentEntry."Posting Date" then
-            ApplyUnapplyParameters."Posting Date" := InvoiceEntry."Posting Date"
-        else
-            ApplyUnapplyParameters."Posting Date" := PaymentEntry."Posting Date";
+        ApplyUnapplyParameters."Posting Date" := Today;
         CustEntryApplyPostedEntries.Apply(PaymentEntry, ApplyUnapplyParameters);
 
         Rec.ResultStatus := 'Success';
