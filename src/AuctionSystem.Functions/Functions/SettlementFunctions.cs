@@ -312,10 +312,13 @@ public class SettlementFunctions
             if (creditMemoEntry == null)
                 return new { creditNote = cn.BcInvoiceNumber, status = "Skipped", reason = "Credit memo entry not found in BC (may already be applied)" };
 
-            // Use the later of today or the entry's posting date to avoid BC posting date error
+            // Use the latest of today, credit memo date, and original invoice date to avoid BC posting date error
             var today = DateTime.UtcNow.Date;
-            var entryDate = DateTime.TryParse(creditMemoEntry.PostingDate, out var parsed) ? parsed.Date : today;
-            var postingDate = (entryDate > today ? entryDate : today).ToString("yyyy-MM-dd");
+            var creditDate = DateTime.TryParse(creditMemoEntry.PostingDate, out var cp) ? cp.Date : today;
+            var origInvEntries = await _bcClient!.GetCustomerLedgerEntriesByCustomerAsync(companyId, buyerNo, "Invoice", false);
+            var origInvEntry = origInvEntries.FirstOrDefault(e => e.DocumentNo == originalInvoice.BcInvoiceNumber);
+            var origInvDate = origInvEntry != null && DateTime.TryParse(origInvEntry.PostingDate, out var oip) ? oip.Date : today;
+            var postingDate = new[] { today, creditDate, origInvDate }.Max().ToString("yyyy-MM-dd");
 
             var result = await _bcClient.ApplyCreditMemoToInvoiceAsync(
                 companyId, buyerNo, creditMemoEntry.EntryNo, originalInvoice.BcInvoiceNumber!, 0, postingDate);
@@ -748,10 +751,11 @@ public class SettlementFunctions
         // Use the first open payment entry
         var paymentEntry = payments.First();
 
-        // Use the later of today or the payment entry's posting date to avoid BC posting date error
+        // Use the latest of today, payment entry date, and invoice entry date to avoid BC posting date error
         var today = DateTime.UtcNow.Date;
-        var entryDate = DateTime.TryParse(paymentEntry.PostingDate, out var parsed) ? parsed.Date : today;
-        var postingDate = (entryDate > today ? entryDate : today).ToString("yyyy-MM-dd");
+        var paymentDate = DateTime.TryParse(paymentEntry.PostingDate, out var pp) ? pp.Date : today;
+        var invoiceDate = bcInvoiceEntry != null && DateTime.TryParse(bcInvoiceEntry.PostingDate, out var ip) ? ip.Date : today;
+        var postingDate = new[] { today, paymentDate, invoiceDate }.Max().ToString("yyyy-MM-dd");
 
         // Apply the payment to the invoice via the custom API
         var amountToApply = partialAmount ?? 0; // 0 means full invoice amount (handled by AL)
