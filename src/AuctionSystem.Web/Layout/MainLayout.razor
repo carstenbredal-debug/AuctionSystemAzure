@@ -7,7 +7,22 @@
 
     <main>
         <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
+            <AuthorizeView>
+                <Authorized>
+                    <div class="user-menu">
+                        <div class="user-avatar" @onclick="ToggleUserMenu">
+                            <span class="avatar-icon">👤</span>
+                        </div>
+                        @if (_showUserMenu)
+                        {
+                            <div class="user-dropdown">
+                                <span class="dropdown-user-name">@context.User.Identity?.Name</span>
+                                <a href="/.auth/logout?post_logout_redirect_uri=/" class="dropdown-item">Logout</a>
+                            </div>
+                        }
+                    </div>
+                </Authorized>
+            </AuthorizeView>
         </div>
 
         <article class="content px-4">
@@ -21,3 +36,12 @@
     <a href="" class="reload">Reload</a>
     <a class="dismiss">🗙</a>
 </div>
+
+@code {
+    private bool _showUserMenu;
+
+    private void ToggleUserMenu()
+    {
+        _showUserMenu = !_showUserMenu;
+    }
+}
