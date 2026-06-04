@@ -763,6 +763,107 @@ public class SettlementFunctions
         return result.ResultMessage;
     }
 
+    [Function("DiagnosePaymentApplication")]
+    public async Task<HttpResponseData> DiagnosePaymentApplication(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements/diagnose-payment/{customerNo}/{invoiceDocNo}")] HttpRequestData req,
+        string customerNo, string invoiceDocNo)
+    {
+        if (_bcClient == null)
+            return await CreateJsonResponse(req, new { error = "BC not configured" });
+
+        try
+        {
+            var companyId = await _bcClient.ResolveCompanyIdAsync();
+
+            // Step 1: Find all open payment entries for this customer
+            var payments = await _bcClient.GetCustomerLedgerEntriesByCustomerAsync(companyId, customerNo, "Payment", true);
+
+            // Step 2: Find all invoice entries (open and closed) for this customer
+            var allInvoices = await _bcClient.GetCustomerLedgerEntriesByCustomerAsync(companyId, customerNo, "Invoice", false);
+            var targetInvoice = allInvoices.FirstOrDefault(e => e.DocumentNo == invoiceDocNo);
+
+            // Step 3: Prepare diagnostic info
+            var diag = new
+            {
+                customer = customerNo,
+                invoiceDocNo,
+                invoiceFound = targetInvoice != null,
+                invoiceOpen = targetInvoice?.Open,
+                invoicePostingDate = targetInvoice?.PostingDate,
+                invoiceOriginalAmount = targetInvoice?.OriginalAmount,
+                invoiceRemainingAmount = targetInvoice?.RemainingAmount,
+                invoiceEntryNo = targetInvoice?.EntryNo,
+                openPayments = payments.Select(p => new
+                {
+                    p.EntryNo,
+                    p.DocumentNo,
+                    p.PostingDate,
+                    p.OriginalAmount,
+                    p.RemainingAmount,
+                    p.Open
+                }).ToList(),
+                openPaymentCount = payments.Count,
+                totalAvailablePayment = payments.Sum(p => Math.Abs(p.RemainingAmount)),
+                selectedPaymentEntryNo = payments.FirstOrDefault()?.EntryNo,
+                amountToApplyWouldBe = 0, // 0 = full invoice amount in AL
+                note = "To test the actual BC application, POST to this same URL"
+            };
+
+            return await CreateJsonResponse(req, diag);
+        }
+        catch (Exception ex)
+        {
+            return await CreateJsonResponse(req, new { error = ex.Message, stack = ex.StackTrace });
+        }
+    }
+
+    [Function("TestPaymentApplication")]
+    public async Task<HttpResponseData> TestPaymentApplication(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "settlements/diagnose-payment/{customerNo}/{invoiceDocNo}")] HttpRequestData req,
+        string customerNo, string invoiceDocNo)
+    {
+        if (_bcClient == null)
+            return await CreateJsonResponse(req, new { error = "BC not configured" });
+
+        try
+        {
+            var companyId = await _bcClient.ResolveCompanyIdAsync();
+
+            // Find open payments
+            var payments = await _bcClient.GetCustomerLedgerEntriesByCustomerAsync(companyId, customerNo, "Payment", true);
+            if (payments.Count == 0)
+                return await CreateJsonResponse(req, new { error = $"No open payment entries for customer {customerNo}" });
+
+            var paymentEntry = payments.First();
+
+            // Try the actual application
+            var result = await _bcClient.ApplyPaymentToInvoiceAsync(
+                companyId, customerNo, paymentEntry.EntryNo, invoiceDocNo, 0);
+
+            return await CreateJsonResponse(req, new
+            {
+                success = result.ResultStatus != "Error",
+                resultStatus = result.ResultStatus,
+                resultMessage = result.ResultMessage,
+                amountApplied = result.AmountToApply,
+                paymentEntryUsed = paymentEntry.EntryNo,
+                paymentDocNo = paymentEntry.DocumentNo,
+                paymentPostingDate = paymentEntry.PostingDate,
+                paymentRemaining = paymentEntry.RemainingAmount
+            });
+        }
+        catch (Exception ex)
+        {
+            return await CreateJsonResponse(req, new
+            {
+                success = false,
+                error = ex.Message,
+                errorType = ex.GetType().Name,
+                innerError = ex.InnerException?.Message
+            });
+        }
+    }
+
     private static async Task<HttpResponseData> CreateJsonResponse<T>(
         HttpRequestData req, T data, System.Net.HttpStatusCode status = System.Net.HttpStatusCode.OK)
     {
