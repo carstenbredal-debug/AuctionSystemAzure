@@ -672,6 +672,7 @@ public class PaymentHistoryDto
     public string? CustomerName { get; set; }
     public decimal InvoiceTotal { get; set; }
     public decimal? BcOriginalAmount { get; set; }
+    public decimal BcAmountApplied { get; set; }
     public decimal? BcRemainingAmount { get; set; }
     public bool? BcOpen { get; set; }
     public string? Message { get; set; }
