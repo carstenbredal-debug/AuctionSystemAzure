@@ -145,7 +145,9 @@ else
                                 }
                             </td>
                             <td>
-                                <strong>@inv.InvoiceNumber</strong>
+                                <a href="#" @onclick="() => OpenPaymentHistory(inv.Id)" @onclick:preventDefault style="text-decoration: underline; cursor: pointer;">
+                                    <strong>@inv.InvoiceNumber</strong>
+                                </a>
                                 @if (!string.IsNullOrEmpty(inv.OriginalInvoiceNumber))
                                 {
                                     <br /><small class="text-muted">Ref: @inv.OriginalInvoiceNumber</small>
@@ -354,6 +356,92 @@ else
     </div>
 }
 
+@if (_showPaymentHistory && _paymentHistory != null)
+{
+    <div class="modal d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Payment History — @_paymentHistory.InvoiceNumber</h5>
+                    <button type="button" class="btn-close" @onclick="() => _showPaymentHistory = false"></button>
+                </div>
+                <div class="modal-body">
+                    @if (!string.IsNullOrEmpty(_paymentHistory.Message))
+                    {
+                        <div class="alert alert-warning">@_paymentHistory.Message</div>
+                    }
+                    else
+                    {
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <small class="text-muted">BC Invoice No.</small><br />
+                                <strong>@_paymentHistory.BcInvoiceNumber</strong>
+                            </div>
+                            <div class="col-md-3">
+                                <small class="text-muted">Customer</small><br />
+                                <strong>@_paymentHistory.CustomerNo</strong> — @_paymentHistory.CustomerName
+                            </div>
+                            <div class="col-md-3">
+                                <small class="text-muted">Remaining</small><br />
+                                <strong class="@(_paymentHistory.BcRemainingAmount > 0 ? "text-danger" : "text-success")">
+                                    €@((_paymentHistory.BcRemainingAmount ?? 0).ToString("N2"))
+                                </strong>
+                                @if (_paymentHistory.BcOpen == false)
+                                {
+                                    <span class="badge bg-success ms-1">Closed</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-warning ms-1">Open</span>
+                                }
+                            </div>
+                        </div>
+                        <table class="table table-sm table-striped">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Type</th>
+                                    <th>Document No.</th>
+                                    <th>Posting Date</th>
+                                    <th>Original Amount</th>
+                                    <th>Remaining</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var entry in _paymentHistory.Entries)
+                                {
+                                    <tr class="@(entry.Type == "Payment" ? "" : entry.Type == "Credit Memo" ? "credit-row" : "")">
+                                        <td>
+                                            <span class="badge @(entry.Type == "Invoice" ? "bg-primary" : entry.Type == "Payment" ? "bg-success" : "bg-warning text-dark")">@entry.Type</span>
+                                        </td>
+                                        <td>@entry.DocumentNo</td>
+                                        <td>@entry.PostingDate</td>
+                                        <td>€@entry.OriginalAmount.ToString("N2")</td>
+                                        <td>€@entry.RemainingAmount.ToString("N2")</td>
+                                        <td>
+                                            @if (entry.Open)
+                                            {
+                                                <span class="badge bg-warning">Open</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-success">Closed</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => _showPaymentHistory = false">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @if (_showInsufficientBalancePopup)
 {
     <div class="modal d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
@@ -393,7 +481,7 @@ else
     private string _selectedStatus = "";
     private List<string> _brokerNames = new();
     private List<string> _buyerNames = new();
-    private List<string> _statusOptions = new() { "Issued", "Partial Payment", "Paid", "Released to Ship", "Partially Credited", "Fully Credited", "Alloted" };
+    private List<string> _statusOptions = new() { "Issued", "Partially Paid", "Paid", "Released to Ship", "Partially Credited", "Fully Credited", "Alloted" };
     private int? _updatingId;
     private int? _expandedInvoiceId;
 
@@ -413,6 +501,11 @@ else
     private decimal _bcAvailableAmount;
     private decimal _bcInvoiceAmount;
     private string _balanceContext = ""; // "fullypaid" or "downpayment"
+
+    // Payment history popup
+    private bool _showPaymentHistory;
+    private PaymentHistoryDto? _paymentHistory;
+    private bool _loadingHistory;
 
     // BC feedback
     private string? _bcError;
@@ -437,6 +530,18 @@ else
             result = result.Where(i => i.IsCreditNote);
 
         return result.ToList();
+    }
+
+    private async Task OpenPaymentHistory(int invoiceId)
+    {
+        _loadingHistory = true;
+        _showPaymentHistory = true;
+        _paymentHistory = null;
+        StateHasChanged();
+
+        _paymentHistory = await Api.GetInvoicePaymentHistoryAsync(invoiceId);
+        _loadingHistory = false;
+        StateHasChanged();
     }
 
     protected override async Task OnInitializedAsync()

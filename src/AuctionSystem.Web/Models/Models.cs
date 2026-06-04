@@ -664,6 +664,30 @@ public class BcInvoiceRemainingDto
     public string? Reason { get; set; }
 }
 
+public class PaymentHistoryDto
+{
+    public string InvoiceNumber { get; set; } = "";
+    public string? BcInvoiceNumber { get; set; }
+    public string? CustomerNo { get; set; }
+    public string? CustomerName { get; set; }
+    public decimal InvoiceTotal { get; set; }
+    public decimal? BcRemainingAmount { get; set; }
+    public bool? BcOpen { get; set; }
+    public string? Message { get; set; }
+    public List<PaymentHistoryEntryDto> Entries { get; set; } = new();
+}
+
+public class PaymentHistoryEntryDto
+{
+    public string Type { get; set; } = "";
+    public string DocumentNo { get; set; } = "";
+    public string PostingDate { get; set; } = "";
+    public decimal OriginalAmount { get; set; }
+    public decimal RemainingAmount { get; set; }
+    public bool Open { get; set; }
+    public string? Description { get; set; }
+}
+
 public class BcPaymentConsistencyDto
 {
     public string Message { get; set; } = "";

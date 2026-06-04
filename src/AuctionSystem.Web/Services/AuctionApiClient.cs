@@ -162,6 +162,17 @@ public class AuctionApiClient
         catch { return null; }
     }
 
+    public async Task<PaymentHistoryDto?> GetInvoicePaymentHistoryAsync(int invoiceId)
+    {
+        try
+        {
+            var resp = await _http.GetAsync($"api/settlements/invoices/{invoiceId}/payment-history");
+            if (!resp.IsSuccessStatusCode) return null;
+            return await resp.Content.ReadFromJsonAsync<PaymentHistoryDto>();
+        }
+        catch { return null; }
+    }
+
     public async Task<HttpResponseMessage> ProcessDownpaymentAsync(int invoiceId, decimal amount, bool isPercentage, bool releaseForShipping)
         => await _http.PostAsJsonAsync($"api/settlements/invoices/{invoiceId}/downpayment", new { amount, isPercentage, releaseForShipping });
 

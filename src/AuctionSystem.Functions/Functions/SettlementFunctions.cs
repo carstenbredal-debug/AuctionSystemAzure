@@ -647,6 +647,121 @@ public class SettlementFunctions
         return await CreateJsonResponse(req, result);
     }
 
+    [Function("GetInvoicePaymentHistory")]
+    public async Task<HttpResponseData> GetInvoicePaymentHistory(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements/invoices/{invoiceId:int}/payment-history")] HttpRequestData req, int invoiceId)
+    {
+        var invoice = await _db.Invoices.Include(i => i.Buyer).FirstOrDefaultAsync(i => i.Id == invoiceId);
+        if (invoice == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        if (_bcClient == null || string.IsNullOrEmpty(invoice.BcInvoiceNumber))
+        {
+            return await CreateJsonResponse(req, new
+            {
+                invoiceNumber = invoice.InvoiceNumber,
+                bcInvoiceNumber = invoice.BcInvoiceNumber,
+                entries = Array.Empty<object>(),
+                message = "BC not configured or invoice not pushed to BC"
+            });
+        }
+
+        var customerNo = invoice.Buyer?.BuyerNumber ?? "";
+        if (string.IsNullOrEmpty(customerNo))
+        {
+            return await CreateJsonResponse(req, new
+            {
+                invoiceNumber = invoice.InvoiceNumber,
+                bcInvoiceNumber = invoice.BcInvoiceNumber,
+                entries = Array.Empty<object>(),
+                message = "Buyer has no customer number"
+            });
+        }
+
+        try
+        {
+            var companyId = await _bcClient.ResolveCompanyIdAsync();
+
+            // Get all ledger entries for this customer (all types, open and closed)
+            var allEntries = await _bcClient.GetCustomerLedgerEntriesByCustomerAsync(companyId, customerNo, "Invoice", false);
+            var invoiceEntry = allEntries.FirstOrDefault(e => e.DocumentNo == invoice.BcInvoiceNumber);
+
+            // Get payment entries for this customer
+            var payments = await _bcClient.GetCustomerLedgerEntriesByCustomerAsync(companyId, customerNo, "Payment", false);
+            // Get credit memo entries
+            var creditMemos = await _bcClient.GetCustomerLedgerEntriesByCustomerAsync(companyId, customerNo, "Credit Memo", false);
+
+            // Combine all related entries
+            var history = new List<object>();
+
+            // Add the invoice entry itself
+            if (invoiceEntry != null)
+            {
+                history.Add(new
+                {
+                    type = "Invoice",
+                    documentNo = invoiceEntry.DocumentNo,
+                    postingDate = invoiceEntry.PostingDate,
+                    originalAmount = invoiceEntry.OriginalAmount,
+                    remainingAmount = invoiceEntry.RemainingAmount,
+                    open = invoiceEntry.Open,
+                    description = invoiceEntry.Description
+                });
+            }
+
+            // Add payments that reference this invoice (by closedByEntryNo or by checking applied entries)
+            foreach (var p in payments)
+            {
+                history.Add(new
+                {
+                    type = "Payment",
+                    documentNo = p.DocumentNo,
+                    postingDate = p.PostingDate,
+                    originalAmount = p.OriginalAmount,
+                    remainingAmount = p.RemainingAmount,
+                    open = p.Open,
+                    description = p.Description
+                });
+            }
+
+            // Add credit memos
+            foreach (var cm in creditMemos)
+            {
+                history.Add(new
+                {
+                    type = "Credit Memo",
+                    documentNo = cm.DocumentNo,
+                    postingDate = cm.PostingDate,
+                    originalAmount = cm.OriginalAmount,
+                    remainingAmount = cm.RemainingAmount,
+                    open = cm.Open,
+                    description = cm.Description
+                });
+            }
+
+            return await CreateJsonResponse(req, new
+            {
+                invoiceNumber = invoice.InvoiceNumber,
+                bcInvoiceNumber = invoice.BcInvoiceNumber,
+                customerNo,
+                customerName = invoice.Buyer?.Name ?? "",
+                invoiceTotal = invoice.TotalAmount,
+                bcRemainingAmount = invoiceEntry?.RemainingAmount,
+                bcOpen = invoiceEntry?.Open,
+                entries = history
+            });
+        }
+        catch (Exception ex)
+        {
+            return await CreateJsonResponse(req, new
+            {
+                invoiceNumber = invoice.InvoiceNumber,
+                bcInvoiceNumber = invoice.BcInvoiceNumber,
+                entries = Array.Empty<object>(),
+                message = $"Failed to fetch BC data: {ex.Message}"
+            });
+        }
+    }
+
     [Function("GetInvoicesByBrokerAndBuyer")]
     public async Task<HttpResponseData> GetInvoicesByBrokerAndBuyer(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements/invoices/broker/{brokerId:int}/buyer/{buyerId:int}")] HttpRequestData req, int brokerId, int buyerId)
