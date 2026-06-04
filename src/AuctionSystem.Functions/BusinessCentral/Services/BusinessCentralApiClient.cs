@@ -429,7 +429,7 @@ public class BusinessCentralApiClient
         return await GetListAsync<BcCustomerLedgerEntry>(url);
     }
 
-    public async Task<BcPaymentApplication> ApplyPaymentToInvoiceAsync(Guid companyId, string customerNo, int paymentEntryNo, string invoiceDocumentNo, decimal amountToApply = 0, string? postingDate = null)
+    public async Task<BcPaymentApplication> ApplyPaymentToInvoiceAsync(Guid companyId, string customerNo, int paymentEntryNo, string invoiceDocumentNo, decimal amountToApply = 0)
     {
         var url = $"{_options.CustomApiBaseUrl}/companies({companyId})/paymentApplications";
         var payload = new BcPaymentApplication
@@ -437,13 +437,12 @@ public class BusinessCentralApiClient
             CustomerNo = customerNo,
             PaymentEntryNo = paymentEntryNo,
             InvoiceDocumentNo = invoiceDocumentNo,
-            AmountToApply = amountToApply,
-            PostingDate = postingDate
+            AmountToApply = amountToApply
         };
         return await PostAsync(url, payload);
     }
 
-    public async Task<BcPaymentApplication> ApplyCreditMemoToInvoiceAsync(Guid companyId, string customerNo, int creditMemoEntryNo, string invoiceDocumentNo, decimal amountToApply = 0, string? postingDate = null)
+    public async Task<BcPaymentApplication> ApplyCreditMemoToInvoiceAsync(Guid companyId, string customerNo, int creditMemoEntryNo, string invoiceDocumentNo, decimal amountToApply = 0)
     {
         var url = $"{_options.CustomApiBaseUrl}/companies({companyId})/paymentApplications";
         var payload = new BcPaymentApplication
@@ -452,8 +451,7 @@ public class BusinessCentralApiClient
             PaymentEntryNo = creditMemoEntryNo,
             InvoiceDocumentNo = invoiceDocumentNo,
             AmountToApply = amountToApply,
-            SourceDocumentType = "CreditMemo",
-            PostingDate = postingDate
+            SourceDocumentType = "CreditMemo"
         };
         return await PostAsync(url, payload);
     }
