@@ -857,30 +857,42 @@ else
 
     private async Task<bool> CreateLinkedEntityForNewUser()
     {
-        switch (_editingUser!.Role)
+        return _editingUser!.Role switch
         {
-            case "Broker":
-                if (string.IsNullOrWhiteSpace(_brokerForm.CompanyName) || string.IsNullOrWhiteSpace(_brokerForm.BrokerNumber))
-                { SetError("Broker Name and Broker Number are required."); return false; }
-                var broker = await Api.CreateBrokerAsync(_brokerForm);
-                if (broker == null) { SetError("Failed to create broker."); return false; }
-                _editingUser.BrokerId = broker.Id;
-                break;
-            case "Farmer":
-                if (string.IsNullOrWhiteSpace(_farmerForm.FarmerNumber) || string.IsNullOrWhiteSpace(_farmerForm.Name))
-                { SetError("Farmer Number and Name are required."); return false; }
-                var farmer = await Api.CreateFarmerAsync(_farmerForm);
-                if (farmer == null) { SetError("Failed to create farmer."); return false; }
-                _editingUser.FarmerId = farmer.Id;
-                break;
-            case "Buyer":
-                if (string.IsNullOrWhiteSpace(_buyerForm.BuyerNumber) || string.IsNullOrWhiteSpace(_buyerForm.Name))
-                { SetError("Buyer Number and Name are required."); return false; }
-                var buyer = await Api.CreateBuyerAsync(0, _buyerForm);
-                if (buyer == null) { SetError("Failed to create buyer."); return false; }
-                _editingUser.BuyerId = buyer.Id;
-                break;
-        }
+            "Broker" => await CreateLinkedBrokerAsync(),
+            "Farmer" => await CreateLinkedFarmerAsync(),
+            "Buyer" => await CreateLinkedBuyerAsync(),
+            _ => true
+        };
+    }
+
+    private async Task<bool> CreateLinkedBrokerAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_brokerForm.CompanyName) || string.IsNullOrWhiteSpace(_brokerForm.BrokerNumber))
+        { SetError("Broker Name and Broker Number are required."); return false; }
+        var broker = await Api.CreateBrokerAsync(_brokerForm);
+        if (broker == null) { SetError("Failed to create broker."); return false; }
+        _editingUser!.BrokerId = broker.Id;
+        return true;
+    }
+
+    private async Task<bool> CreateLinkedFarmerAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_farmerForm.FarmerNumber) || string.IsNullOrWhiteSpace(_farmerForm.Name))
+        { SetError("Farmer Number and Name are required."); return false; }
+        var farmer = await Api.CreateFarmerAsync(_farmerForm);
+        if (farmer == null) { SetError("Failed to create farmer."); return false; }
+        _editingUser!.FarmerId = farmer.Id;
+        return true;
+    }
+
+    private async Task<bool> CreateLinkedBuyerAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_buyerForm.BuyerNumber) || string.IsNullOrWhiteSpace(_buyerForm.Name))
+        { SetError("Buyer Number and Name are required."); return false; }
+        var buyer = await Api.CreateBuyerAsync(0, _buyerForm);
+        if (buyer == null) { SetError("Failed to create buyer."); return false; }
+        _editingUser!.BuyerId = buyer.Id;
         return true;
     }
 

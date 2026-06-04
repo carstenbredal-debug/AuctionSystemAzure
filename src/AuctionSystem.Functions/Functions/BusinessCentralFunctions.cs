@@ -493,48 +493,8 @@ public class BusinessCentralFunctions
     public async Task<HttpResponseData> GetConnections(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "diag/connections")] HttpRequestData req)
     {
-        var bcConnected = false;
-        var bcCompanyName = "";
-        var bcError = "";
-        if (_options.IsConfigured && _bcClient is not null)
-        {
-            try
-            {
-                var companies = await _bcClient.GetCompaniesAsync();
-                bcConnected = companies.Count > 0;
-                var target = companies.FirstOrDefault(c => c.Id.ToString() == _options.CompanyId);
-                bcCompanyName = target?.DisplayName ?? companies.FirstOrDefault()?.DisplayName ?? "";
-            }
-            catch (Exception ex)
-            {
-                bcError = ex.Message;
-            }
-        }
-
-        var sqlConnected = false;
-        var sqlServer = "";
-        var sqlDatabase = "";
-        var sqlError = "";
-        try
-        {
-            var conn = _db.Database.GetConnectionString() ?? "";
-            sqlConnected = await _db.Database.CanConnectAsync();
-            var parts = conn.Split(';', StringSplitOptions.RemoveEmptyEntries);
-            foreach (var part in parts)
-            {
-                var kv = part.Split('=', 2);
-                if (kv.Length == 2)
-                {
-                    var key = kv[0].Trim().ToLowerInvariant();
-                    if (key is "server" or "data source") sqlServer = kv[1].Trim();
-                    if (key is "database" or "initial catalog") sqlDatabase = kv[1].Trim();
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            sqlError = ex.Message;
-        }
+        var (bcConnected, bcCompanyName, bcError) = await CheckBcConnectionAsync();
+        var (sqlConnected, sqlServer, sqlDatabase, sqlError) = await CheckSqlConnectionAsync();
 
         return await JsonResponse(req, new
         {
@@ -551,19 +511,57 @@ public class BusinessCentralFunctions
             },
             azure = new
             {
-                sql = new
-                {
-                    connected = sqlConnected,
-                    server = sqlServer,
-                    database = sqlDatabase,
-                    error = sqlError
-                },
-                blobStorage = new
-                {
-                    configured = _blobStorage is not null
-                }
+                sql = new { connected = sqlConnected, server = sqlServer, database = sqlDatabase, error = sqlError },
+                blobStorage = new { configured = _blobStorage is not null }
             }
         });
+    }
+
+    private async Task<(bool Connected, string CompanyName, string Error)> CheckBcConnectionAsync()
+    {
+        if (!_options.IsConfigured || _bcClient is null)
+            return (false, "", "");
+
+        try
+        {
+            var companies = await _bcClient.GetCompaniesAsync();
+            var target = companies.FirstOrDefault(c => c.Id.ToString() == _options.CompanyId);
+            return (companies.Count > 0, target?.DisplayName ?? companies.FirstOrDefault()?.DisplayName ?? "", "");
+        }
+        catch (Exception ex)
+        {
+            return (false, "", ex.Message);
+        }
+    }
+
+    private async Task<(bool Connected, string Server, string Database, string Error)> CheckSqlConnectionAsync()
+    {
+        try
+        {
+            var conn = _db.Database.GetConnectionString() ?? "";
+            var connected = await _db.Database.CanConnectAsync();
+            var (server, database) = ParseSqlConnectionString(conn);
+            return (connected, server, database, "");
+        }
+        catch (Exception ex)
+        {
+            return (false, "", "", ex.Message);
+        }
+    }
+
+    private static (string Server, string Database) ParseSqlConnectionString(string conn)
+    {
+        var server = "";
+        var database = "";
+        foreach (var part in conn.Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var kv = part.Split('=', 2);
+            if (kv.Length != 2) continue;
+            var key = kv[0].Trim().ToLowerInvariant();
+            if (key is "server" or "data source") server = kv[1].Trim();
+            if (key is "database" or "initial catalog") database = kv[1].Trim();
+        }
+        return (server, database);
     }
 
     [Function("BcCheckPayments")]

@@ -619,44 +619,47 @@ else
         if (string.IsNullOrWhiteSpace(_newSortColumnName) || string.IsNullOrWhiteSpace(_newSortValue)) return;
 
         if (_editingSortOrder != null)
-        {
-            var dto = new LotSortOrderDto
-            {
-                ColumnName = _newSortColumnName.Trim(),
-                Value = _newSortValue.Trim(),
-                SortOrder = _newSortOrder
-            };
-            var (data, error) = await Api.UpdateLotSortOrderAsync(dto, _editingSortOrder.ColumnName, _editingSortOrder.Value);
-            _message = data != null ? "Sort order updated." : $"Failed to update sort order: {error}";
-            _messageIsError = data == null;
-        }
+            await UpdateExistingSortOrderAsync();
         else
-        {
-            var groupItems = _sortOrders.Where(s => s.ColumnName == _newSortColumnName.Trim()).ToList();
-            if (_newSortOrder == 0)
-                _newSortOrder = groupItems.Count > 0 ? groupItems.Max(s => s.SortOrder) + 1 : 1;
-
-            var (data, error) = await Api.CreateLotSortOrderAsync(new LotSortOrderDto
-            {
-                ColumnName = _newSortColumnName.Trim(),
-                Value = _newSortValue.Trim(),
-                SortOrder = _newSortOrder
-            });
-
-            if (data != null)
-            {
-                _message = $"Value '{_newSortValue}' added to '{_newSortColumnName}'.";
-                _messageIsError = false;
-            }
-            else
-            {
-                _message = $"Failed to add: {error}";
-                _messageIsError = true;
-            }
-        }
+            await CreateNewSortOrderAsync();
 
         _showSortForm = false;
         _editingSortOrder = null;
+        await RefreshSortOrdersAsync();
+    }
+
+    private async Task UpdateExistingSortOrderAsync()
+    {
+        var dto = new LotSortOrderDto
+        {
+            ColumnName = _newSortColumnName.Trim(),
+            Value = _newSortValue.Trim(),
+            SortOrder = _newSortOrder
+        };
+        var (data, error) = await Api.UpdateLotSortOrderAsync(dto, _editingSortOrder!.ColumnName, _editingSortOrder.Value);
+        _message = data != null ? "Sort order updated." : $"Failed to update sort order: {error}";
+        _messageIsError = data == null;
+    }
+
+    private async Task CreateNewSortOrderAsync()
+    {
+        var groupItems = _sortOrders.Where(s => s.ColumnName == _newSortColumnName.Trim()).ToList();
+        if (_newSortOrder == 0)
+            _newSortOrder = groupItems.Count > 0 ? groupItems.Max(s => s.SortOrder) + 1 : 1;
+
+        var (data, error) = await Api.CreateLotSortOrderAsync(new LotSortOrderDto
+        {
+            ColumnName = _newSortColumnName.Trim(),
+            Value = _newSortValue.Trim(),
+            SortOrder = _newSortOrder
+        });
+
+        _message = data != null ? $"Value '{_newSortValue}' added to '{_newSortColumnName}'." : $"Failed to add: {error}";
+        _messageIsError = data == null;
+    }
+
+    private async Task RefreshSortOrdersAsync()
+    {
         _sortOrders = await Api.GetLotSortOrdersAsync();
         _sortGroups = _sortOrders.Select(s => s.ColumnName).Distinct().OrderBy(s => s).ToList();
         if (_activeSortGroup == null || !_sortGroups.Contains(_activeSortGroup))
@@ -668,10 +671,7 @@ else
         var (success, error) = await Api.DeleteLotSortOrderAsync(item);
         _message = success ? $"Value '{item.Value}' removed from '{item.ColumnName}'." : $"Failed to delete: {error}";
         _messageIsError = !success;
-        _sortOrders = await Api.GetLotSortOrdersAsync();
-        _sortGroups = _sortOrders.Select(s => s.ColumnName).Distinct().OrderBy(s => s).ToList();
-        if (_activeSortGroup == null || !_sortGroups.Contains(_activeSortGroup))
-            _activeSortGroup = _sortGroups.FirstOrDefault();
+        await RefreshSortOrdersAsync();
     }
 
     // ── Catalog Number Rules ──

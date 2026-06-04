@@ -39,53 +39,57 @@ public static class InvoicePdfService
         {
             col.Item().Row(row =>
             {
-                row.RelativeItem(6).Column(left =>
-                {
-                    left.Item().Text("Kopenhagen Fur").Bold().FontSize(14);
-                    left.Item().Height(10);
-
-                    left.Item().Text(invoice.Buyer?.Name ?? "").Bold().FontSize(10);
-                    if (!string.IsNullOrEmpty(invoice.Buyer?.Name2))
-                        left.Item().Text(invoice.Buyer.Name2);
-                    if (!string.IsNullOrEmpty(invoice.Buyer?.AddressLine1))
-                        left.Item().Text(invoice.Buyer.AddressLine1);
-                    if (!string.IsNullOrEmpty(invoice.Buyer?.AddressLine2))
-                        left.Item().Text(invoice.Buyer.AddressLine2);
-                    var cityLine = string.Join(" ", new[] { invoice.Buyer?.PostalCode, invoice.Buyer?.City }.Where(s => !string.IsNullOrEmpty(s)));
-                    if (!string.IsNullOrEmpty(cityLine))
-                        left.Item().Text(cityLine);
-                    if (!string.IsNullOrEmpty(invoice.Buyer?.Country))
-                        left.Item().Text(invoice.Buyer.Country);
-                });
-
-                row.RelativeItem(4).Column(right =>
-                {
-                    var title = invoice.IsCreditNote ? "CREDIT NOTE" : "INVOICE";
-                    right.Item().AlignRight().Text(title).Bold().FontSize(14);
-                    right.Item().Height(10);
-
-                    void InfoRow(ColumnDescriptor c, string label, string value)
-                    {
-                        c.Item().Row(r =>
-                        {
-                            r.RelativeItem().Text(label).FontSize(8);
-                            r.ConstantItem(100).AlignRight().Text(value).FontSize(8);
-                        });
-                    }
-
-                    var numberLabel = invoice.IsCreditNote ? "Credit note no. . :" : "Invoice number. . . :";
-                    InfoRow(right, numberLabel, invoice.InvoiceNumber);
-                    InfoRow(right, "Date . . . . . . . . . . :", invoice.InvoiceDate.ToString("yy-MM-dd"));
-                    InfoRow(right, "Buyer no . . . . . . :", invoice.Buyer?.BuyerNumber ?? "");
-                    InfoRow(right, "VAT no. . . . . . . . :", invoice.Buyer?.VatRegistrationNo ?? "");
-                    if (invoice.OriginalInvoice != null)
-                        InfoRow(right, "Ref. invoice . . . :", invoice.OriginalInvoice.InvoiceNumber);
-                    if (invoice.PromptDate.HasValue)
-                        InfoRow(right, "Prompt date . . . :", invoice.PromptDate.Value.ToString("yy-MM-dd"));
-                });
+                row.RelativeItem(6).Column(left => ComposeBuyerAddress(left, invoice));
+                row.RelativeItem(4).Column(right => ComposeInvoiceInfo(right, invoice));
             });
 
             col.Item().Height(15);
+        });
+    }
+
+    private static void ComposeBuyerAddress(ColumnDescriptor col, Invoice invoice)
+    {
+        col.Item().Text("Kopenhagen Fur").Bold().FontSize(14);
+        col.Item().Height(10);
+
+        col.Item().Text(invoice.Buyer?.Name ?? "").Bold().FontSize(10);
+
+        var addressLines = new[]
+        {
+            invoice.Buyer?.Name2,
+            invoice.Buyer?.AddressLine1,
+            invoice.Buyer?.AddressLine2,
+            string.Join(" ", new[] { invoice.Buyer?.PostalCode, invoice.Buyer?.City }.Where(s => !string.IsNullOrEmpty(s))),
+            invoice.Buyer?.Country
+        };
+
+        foreach (var line in addressLines.Where(l => !string.IsNullOrEmpty(l)))
+            col.Item().Text(line!);
+    }
+
+    private static void ComposeInvoiceInfo(ColumnDescriptor col, Invoice invoice)
+    {
+        var title = invoice.IsCreditNote ? "CREDIT NOTE" : "INVOICE";
+        col.Item().AlignRight().Text(title).Bold().FontSize(14);
+        col.Item().Height(10);
+
+        var numberLabel = invoice.IsCreditNote ? "Credit note no. . :" : "Invoice number. . . :";
+        AddInfoRow(col, numberLabel, invoice.InvoiceNumber);
+        AddInfoRow(col, "Date . . . . . . . . . . :", invoice.InvoiceDate.ToString("yy-MM-dd"));
+        AddInfoRow(col, "Buyer no . . . . . . :", invoice.Buyer?.BuyerNumber ?? "");
+        AddInfoRow(col, "VAT no. . . . . . . . :", invoice.Buyer?.VatRegistrationNo ?? "");
+        if (invoice.OriginalInvoice != null)
+            AddInfoRow(col, "Ref. invoice . . . :", invoice.OriginalInvoice.InvoiceNumber);
+        if (invoice.PromptDate.HasValue)
+            AddInfoRow(col, "Prompt date . . . :", invoice.PromptDate.Value.ToString("yy-MM-dd"));
+    }
+
+    private static void AddInfoRow(ColumnDescriptor col, string label, string value)
+    {
+        col.Item().Row(r =>
+        {
+            r.RelativeItem().Text(label).FontSize(8);
+            r.ConstantItem(100).AlignRight().Text(value).FontSize(8);
         });
     }
 

@@ -75,13 +75,7 @@ public class SalesOrderSetupFunctions
         {
             var body = await req.ReadAsStringAsync();
             using var doc = JsonDocument.Parse(body!);
-            var root = doc.RootElement;
-
-            var origName = root.TryGetProperty("originalColumnName", out var on) ? on.GetString() : null;
-            var newName = root.TryGetProperty("columnName", out var cn) ? cn.GetString()
-                        : root.TryGetProperty("ColumnName", out var CN) ? CN.GetString() : null;
-            var newOrder = root.TryGetProperty("groupOrder", out var go) ? go.GetInt32()
-                         : root.TryGetProperty("GroupOrder", out var GO) ? GO.GetInt32() : 0;
+            var (origName, newName, newOrder) = ParseGroupOrderUpdate(doc.RootElement);
 
             var lookupName = !string.IsNullOrWhiteSpace(origName) ? origName : newName;
             if (string.IsNullOrWhiteSpace(lookupName) || string.IsNullOrWhiteSpace(newName))
@@ -91,31 +85,45 @@ public class SalesOrderSetupFunctions
             if (item == null)
                 return await CreateErrorResponse(req, $"'{lookupName}' not found.", System.Net.HttpStatusCode.NotFound);
 
-            bool pkChanged = newName != lookupName;
-            if (pkChanged)
-            {
-                var conflict = await _db.LotGroupOrders.FindAsync(newName);
-                if (conflict != null)
-                    return await CreateErrorResponse(req, $"'{newName}' already exists.", System.Net.HttpStatusCode.Conflict);
-
-                _db.LotGroupOrders.Remove(item);
-                var newItem = new LotGroupOrder { ColumnName = newName!, GroupOrder = newOrder };
-                _db.LotGroupOrders.Add(newItem);
-                await _db.SaveChangesAsync();
-                return await CreateJsonResponse(req, newItem);
-            }
-            else
-            {
-                item.GroupOrder = newOrder;
-                await _db.SaveChangesAsync();
-                return await CreateJsonResponse(req, item);
-            }
+            return newName != lookupName
+                ? await ReplaceGroupOrderAsync(req, item, newName!, newOrder)
+                : await UpdateGroupOrderInPlaceAsync(req, item, newOrder);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating lot group order");
             return await CreateErrorResponse(req, ex.Message);
         }
+    }
+
+    private static (string? OrigName, string? NewName, int NewOrder) ParseGroupOrderUpdate(JsonElement root)
+    {
+        var origName = root.TryGetProperty("originalColumnName", out var on) ? on.GetString() : null;
+        var newName = root.TryGetProperty("columnName", out var cn) ? cn.GetString()
+                    : root.TryGetProperty("ColumnName", out var CN) ? CN.GetString() : null;
+        var newOrder = root.TryGetProperty("groupOrder", out var go) ? go.GetInt32()
+                     : root.TryGetProperty("GroupOrder", out var GO) ? GO.GetInt32() : 0;
+        return (origName, newName, newOrder);
+    }
+
+    private async Task<HttpResponseData> ReplaceGroupOrderAsync(HttpRequestData req, LotGroupOrder oldItem, string newName, int newOrder)
+    {
+        var conflict = await _db.LotGroupOrders.FindAsync(newName);
+        if (conflict != null)
+            return await CreateErrorResponse(req, $"'{newName}' already exists.", System.Net.HttpStatusCode.Conflict);
+
+        _db.LotGroupOrders.Remove(oldItem);
+        var newItem = new LotGroupOrder { ColumnName = newName, GroupOrder = newOrder };
+        _db.LotGroupOrders.Add(newItem);
+        await _db.SaveChangesAsync();
+        return await CreateJsonResponse(req, newItem);
+    }
+
+    private async Task<HttpResponseData> UpdateGroupOrderInPlaceAsync(HttpRequestData req, LotGroupOrder item, int newOrder)
+    {
+        item.GroupOrder = newOrder;
+        await _db.SaveChangesAsync();
+        return await CreateJsonResponse(req, item);
     }
 
     [Function("ReorderLotGroupOrders")]
@@ -303,18 +311,8 @@ public class SalesOrderSetupFunctions
         {
             var body = await req.ReadAsStringAsync();
             using var doc = JsonDocument.Parse(body!);
-            var root = doc.RootElement;
+            var (origCol, origVal, newCol, newVal, newOrder) = ParseSortOrderUpdate(doc.RootElement);
 
-            var origCol = root.TryGetProperty("originalColumnName", out var oc) ? oc.GetString() : null;
-            var origVal = root.TryGetProperty("originalValue", out var ov) ? ov.GetString() : null;
-            var newCol = root.TryGetProperty("columnName", out var nc) ? nc.GetString()
-                       : root.TryGetProperty("ColumnName", out var NC) ? NC.GetString() : null;
-            var newVal = root.TryGetProperty("value", out var nv) ? nv.GetString()
-                       : root.TryGetProperty("Value", out var NV) ? NV.GetString() : null;
-            var newOrder = root.TryGetProperty("sortOrder", out var so) ? so.GetInt32()
-                         : root.TryGetProperty("SortOrder", out var SO) ? SO.GetInt32() : 0;
-
-            // Use original keys if provided, otherwise fall back to the main fields
             var lookupCol = !string.IsNullOrWhiteSpace(origCol) ? origCol : newCol;
             var lookupVal = !string.IsNullOrWhiteSpace(origVal) ? origVal : newVal;
 
@@ -327,32 +325,48 @@ public class SalesOrderSetupFunctions
             if (item == null)
                 return await CreateErrorResponse(req, $"'{lookupVal}' not found in '{lookupCol}'.", System.Net.HttpStatusCode.NotFound);
 
-            bool pkChanged = newCol != lookupCol || newVal != lookupVal;
-            if (pkChanged)
-            {
-                // PK fields changed — delete old record and insert new one
-                var conflict = await _db.LotSortOrders.FindAsync(newCol, newVal);
-                if (conflict != null)
-                    return await CreateErrorResponse(req, $"'{newVal}' already exists in '{newCol}'.", System.Net.HttpStatusCode.Conflict);
-
-                _db.LotSortOrders.Remove(item);
-                var newItem = new LotSortOrder { ColumnName = newCol!, Value = newVal!, SortOrder = newOrder };
-                _db.LotSortOrders.Add(newItem);
-                await _db.SaveChangesAsync();
-                return await CreateJsonResponse(req, newItem);
-            }
-            else
-            {
-                item.SortOrder = newOrder;
-                await _db.SaveChangesAsync();
-                return await CreateJsonResponse(req, item);
-            }
+            return (newCol != lookupCol || newVal != lookupVal)
+                ? await ReplaceSortOrderAsync(req, item, newCol!, newVal!, newOrder)
+                : await UpdateSortOrderInPlaceAsync(req, item, newOrder);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating lot sort order");
             return await CreateErrorResponse(req, ex.Message);
         }
+    }
+
+    private static (string? OrigCol, string? OrigVal, string? NewCol, string? NewVal, int NewOrder) ParseSortOrderUpdate(JsonElement root)
+    {
+        var origCol = root.TryGetProperty("originalColumnName", out var oc) ? oc.GetString() : null;
+        var origVal = root.TryGetProperty("originalValue", out var ov) ? ov.GetString() : null;
+        var newCol = root.TryGetProperty("columnName", out var nc) ? nc.GetString()
+                   : root.TryGetProperty("ColumnName", out var NC) ? NC.GetString() : null;
+        var newVal = root.TryGetProperty("value", out var nv) ? nv.GetString()
+                   : root.TryGetProperty("Value", out var NV) ? NV.GetString() : null;
+        var newOrder = root.TryGetProperty("sortOrder", out var so) ? so.GetInt32()
+                     : root.TryGetProperty("SortOrder", out var SO) ? SO.GetInt32() : 0;
+        return (origCol, origVal, newCol, newVal, newOrder);
+    }
+
+    private async Task<HttpResponseData> ReplaceSortOrderAsync(HttpRequestData req, LotSortOrder oldItem, string newCol, string newVal, int newOrder)
+    {
+        var conflict = await _db.LotSortOrders.FindAsync(newCol, newVal);
+        if (conflict != null)
+            return await CreateErrorResponse(req, $"'{newVal}' already exists in '{newCol}'.", System.Net.HttpStatusCode.Conflict);
+
+        _db.LotSortOrders.Remove(oldItem);
+        var newItem = new LotSortOrder { ColumnName = newCol, Value = newVal, SortOrder = newOrder };
+        _db.LotSortOrders.Add(newItem);
+        await _db.SaveChangesAsync();
+        return await CreateJsonResponse(req, newItem);
+    }
+
+    private async Task<HttpResponseData> UpdateSortOrderInPlaceAsync(HttpRequestData req, LotSortOrder item, int newOrder)
+    {
+        item.SortOrder = newOrder;
+        await _db.SaveChangesAsync();
+        return await CreateJsonResponse(req, item);
     }
 
     [Function("ReorderLotSortOrders")]
