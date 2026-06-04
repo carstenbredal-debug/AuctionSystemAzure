@@ -138,15 +138,22 @@ public class SettlementFunctions
             var payments = await _bcClient.GetCustomerLedgerEntriesByCustomerAsync(companyId, buyerNo, "Payment", true);
             var totalAvailable = payments.Sum(p => Math.Abs(p.RemainingAmount));
 
+            // Fetch the actual remaining amount on the BC invoice (accounts for partial payments already applied)
+            var bcInvoices = await _bcClient.GetSalesInvoicesAsync(companyId, 5000);
+            var bcInvoice = bcInvoices.FirstOrDefault(i => i.Number == invoice.BcInvoiceNumber);
+            var remainingOnInvoice = bcInvoice?.RemainingAmount ?? invoice.TotalAmount;
+
             return await CreateJsonResponse(req, new
             {
                 available = true,
                 availableAmount = totalAvailable,
-                invoiceAmount = invoice.TotalAmount,
-                sufficient = totalAvailable >= invoice.TotalAmount,
+                invoiceAmount = remainingOnInvoice,
+                originalInvoiceAmount = invoice.TotalAmount,
+                sufficient = totalAvailable >= remainingOnInvoice,
                 buyerNumber = buyerNo,
                 buyerName = invoice.Buyer?.Name ?? "",
-                openPaymentCount = payments.Count
+                openPaymentCount = payments.Count,
+                bcRemainingAmount = remainingOnInvoice
             });
         }
         catch (Exception ex)
