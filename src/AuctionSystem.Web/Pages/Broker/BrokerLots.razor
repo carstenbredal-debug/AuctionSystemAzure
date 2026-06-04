@@ -274,7 +274,7 @@ else if (_activeTab == "unsold")
                         <option value="@buyer.Id">@buyer.BuyerNumber — @buyer.Name</option>
                     }
                 </select>
-                <button class="btn btn-primary" @onclick="OpenCommissionModal" disabled="@(_selling || _selectedIds.Count == 0 || _selectedBuyerId <= 0)">
+                <button class="btn btn-primary" @onclick="OpenInitialsForSell" disabled="@(_selling || _selectedIds.Count == 0 || _selectedBuyerId <= 0)">
                     Sell (@_selectedIds.Count)
                 </button>
             </div>
@@ -481,7 +481,7 @@ else if (_activeTab == "takeback")
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" @onclick="CloseCommissionModal">Cancel</button>
-                    <button class="btn btn-primary" @onclick="OpenInitialsForSell" disabled="@_selling">
+                    <button class="btn btn-primary" @onclick="SellToBuyer" disabled="@_selling">
                         @if (_selling) { <span class="spinner-border spinner-border-sm me-1"></span> }
                         Confirm Sale
                     </button>
@@ -507,9 +507,18 @@ else if (_activeTab == "takeback")
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" @onclick="CloseInitialsModal">Cancel</button>
-                    <button class="btn btn-primary" @onclick="ConfirmInitials" disabled="@(string.IsNullOrWhiteSpace(_initialsValue))">
-                        Confirm
-                    </button>
+                    @if (_initialsAction == "sell")
+                    {
+                        <button class="btn btn-primary" @onclick="InitialsNextToCommission" disabled="@(string.IsNullOrWhiteSpace(_initialsValue))">
+                            Next →
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-primary" @onclick="ConfirmInitials" disabled="@(string.IsNullOrWhiteSpace(_initialsValue))">
+                            Confirm
+                        </button>
+                    }
                 </div>
             </div>
         </div>
@@ -682,6 +691,7 @@ else if (_activeTab == "takeback")
         _showCommissionModal = true;
     }
 
+
     private void CloseCommissionModal()
     {
         _showCommissionModal = false;
@@ -692,6 +702,14 @@ else if (_activeTab == "takeback")
         _initialsAction = "sell";
         _initialsValue = "";
         _showInitialsModal = true;
+    }
+
+    private void InitialsNextToCommission()
+    {
+        _showInitialsModal = false;
+        _commissionType = "percentage";
+        _commissionValue = 0;
+        _showCommissionModal = true;
     }
 
     private void OpenInitialsForReinvoice()
