@@ -55,11 +55,20 @@ jobs:
           cd bc-extension
           mkdir -p .alpackages
           
-          TOKEN=$(curl -s -X POST "https://login.microsoftonline.com/${BC_TENANT_ID}/oauth2/v2.0/token" \
+          echo "Getting OAuth token..."
+          TOKEN_RESPONSE=$(curl -s -X POST "https://login.microsoftonline.com/${BC_TENANT_ID}/oauth2/v2.0/token" \
             -d "client_id=${BC_CLIENT_ID}" \
             -d "client_secret=${BC_CLIENT_SECRET}" \
             -d "scope=https://api.businesscentral.dynamics.com/.default" \
-            -d "grant_type=client_credentials" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+            -d "grant_type=client_credentials")
+          
+          TOKEN=$(echo "$TOKEN_RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('access_token',''))" 2>/dev/null)
+          if [ -z "$TOKEN" ]; then
+            echo "ERROR: Failed to get OAuth token. Response:"
+            echo "$TOKEN_RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('error','unknown'), '-', d.get('error_description','no details'))" 2>/dev/null || echo "$TOKEN_RESPONSE"
+            exit 1
+          fi
+          echo "OAuth token obtained successfully."
           
           BC_VERSION=$(python3 -c "import json; print(json.load(open('app.json'))['platform'])")
           echo "Downloading symbols for BC version $BC_VERSION..."
@@ -67,9 +76,16 @@ jobs:
           for APP_NAME in "System" "Application" "Base%20Application" "System%20Application"; do
             CLEAN_NAME=$(echo "$APP_NAME" | sed 's/%20/_/g')
             echo "  Downloading $CLEAN_NAME..."
-            curl -s -o ".alpackages/${CLEAN_NAME}.app" \
+            HTTP_CODE=$(curl -s -o ".alpackages/${CLEAN_NAME}.app" -w "%{http_code}" \
               -H "Authorization: Bearer $TOKEN" \
-              "https://api.businesscentral.dynamics.com/v2.0/${BC_TENANT_ID}/${BC_ENVIRONMENT}/dev/packages?publisher=Microsoft&appName=${APP_NAME}&versionText=${BC_VERSION}"
+              "https://api.businesscentral.dynamics.com/v2.0/${BC_TENANT_ID}/${BC_ENVIRONMENT}/dev/packages?publisher=Microsoft&appName=${APP_NAME}&versionText=${BC_VERSION}")
+            FILE_SIZE=$(stat -c%s ".alpackages/${CLEAN_NAME}.app" 2>/dev/null || echo 0)
+            echo "    HTTP $HTTP_CODE, size: $FILE_SIZE bytes"
+            if [ "$HTTP_CODE" != "200" ] || [ "$FILE_SIZE" -lt 1000 ]; then
+              echo "    WARNING: Download may have failed. Content:"
+              head -c 500 ".alpackages/${CLEAN_NAME}.app" | cat -v
+              echo
+            fi
           done
           
           ls -la .alpackages/
