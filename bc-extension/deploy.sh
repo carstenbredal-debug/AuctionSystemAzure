@@ -48,7 +48,7 @@ else
     -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
     "https://api.businesscentral.dynamics.com/v2.0/${BC_TENANT_ID}/${BC_ENVIRONMENT}/api/microsoft/automation/v2.0/companies(${COMPANY_ID})/extensionUpload" \
-    -d '{"schedule":"Current version","schemaSyncMode":"Add"}')
+    -d '{"schedule":"Current version","schemaSyncMode":"Force Sync"}')
   UPLOAD_ID=$(echo "$UPLOAD_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('systemId',''))")
 fi
 
