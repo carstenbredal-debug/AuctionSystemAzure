@@ -114,7 +114,7 @@ h3 {
     letter-spacing: 0.5px;
     text-transform: uppercase;
     padding: 0.65rem 1rem;
-    border-bottom: none;
+    border-bottom: 4px solid #FFFFFF !important;
     color: #FFFFFF;
 }
 
@@ -122,6 +122,7 @@ h3 {
     vertical-align: middle;
     padding: 0.6rem 1rem;
     border-color: #FFFFFF !important;
+    border-width: 2px 4px;
 }
 
 .table > tbody > tr {
