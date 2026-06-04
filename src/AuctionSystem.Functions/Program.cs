@@ -209,6 +209,40 @@ using (var scope = host.Services.CreateScope())
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.BrokerCustomerRequests') AND name = 'InitiatedBy')
                 ALTER TABLE auction.BrokerCustomerRequests ADD InitiatedBy nvarchar(10) NOT NULL DEFAULT 'Broker';
         ");
+        // AuctionResults: add LastModifiedBy and LastModifiedAt columns
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.AuctionResults') AND name = 'LastModifiedBy')
+                ALTER TABLE auction.AuctionResults ADD LastModifiedBy nvarchar(10) NULL;
+        ");
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.AuctionResults') AND name = 'LastModifiedAt')
+                ALTER TABLE auction.AuctionResults ADD LastModifiedAt datetime2 NULL;
+        ");
+        // LotSalesHistories table
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'LotSalesHistories')
+            BEGIN
+                CREATE TABLE auction.LotSalesHistories (
+                    Id INT IDENTITY(1,1) PRIMARY KEY,
+                    LotNumber INT NOT NULL,
+                    AuctionResultId INT NOT NULL,
+                    ActionType NVARCHAR(50) NOT NULL,
+                    Initials NVARCHAR(10) NULL,
+                    BuyerId INT NULL,
+                    BuyerName NVARCHAR(200) NULL,
+                    InvoiceId INT NULL,
+                    InvoiceNumber NVARCHAR(100) NULL,
+                    Amount DECIMAL(18,2) NULL,
+                    Notes NVARCHAR(500) NULL,
+                    CreatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+                    CONSTRAINT FK_LotSalesHistories_AuctionResult FOREIGN KEY (AuctionResultId) REFERENCES auction.AuctionResults(Id),
+                    CONSTRAINT FK_LotSalesHistories_Buyer FOREIGN KEY (BuyerId) REFERENCES auction.Buyers(Id),
+                    CONSTRAINT FK_LotSalesHistories_Invoice FOREIGN KEY (InvoiceId) REFERENCES auction.Invoices(Id)
+                );
+                CREATE INDEX IX_LotSalesHistories_LotNumber ON auction.LotSalesHistories(LotNumber);
+                CREATE INDEX IX_LotSalesHistories_AuctionResultId ON auction.LotSalesHistories(AuctionResultId);
+            END
+        ");
         db.Database.Migrate();
     }
     catch (Exception ex)

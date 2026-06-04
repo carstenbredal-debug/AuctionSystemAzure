@@ -336,6 +336,23 @@ public class AuctionResultDto
     public string? CommissionType { get; set; }
     public decimal? CommissionValue { get; set; }
     public decimal? CommissionAmount { get; set; }
+    public string? LastModifiedBy { get; set; }
+    public DateTime? LastModifiedAt { get; set; }
+}
+
+public class LotSalesHistoryDto
+{
+    public int Id { get; set; }
+    public int LotNumber { get; set; }
+    public string ActionType { get; set; } = "";
+    public string? Initials { get; set; }
+    public int? BuyerId { get; set; }
+    public string? BuyerName { get; set; }
+    public int? InvoiceId { get; set; }
+    public string? InvoiceNumber { get; set; }
+    public decimal? Amount { get; set; }
+    public string? Notes { get; set; }
+    public DateTime CreatedAt { get; set; }
 }
 
 public class DashboardStats

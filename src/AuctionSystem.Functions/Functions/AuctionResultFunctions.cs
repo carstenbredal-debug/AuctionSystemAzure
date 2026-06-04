@@ -328,6 +328,8 @@ public class AuctionResultFunctions
             result.SoldAt = DateTime.UtcNow;
             result.CommissionType = body.CommissionType;
             result.CommissionValue = body.CommissionValue;
+            result.LastModifiedBy = body.Initials;
+            result.LastModifiedAt = DateTime.UtcNow;
             if (body.CommissionType == "percentage" && body.CommissionValue.HasValue)
             {
                 var hammerPrice = result.TotalSkins * result.PriceEur;
@@ -349,6 +351,23 @@ public class AuctionResultFunctions
 
         await _db.SaveChangesAsync();
 
+        // Record sales history
+        foreach (var result in results)
+        {
+            var hammerPrice = result.TotalSkins * result.PriceEur;
+            _db.LotSalesHistories.Add(new LotSalesHistory
+            {
+                LotNumber = result.LotNumber,
+                AuctionResultId = result.Id,
+                ActionType = "Sold",
+                Initials = body.Initials,
+                BuyerId = body.BuyerId,
+                BuyerName = buyer.Name,
+                Amount = hammerPrice,
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
         int? invoiceId = null;
         string? bcError = null;
         if (results.Count > 0 && _bcSyncService != null)
@@ -359,6 +378,18 @@ public class AuctionResultFunctions
         {
             var inv = await _db.Invoices.FindAsync(invoiceId);
             pdfUrl = inv?.PdfUrl;
+            // Update sales history with invoice info
+            var lotNums = results.Select(r => r.LotNumber).ToList();
+            var historyEntries = await _db.LotSalesHistories
+                .Where(h => lotNums.Contains(h.LotNumber) && h.InvoiceId == null && h.ActionType == "Sold")
+                .OrderByDescending(h => h.CreatedAt)
+                .ToListAsync();
+            foreach (var h in historyEntries)
+            {
+                h.InvoiceId = invoiceId;
+                h.InvoiceNumber = inv?.InvoiceNumber ?? inv?.BcInvoiceNumber;
+            }
+            await _db.SaveChangesAsync();
         }
 
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
@@ -453,7 +484,8 @@ public class AuctionResultFunctions
                 r.SoldToBuyerId,
                 soldToBuyerName = r.SoldToBuyer != null ? r.SoldToBuyer.Name : null,
                 soldToBuyerNumber = r.SoldToBuyer != null ? r.SoldToBuyer.BuyerNumber : null,
-                r.SoldAt, r.CommissionType, r.CommissionValue, r.CommissionAmount
+                r.SoldAt, r.CommissionType, r.CommissionValue, r.CommissionAmount,
+                r.LastModifiedBy, r.LastModifiedAt
             })
             .ToListAsync();
 
@@ -477,14 +509,67 @@ public class AuctionResultFunctions
         var shippingError = await CheckShippedLotsAsync(results, req, "Cannot take back");
         if (shippingError != null) return shippingError;
 
+        // Record initials on auction results
+        foreach (var r in results)
+        {
+            r.LastModifiedBy = body.Initials;
+            r.LastModifiedAt = DateTime.UtcNow;
+        }
+
         var (created, takenBackResultIds, takebackBuyerId) = await ProcessBrokerTakebacksAsync(results);
         await _db.SaveChangesAsync();
 
         var (creditNoteId, creditNotePdfUrl) = await TryGenerateCreditNoteForTakebackAsync(takenBackResultIds, takebackBuyerId);
 
+        // Record re-invoice history
+        string? creditNoteNumber = null;
+        if (creditNoteId != null)
+        {
+            var cn = await _db.Invoices.FindAsync(creditNoteId);
+            creditNoteNumber = cn?.InvoiceNumber ?? cn?.BcInvoiceNumber;
+        }
+        foreach (var r in results)
+        {
+            _db.LotSalesHistories.Add(new LotSalesHistory
+            {
+                LotNumber = r.LotNumber,
+                AuctionResultId = r.Id,
+                ActionType = "Re-Invoice",
+                Initials = body.Initials,
+                BuyerId = takebackBuyerId,
+                InvoiceId = creditNoteId,
+                InvoiceNumber = creditNoteNumber,
+                Amount = r.TotalSkins * r.PriceEur,
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+        await _db.SaveChangesAsync();
+
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
         await response.WriteStringAsync(JsonSerializer.Serialize(new { requestCount = created.Count, creditNoteId, creditNotePdfUrl }, JsonOptions));
+        return response;
+    }
+
+    [Function("GetLotSalesHistory")]
+    public async Task<HttpResponseData> GetLotSalesHistory(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "auction-results/lot-history/{lotNumber:int}")] HttpRequestData req, int lotNumber)
+    {
+        var history = await _db.LotSalesHistories
+            .Where(h => h.LotNumber == lotNumber)
+            .OrderByDescending(h => h.CreatedAt)
+            .Select(h => new
+            {
+                h.Id, h.LotNumber, h.ActionType, h.Initials,
+                h.BuyerId, h.BuyerName,
+                h.InvoiceId, h.InvoiceNumber,
+                h.Amount, h.Notes, h.CreatedAt
+            })
+            .ToListAsync();
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(history, JsonOptions));
         return response;
     }
 
@@ -954,11 +1039,13 @@ public class SellToBuyerRequest
     public int BuyerId { get; set; }
     public string? CommissionType { get; set; }
     public decimal? CommissionValue { get; set; }
+    public string? Initials { get; set; }
 }
 
 public class TakebackRequestBody
 {
     public List<int> AuctionResultIds { get; set; } = new();
+    public string? Initials { get; set; }
 }
 
 public class TakebackResponseBody

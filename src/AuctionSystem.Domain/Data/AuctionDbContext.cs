@@ -25,6 +25,7 @@ public class AuctionDbContext : DbContext
     public DbSet<BrokerBuyer> BrokerBuyers => Set<BrokerBuyer>();
     public DbSet<TypistEntry> TypistEntries => Set<TypistEntry>();
     public DbSet<AuctionTransaction> AuctionTransactions => Set<AuctionTransaction>();
+    public DbSet<LotSalesHistory> LotSalesHistories => Set<LotSalesHistory>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -191,6 +192,23 @@ public class AuctionDbContext : DbContext
             e.Property(r => r.CommissionType).HasMaxLength(20);
             e.Property(r => r.CommissionValue).HasColumnType("decimal(18,4)");
             e.Property(r => r.CommissionAmount).HasColumnType("decimal(18,2)");
+            e.Property(r => r.LastModifiedBy).HasMaxLength(10);
+        });
+
+        modelBuilder.Entity<LotSalesHistory>(e =>
+        {
+            e.HasKey(h => h.Id);
+            e.HasOne(h => h.AuctionResult).WithMany().HasForeignKey(h => h.AuctionResultId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(h => h.Buyer).WithMany().HasForeignKey(h => h.BuyerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(h => h.Invoice).WithMany().HasForeignKey(h => h.InvoiceId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(h => h.LotNumber);
+            e.HasIndex(h => h.AuctionResultId);
+            e.Property(h => h.ActionType).HasMaxLength(50).IsRequired();
+            e.Property(h => h.Initials).HasMaxLength(10);
+            e.Property(h => h.BuyerName).HasMaxLength(200);
+            e.Property(h => h.InvoiceNumber).HasMaxLength(100);
+            e.Property(h => h.Amount).HasColumnType("decimal(18,2)");
+            e.Property(h => h.Notes).HasMaxLength(500);
         });
 
         modelBuilder.Entity<TakebackRequest>(e =>

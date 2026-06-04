@@ -201,13 +201,14 @@ else if (_activeTab == "sold")
                         <th>Commission</th>
                         <th>Sold To</th>
                         <th>Sold Date</th>
+                        <th>Initiated By</th>
                         <th>Documents</th>
                     </tr>
                 </thead>
                 <tbody>
                     @if (GetSoldLots().Count == 0)
                     {
-                        <tr><td colspan="14" class="text-center text-muted py-4">No lots sold yet.</td></tr>
+                        <tr><td colspan="15" class="text-center text-muted py-4">No lots sold yet.</td></tr>
                     }
                     @foreach (var r in GetSoldLots())
                     {
@@ -216,7 +217,7 @@ else if (_activeTab == "sold")
                             <td>
                                 <input type="checkbox" checked="@_selectedSoldIds.Contains(r.Id)" @onchange="() => ToggleSoldSelection(r.Id)" />
                             </td>
-                            <td><strong>@r.LotNumber</strong></td>
+                            <td><a href="#" @onclick="() => ShowLotSalesHistory(r.LotNumber)" @onclick:preventDefault style="font-weight:bold; cursor:pointer;">@r.LotNumber</a></td>
                             <td>@(r.SalesType ?? "—")</td>
                             <td>@(r.Gender ?? "—")</td>
                             <td>@(r.Color ?? "—")</td>
@@ -228,6 +229,7 @@ else if (_activeTab == "sold")
                             <td>€@((r.CommissionAmount ?? 0).ToString("N2"))</td>
                             <td>@(r.SoldToBuyerNumber ?? "") — @(r.SoldToBuyerName ?? "")</td>
                             <td>@(r.SoldAt?.ToString("g") ?? "—")</td>
+                            <td>@(r.LastModifiedBy ?? "—")</td>
                             <td>
                                 @if (link != null)
                                 {
@@ -479,10 +481,95 @@ else if (_activeTab == "takeback")
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" @onclick="CloseCommissionModal">Cancel</button>
-                    <button class="btn btn-primary" @onclick="SellToBuyer" disabled="@_selling">
+                    <button class="btn btn-primary" @onclick="OpenInitialsForSell" disabled="@_selling">
                         @if (_selling) { <span class="spinner-border spinner-border-sm me-1"></span> }
                         Confirm Sale
                     </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* Initials Popup Modal *@
+@if (_showInitialsModal)
+{
+    <div class="modal d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Enter Initials</h5>
+                    <button type="button" class="btn-close" @onclick="CloseInitialsModal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small">Enter your initials to @(_initialsAction == "sell" ? "confirm the sale" : "confirm re-invoicing")</p>
+                    <input type="text" class="form-control" maxlength="5" placeholder="e.g. CB" @bind="_initialsValue" @onkeydown="HandleInitialsKeydown" />
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseInitialsModal">Cancel</button>
+                    <button class="btn btn-primary" @onclick="ConfirmInitials" disabled="@(string.IsNullOrWhiteSpace(_initialsValue))">
+                        Confirm
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* Lot Sales History Popup *@
+@if (_showSalesHistoryModal)
+{
+    <div class="modal d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Sales History — Lot @_salesHistoryLotNumber</h5>
+                    <button type="button" class="btn-close" @onclick="() => _showSalesHistoryModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    @if (_loadingSalesHistory)
+                    {
+                        <div class="text-center py-3"><span class="spinner-border"></span></div>
+                    }
+                    else if (_salesHistory.Count == 0)
+                    {
+                        <div class="text-center text-muted py-3">No sales history recorded for this lot.</div>
+                    }
+                    else
+                    {
+                        <table class="table table-sm table-striped">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Action</th>
+                                    <th>Initiated By</th>
+                                    <th>Buyer</th>
+                                    <th>Invoice / Credit Note</th>
+                                    <th>Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var h in _salesHistory)
+                                {
+                                    <tr>
+                                        <td>@h.CreatedAt.ToString("g")</td>
+                                        <td>
+                                            <span class="badge @(h.ActionType == "Sold" ? "bg-success" : h.ActionType == "Re-Invoice" ? "bg-warning" : "bg-info")">
+                                                @h.ActionType
+                                            </span>
+                                        </td>
+                                        <td><strong>@(h.Initials ?? "—")</strong></td>
+                                        <td>@(h.BuyerName ?? "—")</td>
+                                        <td>@(h.InvoiceNumber ?? "—")</td>
+                                        <td>@(h.Amount != null ? $"€{h.Amount:N2}" : "—")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => _showSalesHistoryModal = false">Close</button>
                 </div>
             </div>
         </div>
@@ -521,6 +608,15 @@ else if (_activeTab == "takeback")
     private bool _allSelected => GetUnsoldLots().Count > 0 && GetUnsoldLots().All(r => _selectedIds.Contains(r.Id));
     private bool _allSoldSelected => GetSoldLots().Count > 0 && GetSoldLots().All(r => _selectedSoldIds.Contains(r.Id));
     private int _brokerId;
+    // Initials modal
+    private bool _showInitialsModal;
+    private string _initialsValue = "";
+    private string _initialsAction = "sell"; // "sell" or "reinvoice"
+    // Sales history modal
+    private bool _showSalesHistoryModal;
+    private int _salesHistoryLotNumber;
+    private bool _loadingSalesHistory;
+    private List<LotSalesHistoryDto> _salesHistory = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -591,6 +687,41 @@ else if (_activeTab == "takeback")
         _showCommissionModal = false;
     }
 
+    private void OpenInitialsForSell()
+    {
+        _initialsAction = "sell";
+        _initialsValue = "";
+        _showInitialsModal = true;
+    }
+
+    private void OpenInitialsForReinvoice()
+    {
+        _initialsAction = "reinvoice";
+        _initialsValue = "";
+        _showInitialsModal = true;
+    }
+
+    private void CloseInitialsModal()
+    {
+        _showInitialsModal = false;
+        _initialsValue = "";
+    }
+
+    private async Task HandleInitialsKeydown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_initialsValue))
+            await ConfirmInitials();
+    }
+
+    private async Task ConfirmInitials()
+    {
+        _showInitialsModal = false;
+        if (_initialsAction == "sell")
+            await SellToBuyer();
+        else
+            await ExecuteTakeback();
+    }
+
     private async Task SellToBuyer()
     {
         _message = null;
@@ -599,7 +730,7 @@ else if (_activeTab == "takeback")
         _selling = true;
         try
         {
-            var resp = await Api.SellLotsToBuyerAsync(_selectedIds.ToList(), _selectedBuyerId, _commissionType, _commissionValue);
+            var resp = await Api.SellLotsToBuyerAsync(_selectedIds.ToList(), _selectedBuyerId, _commissionType, _commissionValue, _initialsValue);
             if (resp.IsSuccessStatusCode)
                 await HandleSellSuccess(resp);
             else
@@ -656,13 +787,19 @@ else if (_activeTab == "takeback")
 
     private async Task RequestTakeback()
     {
+        if (_selectedSoldIds.Count == 0) return;
+        OpenInitialsForReinvoice();
+    }
+
+    private async Task ExecuteTakeback()
+    {
         _takebackMessage = null;
         if (_selectedSoldIds.Count == 0) return;
 
         _requestingTakeback = true;
         try
         {
-            var resp = await Api.RequestTakebackAsync(_selectedSoldIds.ToList());
+            var resp = await Api.RequestTakebackAsync(_selectedSoldIds.ToList(), _initialsValue);
             if (resp.IsSuccessStatusCode)
             {
                 var json = await resp.Content.ReadFromJsonAsync<TakebackResponse>();
@@ -736,6 +873,21 @@ else if (_activeTab == "takeback")
             _brokerTakebackMessage = $"Error: {ex.Message}";
             _brokerTakebackMessageIsError = true;
         }
+    }
+
+    private async Task ShowLotSalesHistory(int lotNumber)
+    {
+        _salesHistoryLotNumber = lotNumber;
+        _loadingSalesHistory = true;
+        _showSalesHistoryModal = true;
+        _salesHistory = new();
+        StateHasChanged();
+        try
+        {
+            _salesHistory = await Api.GetLotSalesHistoryAsync(lotNumber);
+        }
+        catch { }
+        _loadingSalesHistory = false;
     }
 
     private class SellResponse

@@ -330,15 +330,18 @@ public class AuctionApiClient
     public async Task<HttpResponseMessage> SubmitAuctionResultAsync(int lotNumber, int brokerId, decimal priceEur)
         => await _http.PostAsJsonAsync("api/auction-results", new { lotNumber, brokerId, priceEur });
 
-    public async Task<HttpResponseMessage> SellLotsToBuyerAsync(List<int> auctionResultIds, int buyerId, string? commissionType = null, decimal? commissionValue = null)
-        => await _http.PostAsJsonAsync("api/auction-results/sell-to-buyer", new { auctionResultIds, buyerId, commissionType, commissionValue });
+    public async Task<HttpResponseMessage> SellLotsToBuyerAsync(List<int> auctionResultIds, int buyerId, string? commissionType = null, decimal? commissionValue = null, string? initials = null)
+        => await _http.PostAsJsonAsync("api/auction-results/sell-to-buyer", new { auctionResultIds, buyerId, commissionType, commissionValue, initials });
 
     public async Task<List<AuctionResultDto>> GetAuctionResultsByBuyerAsync(int buyerId)
         => await _http.GetFromJsonAsync<List<AuctionResultDto>>($"api/auction-results/buyer/{buyerId}") ?? new();
 
     // Takeback Requests
-    public async Task<HttpResponseMessage> RequestTakebackAsync(List<int> auctionResultIds)
-        => await _http.PostAsJsonAsync("api/takeback-requests", new { auctionResultIds });
+    public async Task<HttpResponseMessage> RequestTakebackAsync(List<int> auctionResultIds, string? initials = null)
+        => await _http.PostAsJsonAsync("api/takeback-requests", new { auctionResultIds, initials });
+
+    public async Task<List<LotSalesHistoryDto>> GetLotSalesHistoryAsync(int lotNumber)
+        => await _http.GetFromJsonAsync<List<LotSalesHistoryDto>>($"api/auction-results/lot-history/{lotNumber}") ?? new();
 
     public async Task<HttpResponseMessage> RequestTakebackByBuyerAsync(List<int> auctionResultIds)
         => await _http.PostAsJsonAsync("api/takeback-requests/buyer-initiated", new { auctionResultIds });

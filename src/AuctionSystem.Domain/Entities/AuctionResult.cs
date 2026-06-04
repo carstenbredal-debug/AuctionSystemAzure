@@ -30,4 +30,7 @@ public class AuctionResult
     public string? CommissionType { get; set; }
     public decimal? CommissionValue { get; set; }
     public decimal? CommissionAmount { get; set; }
+
+    public string? LastModifiedBy { get; set; }
+    public DateTime? LastModifiedAt { get; set; }
 }
