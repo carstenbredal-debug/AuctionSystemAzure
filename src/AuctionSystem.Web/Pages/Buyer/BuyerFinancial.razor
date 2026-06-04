@@ -20,46 +20,38 @@ else
 {
     <div class="row mb-4">
         <div class="col-md-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h5 class="card-title text-muted">Total Purchases</h5>
-                    <h2>@_allocations.Count</h2>
-                </div>
+            <div class="summary-card">
+                <div class="card-title">Total Purchases</div>
+                <div class="card-value">@_allocations.Count</div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h5 class="card-title text-muted">Total Spent</h5>
-                    <h2>@_allocations.Sum(a => a.TotalPrice).ToString("N2")</h2>
-                </div>
+            <div class="summary-card">
+                <div class="card-title">Total Spent</div>
+                <div class="card-value">@_allocations.Sum(a => a.TotalPrice).ToString("N2")</div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h5 class="card-title text-muted">Confirmed</h5>
-                    <h2 class="text-success">@_allocations.Count(a => a.Status == AllocationStatus.Allocated)</h2>
-                </div>
+            <div class="summary-card">
+                <div class="card-title">Confirmed</div>
+                <div class="card-value">@_allocations.Count(a => a.Status == AllocationStatus.Allocated)</div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h5 class="card-title text-muted">Pending</h5>
-                    <h2 class="text-warning">@_allocations.Count(a => a.Status == AllocationStatus.Pending)</h2>
-                </div>
+            <div class="summary-card">
+                <div class="card-title">Pending</div>
+                <div class="card-value">@_allocations.Count(a => a.Status == AllocationStatus.Pending)</div>
             </div>
         </div>
     </div>
 
     @if (_brokerSummaries.Any())
     {
-        <div class="card mb-4">
-            <div class="card-header">
-                <strong>Spending by Broker</strong>
-            </div>
-            <div class="card-body p-0">
+        <div class="section-container mb-4">
+            <div class="section-header">
+            Spending by Broker
+        </div>
+            <div class="section-body">
                 <table class="table table-striped table-hover mb-0">
                     <thead class="table-dark">
                         <tr>
@@ -85,11 +77,11 @@ else
         </div>
     }
 
-    <div class="card mb-4">
-        <div class="card-header">
-            <strong>Invoices</strong> <span class="badge bg-secondary">@_invoices.Count</span>
+    <div class="section-container mb-4">
+        <div class="section-header">
+            Invoices
         </div>
-        <div class="card-body p-0">
+        <div class="section-body">
             <table class="table table-striped table-hover mb-0">
                 <thead class="table-dark">
                     <tr>
@@ -112,7 +104,7 @@ else
                     }
                     @foreach (var inv in _invoices)
                     {
-                        <tr class="@(inv.IsCreditNote ? "table-warning" : "")">
+                        <tr class="@(inv.IsCreditNote ? "credit-row" : "")">
                             <td>
                                 @if (inv.IsCreditNote)
                                 {
@@ -154,11 +146,11 @@ else
         </div>
     </div>
 
-    <div class="card">
-        <div class="card-header">
-            <strong>Recent Purchases</strong> <span class="badge bg-secondary">@_allocations.Count</span>
+    <div class="section-container">
+        <div class="section-header">
+            Recent Purchases
         </div>
-        <div class="card-body p-0">
+        <div class="section-body">
             <table class="table table-striped table-hover mb-0">
                 <thead class="table-dark">
                     <tr>

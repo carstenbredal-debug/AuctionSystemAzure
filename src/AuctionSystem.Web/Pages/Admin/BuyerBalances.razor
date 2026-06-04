@@ -45,7 +45,7 @@
         <div class="row mb-4">
             <div class="col-md-3">
                 <div class="card text-center">
-                    <div class="card-body">
+                    <div class="section-body p-3">
                         <h5 class="card-title text-muted">Total Buyers</h5>
                         <h3>@_result.Buyers.Count</h3>
                     </div>
@@ -53,7 +53,7 @@
             </div>
             <div class="col-md-3">
                 <div class="card text-center">
-                    <div class="card-body">
+                    <div class="section-body p-3">
                         <h5 class="card-title text-muted">Total Unallocated</h5>
                         <h3>€@_result.Buyers.Sum(b => b.UnallocatedPayment).ToString("N2")</h3>
                     </div>
@@ -61,7 +61,7 @@
             </div>
             <div class="col-md-3">
                 <div class="card text-center">
-                    <div class="card-body">
+                    <div class="section-body p-3">
                         <h5 class="card-title text-muted">Open Invoices</h5>
                         <h3>@_result.Buyers.Sum(b => b.OpenInvoiceCount)</h3>
                     </div>
@@ -69,7 +69,7 @@
             </div>
             <div class="col-md-3">
                 <div class="card text-center">
-                    <div class="card-body">
+                    <div class="section-body p-3">
                         <h5 class="card-title text-muted">Open Payments</h5>
                         <h3>@_result.Buyers.Sum(b => b.OpenPaymentCount)</h3>
                     </div>
@@ -77,8 +77,8 @@
             </div>
         </div>
 
-        <div class="card">
-            <div class="card-body p-0">
+        <div class="section-container">
+            <div class="section-body">
                 <table class="table table-striped table-hover mb-0">
                     <thead class="table-dark">
                         <tr>
@@ -97,7 +97,7 @@
                     <tbody>
                         @foreach (var b in _result.Buyers)
                         {
-                            <tr class="@(b.UnallocatedPayment > 0 ? "table-warning" : "")">
+                            <tr class="@(b.UnallocatedPayment > 0 ? "credit-row" : "")">
                                 <td>@b.CustomerNo</td>
                                 <td>@b.CustomerName</td>
                                 <td>@(b.BuyerName ?? "—")</td>

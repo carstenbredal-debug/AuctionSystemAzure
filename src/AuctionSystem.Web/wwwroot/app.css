@@ -14,10 +14,21 @@
     font-display: swap;
 }
 
+/* ===== Design System Colors =====
+   White:      #FFFFFF
+   Beige:      #E8E3DD
+   Purple:     #230A3C
+   Orange:     #F15A31
+   Grey:       #95958F
+   Light Blue: #9CC6C8
+   Bluegreen:  #314450
+   Black:      #000000
+   ================================= */
+
 html, body {
     font-family: 'PPPangramSans', 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif;
     background-color: #E8E3DD;
-    color: #333;
+    color: #000000;
 }
 
 h1, h2, h3, h4, h5, h6,
@@ -27,33 +38,45 @@ a, label, th, td {
 }
 
 a, .btn-link {
-    color: #2D1B4E;
+    color: #230A3C;
 }
 
+/* ===== Buttons ===== */
 .btn-primary {
     color: #fff;
-    background-color: #E8501E;
-    border-color: #E8501E;
+    background-color: #F15A31;
+    border-color: #F15A31;
 }
 
 .btn-primary:hover {
-    background-color: #d04518;
-    border-color: #d04518;
+    background-color: #d94e2a;
+    border-color: #d94e2a;
 }
 
 .btn-outline-primary {
-    color: #2D1B4E;
-    border-color: #2D1B4E;
+    color: #230A3C;
+    border-color: #230A3C;
 }
 
 .btn-outline-primary:hover {
-    background-color: #2D1B4E;
-    border-color: #2D1B4E;
+    background-color: #230A3C;
+    border-color: #230A3C;
+    color: #fff;
+}
+
+.btn-outline-secondary {
+    color: #314450;
+    border-color: #95958F;
+}
+
+.btn-outline-secondary:hover {
+    background-color: #314450;
+    border-color: #314450;
     color: #fff;
 }
 
 .btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-    box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem rgba(45, 27, 78, 0.4);
+    box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem rgba(35, 10, 60, 0.4);
 }
 
 .content {
@@ -63,7 +86,7 @@ a, .btn-link {
 h1 {
     font-weight: 700;
     font-size: 1.5rem;
-    color: #2D1B4E;
+    color: #230A3C;
     margin-bottom: 0.25rem;
 }
 
@@ -73,24 +96,26 @@ h1:focus {
 
 h3 {
     font-weight: 700;
-    color: #2D1B4E;
+    color: #230A3C;
 }
 
-/* Table styling */
+/* ===== Table Styling ===== */
+/* Dark purple header - used for section container headers */
 .table-dark {
-    --bs-table-bg: #2D1B4E;
-    --bs-table-border-color: #3d2766;
-    --bs-table-striped-bg: #382060;
-    --bs-table-hover-bg: #432870;
+    --bs-table-bg: #95958F;
+    --bs-table-border-color: #7a7a75;
+    --bs-table-striped-bg: #8a8a84;
+    --bs-table-hover-bg: #8a8a84;
 }
 
 .table-dark th {
     font-weight: 700;
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     letter-spacing: 0.5px;
     text-transform: uppercase;
-    padding: 0.75rem 1rem;
+    padding: 0.65rem 1rem;
     border-bottom: none;
+    color: #FFFFFF;
 }
 
 .table th, .table td {
@@ -103,32 +128,97 @@ h3 {
 }
 
 .table-hover > tbody > tr:hover > * {
-    --bs-table-bg-state: rgba(45, 27, 78, 0.04);
+    --bs-table-bg-state: rgba(35, 10, 60, 0.04);
 }
 
-/* Card styling */
+/* Credit note row highlight */
+.table .credit-row {
+    background-color: rgba(156, 198, 200, 0.3) !important;
+}
+
+/* ===== Card Styling (Summary Cards) ===== */
 .card {
-    border: 1px solid #e0e0e0;
-    border-radius: 6px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    border: 1.5px solid #230A3C;
+    border-radius: 8px;
+    box-shadow: none;
+    background-color: #FFFFFF;
 }
 
 .card-header {
-    background-color: #f8f8f8;
-    border-bottom: 1px solid #e0e0e0;
+    background-color: #FFFFFF;
+    border-bottom: 1px solid #E8E3DD;
     font-size: 0.95rem;
 }
 
-/* Badge overrides */
+/* Summary cards - specific styling */
+.summary-card {
+    border: 1.5px solid #230A3C;
+    border-radius: 8px;
+    background-color: #FFFFFF;
+    box-shadow: none;
+    text-align: center;
+    padding: 1.25rem 1rem;
+}
+
+.summary-card .card-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #000000;
+    text-transform: none;
+    margin-bottom: 0.5rem;
+}
+
+.summary-card .card-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #000000;
+}
+
+.summary-card .card-value.text-warning,
+.summary-card .card-value.text-pending {
+    color: #F15A31 !important;
+}
+
+/* ===== Section Container ===== */
+.section-container {
+    border: 1px solid #E8E3DD;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+    background-color: #FFFFFF;
+}
+
+.section-header {
+    background-color: #230A3C;
+    color: #FFFFFF;
+    padding: 0.75rem 1.25rem;
+    font-weight: 700;
+    font-size: 0.95rem;
+}
+
+.section-body {
+    padding: 0;
+}
+
+.section-body .table {
+    margin-bottom: 0;
+}
+
+/* ===== Badge overrides ===== */
 .badge.bg-secondary {
-    background-color: #6B5F5B !important;
+    background-color: #95958F !important;
 }
 
 .badge.bg-info {
-    background-color: #2D1B4E !important;
+    background-color: #314450 !important;
 }
 
-/* Alert styling */
+.badge.bg-warning {
+    background-color: #F15A31 !important;
+    color: #fff !important;
+}
+
+/* ===== Alert Styling ===== */
 .alert-success {
     background-color: #e8f5e9;
     border-color: #c8e6c9;
@@ -141,16 +231,16 @@ h3 {
     color: #c62828;
 }
 
-/* Form controls */
+/* ===== Form Controls ===== */
 .form-control:focus, .form-select:focus {
-    border-color: #2D1B4E;
-    box-shadow: 0 0 0 0.2rem rgba(45, 27, 78, 0.15);
+    border-color: #230A3C;
+    box-shadow: 0 0 0 0.2rem rgba(35, 10, 60, 0.15);
 }
 
 .form-label {
     font-weight: 500;
     font-size: 0.875rem;
-    color: #555;
+    color: #314450;
 }
 
 .valid.modified:not([type=checkbox]) {
@@ -179,50 +269,75 @@ h3 {
     border-color: #929292;
 }
 
-/* Tab styling */
+/* ===== Tab Styling ===== */
 .nav-tabs .nav-link {
-    color: #6B5F5B;
+    color: #95958F;
     font-weight: 500;
 }
 
 .nav-tabs .nav-link.active {
-    color: #2D1B4E;
+    color: #230A3C;
     font-weight: 700;
-    border-bottom-color: #E8501E;
+    border-bottom-color: #F15A31;
 }
 
 .nav-tabs .nav-link:hover {
-    color: #2D1B4E;
+    color: #230A3C;
 }
 
-/* Text utilities */
+/* ===== Text Utilities ===== */
 .text-muted {
-    color: #888 !important;
+    color: #95958F !important;
 }
 
 p.text-muted {
     font-size: 0.9rem;
 }
 
-/* Action buttons - orange accent */
+/* ===== Action Buttons ===== */
 .btn-warning {
-    background-color: #E8501E;
-    border-color: #E8501E;
+    background-color: #F15A31;
+    border-color: #F15A31;
     color: #fff;
 }
 
 .btn-warning:hover {
-    background-color: #d04518;
-    border-color: #d04518;
+    background-color: #d94e2a;
+    border-color: #d94e2a;
     color: #fff;
 }
 
 .btn-success {
-    background-color: #2D1B4E;
-    border-color: #2D1B4E;
+    background-color: #314450;
+    border-color: #314450;
 }
 
 .btn-success:hover {
-    background-color: #3d2766;
-    border-color: #3d2766;
+    background-color: #243540;
+    border-color: #243540;
+}
+
+/* ===== Top Bar ===== */
+.top-row {
+    background-color: #230A3C !important;
+    border-bottom: none;
+}
+
+.top-row a, .top-row .btn-link {
+    color: #FFFFFF !important;
+}
+
+/* ===== PDF/Action Button Outlined ===== */
+.btn-outline-dark {
+    color: #314450;
+    border-color: #95958F;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    padding: 0.25rem 0.75rem;
+}
+
+.btn-outline-dark:hover {
+    background-color: #314450;
+    border-color: #314450;
+    color: #FFFFFF;
 }

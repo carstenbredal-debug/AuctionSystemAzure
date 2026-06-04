@@ -37,9 +37,9 @@ else
 
     @if (_tab == "bids")
     {
-        <div class="card mb-4">
+        <div class="section-container mb-4">
             <div class="card-header">Place Bid</div>
-            <div class="card-body">
+            <div class="section-body p-3">
                 <div class="row g-3">
                     <div class="col-md-4">
                         <label class="form-label">Lot ID</label>
@@ -56,11 +56,11 @@ else
             </div>
         </div>
 
-        <div class="card">
-            <div class="card-header">
-                <strong>Bid History</strong> <span class="badge bg-secondary">@_bids.Count</span>
-            </div>
-            <div class="card-body p-0">
+        <div class="section-container">
+            <div class="section-header">
+            Bid History
+        </div>
+            <div class="section-body">
                 <table class="table table-striped table-hover mb-0">
                     <thead class="table-dark">
                         <tr>
@@ -92,9 +92,9 @@ else
 
     @if (_tab == "allocations")
     {
-        <div class="card mb-4">
+        <div class="section-container mb-4">
             <div class="card-header">Allocate Lot to Customer</div>
-            <div class="card-body">
+            <div class="section-body p-3">
                 <div class="row g-3">
                     <div class="col-md-2">
                         <label class="form-label">Lot ID</label>
@@ -125,11 +125,11 @@ else
             </div>
         </div>
 
-        <div class="card">
-            <div class="card-header">
-                <strong>Lot Allocations</strong> <span class="badge bg-secondary">@_allocations.Count</span>
-            </div>
-            <div class="card-body p-0">
+        <div class="section-container">
+            <div class="section-header">
+            Lot Allocations
+        </div>
+            <div class="section-body">
                 <table class="table table-striped table-hover mb-0">
                     <thead class="table-dark">
                         <tr>

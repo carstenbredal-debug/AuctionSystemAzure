@@ -38,7 +38,7 @@ else
     <div class="row mb-4">
         <div class="col-md-3">
             <div class="card text-center">
-                <div class="card-body">
+                <div class="section-body p-3">
                     <h5 class="card-title">Brokers</h5>
                     <div class="d-flex justify-content-around">
                         <div>
@@ -62,7 +62,7 @@ else
         </div>
         <div class="col-md-3">
             <div class="card text-center">
-                <div class="card-body">
+                <div class="section-body p-3">
                     <h5 class="card-title">Buyers</h5>
                     <div class="d-flex justify-content-around">
                         <div>
@@ -86,7 +86,7 @@ else
         </div>
         <div class="col-md-3">
             <div class="card text-center">
-                <div class="card-body">
+                <div class="section-body p-3">
                     <h5 class="card-title">Invoices</h5>
                     <span class="badge bg-info fs-5">@_status.Status?.Invoices</span>
                     <p class="mt-2 mb-0 text-muted"><small>Total invoices</small></p>
@@ -101,7 +101,7 @@ else
         </div>
         <div class="col-md-3">
             <div class="card text-center">
-                <div class="card-body">
+                <div class="section-body p-3">
                     <h5 class="card-title">Credit Notes</h5>
                     <span class="badge bg-secondary fs-5">@_status.Status?.CreditNotes</span>
                     <p class="mt-2 mb-0 text-muted"><small>Total credit notes</small></p>
@@ -117,7 +117,7 @@ else
     </div>
 
     <!-- Full Sync Button -->
-    <div class="card mb-4">
+    <div class="section-container mb-4">
         <div class="card-body d-flex justify-content-between align-items-center">
             <div>
                 <strong>Full Sync</strong>
@@ -131,7 +131,7 @@ else
     </div>
 
     <!-- Unpushed Invoices -->
-    <div class="card mb-4">
+    <div class="section-container mb-4">
         <div class="card-header d-flex justify-content-between align-items-center">
             <strong>Unpushed Invoices</strong>
             <div>
@@ -148,7 +148,7 @@ else
                 }
             </div>
         </div>
-        <div class="card-body">
+        <div class="section-body p-3">
             @if (_unpushedInvoices.Count == 0)
             {
                 <div class="alert alert-success mb-0">All invoices have been pushed to BC.</div>
@@ -188,7 +188,7 @@ else
     </div>
 
     <!-- Unpushed Credit Notes -->
-    <div class="card mb-4">
+    <div class="section-container mb-4">
         <div class="card-header d-flex justify-content-between align-items-center">
             <strong>Unpushed Credit Notes</strong>
             <div>
@@ -205,7 +205,7 @@ else
                 }
             </div>
         </div>
-        <div class="card-body">
+        <div class="section-body p-3">
             @if (_unpushedCreditNotes.Count == 0)
             {
                 <div class="alert alert-success mb-0">All credit notes have been pushed to BC.</div>
@@ -245,7 +245,7 @@ else
     </div>
 
     <!-- Consistency Check -->
-    <div class="card mb-4">
+    <div class="section-container mb-4">
         <div class="card-header d-flex justify-content-between align-items-center">
             <strong>Consistency Check</strong>
             <button class="btn btn-sm btn-outline-primary" @onclick="RunConsistencyCheck" disabled="@_checkingConsistency">
@@ -255,7 +255,7 @@ else
         </div>
         @if (_consistencyResult is not null)
         {
-            <div class="card-body">
+            <div class="section-body p-3">
                 <p class="mb-2">
                     Checked: <strong>@_consistencyResult.Checked_?.Brokers</strong> brokers,
                     <strong>@_consistencyResult.Checked_?.Buyers</strong> buyers,
@@ -283,7 +283,7 @@ else
                             <tbody>
                                 @foreach (var m in _consistencyResult.Mismatches)
                                 {
-                                    <tr class="@(m.Bc == "NOT FOUND" ? "table-danger" : "table-warning")">
+                                    <tr class="@(m.Bc == "NOT FOUND" ? "table-danger" : "credit-row")">
                                         <td><span class="badge @(m.Entity == "Broker" ? "bg-primary" : m.Entity == "Buyer" ? "bg-success" : "bg-info")">@m.Entity</span></td>
                                         <td>@m.Number</td>
                                         <td>@m.Name</td>
@@ -301,7 +301,7 @@ else
     </div>
 
     <!-- Payment Status Check -->
-    <div class="card mb-4">
+    <div class="section-container mb-4">
         <div class="card-header d-flex justify-content-between align-items-center">
             <strong>Payment Status Check</strong>
             <button class="btn btn-sm btn-outline-primary" @onclick="RunPaymentCheck" disabled="@_checkingPayments">
@@ -311,7 +311,7 @@ else
         </div>
         @if (_paymentResult is not null)
         {
-            <div class="card-body">
+            <div class="section-body p-3">
                 <p class="mb-2">
                     Checked: <strong>@_paymentResult.TotalChecked</strong> invoices —
                     @if (_paymentResult.Mismatches == 0)
@@ -340,7 +340,7 @@ else
                         <tbody>
                             @foreach (var inv in _paymentResult.Invoices)
                             {
-                                <tr class="@(inv.Issue != null ? "table-warning" : "")">
+                                <tr class="@(inv.Issue != null ? "credit-row" : "")">
                                     <td>@inv.BcInvoiceNumber</td>
                                     <td>@inv.BuyerNumber @inv.BuyerName</td>
                                     <td><span class="badge @GetLocalStatusBadge(inv.LocalStatus)">@inv.LocalStatus</span></td>
@@ -361,11 +361,11 @@ else
     <!-- Sync Results -->
     @if (_syncResults.Count > 0)
     {
-        <div class="card mb-4">
-            <div class="card-header">
-                <strong>Sync Results</strong>
-            </div>
-            <div class="card-body p-0">
+        <div class="section-container mb-4">
+            <div class="section-header">
+            Sync Results
+        </div>
+            <div class="section-body">
                 <table class="table table-striped mb-0">
                     <thead class="table-dark">
                         <tr>

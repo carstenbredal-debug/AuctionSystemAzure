@@ -51,9 +51,9 @@ else
     @if (_activeTab == "info")
     {
         <!-- General Section -->
-        <div class="card mb-3">
-            <div class="card-header bg-light"><strong>General</strong></div>
-            <div class="card-body">
+        <div class="section-container mb-3">
+            <div class="section-header">General</div>
+            <div class="section-body p-3">
                 <div class="row g-3">
                     <div class="col-md-3">
                         <label class="form-label fw-bold">No. <span class="text-danger">*</span></label>
@@ -81,9 +81,9 @@ else
         </div>
 
         <!-- Address & Contact Section -->
-        <div class="card mb-3">
-            <div class="card-header bg-light"><strong>Address & Contact</strong></div>
-            <div class="card-body">
+        <div class="section-container mb-3">
+            <div class="section-header">Address & Contact</div>
+            <div class="section-body p-3">
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label class="form-label">Address</label>
@@ -136,9 +136,9 @@ else
         </div>
 
         <!-- Invoicing Section -->
-        <div class="card mb-3">
-            <div class="card-header bg-light"><strong>Invoicing</strong></div>
-            <div class="card-body">
+        <div class="section-container mb-3">
+            <div class="section-header">Invoicing</div>
+            <div class="section-body p-3">
                 <div class="row g-3">
                     <div class="col-md-4">
                         <label class="form-label">VAT Registration No.</label>
@@ -193,9 +193,9 @@ else
         </div>
 
         <!-- Payments Section -->
-        <div class="card mb-3">
-            <div class="card-header bg-light"><strong>Payments</strong></div>
-            <div class="card-body">
+        <div class="section-container mb-3">
+            <div class="section-header">Payments</div>
+            <div class="section-body p-3">
                 <div class="row g-3">
                     <div class="col-md-4">
                         <label class="form-label">Payment Terms Code</label>
@@ -222,9 +222,9 @@ else
         </div>
 
         <!-- Banking Section -->
-        <div class="card mb-3">
-            <div class="card-header bg-light"><strong>Banking</strong></div>
-            <div class="card-body">
+        <div class="section-container mb-3">
+            <div class="section-header">Banking</div>
+            <div class="section-body p-3">
                 <div class="row g-3">
                     <div class="col-md-4">
                         <label class="form-label">Bank Name</label>
@@ -267,11 +267,11 @@ else
 
     @if (_activeTab == "lots")
     {
-        <div class="card">
-            <div class="card-header">
-                <strong>Lots</strong>
-            </div>
-            <div class="card-body p-0">
+        <div class="section-container">
+            <div class="section-header">
+            Lots
+        </div>
+            <div class="section-body">
                 <table class="table table-striped table-hover mb-0">
                     <thead class="table-dark">
                         <tr>
@@ -307,10 +307,10 @@ else
 
     @if (_activeTab == "settlements")
     {
-        <div class="card">
-            <div class="card-header">
-                <strong>Settlements</strong>
-            </div>
+        <div class="section-container">
+            <div class="section-header">
+            Settlements
+        </div>
             <div class="card-body text-center text-muted py-4">
                 <p>Settlement information will be available here.</p>
             </div>

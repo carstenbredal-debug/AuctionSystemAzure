@@ -30,43 +30,33 @@ else
 {
     <div class="row mb-4">
         <div class="col-md-2">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h5 class="card-title text-muted">Total</h5>
-                    <h2>@FilteredInvoices.Count</h2>
-                </div>
+            <div class="summary-card">
+                <div class="card-title">Total</div>
+                <div class="card-value">@FilteredInvoices.Count</div>
             </div>
         </div>
         <div class="col-md-2">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h5 class="card-title text-muted">Invoices</h5>
-                    <h2>@FilteredInvoices.Count(i => !i.IsCreditNote)</h2>
-                </div>
+            <div class="summary-card">
+                <div class="card-title">Invoices</div>
+                <div class="card-value">@FilteredInvoices.Count(i => !i.IsCreditNote)</div>
             </div>
         </div>
         <div class="col-md-2">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h5 class="card-title text-muted">Credit Notes</h5>
-                    <h2 class="text-warning">@FilteredInvoices.Count(i => i.IsCreditNote)</h2>
-                </div>
+            <div class="summary-card">
+                <div class="card-title">Credit Notes</div>
+                <div class="card-value">@FilteredInvoices.Count(i => i.IsCreditNote)</div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h5 class="card-title text-muted">Total Amount</h5>
-                    <h2>€@FilteredInvoices.Where(i => !i.IsCreditNote).Sum(i => i.TotalAmount).ToString("N2")</h2>
-                </div>
+            <div class="summary-card">
+                <div class="card-title">Total Amount</div>
+                <div class="card-value">€@FilteredInvoices.Where(i => !i.IsCreditNote).Sum(i => i.TotalAmount).ToString("N2")</div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h5 class="card-title text-muted">Credit Total</h5>
-                    <h2 class="text-warning">€@FilteredInvoices.Where(i => i.IsCreditNote).Sum(i => i.TotalAmount).ToString("N2")</h2>
-                </div>
+            <div class="summary-card">
+                <div class="card-title">Credit Total</div>
+                <div class="card-value">€@FilteredInvoices.Where(i => i.IsCreditNote).Sum(i => i.TotalAmount).ToString("N2")</div>
             </div>
         </div>
     </div>
@@ -113,8 +103,8 @@ else
         <li class="nav-item"><a class="nav-link @(_tab == "credits" ? "active" : "")" href="#" @onclick='() => _tab = "credits"' @onclick:preventDefault>Credit Notes (@FilteredInvoices.Count(i => i.IsCreditNote))</a></li>
     </ul>
 
-    <div class="card">
-        <div class="card-body p-0">
+    <div class="section-container">
+        <div class="section-body">
             <table class="table table-striped table-hover mb-0">
                 <thead class="table-dark">
                     <tr>
@@ -142,7 +132,7 @@ else
                     }
                     @foreach (var inv in FilteredInvoices)
                     {
-                        <tr class="@(inv.IsCreditNote ? "table-warning" : "")">
+                        <tr class="@(inv.IsCreditNote ? "credit-row" : "")">
                             <td>
                                 @if (inv.IsCreditNote)
                                 {
@@ -367,7 +357,7 @@ else
                     <table class="table table-sm mb-3">
                         <tr><td>Required amount:</td><td class="text-end"><strong>@_bcInvoiceAmount.ToString("N2") €</strong></td></tr>
                         <tr><td>Available in BC:</td><td class="text-end"><strong>@_bcAvailableAmount.ToString("N2") €</strong></td></tr>
-                        <tr class="table-warning"><td>Shortfall:</td><td class="text-end"><strong>@((_bcInvoiceAmount - _bcAvailableAmount).ToString("N2")) €</strong></td></tr>
+                        <tr class="credit-row"><td>Shortfall:</td><td class="text-end"><strong>@((_bcInvoiceAmount - _bcAvailableAmount).ToString("N2")) €</strong></td></tr>
                     </table>
                     <p>Do you want to apply the available <strong>@_bcAvailableAmount.ToString("N2") €</strong> to this invoice?</p>
                 </div>

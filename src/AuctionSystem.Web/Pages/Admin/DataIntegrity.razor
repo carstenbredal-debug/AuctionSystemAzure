@@ -28,16 +28,14 @@
 
     <div class="row mb-4">
         <div class="col-md-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h5 class="card-title text-muted">Lots Checked</h5>
-                    <h2>@_totalChecked</h2>
-                </div>
+            <div class="summary-card">
+                <div class="card-title">Lots Checked</div>
+                <div class="card-value">@_totalChecked</div>
             </div>
         </div>
         <div class="col-md-3">
             <div class="card text-center">
-                <div class="card-body">
+                <div class="section-body p-3">
                     <h5 class="card-title text-muted">Mismatches</h5>
                     <h2 class="@(_totalMismatches > 0 ? "text-danger" : "text-success")">@_totalMismatches</h2>
                 </div>
@@ -65,7 +63,7 @@
                 <tbody>
                     @foreach (var m in _mismatches)
                     {
-                        <tr class="table-warning">
+                        <tr class="credit-row">
                             <td>@m.LotNumber</td>
                             <td>@m.Broker</td>
                             <td>@m.Buyer</td>

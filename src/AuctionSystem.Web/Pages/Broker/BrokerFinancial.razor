@@ -20,44 +20,36 @@ else
 {
     <div class="row mb-4">
         <div class="col-md-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h5 class="card-title text-muted">Total Invoices</h5>
-                    <h2>@_invoices.Count</h2>
-                </div>
+            <div class="summary-card">
+                <div class="card-title">Total Invoices</div>
+                <div class="card-value">@_invoices.Count</div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h5 class="card-title text-muted">Outstanding</h5>
-                    <h2 class="text-warning">@_invoices.Count(i => i.Status != "Paid")</h2>
-                </div>
+            <div class="summary-card">
+                <div class="card-title">Outstanding</div>
+                <div class="card-value">@_invoices.Count(i => i.Status != "Paid")</div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h5 class="card-title text-muted">Paid</h5>
-                    <h2 class="text-success">@_invoices.Count(i => i.Status == "Paid")</h2>
-                </div>
+            <div class="summary-card">
+                <div class="card-title">Paid</div>
+                <div class="card-value">@_invoices.Count(i => i.Status == "Paid")</div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h5 class="card-title text-muted">Total Amount</h5>
-                    <h2>€@_invoices.Sum(i => i.TotalAmount).ToString("N2")</h2>
-                </div>
+            <div class="summary-card">
+                <div class="card-title">Total Amount</div>
+                <div class="card-value">€@_invoices.Sum(i => i.TotalAmount).ToString("N2")</div>
             </div>
         </div>
     </div>
 
-    <div class="card">
-        <div class="card-header">
-            <strong>Invoices</strong> <span class="badge bg-secondary">@_invoices.Count</span>
+    <div class="section-container">
+        <div class="section-header">
+            Invoices
         </div>
-        <div class="card-body p-0">
+        <div class="section-body">
             <table class="table table-striped table-hover mb-0">
                 <thead class="table-dark">
                     <tr>
@@ -80,7 +72,7 @@ else
                     }
                     @foreach (var inv in _invoices)
                     {
-                        <tr class="@(inv.IsCreditNote ? "table-warning" : "")">
+                        <tr class="@(inv.IsCreditNote ? "credit-row" : "")">
                             <td>
                                 @if (inv.IsCreditNote)
                                 {

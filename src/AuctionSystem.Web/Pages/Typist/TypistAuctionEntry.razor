@@ -11,15 +11,15 @@
 
 <div class="row">
     <div class="col-md-5">
-        <div class="card mb-4">
-            <div class="card-header">
+        <div class="section-container mb-4">
+            <div class="section-header">
                 <strong>Submit Entry</strong>
                 @if (_currentUser != null)
                 {
                     <span class="badge bg-info float-end">@_currentUser.DisplayName</span>
                 }
             </div>
-            <div class="card-body">
+            <div>
                 @if (!string.IsNullOrEmpty(_successMessage))
                 {
                     <div class="alert alert-success alert-dismissible">
@@ -81,12 +81,12 @@
     </div>
 
     <div class="col-md-7">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
+        <div class="section-container">
+            <div class="section-header">
                 <strong>Recent Results</strong>
                 <span class="badge bg-secondary">@_recentEntries.Count</span>
             </div>
-            <div class="card-body p-0">
+            <div class="section-body">
                 <table class="table table-striped table-hover mb-0">
                     <thead class="table-dark">
                         <tr>

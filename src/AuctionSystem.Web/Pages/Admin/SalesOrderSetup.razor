@@ -39,12 +39,12 @@ else
     @if (_activeTab == "grouporder")
     {
         @* ── Lot Group Order ── *@
-        <div class="card mb-4">
+        <div class="section-container mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <strong>Lot Group Order</strong>
                 <button class="btn btn-sm btn-primary" @onclick="ShowAddGroupOrder">Add Group</button>
             </div>
-            <div class="card-body p-0">
+            <div class="section-body">
                 <table class="table table-striped table-hover mb-0">
                     <thead class="table-dark">
                         <tr>
@@ -79,12 +79,12 @@ else
     else if (_activeTab == "sizerules")
     {
         @* ── Lot Size Rules ── *@
-        <div class="card mb-4">
+        <div class="section-container mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <strong>Lot Size Rules</strong>
                 <button class="btn btn-sm btn-primary" @onclick="ShowAddSizeRule">Add Rule</button>
             </div>
-            <div class="card-body p-0">
+            <div class="section-body">
                 <table class="table table-striped table-hover mb-0">
                     <thead class="table-dark">
                         <tr>
@@ -164,12 +164,11 @@ else
             @if (_activeSortGroup != null)
             {
                 var groupItems = _sortOrders.Where(s => s.ColumnName == _activeSortGroup).OrderBy(s => s.SortOrder).ToList();
-                <div class="card mb-3">
-                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                        <strong>@_activeSortGroup</strong>
-                        <span class="badge bg-dark">@groupItems.Count values</span>
-                    </div>
-                    <div class="card-body p-0">
+                <div class="section-container mb-3">
+                    <div class="section-header">
+            @_activeSortGroup
+        </div>
+                    <div class="section-body">
                         <table class="table table-striped table-hover mb-0">
                             <thead>
                                 <tr>
@@ -204,12 +203,12 @@ else
     else if (_activeTab == "catalognumber")
     {
         @* ── Catalog Number Rules ── *@
-        <div class="card mb-4">
+        <div class="section-container mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <strong>Catalog Number Rules</strong>
                 <button class="btn btn-sm btn-primary" @onclick="ShowAddCatalogRule">Add Rule</button>
             </div>
-            <div class="card-body p-0">
+            <div class="section-body">
                 <table class="table table-striped table-hover mb-0">
                     <thead class="table-dark">
                         <tr>

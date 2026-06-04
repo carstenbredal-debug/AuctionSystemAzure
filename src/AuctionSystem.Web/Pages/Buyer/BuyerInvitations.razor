@@ -27,10 +27,10 @@ else
     }
 
     <div class="card mb-4 border-primary">
-        <div class="card-header bg-primary text-white">
+        <div class="section-header">
             <strong>Request Connection to Broker</strong>
         </div>
-        <div class="card-body">
+        <div>
             <div class="row g-3 align-items-end">
                 <div class="col-md-6">
                     <label class="form-label">Select Broker</label>
@@ -53,11 +53,11 @@ else
 
     @if (_brokerInitiatedPending.Any())
     {
-        <div class="card mb-4 border-warning">
-            <div class="card-header bg-warning text-dark">
+        <div class="section-container mb-4">
+            <div class="section-header">
                 <strong>Pending Invitations from Brokers</strong> <span class="badge bg-dark">@_brokerInitiatedPending.Count</span>
             </div>
-            <div class="card-body p-0">
+            <div class="section-body">
                 <table class="table table-hover mb-0">
                     <thead>
                         <tr>
@@ -87,10 +87,10 @@ else
     @if (_buyerInitiatedPending.Any())
     {
         <div class="card mb-4 border-info">
-            <div class="card-header bg-info text-white">
+            <div class="section-header">
                 <strong>Your Pending Requests</strong> <span class="badge bg-dark">@_buyerInitiatedPending.Count</span>
             </div>
-            <div class="card-body p-0">
+            <div class="section-body">
                 <table class="table table-hover mb-0">
                     <thead>
                         <tr>
@@ -121,11 +121,11 @@ else
 
     @if (_approvedRequests.Any())
     {
-        <div class="card">
-            <div class="card-header">
+        <div class="section-container">
+            <div class="section-header">
                 <strong>My Brokers</strong> <span class="badge bg-secondary">@_approvedRequests.Count</span>
             </div>
-            <div class="card-body p-0">
+            <div class="section-body">
                 <table class="table table-striped table-hover mb-0">
                     <thead class="table-dark">
                         <tr>

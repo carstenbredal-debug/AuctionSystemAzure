@@ -28,7 +28,7 @@ else
 
     @if (_activeTab == "bc")
     {
-        <div class="card">
+        <div class="section-container">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <strong>Business Central</strong>
                 @if (_info.BusinessCentral.Connected)
@@ -44,7 +44,7 @@ else
                     <span class="badge bg-danger">Not configured</span>
                 }
             </div>
-            <div class="card-body">
+            <div class="section-body p-3">
                 @if (!_info.BusinessCentral.Configured)
                 {
                     <div class="alert alert-warning mb-0">
@@ -87,7 +87,7 @@ else
 
     @if (_activeTab == "azure")
     {
-        <div class="card mb-4">
+        <div class="section-container mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <strong>Azure SQL Database</strong>
                 @if (_info.Azure.Sql.Connected)
@@ -99,7 +99,7 @@ else
                     <span class="badge bg-danger">Not connected</span>
                 }
             </div>
-            <div class="card-body">
+            <div class="section-body p-3">
                 <table class="table table-sm mb-0">
                     <tbody>
                         <tr>
@@ -122,7 +122,7 @@ else
             </div>
         </div>
 
-        <div class="card">
+        <div class="section-container">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <strong>Azure Blob Storage</strong>
                 @if (_info.Azure.BlobStorage.Configured)
@@ -134,7 +134,7 @@ else
                     <span class="badge bg-warning">Not configured</span>
                 }
             </div>
-            <div class="card-body">
+            <div class="section-body p-3">
                 @if (_info.Azure.BlobStorage.Configured)
                 {
                     <p class="mb-0 text-muted">Blob storage is configured and available for PDF storage.</p>

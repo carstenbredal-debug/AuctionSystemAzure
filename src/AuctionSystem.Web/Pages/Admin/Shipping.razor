@@ -32,7 +32,7 @@ else
     <div class="row mb-4">
         <div class="col-md-3">
             <div class="card text-center">
-                <div class="card-body">
+                <div class="section-body p-3">
                     <h5 class="card-title text-muted">Total Boxes</h5>
                     <h3>@FilteredBoxes.Count</h3>
                 </div>
@@ -40,7 +40,7 @@ else
         </div>
         <div class="col-md-3">
             <div class="card text-center">
-                <div class="card-body">
+                <div class="section-body p-3">
                     <h5 class="card-title text-muted">Total Skins</h5>
                     <h3>@FilteredBoxes.Sum(b => b.Skins)</h3>
                 </div>
@@ -48,8 +48,8 @@ else
         </div>
     </div>
 
-    <div class="card">
-        <div class="card-body p-0">
+    <div class="section-container">
+        <div class="section-body">
             <table class="table table-striped table-hover mb-0">
                 <thead class="table-dark">
                     <tr>

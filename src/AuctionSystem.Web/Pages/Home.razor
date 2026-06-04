@@ -16,7 +16,7 @@ else
     <div class="row mt-4">
         <div class="col-md-3">
             <div class="card text-bg-primary mb-3">
-                <div class="card-body">
+                <div class="section-body p-3">
                     <h5 class="card-title">Auctions</h5>
                     <p class="card-text display-6">@stats.TotalAuctions</p>
                     <small>@stats.ActiveAuctions active</small>
@@ -25,7 +25,7 @@ else
         </div>
         <div class="col-md-3">
             <div class="card text-bg-success mb-3">
-                <div class="card-body">
+                <div class="section-body p-3">
                     <h5 class="card-title">Lots</h5>
                     <p class="card-text display-6">@stats.TotalLots</p>
                     <small>@stats.SoldLots sold</small>
@@ -34,7 +34,7 @@ else
         </div>
         <div class="col-md-3">
             <div class="card text-bg-info mb-3">
-                <div class="card-body">
+                <div class="section-body p-3">
                     <h5 class="card-title">Brokers</h5>
                     <p class="card-text display-6">@stats.TotalBrokers</p>
                     <small>@stats.TotalBuyers buyers</small>
@@ -43,7 +43,7 @@ else
         </div>
         <div class="col-md-3">
             <div class="card text-bg-warning mb-3">
-                <div class="card-body">
+                <div class="section-body p-3">
                     <h5 class="card-title">Farmers</h5>
                     <p class="card-text display-6">@stats.TotalFarmers</p>
                     <small>@stats.PendingSettlements pending settlements</small>
@@ -54,9 +54,9 @@ else
 
     <div class="row mt-3">
         <div class="col-md-6">
-            <div class="card">
-                <div class="card-header"><strong>Recent Auctions</strong></div>
-                <div class="card-body">
+            <div class="section-container">
+                <div class="section-header">Recent Auctions</div>
+                <div class="section-body p-3">
                     <table class="table table-sm">
                         <thead><tr><th>Number</th><th>Title</th><th>Date</th><th>Status</th></tr></thead>
                         <tbody>
@@ -75,9 +75,9 @@ else
             </div>
         </div>
         <div class="col-md-6">
-            <div class="card">
-                <div class="card-header"><strong>Bid Activity</strong></div>
-                <div class="card-body">
+            <div class="section-container">
+                <div class="section-header">Bid Activity</div>
+                <div class="section-body p-3">
                     <p>Total bids: <strong>@stats.TotalBids</strong></p>
                     <p>Pending invoices: <strong>@stats.PendingInvoices</strong></p>
                 </div>

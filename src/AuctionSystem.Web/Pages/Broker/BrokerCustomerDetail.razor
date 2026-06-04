@@ -43,9 +43,9 @@ else
     @if (_activeTab == "info")
     {
         <!-- General Section -->
-        <div class="card mb-3">
-            <div class="card-header bg-light"><strong>General</strong></div>
-            <div class="card-body">
+        <div class="section-container mb-3">
+            <div class="section-header">General</div>
+            <div class="section-body p-3">
                 <div class="row g-3">
                     <div class="col-md-3">
                         <label class="form-label fw-bold">No.</label>
@@ -80,9 +80,9 @@ else
         </div>
 
         <!-- Address & Contact Section -->
-        <div class="card mb-3">
-            <div class="card-header bg-light"><strong>Address & Contact</strong></div>
-            <div class="card-body">
+        <div class="section-container mb-3">
+            <div class="section-header">Address & Contact</div>
+            <div class="section-body p-3">
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label class="form-label">Address</label>
@@ -129,9 +129,9 @@ else
         </div>
 
         <!-- Invoicing Section -->
-        <div class="card mb-3">
-            <div class="card-header bg-light"><strong>Invoicing</strong></div>
-            <div class="card-body">
+        <div class="section-container mb-3">
+            <div class="section-header">Invoicing</div>
+            <div class="section-body p-3">
                 <div class="row g-3">
                     <div class="col-md-4">
                         <label class="form-label">VAT Registration No.</label>
@@ -158,9 +158,9 @@ else
         </div>
 
         <!-- Payments Section -->
-        <div class="card mb-3">
-            <div class="card-header bg-light"><strong>Payments</strong></div>
-            <div class="card-body">
+        <div class="section-container mb-3">
+            <div class="section-header">Payments</div>
+            <div class="section-body p-3">
                 <div class="row g-3">
                     <div class="col-md-4">
                         <label class="form-label">Payment Terms Code</label>
@@ -188,12 +188,11 @@ else
     }
     else if (_activeTab == "lots")
     {
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <strong>Lots Sold to @_buyer.Name</strong>
-                <span class="badge bg-secondary">@_soldLots.Count</span>
-            </div>
-            <div class="card-body p-0">
+        <div class="section-container">
+            <div class="section-header">
+            Lots Sold to @_buyer.Name
+        </div>
+            <div class="section-body">
                 <table class="table table-striped table-hover mb-0">
                     <thead class="table-dark">
                         <tr>
@@ -242,44 +241,36 @@ else
     {
         <div class="row mb-4">
             <div class="col-md-3">
-                <div class="card text-center">
-                    <div class="card-body">
-                        <h5 class="card-title text-muted">Total Invoices</h5>
-                        <h2>@_customerInvoices.Count</h2>
-                    </div>
-                </div>
+                <div class="summary-card">
+                <div class="card-title">Total Invoices</div>
+                <div class="card-value">@_customerInvoices.Count</div>
+            </div>
             </div>
             <div class="col-md-3">
-                <div class="card text-center">
-                    <div class="card-body">
-                        <h5 class="card-title text-muted">Outstanding</h5>
-                        <h2 class="text-warning">@_customerInvoices.Count(i => i.Status != "Paid")</h2>
-                    </div>
-                </div>
+                <div class="summary-card">
+                <div class="card-title">Outstanding</div>
+                <div class="card-value">@_customerInvoices.Count(i => i.Status != "Paid")</div>
+            </div>
             </div>
             <div class="col-md-3">
-                <div class="card text-center">
-                    <div class="card-body">
-                        <h5 class="card-title text-muted">Paid</h5>
-                        <h2 class="text-success">@_customerInvoices.Count(i => i.Status == "Paid")</h2>
-                    </div>
-                </div>
+                <div class="summary-card">
+                <div class="card-title">Paid</div>
+                <div class="card-value">@_customerInvoices.Count(i => i.Status == "Paid")</div>
+            </div>
             </div>
             <div class="col-md-3">
-                <div class="card text-center">
-                    <div class="card-body">
-                        <h5 class="card-title text-muted">Total Amount</h5>
-                        <h2>€@_customerInvoices.Sum(i => i.TotalAmount).ToString("N2")</h2>
-                    </div>
-                </div>
+                <div class="summary-card">
+                <div class="card-title">Total Amount</div>
+                <div class="card-value">€@_customerInvoices.Sum(i => i.TotalAmount).ToString("N2")</div>
+            </div>
             </div>
         </div>
 
-        <div class="card">
-            <div class="card-header">
-                <strong>Invoices</strong> <span class="badge bg-secondary">@_customerInvoices.Count</span>
-            </div>
-            <div class="card-body p-0">
+        <div class="section-container">
+            <div class="section-header">
+            Invoices
+        </div>
+            <div class="section-body">
                 <table class="table table-striped table-hover mb-0">
                     <thead class="table-dark">
                         <tr>
@@ -301,7 +292,7 @@ else
                         }
                         @foreach (var inv in _customerInvoices)
                         {
-                            <tr class="@(inv.IsCreditNote ? "table-warning" : "")">
+                            <tr class="@(inv.IsCreditNote ? "credit-row" : "")">
                                 <td>
                                     @if (inv.IsCreditNote)
                                     {

@@ -39,12 +39,12 @@ else
 {
     @foreach (var group in _disagreements)
     {
-        <div class="card mb-4">
-            <div class="card-header bg-warning bg-opacity-25 d-flex justify-content-between align-items-center">
+        <div class="section-container mb-4">
+            <div class="section-header">
                 <strong>Lot #@group.LotNumber</strong>
                 <span class="badge bg-danger">Disagreement</span>
             </div>
-            <div class="card-body">
+            <div>
                 <h6>Original Entries:</h6>
                 <table class="table table-sm table-bordered mb-3">
                     <thead class="table-light">

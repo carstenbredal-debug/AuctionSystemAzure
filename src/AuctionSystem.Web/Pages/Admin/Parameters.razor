@@ -21,12 +21,12 @@ else
         </div>
     }
 
-    <div class="card mb-4">
+    <div class="section-container mb-4">
         <div class="card-header d-flex justify-content-between align-items-center">
             <strong>System Parameters</strong>
             <button class="btn btn-sm btn-primary" @onclick="ShowAddForm">Add Parameter</button>
         </div>
-        <div class="card-body p-0">
+        <div class="section-body">
             <table class="table table-striped table-hover mb-0">
                 <thead class="table-dark">
                     <tr>
@@ -82,7 +82,7 @@ else
                 <strong>@(_editing?.Id > 0 ? "Edit Parameter" : "Add Parameter")</strong>
                 <button type="button" class="btn-close btn-close-white" @onclick="Cancel"></button>
             </div>
-            <div class="card-body">
+            <div class="section-body p-3">
                 <div class="row g-3">
                     <div class="col-md-4">
                         <label class="form-label">Parameter Key <span class="text-danger">*</span></label>
