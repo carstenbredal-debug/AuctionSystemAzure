@@ -41,7 +41,7 @@ var host = new HostBuilder()
             opts.CompanyId = context.Configuration["BC_COMPANY_ID"]
                 ?? context.Configuration["Values:BC_COMPANY_ID"] ?? "";
             opts.CompanyName = context.Configuration["BC_COMPANY_NAME"]
-                ?? context.Configuration["Values:BC_COMPANY_NAME"] ?? "Lot Test 3";
+                ?? context.Configuration["Values:BC_COMPANY_NAME"] ?? "KPHG";
         });
 
         var bcTenantId = context.Configuration["BC_TENANT_ID"]
