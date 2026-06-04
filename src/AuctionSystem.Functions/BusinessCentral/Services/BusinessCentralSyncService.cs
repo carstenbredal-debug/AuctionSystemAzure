@@ -146,121 +146,19 @@ public class BusinessCentralSyncService
             .ToListAsync();
 
         result.TotalProcessed = invoices.Count;
-        var companyId = await _bcClient.ResolveCompanyIdAsync();
 
         foreach (var invoice in invoices)
         {
             try
             {
-                // Skip if already pushed
                 if (!string.IsNullOrEmpty(invoice.BcInvoiceNumber))
                 {
                     result.Skipped++;
                     continue;
                 }
 
-                // Check by external doc if we have an invoice number
-                if (!string.IsNullOrEmpty(invoice.InvoiceNumber))
-                {
-                    var existing = await _bcClient.GetSalesInvoiceByExternalDocAsync(companyId, invoice.InvoiceNumber);
-                    if (existing is not null)
-                    {
-                        invoice.BcInvoiceNumber = existing.Number;
-                        invoice.BcInvoiceId = existing.Id;
-                        invoice.InvoiceNumber = existing.Number;
-                        await _db.SaveChangesAsync();
-                        result.Skipped++;
-                        _logger.LogInformation("Invoice {Id} already exists in BC as {Number}", invoice.Id, existing.Number);
-                        continue;
-                    }
-                }
-
-                var buyerBcCustomer = await _bcClient.GetCustomerByNumberAsync(companyId, invoice.Buyer.BuyerNumber);
-                if (buyerBcCustomer is null)
-                {
-                    result.Failed++;
-                    result.Errors.Add($"Invoice {invoice.InvoiceNumber}: Buyer {invoice.Buyer.BuyerNumber} not found in BC. Sync buyers first.");
-                    continue;
-                }
-
-                var extDoc = !string.IsNullOrEmpty(invoice.InvoiceNumber) ? invoice.InvoiceNumber : $"AUC-{invoice.Id}";
-                var postingDate = DateTime.UtcNow;
-                var bcInvoice = new BcSalesInvoice
-                {
-                    ExternalDocumentNumber = extDoc,
-                    InvoiceDate = postingDate.ToString("yyyy-MM-dd"),
-                    DueDate = (invoice.PromptDate ?? postingDate.AddDays(30)).ToString("yyyy-MM-dd"),
-                    CustomerId = buyerBcCustomer.Id,
-                    CurrencyCode = ""
-                };
-
-                var created = await _bcClient.CreateSalesInvoiceAsync(companyId, bcInvoice);
-
-                int seq = 10000;
-                foreach (var line in invoice.Lines)
-                {
-                    var bcLine = new BcSalesInvoiceLine
-                    {
-                        DocumentId = created.Id,
-                        Sequence = seq,
-                        LineType = "Item",
-                        LineObjectNumber = "LOTSALE",
-                        Description = $"Lot {line.LotNumber}: {line.Description} ({line.Skins} skins)",
-                        Quantity = line.Skins,
-                        UnitPrice = line.PricePerSkin
-                    };
-                    await _bcClient.CreateSalesInvoiceLineAsync(companyId, created.Id, bcLine);
-                    seq += 10000;
-                }
-
-                if (invoice.AuctionFee != 0)
-                {
-                    var feeLine = new BcSalesInvoiceLine
-                    {
-                        DocumentId = created.Id,
-                        Sequence = seq,
-                        LineType = "Item",
-                        LineObjectNumber = "AUCTFEE",
-                        Description = "Auction Fee",
-                        Quantity = 1,
-                        UnitPrice = invoice.AuctionFee
-                    };
-                    await _bcClient.CreateSalesInvoiceLineAsync(companyId, created.Id, feeLine);
-                    seq += 10000;
-                }
-
-                if (invoice.Commission != 0)
-                {
-                    var commLine = new BcSalesInvoiceLine
-                    {
-                        DocumentId = created.Id,
-                        Sequence = seq,
-                        LineType = "Item",
-                        LineObjectNumber = "BROKERCOMM",
-                        Description = "Commission",
-                        Quantity = 1,
-                        UnitPrice = invoice.Commission
-                    };
-                    await _bcClient.CreateSalesInvoiceLineAsync(companyId, created.Id, commLine);
-                }
-
-                // Post the invoice in BC and get the posted number
-                var posted = await _bcClient.PostSalesInvoiceAsync(companyId, created.Id);
-                var finalNumber = posted?.Number ?? created.Number;
-                var finalId = posted?.Id ?? created.Id;
-
-                // Store BC-assigned invoice number as THE invoice number
-                invoice.BcInvoiceNumber = finalNumber;
-                invoice.BcInvoiceId = finalId;
-                invoice.InvoiceNumber = finalNumber;
-
-                // Fetch PDF from BC and store in blob storage
-                await TryFetchAndStorePdfAsync(companyId, finalId, invoice);
-
-                await _db.SaveChangesAsync();
-
+                await PushInvoiceToBcAsync(invoice);
                 result.Created++;
-                _logger.LogInformation("Created and posted BC sales invoice {BcNumber}", finalNumber);
             }
             catch (Exception ex)
             {
@@ -317,14 +215,72 @@ public class BusinessCentralSyncService
     {
         var companyId = await _bcClient.ResolveCompanyIdAsync();
 
-        // Skip if already pushed
+        if (await SkipAlreadyPushedCreditNoteAsync(companyId, creditNote)) return;
+
+        var buyer = await ResolveBuyerAsBcCustomerAsync(companyId, creditNote.Id, creditNote.BuyerId, creditNote.Buyer);
+        if (buyer == null) return;
+
+        var extDocNumber = !string.IsNullOrEmpty(creditNote.InvoiceNumber) ? creditNote.InvoiceNumber : $"CN-{creditNote.Id}";
+        var bcCreditMemo = new BcSalesCreditMemo
+        {
+            ExternalDocumentNumber = extDocNumber,
+            CreditMemoDate = DateTime.UtcNow.ToString("yyyy-MM-dd"),
+            CustomerId = buyer.Value.BcCustomerId,
+            CurrencyCode = ""
+        };
+
+        var created = await _bcClient.CreateSalesCreditMemoAsync(companyId, bcCreditMemo);
+        await AddCreditMemoLinesToBcAsync(companyId, created.Id, creditNote);
+
+        var posted = await _bcClient.PostSalesCreditMemoAsync(companyId, created.Id);
+        var finalNumber = posted?.Number ?? created.Number;
+        var finalId = posted?.Id ?? created.Id;
+
+        creditNote.BcInvoiceNumber = finalNumber;
+        creditNote.BcInvoiceId = finalId;
+        creditNote.InvoiceNumber = finalNumber;
+
+        await TryFetchAndStoreCreditMemoPdfAsync(companyId, finalId, creditNote);
+        await _db.SaveChangesAsync();
+
+        _logger.LogInformation("Created and posted BC sales credit memo {BcNumber} (customer={Customer})",
+            creditNote.InvoiceNumber, buyer.Value.BuyerNumber);
+
+        // Apply credit memo against original invoice in BC
+        await TryApplyCreditMemoToInvoiceAsync(companyId, creditNote, buyer.Value.BuyerNumber);
+    }
+
+    private async Task<bool> SkipAlreadyPushedInvoiceAsync(Guid companyId, Invoice invoice)
+    {
+        if (!string.IsNullOrEmpty(invoice.BcInvoiceNumber))
+        {
+            _logger.LogInformation("Invoice {Id} already pushed to BC as {Number}", invoice.Id, invoice.BcInvoiceNumber);
+            return true;
+        }
+
+        if (!string.IsNullOrEmpty(invoice.InvoiceNumber))
+        {
+            var existing = await _bcClient.GetSalesInvoiceByExternalDocAsync(companyId, invoice.InvoiceNumber);
+            if (existing is not null)
+            {
+                invoice.BcInvoiceNumber = existing.Number;
+                invoice.BcInvoiceId = existing.Id;
+                await _db.SaveChangesAsync();
+                _logger.LogInformation("Invoice {Id} already exists in BC as {Number}", invoice.Id, existing.Number);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private async Task<bool> SkipAlreadyPushedCreditNoteAsync(Guid companyId, Invoice creditNote)
+    {
         if (!string.IsNullOrEmpty(creditNote.BcInvoiceNumber))
         {
             _logger.LogInformation("Credit note {Id} already pushed to BC as {Number}", creditNote.Id, creditNote.BcInvoiceNumber);
-            return;
+            return true;
         }
 
-        // Check if already exists in BC by external doc number
         if (!string.IsNullOrEmpty(creditNote.InvoiceNumber))
         {
             var existing = await _bcClient.GetSalesCreditMemoByExternalDocAsync(companyId, creditNote.InvoiceNumber);
@@ -335,46 +291,80 @@ public class BusinessCentralSyncService
                 creditNote.InvoiceNumber = existing.Number;
                 await _db.SaveChangesAsync();
                 _logger.LogInformation("Credit note {Id} already exists in BC as {Number}", creditNote.Id, existing.Number);
-                return;
+                return true;
             }
         }
+        return false;
+    }
 
-        // Resolve buyer as BC customer
-        var buyer = creditNote.Buyer ?? await _db.Buyers.FindAsync(creditNote.BuyerId);
+    private readonly record struct ResolvedBuyer(Guid BcCustomerId, string BuyerNumber);
+
+    private async Task<ResolvedBuyer?> ResolveBuyerAsBcCustomerAsync(Guid companyId, int documentId, int buyerId, Buyer? buyer)
+    {
+        buyer ??= await _db.Buyers.FindAsync(buyerId);
         if (buyer == null)
         {
-            _logger.LogWarning("Credit note {Id}: Buyer {BuyerId} not found, skipping BC push", creditNote.Id, creditNote.BuyerId);
-            return;
+            _logger.LogWarning("Document {Id}: Buyer {BuyerId} not found, skipping BC push", documentId, buyerId);
+            return null;
         }
 
-        var buyerBcCustomer = await _bcClient.GetCustomerByNumberAsync(companyId, buyer.BuyerNumber);
-        if (buyerBcCustomer is null)
+        var bcCustomer = await _bcClient.GetCustomerByNumberAsync(companyId, buyer.BuyerNumber);
+        if (bcCustomer is null)
         {
-            _logger.LogWarning("Credit note {Id}: Buyer {Number} not found in BC, skipping", creditNote.Id, buyer.BuyerNumber);
-            return;
+            _logger.LogWarning("Document {Id}: Buyer {Number} not found in BC, skipping", documentId, buyer.BuyerNumber);
+            return null;
         }
 
-        // Build external document number from the original invoice's BC number
-        var extDocNumber = !string.IsNullOrEmpty(creditNote.InvoiceNumber) ? creditNote.InvoiceNumber : $"CN-{creditNote.Id}";
+        return new ResolvedBuyer(bcCustomer.Id, buyer.BuyerNumber);
+    }
 
-        var bcCreditMemo = new BcSalesCreditMemo
-        {
-            ExternalDocumentNumber = extDocNumber,
-            CreditMemoDate = DateTime.UtcNow.ToString("yyyy-MM-dd"),
-            CustomerId = buyerBcCustomer.Id,
-            CurrencyCode = ""
-        };
-
-        var created = await _bcClient.CreateSalesCreditMemoAsync(companyId, bcCreditMemo);
-
+    private async Task AddInvoiceLinesToBcAsync(Guid companyId, Guid documentId, Invoice invoice)
+    {
         int seq = 10000;
+        foreach (var line in invoice.Lines)
+        {
+            var bcLine = new BcSalesInvoiceLine
+            {
+                DocumentId = documentId,
+                Sequence = seq,
+                LineType = "Item",
+                LineObjectNumber = "LOTSALE",
+                Description = $"Lot {line.LotNumber}: {line.Description} ({line.Skins} skins)",
+                Quantity = line.Skins,
+                UnitPrice = line.PricePerSkin
+            };
+            await _bcClient.CreateSalesInvoiceLineAsync(companyId, documentId, bcLine);
+            seq += 10000;
+        }
 
-        // Lot sale lines — Item LOTSALE (use absolute values for credit memo)
+        if (invoice.AuctionFee != 0)
+        {
+            await _bcClient.CreateSalesInvoiceLineAsync(companyId, documentId, new BcSalesInvoiceLine
+            {
+                DocumentId = documentId, Sequence = seq, LineType = "Item",
+                LineObjectNumber = "AUCTFEE", Description = "Auction Fee", Quantity = 1, UnitPrice = invoice.AuctionFee
+            });
+            seq += 10000;
+        }
+
+        if (invoice.Commission != 0)
+        {
+            await _bcClient.CreateSalesInvoiceLineAsync(companyId, documentId, new BcSalesInvoiceLine
+            {
+                DocumentId = documentId, Sequence = seq, LineType = "Item",
+                LineObjectNumber = "BROKERCOMM", Description = "Commission", Quantity = 1, UnitPrice = invoice.Commission
+            });
+        }
+    }
+
+    private async Task AddCreditMemoLinesToBcAsync(Guid companyId, Guid documentId, Invoice creditNote)
+    {
+        int seq = 10000;
         foreach (var line in creditNote.Lines)
         {
             var bcLine = new BcSalesCreditMemoLine
             {
-                DocumentId = created.Id,
+                DocumentId = documentId,
                 Sequence = seq,
                 LineType = "Item",
                 LineObjectNumber = "LOTSALE",
@@ -382,63 +372,28 @@ public class BusinessCentralSyncService
                 Quantity = Math.Abs(line.Skins),
                 UnitPrice = Math.Abs(line.PricePerSkin)
             };
-            await _bcClient.CreateSalesCreditMemoLineAsync(companyId, created.Id, bcLine);
+            await _bcClient.CreateSalesCreditMemoLineAsync(companyId, documentId, bcLine);
             seq += 10000;
         }
 
-        // Auction Fee line — Item AUCTFEE
         if (creditNote.AuctionFee != 0)
         {
-            var feeLine = new BcSalesCreditMemoLine
+            await _bcClient.CreateSalesCreditMemoLineAsync(companyId, documentId, new BcSalesCreditMemoLine
             {
-                DocumentId = created.Id,
-                Sequence = seq,
-                LineType = "Item",
-                LineObjectNumber = "AUCTFEE",
-                Description = "Auction Fee",
-                Quantity = 1,
-                UnitPrice = Math.Abs(creditNote.AuctionFee)
-            };
-            await _bcClient.CreateSalesCreditMemoLineAsync(companyId, created.Id, feeLine);
+                DocumentId = documentId, Sequence = seq, LineType = "Item",
+                LineObjectNumber = "AUCTFEE", Description = "Auction Fee", Quantity = 1, UnitPrice = Math.Abs(creditNote.AuctionFee)
+            });
             seq += 10000;
         }
 
-        // Commission line — Item BROKERCOMM
         if (creditNote.Commission != 0)
         {
-            var commLine = new BcSalesCreditMemoLine
+            await _bcClient.CreateSalesCreditMemoLineAsync(companyId, documentId, new BcSalesCreditMemoLine
             {
-                DocumentId = created.Id,
-                Sequence = seq,
-                LineType = "Item",
-                LineObjectNumber = "BROKERCOMM",
-                Description = "Commission",
-                Quantity = 1,
-                UnitPrice = Math.Abs(creditNote.Commission)
-            };
-            await _bcClient.CreateSalesCreditMemoLineAsync(companyId, created.Id, commLine);
+                DocumentId = documentId, Sequence = seq, LineType = "Item",
+                LineObjectNumber = "BROKERCOMM", Description = "Commission", Quantity = 1, UnitPrice = Math.Abs(creditNote.Commission)
+            });
         }
-
-        // Post the credit memo in BC and get the posted number
-        var posted = await _bcClient.PostSalesCreditMemoAsync(companyId, created.Id);
-        var finalNumber = posted?.Number ?? created.Number;
-        var finalId = posted?.Id ?? created.Id;
-
-        // Store BC-assigned number
-        creditNote.BcInvoiceNumber = finalNumber;
-        creditNote.BcInvoiceId = finalId;
-        creditNote.InvoiceNumber = finalNumber;
-
-        // Fetch PDF from BC and store in blob storage
-        await TryFetchAndStoreCreditMemoPdfAsync(companyId, finalId, creditNote);
-
-        await _db.SaveChangesAsync();
-
-        _logger.LogInformation("Created and posted BC sales credit memo {BcNumber} (customer={Customer})",
-            creditNote.InvoiceNumber, buyer.BuyerNumber);
-
-        // Apply credit memo against original invoice in BC
-        await TryApplyCreditMemoToInvoiceAsync(companyId, creditNote, buyer.BuyerNumber);
     }
 
     private async Task TryApplyCreditMemoToInvoiceAsync(Guid companyId, Invoice creditNote, string buyerNumber)
@@ -525,121 +480,38 @@ public class BusinessCentralSyncService
     {
         var companyId = await _bcClient.ResolveCompanyIdAsync();
 
-        // Check if already pushed (by BC reference or external doc)
+        if (await SkipAlreadyPushedInvoiceAsync(companyId, invoice)) return;
+
+        var buyer = await ResolveBuyerAsBcCustomerAsync(companyId, invoice.Id, invoice.BuyerId, invoice.Buyer);
+        if (buyer == null) return;
+
         var extDocRef = !string.IsNullOrEmpty(invoice.InvoiceNumber) ? invoice.InvoiceNumber : $"AUC-{invoice.Id}";
-        if (!string.IsNullOrEmpty(invoice.BcInvoiceNumber))
-        {
-            _logger.LogInformation("Invoice {Id} already pushed to BC as {Number}", invoice.Id, invoice.BcInvoiceNumber);
-            return;
-        }
-        var existing = !string.IsNullOrEmpty(invoice.InvoiceNumber)
-            ? await _bcClient.GetSalesInvoiceByExternalDocAsync(companyId, invoice.InvoiceNumber)
-            : null;
-        if (existing is not null)
-        {
-            invoice.BcInvoiceNumber = existing.Number;
-            invoice.BcInvoiceId = existing.Id;
-            await _db.SaveChangesAsync();
-            _logger.LogInformation("Invoice {Id} already exists in BC as {Number}", invoice.Id, existing.Number);
-            return;
-        }
-
-        // Resolve buyer as BC customer
-        var buyer = invoice.Buyer ?? await _db.Buyers.FindAsync(invoice.BuyerId);
-        if (buyer == null)
-        {
-            _logger.LogWarning("Invoice {Id}: Buyer {BuyerId} not found, skipping BC push", invoice.Id, invoice.BuyerId);
-            return;
-        }
-
-        var buyerBcCustomer = await _bcClient.GetCustomerByNumberAsync(companyId, buyer.BuyerNumber);
-        if (buyerBcCustomer is null)
-        {
-            _logger.LogWarning("Invoice {Id}: Buyer {Number} not found in BC, skipping", invoice.Id, buyer.BuyerNumber);
-            return;
-        }
-
         var postingDate = DateTime.UtcNow;
         var bcInvoice = new BcSalesInvoice
         {
             ExternalDocumentNumber = extDocRef,
             InvoiceDate = postingDate.ToString("yyyy-MM-dd"),
             DueDate = (invoice.PromptDate ?? postingDate.AddDays(30)).ToString("yyyy-MM-dd"),
-            CustomerId = buyerBcCustomer.Id,
+            CustomerId = buyer.Value.BcCustomerId,
             CurrencyCode = ""
         };
 
         var created = await _bcClient.CreateSalesInvoiceAsync(companyId, bcInvoice);
+        await AddInvoiceLinesToBcAsync(companyId, created.Id, invoice);
 
-        int seq = 10000;
-
-        // Lot sale lines — Item LOTSALE
-        foreach (var line in invoice.Lines)
-        {
-            var bcLine = new BcSalesInvoiceLine
-            {
-                DocumentId = created.Id,
-                Sequence = seq,
-                LineType = "Item",
-                LineObjectNumber = "LOTSALE",
-                Description = $"Lot {line.LotNumber}: {line.Description} ({line.Skins} skins)",
-                Quantity = line.Skins,
-                UnitPrice = line.PricePerSkin
-            };
-            await _bcClient.CreateSalesInvoiceLineAsync(companyId, created.Id, bcLine);
-            seq += 10000;
-        }
-
-        // Auction Fee line — Item AUCTFEE
-        if (invoice.AuctionFee != 0)
-        {
-            var feeLine = new BcSalesInvoiceLine
-            {
-                DocumentId = created.Id,
-                Sequence = seq,
-                LineType = "Item",
-                LineObjectNumber = "AUCTFEE",
-                Description = "Auction Fee",
-                Quantity = 1,
-                UnitPrice = invoice.AuctionFee
-            };
-            await _bcClient.CreateSalesInvoiceLineAsync(companyId, created.Id, feeLine);
-            seq += 10000;
-        }
-
-        // Commission line — Item BROKERCOMM
-        if (invoice.Commission != 0)
-        {
-            var commLine = new BcSalesInvoiceLine
-            {
-                DocumentId = created.Id,
-                Sequence = seq,
-                LineType = "Item",
-                LineObjectNumber = "BROKERCOMM",
-                Description = "Commission",
-                Quantity = 1,
-                UnitPrice = invoice.Commission
-            };
-            await _bcClient.CreateSalesInvoiceLineAsync(companyId, created.Id, commLine);
-        }
-
-        // Post the invoice in BC and get the posted number (may differ from draft number)
         var posted = await _bcClient.PostSalesInvoiceAsync(companyId, created.Id);
         var finalNumber = posted?.Number ?? created.Number;
         var finalId = posted?.Id ?? created.Id;
 
-        // Store BC-assigned invoice number as THE invoice number
         invoice.BcInvoiceNumber = finalNumber;
         invoice.BcInvoiceId = finalId;
         invoice.InvoiceNumber = finalNumber;
 
-        // Fetch PDF from BC and store in blob storage
         await TryFetchAndStorePdfAsync(companyId, finalId, invoice);
-
         await _db.SaveChangesAsync();
 
         _logger.LogInformation("Created and posted BC sales invoice {BcNumber} (customer={Customer})",
-            invoice.InvoiceNumber, buyer.BuyerNumber);
+            invoice.InvoiceNumber, buyer.Value.BuyerNumber);
     }
 
     /// <summary>

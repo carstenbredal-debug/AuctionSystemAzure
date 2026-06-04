@@ -454,33 +454,16 @@ public class BusinessCentralFunctions
             .GroupBy(e => e.CustomerNo)
             .ToDictionary(g => g.Key, g => g.ToList());
 
-        var results = new List<object>();
-
-        foreach (var invoice in invoices)
+        var results = invoices.Select(invoice =>
         {
             var bcInvNo = invoice.BcInvoiceNumber!;
             var localStatus = invoice.Status.ToString();
             var buyerNo = invoice.Buyer?.BuyerNumber ?? "";
-
-            // Check BC ledger for this invoice
             var bcEntry = invoiceLedgerEntries.GetValueOrDefault(bcInvNo);
             var bcStatus = bcEntry == null ? "Not Found" : (bcEntry.Open ? "Open" : "Closed");
-            var bcRemaining = bcEntry?.RemainingAmount ?? 0;
-
-            // Check for open payments on this customer
             var openPayments = paymentLedgerEntries.GetValueOrDefault(buyerNo) ?? new List<BcCustomerLedgerEntry>();
-            var totalOpenPayment = openPayments.Sum(p => Math.Abs(p.RemainingAmount));
 
-            // Determine mismatch
-            string? issue = null;
-            if (localStatus == "Paid" && bcStatus == "Open")
-                issue = "Marked Paid locally but still Open in BC";
-            else if (localStatus == "Issued" && bcStatus == "Closed")
-                issue = "Still Issued locally but already Closed in BC";
-            else if (localStatus == "Downpayment" && bcStatus == "Closed")
-                issue = "Partial Payment locally but fully Closed in BC";
-
-            results.Add(new
+            return new
             {
                 invoiceId = invoice.Id,
                 bcInvoiceNumber = bcInvNo,
@@ -489,11 +472,11 @@ public class BusinessCentralFunctions
                 localStatus,
                 bcStatus,
                 invoiceAmount = invoice.TotalAmount,
-                bcRemainingAmount = bcRemaining,
-                openPaymentAvailable = totalOpenPayment,
-                issue
-            });
-        }
+                bcRemainingAmount = bcEntry?.RemainingAmount ?? 0m,
+                openPaymentAvailable = openPayments.Sum(p => Math.Abs(p.RemainingAmount)),
+                issue = DetectPaymentMismatch(localStatus, bcStatus)
+            };
+        }).ToList();
 
         var mismatches = results.Where(r => ((dynamic)r).issue != null).ToList();
 
@@ -592,150 +575,11 @@ public class BusinessCentralFunctions
 
         var companyId = await _bcClient!.ResolveCompanyIdAsync();
 
-        // 1. Get customer balances from standard API — shows outstanding amounts
-        var customerBalances = new List<object>();
-        try
-        {
-            var customers = await _bcClient.GetCustomerBalancesAsync(companyId);
-            foreach (var c in customers)
-            {
-                customerBalances.Add(new
-                {
-                    c.Number,
-                    c.DisplayName,
-                    c.Balance,
-                    c.OverdueAmount,
-                    c.CurrencyCode
-                });
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Could not fetch customers for balance check");
-        }
-
-        // 2. Get customer payment journals (unposted draft payments)
-        var journals = await _bcClient.GetCustomerPaymentJournalsAsync(companyId);
-        var journalPayments = new List<object>();
-        foreach (var journal in journals)
-        {
-            var payments = await _bcClient.GetCustomerPaymentsAsync(companyId, journal.Id);
-            foreach (var p in payments)
-            {
-                journalPayments.Add(new
-                {
-                    journal = journal.DisplayName,
-                    p.CustomerNumber,
-                    p.CustomerName,
-                    p.PostingDate,
-                    p.DocumentNumber,
-                    p.ExternalDocumentNumber,
-                    p.Amount,
-                    p.AppliesToInvoiceNumber,
-                    p.Description
-                });
-            }
-        }
-
-        // 3. Check posted sales invoices for payment status
-        var paidInvoices = new List<object>();
-        var allInvoiceStatuses = new List<object>();
-        try
-        {
-            var invoices = await _bcClient.GetSalesInvoicesAsync(companyId, 5000);
-            foreach (var inv in invoices)
-            {
-                allInvoiceStatuses.Add(new
-                {
-                    inv.Number,
-                    inv.ExternalDocumentNumber,
-                    inv.CustomerNumber,
-                    inv.CustomerName,
-                    inv.TotalAmountIncludingTax,
-                    inv.RemainingAmount,
-                    inv.InvoiceDate,
-                    inv.Status
-                });
-
-                if (inv.Status == "Paid" || inv.RemainingAmount == 0)
-                {
-                    paidInvoices.Add(new
-                    {
-                        inv.Number,
-                        inv.ExternalDocumentNumber,
-                        inv.CustomerNumber,
-                        inv.CustomerName,
-                        inv.TotalAmountIncludingTax,
-                        inv.RemainingAmount,
-                        inv.InvoiceDate,
-                        inv.Status
-                    });
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Could not fetch sales invoices for payment status");
-        }
-
-        // 4. Get customer ledger entries via custom API (payments applied to customers)
-        var customerLedgerEntries = new List<object>();
-        string? ledgerError = null;
-        try
-        {
-            var entries = await _bcClient.GetCustomerLedgerEntriesAsync(companyId);
-            foreach (var e in entries.Where(e =>
-                e.DocumentType.Equals("Payment", StringComparison.OrdinalIgnoreCase)))
-            {
-                customerLedgerEntries.Add(new
-                {
-                    e.EntryNo,
-                    e.PostingDate,
-                    e.DocumentNo,
-                    e.DocumentType,
-                    e.CustomerNo,
-                    e.CustomerName,
-                    e.Description,
-                    e.Amount,
-                    e.RemainingAmount,
-                    e.Open,
-                    e.ExternalDocumentNo
-                });
-            }
-        }
-        catch (Exception ex)
-        {
-            ledgerError = ex.Message;
-            _logger.LogWarning(ex, "Could not fetch customer ledger entries");
-        }
-
-        // 5. Get general ledger entries (fallback for payment postings)
-        var glPaymentEntries = new List<object>();
-        string? glError = null;
-        try
-        {
-            var glEntries = await _bcClient.GetGeneralLedgerEntriesAsync(companyId, 1000);
-            foreach (var e in glEntries.Where(e =>
-                e.DocumentType.Equals("Payment", StringComparison.OrdinalIgnoreCase)))
-            {
-                glPaymentEntries.Add(new
-                {
-                    e.EntryNumber,
-                    e.PostingDate,
-                    e.DocumentNumber,
-                    e.DocumentType,
-                    e.AccountNumber,
-                    e.Description,
-                    e.DebitAmount,
-                    e.CreditAmount
-                });
-            }
-        }
-        catch (Exception ex)
-        {
-            glError = ex.Message;
-            _logger.LogWarning(ex, "Could not fetch general ledger entries");
-        }
+        var customerBalances = await FetchCustomerBalancesAsync(companyId);
+        var journalPayments = await FetchJournalPaymentsAsync(companyId);
+        var (paidInvoices, allInvoiceStatuses) = await FetchInvoiceStatusesAsync(companyId);
+        var (customerLedgerEntries, ledgerError) = await FetchPaymentLedgerEntriesAsync(companyId);
+        var (glPaymentEntries, glError) = await FetchGlPaymentEntriesAsync(companyId);
 
         return await JsonResponse(req, new
         {
@@ -753,6 +597,104 @@ public class BusinessCentralFunctions
             totalCustomerLedgerEntries = customerLedgerEntries.Count,
             totalGlPaymentEntries = glPaymentEntries.Count
         });
+    }
+
+    private async Task<List<object>> FetchCustomerBalancesAsync(Guid companyId)
+    {
+        try
+        {
+            var customers = await _bcClient!.GetCustomerBalancesAsync(companyId);
+            return customers.Select(c => (object)new { c.Number, c.DisplayName, c.Balance, c.OverdueAmount, c.CurrencyCode }).ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not fetch customers for balance check");
+            return new List<object>();
+        }
+    }
+
+    private async Task<List<object>> FetchJournalPaymentsAsync(Guid companyId)
+    {
+        var journals = await _bcClient!.GetCustomerPaymentJournalsAsync(companyId);
+        var result = new List<object>();
+        foreach (var journal in journals)
+        {
+            var payments = await _bcClient.GetCustomerPaymentsAsync(companyId, journal.Id);
+            result.AddRange(payments.Select(p => (object)new
+            {
+                journal = journal.DisplayName,
+                p.CustomerNumber, p.CustomerName, p.PostingDate, p.DocumentNumber,
+                p.ExternalDocumentNumber, p.Amount, p.AppliesToInvoiceNumber, p.Description
+            }));
+        }
+        return result;
+    }
+
+    private async Task<(List<object> Paid, List<object> All)> FetchInvoiceStatusesAsync(Guid companyId)
+    {
+        var paid = new List<object>();
+        var all = new List<object>();
+        try
+        {
+            var invoices = await _bcClient!.GetSalesInvoicesAsync(companyId, 5000);
+            foreach (var inv in invoices)
+            {
+                var entry = new
+                {
+                    inv.Number, inv.ExternalDocumentNumber, inv.CustomerNumber, inv.CustomerName,
+                    inv.TotalAmountIncludingTax, inv.RemainingAmount, inv.InvoiceDate, inv.Status
+                };
+                all.Add(entry);
+                if (inv.Status == "Paid" || inv.RemainingAmount == 0) paid.Add(entry);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not fetch sales invoices for payment status");
+        }
+        return (paid, all);
+    }
+
+    private async Task<(List<object> Entries, string? Error)> FetchPaymentLedgerEntriesAsync(Guid companyId)
+    {
+        try
+        {
+            var entries = await _bcClient!.GetCustomerLedgerEntriesAsync(companyId);
+            var result = entries
+                .Where(e => e.DocumentType.Equals("Payment", StringComparison.OrdinalIgnoreCase))
+                .Select(e => (object)new
+                {
+                    e.EntryNo, e.PostingDate, e.DocumentNo, e.DocumentType, e.CustomerNo,
+                    e.CustomerName, e.Description, e.Amount, e.RemainingAmount, e.Open, e.ExternalDocumentNo
+                }).ToList();
+            return (result, null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not fetch customer ledger entries");
+            return (new List<object>(), ex.Message);
+        }
+    }
+
+    private async Task<(List<object> Entries, string? Error)> FetchGlPaymentEntriesAsync(Guid companyId)
+    {
+        try
+        {
+            var glEntries = await _bcClient!.GetGeneralLedgerEntriesAsync(companyId, 1000);
+            var result = glEntries
+                .Where(e => e.DocumentType.Equals("Payment", StringComparison.OrdinalIgnoreCase))
+                .Select(e => (object)new
+                {
+                    e.EntryNumber, e.PostingDate, e.DocumentNumber, e.DocumentType,
+                    e.AccountNumber, e.Description, e.DebitAmount, e.CreditAmount
+                }).ToList();
+            return (result, null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not fetch general ledger entries");
+            return (new List<object>(), ex.Message);
+        }
     }
 
     [Function("BcBuyerBalances")]
@@ -844,6 +786,14 @@ public class BusinessCentralFunctions
                 e.Open
             }).OrderByDescending(e => e.PostingDate).ToList()
         });
+    }
+
+    private static string? DetectPaymentMismatch(string localStatus, string bcStatus)
+    {
+        if (localStatus == "Paid" && bcStatus == "Open") return "Marked Paid locally but still Open in BC";
+        if (localStatus == "Issued" && bcStatus == "Closed") return "Still Issued locally but already Closed in BC";
+        if (localStatus == "Downpayment" && bcStatus == "Closed") return "Partial Payment locally but fully Closed in BC";
+        return null;
     }
 
     private static bool IsDocType(string actual, string expected)

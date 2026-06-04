@@ -273,7 +273,6 @@ public class SettlementFunctions
 
         var companyId = await _bcClient.ResolveCompanyIdAsync();
 
-        // Get all credit notes that have been pushed to BC and have an original invoice
         var creditNotes = await _db.Invoices
             .Include(i => i.Buyer)
             .Include(i => i.OriginalInvoice)
@@ -281,86 +280,73 @@ public class SettlementFunctions
             .ToListAsync();
 
         var results = new List<object>();
-
         foreach (var cn in creditNotes)
-        {
-            var originalInvoice = cn.OriginalInvoice;
-            if (originalInvoice == null || string.IsNullOrEmpty(originalInvoice.BcInvoiceNumber))
-            {
-                results.Add(new { creditNote = cn.BcInvoiceNumber, status = "Skipped", reason = "Original invoice not pushed to BC" });
-                continue;
-            }
-
-            var buyerNo = cn.Buyer?.BuyerNumber ?? "";
-            if (string.IsNullOrEmpty(buyerNo))
-            {
-                results.Add(new { creditNote = cn.BcInvoiceNumber, status = "Skipped", reason = "No buyer number" });
-                continue;
-            }
-
-            try
-            {
-                // Find the credit memo entry in BC
-                var creditMemoEntries = await _bcClient.GetCustomerLedgerEntriesByCustomerAsync(
-                    companyId, buyerNo, "Credit Memo", true);
-
-                var creditMemoEntry = creditMemoEntries
-                    .FirstOrDefault(e => e.DocumentNo == cn.BcInvoiceNumber);
-
-                if (creditMemoEntry == null)
-                {
-                    results.Add(new { creditNote = cn.BcInvoiceNumber, status = "Skipped", reason = "Credit memo entry not found in BC (may already be applied)" });
-                    continue;
-                }
-
-                // Apply it to the original invoice
-                var result = await _bcClient.ApplyCreditMemoToInvoiceAsync(
-                    companyId,
-                    buyerNo,
-                    creditMemoEntry.EntryNo,
-                    originalInvoice.BcInvoiceNumber!);
-
-                if (result.ResultStatus != "Error")
-                {
-                    // Mark the credit note as alloted (applied in BC)
-                    cn.Status = Domain.Enums.InvoiceStatus.Alloted;
-
-                    // Update original invoice status based on credited lots
-                    var originalLotCount = await _db.Invoices
-                        .Where(i => i.Id == originalInvoice.Id)
-                        .SelectMany(i => i.Lines)
-                        .CountAsync();
-
-                    var creditedLotCount = await _db.Invoices
-                        .Where(i => i.OriginalInvoiceId == originalInvoice.Id && i.IsCreditNote)
-                        .SelectMany(i => i.Lines)
-                        .Select(l => l.LotNumber)
-                        .Distinct()
-                        .CountAsync();
-
-                    if (originalLotCount > 0 && creditedLotCount >= originalLotCount)
-                        originalInvoice.Status = Domain.Enums.InvoiceStatus.FullyCredited;
-                    else if (creditedLotCount > 0)
-                        originalInvoice.Status = Domain.Enums.InvoiceStatus.PartiallyCredited;
-
-                    await _db.SaveChangesAsync();
-                }
-
-                results.Add(new
-                {
-                    creditNote = cn.BcInvoiceNumber,
-                    originalInvoice = originalInvoice.BcInvoiceNumber,
-                    status = result.ResultStatus,
-                    message = result.ResultMessage
-                });
-            }
-            catch (Exception ex)
-            {
-                results.Add(new { creditNote = cn.BcInvoiceNumber, status = "Error", reason = ex.Message });
-            }
-        }
+            results.Add(await ApplySingleCreditNoteToBcAsync(companyId, cn));
 
         return await CreateJsonResponse(req, new { totalCreditNotes = creditNotes.Count, results });
+    }
+
+    private async Task<object> ApplySingleCreditNoteToBcAsync(Guid companyId, Invoice cn)
+    {
+        var originalInvoice = cn.OriginalInvoice;
+        if (originalInvoice == null || string.IsNullOrEmpty(originalInvoice.BcInvoiceNumber))
+            return new { creditNote = cn.BcInvoiceNumber, status = "Skipped", reason = "Original invoice not pushed to BC" };
+
+        var buyerNo = cn.Buyer?.BuyerNumber ?? "";
+        if (string.IsNullOrEmpty(buyerNo))
+            return new { creditNote = cn.BcInvoiceNumber, status = "Skipped", reason = "No buyer number" };
+
+        try
+        {
+            var creditMemoEntries = await _bcClient!.GetCustomerLedgerEntriesByCustomerAsync(
+                companyId, buyerNo, "Credit Memo", true);
+
+            var creditMemoEntry = creditMemoEntries.FirstOrDefault(e => e.DocumentNo == cn.BcInvoiceNumber);
+            if (creditMemoEntry == null)
+                return new { creditNote = cn.BcInvoiceNumber, status = "Skipped", reason = "Credit memo entry not found in BC (may already be applied)" };
+
+            var result = await _bcClient.ApplyCreditMemoToInvoiceAsync(
+                companyId, buyerNo, creditMemoEntry.EntryNo, originalInvoice.BcInvoiceNumber!);
+
+            if (result.ResultStatus != "Error")
+                await UpdateCreditStatusesAsync(cn, originalInvoice);
+
+            return new
+            {
+                creditNote = cn.BcInvoiceNumber,
+                originalInvoice = originalInvoice.BcInvoiceNumber,
+                status = result.ResultStatus,
+                message = result.ResultMessage
+            };
+        }
+        catch (Exception ex)
+        {
+            return new { creditNote = cn.BcInvoiceNumber, status = "Error", reason = ex.Message };
+        }
+    }
+
+    private async Task UpdateCreditStatusesAsync(Invoice creditNote, Invoice originalInvoice)
+    {
+        creditNote.Status = Domain.Enums.InvoiceStatus.Alloted;
+
+        var originalLotCount = await _db.Invoices
+            .Where(i => i.Id == originalInvoice.Id)
+            .SelectMany(i => i.Lines)
+            .CountAsync();
+
+        var creditedLotCount = await _db.Invoices
+            .Where(i => i.OriginalInvoiceId == originalInvoice.Id && i.IsCreditNote)
+            .SelectMany(i => i.Lines)
+            .Select(l => l.LotNumber)
+            .Distinct()
+            .CountAsync();
+
+        if (originalLotCount > 0 && creditedLotCount >= originalLotCount)
+            originalInvoice.Status = Domain.Enums.InvoiceStatus.FullyCredited;
+        else if (creditedLotCount > 0)
+            originalInvoice.Status = Domain.Enums.InvoiceStatus.PartiallyCredited;
+
+        await _db.SaveChangesAsync();
     }
 
     [Function("RecalculateCreditStatuses")]
@@ -404,15 +390,26 @@ public class SettlementFunctions
     public async Task<HttpResponseData> GetShippingBoxes(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "shipping/boxes")] HttpRequestData req)
     {
-        // Get invoices released for shipping
+        var (uncreditedLotNumbers, lotInvoiceMap) = await BuildUncreditedLotMapAsync();
+
+        var catalogLots = await _catalogDb.CatalogLots
+            .Where(cl => uncreditedLotNumbers.Contains(cl.LotNumber))
+            .Select(cl => new CatalogLotInfo(cl.LotNumber, cl.IncludedBoxNumbers))
+            .ToListAsync();
+
+        var boxInfo = await FetchBoxInfoAsync(catalogLots);
+
+        var shippingBoxes = BuildShippingBoxList(catalogLots, lotInvoiceMap, boxInfo);
+        return await CreateJsonResponse(req, shippingBoxes);
+    }
+
+    private async Task<(List<int> LotNumbers, Dictionary<int, (Invoice Inv, InvoiceLine Line)> Map)> BuildUncreditedLotMapAsync()
+    {
         var releasedInvoices = await _db.Invoices
-            .Include(i => i.Lines)
-            .Include(i => i.Broker)
-            .Include(i => i.Buyer)
+            .Include(i => i.Lines).Include(i => i.Broker).Include(i => i.Buyer)
             .Where(i => i.ShippingStatus == "Released" && !i.IsCreditNote)
             .ToListAsync();
 
-        // Build credit note lookup to find credited lots
         var creditNotes = await _db.Invoices
             .Include(i => i.Lines)
             .Where(i => i.IsCreditNote && i.OriginalInvoiceId != null)
@@ -420,38 +417,33 @@ public class SettlementFunctions
 
         var creditedLotsByInvoice = creditNotes
             .GroupBy(cn => cn.OriginalInvoiceId!.Value)
-            .ToDictionary(
-                g => g.Key,
-                g => g.SelectMany(cn => cn.Lines.Select(l => l.LotNumber)).Distinct().ToHashSet());
+            .ToDictionary(g => g.Key, g => g.SelectMany(cn => cn.Lines.Select(l => l.LotNumber)).Distinct().ToHashSet());
 
-        // Get uncredited lot numbers
-        var uncreditedLotNumbers = new List<int>();
-        var lotInvoiceMap = new Dictionary<int, (Invoice Inv, InvoiceLine Line)>();
+        var lotNumbers = new List<int>();
+        var map = new Dictionary<int, (Invoice Inv, InvoiceLine Line)>();
         foreach (var inv in releasedInvoices)
         {
             var creditedLots = creditedLotsByInvoice.GetValueOrDefault(inv.Id) ?? new HashSet<int>();
-            var uncreditedLines = inv.Lines.Where(l => !creditedLots.Contains(l.LotNumber)).ToList();
-            foreach (var line in uncreditedLines)
+            foreach (var line in inv.Lines.Where(l => !creditedLots.Contains(l.LotNumber)))
             {
-                uncreditedLotNumbers.Add(line.LotNumber);
-                lotInvoiceMap[line.LotNumber] = (inv, line);
+                lotNumbers.Add(line.LotNumber);
+                map[line.LotNumber] = (inv, line);
             }
         }
+        return (lotNumbers, map);
+    }
 
-        // Get box numbers from catalog lots
-        var catalogLots = await _catalogDb.CatalogLots
-            .Where(cl => uncreditedLotNumbers.Contains(cl.LotNumber))
-            .Select(cl => new { cl.LotNumber, cl.IncludedBoxNumbers })
-            .ToListAsync();
+    private record CatalogLotInfo(int LotNumber, string? IncludedBoxNumbers);
 
-        // Get box skins count from boxes view
+    private async Task<Dictionary<int, BoxViewInfo>> FetchBoxInfoAsync(List<CatalogLotInfo> catalogLots)
+    {
         var allBoxNumbers = catalogLots
             .Where(cl => !string.IsNullOrEmpty(cl.IncludedBoxNumbers))
             .SelectMany(cl => cl.IncludedBoxNumbers!.Split(',', StringSplitOptions.RemoveEmptyEntries)
                 .Select(b => int.TryParse(b.Trim(), out var n) ? n : 0).Where(n => n > 0))
             .Distinct().ToList();
 
-        var boxInfo = new Dictionary<int, BoxViewInfo>();
+        var result = new Dictionary<int, BoxViewInfo>();
         if (allBoxNumbers.Count > 0)
         {
             var boxData = await _catalogDb.Database
@@ -459,10 +451,14 @@ public class SettlementFunctions
                     string.Join(",", allBoxNumbers) + ")")
                 .ToListAsync();
             foreach (var b in boxData)
-                boxInfo[b.BoxNumber] = b;
+                result[b.BoxNumber] = b;
         }
+        return result;
+    }
 
-        // Build shipping boxes response
+    private static List<object> BuildShippingBoxList(
+        List<CatalogLotInfo> catalogLots, Dictionary<int, (Invoice Inv, InvoiceLine Line)> lotInvoiceMap, Dictionary<int, BoxViewInfo> boxInfo)
+    {
         var shippingBoxes = new List<object>();
         foreach (var cl in catalogLots)
         {
@@ -475,21 +471,15 @@ public class SettlementFunctions
                 var bi = boxInfo.GetValueOrDefault(boxNumber);
                 shippingBoxes.Add(new
                 {
-                    InvoiceId = info.Inv.Id,
-                    info.Inv.InvoiceNumber,
-                    BrokerName = info.Inv.Broker?.CompanyName,
-                    BuyerName = info.Inv.Buyer?.Name,
-                    LotNumber = cl.LotNumber,
-                    BoxNumber = boxNumber,
-                    BoxType = bi?.BoxType ?? "",
-                    Skins = bi?.Skins ?? 0,
-                    info.Line.PricePerSkin,
-                    HammerPrice = info.Line.HammerPrice
+                    InvoiceId = info.Inv.Id, info.Inv.InvoiceNumber,
+                    BrokerName = info.Inv.Broker?.CompanyName, BuyerName = info.Inv.Buyer?.Name,
+                    LotNumber = cl.LotNumber, BoxNumber = boxNumber,
+                    BoxType = bi?.BoxType ?? "", Skins = bi?.Skins ?? 0,
+                    info.Line.PricePerSkin, HammerPrice = info.Line.HammerPrice
                 });
             }
         }
-
-        return await CreateJsonResponse(req, shippingBoxes);
+        return shippingBoxes;
     }
 
     private class BoxViewInfo

@@ -474,82 +474,13 @@ public class AuctionResultFunctions
             .Where(r => body.AuctionResultIds.Contains(r.Id) && r.SoldToBuyerId != null)
             .ToListAsync();
 
-        // Check if any of these lots are on a released shipping list
-        var resultLotNumbers = results.Select(r => r.LotNumber).ToList();
-        var shippedLotNumbers = await _db.Invoices
-            .Where(i => i.ShippingStatus == "Released" && !i.IsCreditNote)
-            .SelectMany(i => i.Lines)
-            .Where(l => resultLotNumbers.Contains(l.LotNumber))
-            .Select(l => l.LotNumber)
-            .Distinct()
-            .ToListAsync();
+        var shippingError = await CheckShippedLotsAsync(results, req, "Cannot take back");
+        if (shippingError != null) return shippingError;
 
-        if (shippedLotNumbers.Count > 0)
-        {
-            var errorResp = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
-            errorResp.Headers.Add("Content-Type", "application/json");
-            await errorResp.WriteStringAsync(JsonSerializer.Serialize(new
-            {
-                error = "Lot Sold",
-                message = $"Cannot take back lot(s) {string.Join(", ", shippedLotNumbers)} — already released to ship.",
-                shippedLotNumbers
-            }, JsonOptions));
-            return errorResp;
-        }
-
-        var created = new List<TakebackRequest>();
-        var takenBackResultIds = new List<int>();
-        int? takebackBuyerId = null;
-        foreach (var result in results)
-        {
-            var existing = await _db.TakebackRequests
-                .FirstOrDefaultAsync(t => t.AuctionResultId == result.Id && t.Status == CustomerRequestStatus.Pending);
-            if (existing != null) continue;
-
-            takebackBuyerId ??= result.SoldToBuyerId;
-
-            var takebackReq = new TakebackRequest
-            {
-                AuctionResultId = result.Id,
-                BrokerId = result.BrokerId,
-                BuyerId = result.SoldToBuyerId!.Value,
-                InitiatedBy = "Broker",
-                Status = CustomerRequestStatus.Approved,
-                RequestedAt = DateTime.UtcNow,
-                RespondedAt = DateTime.UtcNow
-            };
-            _db.TakebackRequests.Add(takebackReq);
-            created.Add(takebackReq);
-            takenBackResultIds.Add(result.Id);
-
-            result.SoldToBuyerId = null;
-            result.SoldAt = null;
-
-            // Update lot status back to Broker
-            var lot = await _db.Lots.FirstOrDefaultAsync(l => l.LotNumber == result.LotNumber);
-            if (lot != null) lot.Status = LotStatus.Broker;
-        }
-
+        var (created, takenBackResultIds, takebackBuyerId) = await ProcessBrokerTakebacksAsync(results);
         await _db.SaveChangesAsync();
 
-        int? creditNoteId = null;
-        string? creditNotePdfUrl = null;
-        if (takenBackResultIds.Count > 0)
-        {
-            try
-            {
-                creditNoteId = await GenerateCreditNoteAsync(takenBackResultIds, takebackBuyerId);
-                if (creditNoteId != null)
-                {
-                    var cn = await _db.Invoices.FindAsync(creditNoteId.Value);
-                    creditNotePdfUrl = cn?.PdfUrl;
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to generate credit note");
-            }
-        }
+        var (creditNoteId, creditNotePdfUrl) = await TryGenerateCreditNoteForTakebackAsync(takenBackResultIds, takebackBuyerId);
 
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
@@ -569,49 +500,10 @@ public class AuctionResultFunctions
             .Where(r => body.AuctionResultIds.Contains(r.Id) && r.SoldToBuyerId != null)
             .ToListAsync();
 
-        // Check if any of these lots are on a released shipping list
-        var buyerResultLotNumbers = results.Select(r => r.LotNumber).ToList();
-        var buyerShippedLotNumbers = await _db.Invoices
-            .Where(i => i.ShippingStatus == "Released" && !i.IsCreditNote)
-            .SelectMany(i => i.Lines)
-            .Where(l => buyerResultLotNumbers.Contains(l.LotNumber))
-            .Select(l => l.LotNumber)
-            .Distinct()
-            .ToListAsync();
+        var shippingError = await CheckShippedLotsAsync(results, req, "Cannot request return for");
+        if (shippingError != null) return shippingError;
 
-        if (buyerShippedLotNumbers.Count > 0)
-        {
-            var errorResp = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
-            errorResp.Headers.Add("Content-Type", "application/json");
-            await errorResp.WriteStringAsync(JsonSerializer.Serialize(new
-            {
-                error = "Lot Sold",
-                message = $"Cannot request return for lot(s) {string.Join(", ", buyerShippedLotNumbers)} — already released to ship.",
-                shippedLotNumbers = buyerShippedLotNumbers
-            }, JsonOptions));
-            return errorResp;
-        }
-
-        var created = new List<TakebackRequest>();
-        foreach (var result in results)
-        {
-            var existing = await _db.TakebackRequests
-                .FirstOrDefaultAsync(t => t.AuctionResultId == result.Id && t.Status == CustomerRequestStatus.Pending);
-            if (existing != null) continue;
-
-            var takebackReq = new TakebackRequest
-            {
-                AuctionResultId = result.Id,
-                BrokerId = result.BrokerId,
-                BuyerId = result.SoldToBuyerId!.Value,
-                InitiatedBy = "Buyer",
-                Status = CustomerRequestStatus.Pending,
-                RequestedAt = DateTime.UtcNow
-            };
-            _db.TakebackRequests.Add(takebackReq);
-            created.Add(takebackReq);
-        }
-
+        var created = await ProcessBuyerTakebackRequestsAsync(results);
         await _db.SaveChangesAsync();
 
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
@@ -640,41 +532,11 @@ public class AuctionResultFunctions
             return resp;
         }
 
-        int reassigned = 0;
-
+        int reassigned;
         if (body.Action == "internal")
-        {
-            // Ensure internal broker 999 exists
-            var internalBroker = await _db.Brokers.FirstOrDefaultAsync(b => b.BrokerNumber == "999");
-            if (internalBroker == null)
-            {
-                internalBroker = new Broker
-                {
-                    BrokerNumber = "999",
-                    CompanyName = "Internal",
-                    IsActive = true
-                };
-                _db.Brokers.Add(internalBroker);
-                await _db.SaveChangesAsync();
-            }
-
-            foreach (var result in results)
-            {
-                result.BrokerId = internalBroker.Id;
-                reassigned++;
-            }
-        }
+            reassigned = await ReassignToInternalBrokerAsync(results);
         else if (body.Action == "auction")
-        {
-            // Return lots to auction as unsold — remove the auction results
-            foreach (var result in results)
-            {
-                var lot = await _db.Lots.FirstOrDefaultAsync(l => l.LotNumber == result.LotNumber);
-                if (lot != null) lot.Status = LotStatus.Unsold;
-                _db.AuctionResults.Remove(result);
-                reassigned++;
-            }
-        }
+            reassigned = await ReturnLotsToAuctionAsync(results);
         else
         {
             var resp = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
@@ -689,6 +551,33 @@ public class AuctionResultFunctions
         response.Headers.Add("Content-Type", "application/json");
         await response.WriteStringAsync(JsonSerializer.Serialize(new { action = body.Action, reassigned }, JsonOptions));
         return response;
+    }
+
+    private async Task<int> ReassignToInternalBrokerAsync(List<AuctionResult> results)
+    {
+        var internalBroker = await _db.Brokers.FirstOrDefaultAsync(b => b.BrokerNumber == "999");
+        if (internalBroker == null)
+        {
+            internalBroker = new Broker { BrokerNumber = "999", CompanyName = "Internal", IsActive = true };
+            _db.Brokers.Add(internalBroker);
+            await _db.SaveChangesAsync();
+        }
+
+        foreach (var result in results)
+            result.BrokerId = internalBroker.Id;
+
+        return results.Count;
+    }
+
+    private async Task<int> ReturnLotsToAuctionAsync(List<AuctionResult> results)
+    {
+        foreach (var result in results)
+        {
+            var lot = await _db.Lots.FirstOrDefaultAsync(l => l.LotNumber == result.LotNumber);
+            if (lot != null) lot.Status = LotStatus.Unsold;
+            _db.AuctionResults.Remove(result);
+        }
+        return results.Count;
     }
 
     [Function("GetTakebackRequestsByBuyer")]
@@ -814,6 +703,115 @@ public class AuctionResultFunctions
         response.Headers.Add("Content-Type", "application/json");
         await response.WriteStringAsync(JsonSerializer.Serialize(new { status = takebackReq.Status.ToString(), creditNoteId }, JsonOptions));
         return response;
+    }
+
+    private async Task<HttpResponseData?> CheckShippedLotsAsync(
+        List<AuctionResult> results, HttpRequestData req, string errorPrefix)
+    {
+        var lotNumbers = results.Select(r => r.LotNumber).ToList();
+        var shippedLotNumbers = await _db.Invoices
+            .Where(i => i.ShippingStatus == "Released" && !i.IsCreditNote)
+            .SelectMany(i => i.Lines)
+            .Where(l => lotNumbers.Contains(l.LotNumber))
+            .Select(l => l.LotNumber)
+            .Distinct()
+            .ToListAsync();
+
+        if (shippedLotNumbers.Count == 0) return null;
+
+        var errorResp = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+        errorResp.Headers.Add("Content-Type", "application/json");
+        await errorResp.WriteStringAsync(JsonSerializer.Serialize(new
+        {
+            error = "Lot Sold",
+            message = $"{errorPrefix} lot(s) {string.Join(", ", shippedLotNumbers)} — already released to ship.",
+            shippedLotNumbers
+        }, JsonOptions));
+        return errorResp;
+    }
+
+    private async Task<(List<TakebackRequest> Created, List<int> TakenBackResultIds, int? BuyerId)> ProcessBrokerTakebacksAsync(
+        List<AuctionResult> results)
+    {
+        var created = new List<TakebackRequest>();
+        var takenBackResultIds = new List<int>();
+        int? takebackBuyerId = null;
+
+        foreach (var result in results)
+        {
+            var existing = await _db.TakebackRequests
+                .FirstOrDefaultAsync(t => t.AuctionResultId == result.Id && t.Status == CustomerRequestStatus.Pending);
+            if (existing != null) continue;
+
+            takebackBuyerId ??= result.SoldToBuyerId;
+
+            var takebackReq = new TakebackRequest
+            {
+                AuctionResultId = result.Id,
+                BrokerId = result.BrokerId,
+                BuyerId = result.SoldToBuyerId!.Value,
+                InitiatedBy = "Broker",
+                Status = CustomerRequestStatus.Approved,
+                RequestedAt = DateTime.UtcNow,
+                RespondedAt = DateTime.UtcNow
+            };
+            _db.TakebackRequests.Add(takebackReq);
+            created.Add(takebackReq);
+            takenBackResultIds.Add(result.Id);
+
+            result.SoldToBuyerId = null;
+            result.SoldAt = null;
+
+            var lot = await _db.Lots.FirstOrDefaultAsync(l => l.LotNumber == result.LotNumber);
+            if (lot != null) lot.Status = LotStatus.Broker;
+        }
+
+        return (created, takenBackResultIds, takebackBuyerId);
+    }
+
+    private async Task<List<TakebackRequest>> ProcessBuyerTakebackRequestsAsync(List<AuctionResult> results)
+    {
+        var created = new List<TakebackRequest>();
+        foreach (var result in results)
+        {
+            var existing = await _db.TakebackRequests
+                .FirstOrDefaultAsync(t => t.AuctionResultId == result.Id && t.Status == CustomerRequestStatus.Pending);
+            if (existing != null) continue;
+
+            var takebackReq = new TakebackRequest
+            {
+                AuctionResultId = result.Id,
+                BrokerId = result.BrokerId,
+                BuyerId = result.SoldToBuyerId!.Value,
+                InitiatedBy = "Buyer",
+                Status = CustomerRequestStatus.Pending,
+                RequestedAt = DateTime.UtcNow
+            };
+            _db.TakebackRequests.Add(takebackReq);
+            created.Add(takebackReq);
+        }
+        return created;
+    }
+
+    private async Task<(int? CreditNoteId, string? CreditNotePdfUrl)> TryGenerateCreditNoteForTakebackAsync(
+        List<int> takenBackResultIds, int? buyerId)
+    {
+        if (takenBackResultIds.Count == 0) return (null, null);
+
+        try
+        {
+            var creditNoteId = await GenerateCreditNoteAsync(takenBackResultIds, buyerId);
+            if (creditNoteId != null)
+            {
+                var cn = await _db.Invoices.FindAsync(creditNoteId.Value);
+                return (creditNoteId, cn?.PdfUrl);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to generate credit note");
+        }
+        return (null, null);
     }
 
     private async Task<int?> GenerateCreditNoteAsync(List<int> auctionResultIds, int? buyerId = null)
