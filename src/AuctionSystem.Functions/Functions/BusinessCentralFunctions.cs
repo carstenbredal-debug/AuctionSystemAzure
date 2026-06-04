@@ -812,8 +812,11 @@ public class BusinessCentralFunctions
         if (string.IsNullOrEmpty(actual)) return false;
         // Exact match (case insensitive)
         if (actual.Equals(expected, StringComparison.OrdinalIgnoreCase)) return true;
-        // Handle BC returning without spaces (e.g., "CreditMemo" instead of "Credit Memo")
-        var normalized = actual.Replace(" ", "").Replace("_", "");
+        // BC encodes spaces as _x0020_ in OData responses (e.g., "Credit_x0020_Memo")
+        var decoded = actual.Replace("_x0020_", " ");
+        if (decoded.Equals(expected, StringComparison.OrdinalIgnoreCase)) return true;
+        // Also handle without spaces or underscores
+        var normalized = decoded.Replace(" ", "").Replace("_", "");
         var expectedNormalized = expected.Replace(" ", "").Replace("_", "");
         return normalized.Equals(expectedNormalized, StringComparison.OrdinalIgnoreCase);
     }
