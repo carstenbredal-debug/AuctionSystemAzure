@@ -9,6 +9,8 @@ public class AuctionApiClient
 
     public AuctionApiClient(HttpClient http) => _http = http;
 
+    public string BaseUrl => _http.BaseAddress?.ToString().TrimEnd('/') ?? "";
+
     // Dashboard
     public async Task<DashboardStats> GetDashboardAsync()
         => await _http.GetFromJsonAsync<DashboardStats>("api/dashboard") ?? new();

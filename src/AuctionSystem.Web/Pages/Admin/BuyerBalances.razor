@@ -92,6 +92,7 @@
                             <th class="text-end">Unallocated Payment</th>
                             <th class="text-center">Open Invoices</th>
                             <th class="text-center">Open Payments</th>
+                            <th class="text-center">Statement</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -108,6 +109,11 @@
                                 <td class="text-end fw-bold @(b.UnallocatedPayment > 0 ? "text-danger" : "")">€@b.UnallocatedPayment.ToString("N2")</td>
                                 <td class="text-center">@b.OpenInvoiceCount</td>
                                 <td class="text-center">@b.OpenPaymentCount</td>
+                                <td class="text-center">
+                                    <a href="@($"{Api.BaseUrl}/bc/statement/{b.CustomerNo}")" target="_blank" class="btn btn-sm btn-outline-dark" title="Download Statement">
+                                        📄
+                                    </a>
+                                </td>
                             </tr>
                         }
                     </tbody>
@@ -121,6 +127,7 @@
                             <td class="text-end">€@_result.Buyers.Sum(b => b.UnallocatedPayment).ToString("N2")</td>
                             <td class="text-center">@_result.Buyers.Sum(b => b.OpenInvoiceCount)</td>
                             <td class="text-center">@_result.Buyers.Sum(b => b.OpenPaymentCount)</td>
+                            <td></td>
                         </tr>
                     </tfoot>
                 </table>
