@@ -499,11 +499,14 @@ public class AuctionResultFunctions
 
         var created = new List<TakebackRequest>();
         var takenBackResultIds = new List<int>();
+        int? takebackBuyerId = null;
         foreach (var result in results)
         {
             var existing = await _db.TakebackRequests
                 .FirstOrDefaultAsync(t => t.AuctionResultId == result.Id && t.Status == CustomerRequestStatus.Pending);
             if (existing != null) continue;
+
+            takebackBuyerId ??= result.SoldToBuyerId;
 
             var takebackReq = new TakebackRequest
             {
@@ -535,7 +538,7 @@ public class AuctionResultFunctions
         {
             try
             {
-                creditNoteId = await GenerateCreditNoteAsync(takenBackResultIds);
+                creditNoteId = await GenerateCreditNoteAsync(takenBackResultIds, takebackBuyerId);
                 if (creditNoteId != null)
                 {
                     var cn = await _db.Invoices.FindAsync(creditNoteId.Value);
@@ -813,13 +816,18 @@ public class AuctionResultFunctions
         return response;
     }
 
-    private async Task<int?> GenerateCreditNoteAsync(List<int> auctionResultIds)
+    private async Task<int?> GenerateCreditNoteAsync(List<int> auctionResultIds, int? buyerId = null)
     {
-        var allInvoiceLines = await _db.Set<InvoiceLine>()
+        var query = _db.Set<InvoiceLine>()
             .Include(l => l.Invoice).ThenInclude(i => i.Buyer)
             .Include(l => l.Invoice).ThenInclude(i => i.Broker)
-            .Where(l => auctionResultIds.Contains(l.AuctionResultId) && !l.Invoice.IsCreditNote)
-            .ToListAsync();
+            .Where(l => auctionResultIds.Contains(l.AuctionResultId) && !l.Invoice.IsCreditNote);
+
+        // Only credit lines from invoices belonging to the specific buyer
+        if (buyerId.HasValue)
+            query = query.Where(l => l.Invoice.BuyerId == buyerId.Value);
+
+        var allInvoiceLines = await query.ToListAsync();
 
         // Only use the most recent invoice line per auction result to avoid double crediting
         var invoiceLines = allInvoiceLines
