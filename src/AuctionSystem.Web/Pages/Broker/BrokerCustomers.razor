@@ -113,7 +113,7 @@ else
                     }
                     @foreach (var req in _requests)
                     {
-                        <tr style="cursor: pointer;" @onclick="() => GoToCustomerDetail(req)">
+                        <tr style="@(req.Status == CustomerRequestStatus.Approved ? "cursor: pointer;" : "")" @onclick="() => GoToCustomerDetail(req)">
                             <td>@(req.Buyer?.BuyerNumber ?? "—")</td>
                             <td><strong>@(req.Buyer?.Name ?? "—")</strong></td>
                             <td>@(req.Buyer?.ContactEmail ?? "—")</td>
@@ -251,7 +251,7 @@ else
 
     private void GoToCustomerDetail(BrokerCustomerRequestDto req)
     {
-        if (req.Buyer != null)
+        if (req.Buyer != null && req.Status == CustomerRequestStatus.Approved)
             Nav.NavigateTo($"/broker/customers/{req.BuyerId}");
     }
 }

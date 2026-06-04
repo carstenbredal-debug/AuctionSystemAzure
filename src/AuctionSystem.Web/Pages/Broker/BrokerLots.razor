@@ -531,7 +531,13 @@ else if (_activeTab == "takeback")
             {
                 _brokerId = user.BrokerId.Value;
                 _allResults = await Api.GetAuctionResultsByBrokerAsync(_brokerId);
-                _buyers = await Api.GetAllBuyersAsync();
+                var allRequests = await Api.GetCustomerRequestsByBrokerAsync(_brokerId);
+                var approvedBuyerIds = allRequests
+                    .Where(r => r.Status == CustomerRequestStatus.Approved)
+                    .Select(r => r.BuyerId)
+                    .ToHashSet();
+                var allBuyers = await Api.GetAllBuyersAsync();
+                _buyers = allBuyers.Where(b => approvedBuyerIds.Contains(b.Id)).ToList();
                 _pendingTakebacks = await Api.GetTakebackRequestsByBrokerAsync(_brokerId);
                 _invoiceLinks = await Api.GetInvoiceLinksForBrokerAsync(_brokerId);
                 await LoadFeeParameters();
