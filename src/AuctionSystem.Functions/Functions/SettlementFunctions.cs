@@ -312,8 +312,13 @@ public class SettlementFunctions
             if (creditMemoEntry == null)
                 return new { creditNote = cn.BcInvoiceNumber, status = "Skipped", reason = "Credit memo entry not found in BC (may already be applied)" };
 
+            // Use the later of today or the entry's posting date to avoid BC posting date error
+            var today = DateTime.UtcNow.Date;
+            var entryDate = DateTime.TryParse(creditMemoEntry.PostingDate, out var parsed) ? parsed.Date : today;
+            var postingDate = (entryDate > today ? entryDate : today).ToString("yyyy-MM-dd");
+
             var result = await _bcClient.ApplyCreditMemoToInvoiceAsync(
-                companyId, buyerNo, creditMemoEntry.EntryNo, originalInvoice.BcInvoiceNumber!);
+                companyId, buyerNo, creditMemoEntry.EntryNo, originalInvoice.BcInvoiceNumber!, 0, postingDate);
 
             if (result.ResultStatus != "Error")
                 await UpdateCreditStatusesAsync(cn, originalInvoice);
@@ -743,6 +748,11 @@ public class SettlementFunctions
         // Use the first open payment entry
         var paymentEntry = payments.First();
 
+        // Use the later of today or the payment entry's posting date to avoid BC posting date error
+        var today = DateTime.UtcNow.Date;
+        var entryDate = DateTime.TryParse(paymentEntry.PostingDate, out var parsed) ? parsed.Date : today;
+        var postingDate = (entryDate > today ? entryDate : today).ToString("yyyy-MM-dd");
+
         // Apply the payment to the invoice via the custom API
         var amountToApply = partialAmount ?? 0; // 0 means full invoice amount (handled by AL)
         var result = await _bcClient.ApplyPaymentToInvoiceAsync(
@@ -750,7 +760,8 @@ public class SettlementFunctions
             customerNumber,
             paymentEntry.EntryNo,
             invoice.BcInvoiceNumber!,
-            amountToApply);
+            amountToApply,
+            postingDate);
 
         if (result.ResultStatus == "Error")
             throw new InvalidOperationException($"BC payment application failed: {result.ResultMessage}");

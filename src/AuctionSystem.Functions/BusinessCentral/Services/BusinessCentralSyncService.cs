@@ -426,12 +426,19 @@ public class BusinessCentralSyncService
                 return;
             }
 
+            // Use the later of today or the entry's posting date to avoid BC posting date error
+            var today = DateTime.UtcNow.Date;
+            var entryDate = DateTime.TryParse(creditMemoEntry.PostingDate, out var parsed) ? parsed.Date : today;
+            var postingDate = (entryDate > today ? entryDate : today).ToString("yyyy-MM-dd");
+
             // Apply the credit memo to the original invoice
             var result = await _bcClient.ApplyCreditMemoToInvoiceAsync(
                 companyId,
                 buyerNumber,
                 creditMemoEntry.EntryNo,
-                originalInvoice.BcInvoiceNumber!);
+                originalInvoice.BcInvoiceNumber!,
+                0,
+                postingDate);
 
             if (result.ResultStatus == "Error")
             {
