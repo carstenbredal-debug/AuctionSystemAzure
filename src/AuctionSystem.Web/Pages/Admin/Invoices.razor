@@ -373,16 +373,18 @@ else
                     else
                     {
                         <div class="row mb-3">
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <small class="text-muted">BC Invoice No.</small><br />
                                 <strong>@_paymentHistory.BcInvoiceNumber</strong>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-4">
                                 <small class="text-muted">Customer</small><br />
                                 <strong>@_paymentHistory.CustomerNo</strong> — @_paymentHistory.CustomerName
                             </div>
-                            <div class="col-md-3">
-                                <small class="text-muted">Remaining</small><br />
+                            <div class="col-md-4">
+                                <small class="text-muted">Invoice Amount / Remaining</small><br />
+                                <strong>€@((_paymentHistory.BcOriginalAmount ?? 0).ToString("N2"))</strong>
+                                <span class="text-muted mx-1">/</span>
                                 <strong class="@(_paymentHistory.BcRemainingAmount > 0 ? "text-danger" : "text-success")">
                                     €@((_paymentHistory.BcRemainingAmount ?? 0).ToString("N2"))
                                 </strong>
@@ -396,42 +398,50 @@ else
                                 }
                             </div>
                         </div>
-                        <table class="table table-sm table-striped">
-                            <thead class="table-dark">
-                                <tr>
-                                    <th>Type</th>
-                                    <th>Document No.</th>
-                                    <th>Posting Date</th>
-                                    <th>Original Amount</th>
-                                    <th>Remaining</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var entry in _paymentHistory.Entries)
-                                {
-                                    <tr class="@(entry.Type == "Payment" ? "" : entry.Type == "Credit Memo" ? "credit-row" : "")">
-                                        <td>
-                                            <span class="badge @(entry.Type == "Invoice" ? "bg-primary" : entry.Type == "Payment" ? "bg-success" : "bg-warning text-dark")">@entry.Type</span>
-                                        </td>
-                                        <td>@entry.DocumentNo</td>
-                                        <td>@entry.PostingDate</td>
-                                        <td>€@entry.OriginalAmount.ToString("N2")</td>
-                                        <td>€@entry.RemainingAmount.ToString("N2")</td>
-                                        <td>
-                                            @if (entry.Open)
-                                            {
-                                                <span class="badge bg-warning">Open</span>
-                                            }
-                                            else
-                                            {
-                                                <span class="badge bg-success">Closed</span>
-                                            }
-                                        </td>
+
+                        @if (_paymentHistory.Entries.Count <= 1)
+                        {
+                            <div class="alert alert-info">No payments or credit memos have been applied to this invoice yet.</div>
+                        }
+                        else
+                        {
+                            <table class="table table-sm table-striped">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Type</th>
+                                        <th>Document No.</th>
+                                        <th>Posting Date</th>
+                                        <th>Amount</th>
+                                        <th>Applied</th>
+                                        <th>Status</th>
                                     </tr>
-                                }
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    @foreach (var entry in _paymentHistory.Entries.Where(e => e.Type != "Invoice"))
+                                    {
+                                        <tr class="@(entry.Type == "Credit Memo" ? "credit-row" : "")">
+                                            <td>
+                                                <span class="badge @(entry.Type == "Payment" ? "bg-success" : "bg-warning text-dark")">@entry.Type</span>
+                                            </td>
+                                            <td>@entry.DocumentNo</td>
+                                            <td>@entry.PostingDate</td>
+                                            <td>€@entry.OriginalAmount.ToString("N2")</td>
+                                            <td><strong>€@entry.AmountApplied.ToString("N2")</strong></td>
+                                            <td>
+                                                @if (entry.Open)
+                                                {
+                                                    <span class="badge bg-warning">Open</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-success">Closed</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
                     }
                 </div>
                 <div class="modal-footer">

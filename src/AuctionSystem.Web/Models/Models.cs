@@ -671,6 +671,7 @@ public class PaymentHistoryDto
     public string? CustomerNo { get; set; }
     public string? CustomerName { get; set; }
     public decimal InvoiceTotal { get; set; }
+    public decimal? BcOriginalAmount { get; set; }
     public decimal? BcRemainingAmount { get; set; }
     public bool? BcOpen { get; set; }
     public string? Message { get; set; }
@@ -683,6 +684,7 @@ public class PaymentHistoryEntryDto
     public string DocumentNo { get; set; } = "";
     public string PostingDate { get; set; } = "";
     public decimal OriginalAmount { get; set; }
+    public decimal AmountApplied { get; set; }
     public decimal RemainingAmount { get; set; }
     public bool Open { get; set; }
     public string? Description { get; set; }

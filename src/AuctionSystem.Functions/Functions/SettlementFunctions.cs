@@ -681,61 +681,62 @@ public class SettlementFunctions
         {
             var companyId = await _bcClient.ResolveCompanyIdAsync();
 
-            // Get all ledger entries for this customer (all types, open and closed)
-            var allEntries = await _bcClient.GetCustomerLedgerEntriesByCustomerAsync(companyId, customerNo, "Invoice", false);
-            var invoiceEntry = allEntries.FirstOrDefault(e => e.DocumentNo == invoice.BcInvoiceNumber);
+            // Get the invoice ledger entry for this specific invoice
+            var invoiceEntries = await _bcClient.GetCustomerLedgerEntriesByCustomerAsync(companyId, customerNo, "Invoice", false);
+            var invoiceEntry = invoiceEntries.FirstOrDefault(e => e.DocumentNo == invoice.BcInvoiceNumber);
 
-            // Get payment entries for this customer
-            var payments = await _bcClient.GetCustomerLedgerEntriesByCustomerAsync(companyId, customerNo, "Payment", false);
-            // Get credit memo entries
-            var creditMemos = await _bcClient.GetCustomerLedgerEntriesByCustomerAsync(companyId, customerNo, "Credit Memo", false);
-
-            // Combine all related entries
+            // Only show entries that closed or were closed by this invoice entry
             var history = new List<object>();
-
-            // Add the invoice entry itself
             if (invoiceEntry != null)
             {
+                // The invoice entry itself shows amounts applied
+                var amountApplied = invoiceEntry.OriginalAmount - invoiceEntry.RemainingAmount;
                 history.Add(new
                 {
                     type = "Invoice",
                     documentNo = invoiceEntry.DocumentNo,
                     postingDate = invoiceEntry.PostingDate,
                     originalAmount = invoiceEntry.OriginalAmount,
+                    amountApplied = amountApplied,
                     remainingAmount = invoiceEntry.RemainingAmount,
                     open = invoiceEntry.Open,
                     description = invoiceEntry.Description
                 });
-            }
 
-            // Add payments that reference this invoice (by closedByEntryNo or by checking applied entries)
-            foreach (var p in payments)
-            {
-                history.Add(new
-                {
-                    type = "Payment",
-                    documentNo = p.DocumentNo,
-                    postingDate = p.PostingDate,
-                    originalAmount = p.OriginalAmount,
-                    remainingAmount = p.RemainingAmount,
-                    open = p.Open,
-                    description = p.Description
-                });
-            }
+                // Find payments/credit memos that closed this invoice (by ClosedByEntryNo)
+                var allPayments = await _bcClient.GetCustomerLedgerEntriesByCustomerAsync(companyId, customerNo, "Payment", false);
+                var allCreditMemos = await _bcClient.GetCustomerLedgerEntriesByCustomerAsync(companyId, customerNo, "Credit Memo", false);
 
-            // Add credit memos
-            foreach (var cm in creditMemos)
-            {
-                history.Add(new
+                // Entries whose ClosedByEntryNo matches the invoice entry, or that the invoice was closed by
+                foreach (var p in allPayments.Where(p => p.ClosedByEntryNo == invoiceEntry.EntryNo || (invoiceEntry.ClosedByEntryNo != 0 && p.EntryNo == invoiceEntry.ClosedByEntryNo)))
                 {
-                    type = "Credit Memo",
-                    documentNo = cm.DocumentNo,
-                    postingDate = cm.PostingDate,
-                    originalAmount = cm.OriginalAmount,
-                    remainingAmount = cm.RemainingAmount,
-                    open = cm.Open,
-                    description = cm.Description
-                });
+                    history.Add(new
+                    {
+                        type = "Payment",
+                        documentNo = p.DocumentNo,
+                        postingDate = p.PostingDate,
+                        originalAmount = p.OriginalAmount,
+                        amountApplied = p.OriginalAmount - p.RemainingAmount,
+                        remainingAmount = p.RemainingAmount,
+                        open = p.Open,
+                        description = p.Description
+                    });
+                }
+
+                foreach (var cm in allCreditMemos.Where(cm => cm.ClosedByEntryNo == invoiceEntry.EntryNo || (invoiceEntry.ClosedByEntryNo != 0 && cm.EntryNo == invoiceEntry.ClosedByEntryNo)))
+                {
+                    history.Add(new
+                    {
+                        type = "Credit Memo",
+                        documentNo = cm.DocumentNo,
+                        postingDate = cm.PostingDate,
+                        originalAmount = cm.OriginalAmount,
+                        amountApplied = cm.OriginalAmount - cm.RemainingAmount,
+                        remainingAmount = cm.RemainingAmount,
+                        open = cm.Open,
+                        description = cm.Description
+                    });
+                }
             }
 
             return await CreateJsonResponse(req, new
@@ -745,6 +746,7 @@ public class SettlementFunctions
                 customerNo,
                 customerName = invoice.Buyer?.Name ?? "",
                 invoiceTotal = invoice.TotalAmount,
+                bcOriginalAmount = invoiceEntry?.OriginalAmount,
                 bcRemainingAmount = invoiceEntry?.RemainingAmount,
                 bcOpen = invoiceEntry?.Open,
                 entries = history
