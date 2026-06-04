@@ -254,9 +254,10 @@ h3 {
     background-color: #314450 !important;
 }
 
-.badge.bg-warning {
+.badge.bg-warning,
+.badge.bg-warning.text-dark {
     background-color: #F15A31 !important;
-    color: #fff !important;
+    color: #FFFFFF !important;
 }
 
 /* ===== Alert Styling ===== */
@@ -337,15 +338,15 @@ p.text-muted {
 
 /* ===== Action Buttons ===== */
 .btn-warning {
-    background-color: #F15A31;
-    border-color: #F15A31;
-    color: #fff;
+    background-color: #F15A31 !important;
+    border-color: #F15A31 !important;
+    color: #FFFFFF !important;
 }
 
 .btn-warning:hover {
-    background-color: #d94e2a;
-    border-color: #d94e2a;
-    color: #fff;
+    background-color: #d94e2a !important;
+    border-color: #d94e2a !important;
+    color: #FFFFFF !important;
 }
 
 .btn-success {
