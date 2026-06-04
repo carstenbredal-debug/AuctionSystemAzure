@@ -348,13 +348,13 @@ p.text-muted {
 }
 
 /* ===== Top Bar ===== */
-.top-row {
-    background-color: #230A3C !important;
+.page > main > .top-row {
+    background-color: #FFFFFF !important;
     border-bottom: none;
 }
 
-.top-row a, .top-row .btn-link {
-    color: #FFFFFF !important;
+.page > main > .top-row a, .page > main > .top-row .btn-link {
+    color: #000000 !important;
 }
 
 /* ===== PDF/Action Button Outlined ===== */
