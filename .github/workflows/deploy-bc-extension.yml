@@ -7,6 +7,7 @@ on:
     paths:
       - 'bc-extension/src/**'
       - 'bc-extension/app.json'
+      - '.github/workflows/deploy-bc-extension.yml'
   workflow_dispatch:
 
 env:
@@ -71,23 +72,34 @@ jobs:
           fi
           echo "OAuth token obtained successfully."
           
-          BC_VERSION=$(python3 -c "import json; print(json.load(open('app.json'))['platform'])")
-          echo "Downloading symbols for BC version $BC_VERSION..."
+          echo "Downloading symbols from BC environment '${BC_ENVIRONMENT}'..."
+          DOWNLOAD_OK=true
           
-          for APP_NAME in "System" "Application" "Base%20Application" "System%20Application"; do
-            CLEAN_NAME=$(echo "$APP_NAME" | sed 's/%20/_/g')
+          for APP_NAME in "System" "Application" "Base Application" "System Application"; do
+            CLEAN_NAME=$(echo "$APP_NAME" | sed 's/ /_/g')
+            URL_NAME=$(echo "$APP_NAME" | sed 's/ /%20/g')
             echo "  Downloading $CLEAN_NAME..."
             HTTP_CODE=$(curl -s -o ".alpackages/${CLEAN_NAME}.app" -w "%{http_code}" \
               -H "Authorization: Bearer $TOKEN" \
-              "https://api.businesscentral.dynamics.com/v2.0/${BC_TENANT_ID}/${BC_ENVIRONMENT}/dev/packages?publisher=Microsoft&appName=${APP_NAME}&versionText=${BC_VERSION}")
+              "https://api.businesscentral.dynamics.com/v2.0/${BC_TENANT_ID}/${BC_ENVIRONMENT}/dev/packages?publisher=Microsoft&appName=${URL_NAME}&versionText=0.0.0.0")
             FILE_SIZE=$(stat -c%s ".alpackages/${CLEAN_NAME}.app" 2>/dev/null || echo 0)
             echo "    HTTP $HTTP_CODE, size: $FILE_SIZE bytes"
             if [ "$HTTP_CODE" != "200" ] || [ "$FILE_SIZE" -lt 1000 ]; then
-              echo "    WARNING: Download may have failed. Content:"
+              echo "    WARNING: Download failed. Content:"
               head -c 500 ".alpackages/${CLEAN_NAME}.app" | cat -v
               echo
+              DOWNLOAD_OK=false
             fi
           done
+          
+          if [ "$DOWNLOAD_OK" = "false" ]; then
+            echo ""
+            echo "ERROR: Symbol download failed. Check:"
+            echo "  1. BC_ENVIRONMENT_DEV matches exact BC environment name"
+            echo "  2. App has 'EXTEN. MGT. - ADMIN' permission in BC"
+            echo "  3. App has 'D365 EXTENSION MGT' permission in BC"
+            exit 1
+          fi
           
           ls -la .alpackages/
 
