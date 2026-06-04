@@ -861,6 +861,74 @@ public class BusinessCentralFunctions
         return true;
     }
 
+    [Function("BcCustomerStatement")]
+    public async Task<HttpResponseData> GetCustomerStatement(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "bc/statement/{customerNo}")] HttpRequestData req, string customerNo)
+    {
+        if (!EnsureConfigured(out var error))
+            return await JsonResponse(req, error!, HttpStatusCode.BadRequest);
+
+        try
+        {
+            var companyId = await _bcClient!.ResolveCompanyIdAsync();
+
+            // Get customer details
+            var customers = await _bcClient.GetCustomersAsync(companyId);
+            var customer = customers.FirstOrDefault(c => c.Number == customerNo);
+            if (customer == null)
+                return await JsonResponse(req, new { error = $"Customer {customerNo} not found in BC" }, HttpStatusCode.NotFound);
+
+            // Get ledger entries
+            var allEntries = await _bcClient.GetCustomerLedgerEntriesAsync(companyId);
+            var customerEntries = allEntries
+                .Where(e => e.CustomerNo == customerNo)
+                .OrderBy(e => e.PostingDate)
+                .ToList();
+
+            if (customerEntries.Count == 0)
+                return await JsonResponse(req, new { error = $"No ledger entries found for customer {customerNo}" }, HttpStatusCode.NotFound);
+
+            // Generate PDF
+            var generator = new StatementOfAccountGenerator();
+            var statementEntries = customerEntries.Select(e => new StatementEntry
+            {
+                PostingDate = e.PostingDate ?? "",
+                DocumentType = e.DocumentType ?? "",
+                DocumentNo = e.DocumentNo ?? "",
+                Description = e.Description ?? "",
+                OriginalAmount = e.OriginalAmount,
+                RemainingAmount = e.RemainingAmount,
+                Open = e.Open
+            }).ToList();
+
+            var address = $"{customer.AddressLine1}";
+            if (!string.IsNullOrEmpty(customer.City))
+                address += $", {customer.City}";
+            if (!string.IsNullOrEmpty(customer.PostalCode))
+                address += $" {customer.PostalCode}";
+            if (!string.IsNullOrEmpty(customer.Country))
+                address += $", {customer.Country}";
+
+            var pdfBytes = generator.Generate(
+                customerNo,
+                customer.DisplayName ?? customerNo,
+                address,
+                statementEntries,
+                DateTime.UtcNow);
+
+            var response = req.CreateResponse(HttpStatusCode.OK);
+            response.Headers.Add("Content-Type", "application/pdf");
+            response.Headers.Add("Content-Disposition", $"inline; filename=\"Statement_{customerNo}_{DateTime.UtcNow:yyyyMMdd}.pdf\"");
+            await response.Body.WriteAsync(pdfBytes);
+            return response;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to generate statement for customer {CustomerNo}", customerNo);
+            return await JsonResponse(req, new { error = ex.Message }, HttpStatusCode.InternalServerError);
+        }
+    }
+
     private static async Task<HttpResponseData> JsonResponse(HttpRequestData req, object data, HttpStatusCode status = HttpStatusCode.OK)
     {
         var response = req.CreateResponse(status);
