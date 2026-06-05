@@ -5,6 +5,7 @@ using AuctionSystem.Functions.BusinessCentral.Services;
 using AuctionSystem.Functions.Functions;
 using AuctionSystem.Functions.Services;
 using Microsoft.Azure.Functions.Worker;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -18,18 +19,22 @@ var host = new HostBuilder()
             ?? context.Configuration["Values:SqlConnectionString"]
             ?? throw new InvalidOperationException("SqlConnectionString is not configured");
 
+        var sqlConnectionString = ConfigureManagedIdentity(connectionString);
+
         services.AddDbContext<AuctionDbContext>(options =>
-            options.UseSqlServer(connectionString));
+            options.UseSqlServer(sqlConnectionString));
 
         services.AddDbContext<CatalogDbContext>(options =>
-            options.UseSqlServer(connectionString));
+            options.UseSqlServer(sqlConnectionString));
 
         var targetCatalogConnectionString = context.Configuration["TargetCatalogConnectionString"]
             ?? context.Configuration["Values:TargetCatalogConnectionString"]
             ?? context.Configuration["ConnectionStrings:TargetCatalogConnectionString"]
             ?? context.Configuration.GetConnectionString("TargetCatalogConnectionString")
             ?? "";
-        services.AddSingleton(new TargetCatalogDbOptions { ConnectionString = targetCatalogConnectionString });
+        var targetSqlConnectionString = string.IsNullOrEmpty(targetCatalogConnectionString)
+            ? "" : ConfigureManagedIdentity(targetCatalogConnectionString);
+        services.AddSingleton(new TargetCatalogDbOptions { ConnectionString = targetSqlConnectionString });
 
         services.AddScoped<AuctionService>();
         services.AddScoped<BidService>();
@@ -279,3 +284,16 @@ using (var scope = host.Services.CreateScope())
 }
 
 host.Run();
+
+static string ConfigureManagedIdentity(string connectionString)
+{
+    var builder = new SqlConnectionStringBuilder(connectionString);
+    if (string.IsNullOrEmpty(builder.Password) &&
+        string.IsNullOrEmpty(builder.UserID) &&
+        !connectionString.Contains("Authentication=", StringComparison.OrdinalIgnoreCase) &&
+        !connectionString.Contains("Integrated Security=", StringComparison.OrdinalIgnoreCase))
+    {
+        builder.Authentication = SqlAuthenticationMethod.ActiveDirectoryDefault;
+    }
+    return builder.ConnectionString;
+}
