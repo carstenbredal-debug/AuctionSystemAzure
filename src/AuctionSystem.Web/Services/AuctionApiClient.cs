@@ -808,6 +808,25 @@ public class AuctionApiClient
         return (true, null);
     }
 
+    // Catalog Copy
+    public async Task<(bool Success, int RowsCopied, string? Error)> AppendCatalogAsync()
+    {
+        var resp = await _http.PostAsync("api/catalog-copy/append", null);
+        if (!resp.IsSuccessStatusCode) return (false, 0, await GetErrorMessage(resp));
+        var doc = System.Text.Json.JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+        var rows = doc.RootElement.GetProperty("rowsCopied").GetInt32();
+        return (true, rows, null);
+    }
+
+    public async Task<(bool Success, int RowsCopied, string? Error)> RecreateCatalogAsync()
+    {
+        var resp = await _http.PostAsync("api/catalog-copy/recreate", null);
+        if (!resp.IsSuccessStatusCode) return (false, 0, await GetErrorMessage(resp));
+        var doc = System.Text.Json.JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+        var rows = doc.RootElement.GetProperty("rowsCopied").GetInt32();
+        return (true, rows, null);
+    }
+
     private static async Task<string> GetErrorMessage(HttpResponseMessage resp)
     {
         try

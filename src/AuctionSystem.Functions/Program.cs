@@ -2,6 +2,7 @@ using AuctionSystem.Domain.Data;
 using AuctionSystem.Domain.Services;
 using AuctionSystem.Functions.BusinessCentral.Configuration;
 using AuctionSystem.Functions.BusinessCentral.Services;
+using AuctionSystem.Functions.Functions;
 using AuctionSystem.Functions.Services;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.EntityFrameworkCore;
@@ -22,6 +23,10 @@ var host = new HostBuilder()
 
         services.AddDbContext<CatalogDbContext>(options =>
             options.UseSqlServer(connectionString));
+
+        var targetCatalogConnectionString = context.Configuration["TargetCatalogConnectionString"]
+            ?? context.Configuration["Values:TargetCatalogConnectionString"] ?? "";
+        services.AddSingleton(new TargetCatalogDbOptions { ConnectionString = targetCatalogConnectionString });
 
         services.AddScoped<AuctionService>();
         services.AddScoped<BidService>();

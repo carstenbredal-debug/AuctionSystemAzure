@@ -244,6 +244,42 @@ else
         }
     </div>
 
+    <div class="section-container mb-3">
+        <div class="section-header">
+            <strong>Copy Catalog to Auction Hub</strong>
+        </div>
+        <div class="section-body p-3">
+            @if (!string.IsNullOrEmpty(copyMessage))
+            {
+                <div class="alert @(copyIsError ? "alert-danger" : "alert-success") alert-dismissible fade show">
+                    @copyMessage
+                    <button type="button" class="btn-close" @onclick="() => copyMessage = null"></button>
+                </div>
+            }
+            <p class="text-muted mb-3">Copy the current catalog lots to the Auction Hub database.</p>
+            <div class="d-flex gap-2">
+                <button class="btn btn-primary" @onclick="AppendCatalog" disabled="@copyingCatalog">
+                    @if (copyingCatalog && copyAction == "append") { <span class="spinner-border spinner-border-sm me-1"></span> }
+                    Append Catalog
+                </button>
+                <button class="btn btn-warning" @onclick="ConfirmRecreateCatalog" disabled="@copyingCatalog">
+                    @if (copyingCatalog && copyAction == "recreate") { <span class="spinner-border spinner-border-sm me-1"></span> }
+                    Recreate Catalog
+                </button>
+            </div>
+            @if (showRecreateConfirm)
+            {
+                <div class="alert alert-warning mt-3">
+                    <strong>Are you sure?</strong> This will delete all existing rows in the target table and replace them with the current catalog.
+                    <div class="mt-2">
+                        <button class="btn btn-danger btn-sm me-2" @onclick="RecreateCatalog">Yes, Recreate</button>
+                        <button class="btn btn-secondary btn-sm" @onclick="() => showRecreateConfirm = false">Cancel</button>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
     <div class="section-container">
         <div class="section-header">
             <strong>Auctions</strong> <span class="badge bg-secondary">@auctions.Count</span>
@@ -310,6 +346,13 @@ else
     private bool creatingAuction;
     private string? createMessage;
     private bool createIsError;
+
+    // Copy catalog state
+    private bool copyingCatalog;
+    private string copyAction = "";
+    private string? copyMessage;
+    private bool copyIsError;
+    private bool showRecreateConfirm;
 
     private void NavigateTo(int id) => Nav.NavigateTo($"/auctions/{id}");
 
@@ -478,6 +521,67 @@ else
             await Api.UpdateAuctionStatusAsync(Id!.Value, status);
             selectedAuction = await Api.GetAuctionAsync(Id.Value);
         }
+    }
+
+    private async Task AppendCatalog()
+    {
+        copyingCatalog = true;
+        copyAction = "append";
+        copyMessage = null;
+        showRecreateConfirm = false;
+        try
+        {
+            var (success, rows, error) = await Api.AppendCatalogAsync();
+            if (success)
+            {
+                copyMessage = $"Successfully appended {rows:N0} catalog lots to the Auction Hub.";
+                copyIsError = false;
+            }
+            else
+            {
+                copyMessage = $"Failed to append: {error}";
+                copyIsError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            copyMessage = $"Error: {ex.Message}";
+            copyIsError = true;
+        }
+        copyingCatalog = false;
+    }
+
+    private void ConfirmRecreateCatalog()
+    {
+        showRecreateConfirm = true;
+    }
+
+    private async Task RecreateCatalog()
+    {
+        showRecreateConfirm = false;
+        copyingCatalog = true;
+        copyAction = "recreate";
+        copyMessage = null;
+        try
+        {
+            var (success, rows, error) = await Api.RecreateCatalogAsync();
+            if (success)
+            {
+                copyMessage = $"Successfully recreated Auction Hub with {rows:N0} catalog lots.";
+                copyIsError = false;
+            }
+            else
+            {
+                copyMessage = $"Failed to recreate: {error}";
+                copyIsError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            copyMessage = $"Error: {ex.Message}";
+            copyIsError = true;
+        }
+        copyingCatalog = false;
     }
 
     private string GetLotColor(LotStatus s) => s switch
