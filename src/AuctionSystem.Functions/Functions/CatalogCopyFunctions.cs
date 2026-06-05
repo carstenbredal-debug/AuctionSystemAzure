@@ -98,8 +98,8 @@ public class CatalogCopyFunctions
 
         if (truncateFirst)
         {
-            await using var truncCmd = new SqlCommand("TRUNCATE TABLE dbo.ForAuctionHub", conn);
-            await truncCmd.ExecuteNonQueryAsync();
+            await using var deleteCmd = new SqlCommand("DELETE FROM dbo.ForAuctionHub", conn);
+            await deleteCmd.ExecuteNonQueryAsync();
         }
 
         // Bulk insert using SqlBulkCopy for performance
