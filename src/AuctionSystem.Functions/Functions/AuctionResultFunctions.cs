@@ -220,7 +220,9 @@ public class AuctionResultFunctions
         r.SoldAt,
         r.CommissionType,
         r.CommissionValue,
-        r.CommissionAmount
+        r.CommissionAmount,
+        r.LastModifiedBy,
+        r.LastModifiedAt
     };
 
     [Function("GetAuctionResults")]
@@ -240,7 +242,8 @@ public class AuctionResultFunctions
                 r.SoldToBuyerId,
                 soldToBuyerName = r.SoldToBuyer != null ? r.SoldToBuyer.Name : null,
                 soldToBuyerNumber = r.SoldToBuyer != null ? r.SoldToBuyer.BuyerNumber : null,
-                r.SoldAt, r.CommissionType, r.CommissionValue, r.CommissionAmount
+                r.SoldAt, r.CommissionType, r.CommissionValue, r.CommissionAmount,
+                r.LastModifiedBy, r.LastModifiedAt
             })
             .ToListAsync();
 
@@ -268,7 +271,8 @@ public class AuctionResultFunctions
                 r.SoldToBuyerId,
                 soldToBuyerName = r.SoldToBuyer != null ? r.SoldToBuyer.Name : null,
                 soldToBuyerNumber = r.SoldToBuyer != null ? r.SoldToBuyer.BuyerNumber : null,
-                r.SoldAt, r.CommissionType, r.CommissionValue, r.CommissionAmount
+                r.SoldAt, r.CommissionType, r.CommissionValue, r.CommissionAmount,
+                r.LastModifiedBy, r.LastModifiedAt
             })
             .ToListAsync();
 
