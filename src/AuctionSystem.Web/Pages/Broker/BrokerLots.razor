@@ -92,13 +92,14 @@ else if (_activeTab == "purchased")
                         <th style="cursor:pointer" @onclick='() => ToggleSort("AuctionFee")'>Auction Fee @SortIndicator("AuctionFee")</th>
                         <th style="cursor:pointer" @onclick='() => ToggleSort("Commission")'>Commission @SortIndicator("Commission")</th>
                         <th style="cursor:pointer" @onclick='() => ToggleSort("Status")'>Status @SortIndicator("Status")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("InitiatedBy")'>Initiated By @SortIndicator("InitiatedBy")</th>
                         <th>Documents</th>
                     </tr>
                 </thead>
                 <tbody>
                     @if (_allResults.Count == 0)
                     {
-                        <tr><td colspan="15" class="text-center text-muted py-4">No purchased lots yet.</td></tr>
+                        <tr><td colspan="16" class="text-center text-muted py-4">No purchased lots yet.</td></tr>
                     }
                     @foreach (var r in ApplySort(_allResults))
                     {
@@ -127,6 +128,7 @@ else if (_activeTab == "purchased")
                                     <span class="badge bg-warning">Un-Invoiced</span>
                                 }
                             </td>
+                            <td>@(r.LastModifiedBy ?? "")</td>
                             <td>
                                 @if (link != null)
                                 {
@@ -304,13 +306,14 @@ else if (_activeTab == "unsold")
                         <th style="cursor:pointer" @onclick='() => ToggleSort("Price")'>Price (EUR) @SortIndicator("Price")</th>
                         <th style="cursor:pointer" @onclick='() => ToggleSort("HammerPrice")'>Hammer Price @SortIndicator("HammerPrice")</th>
                         <th style="cursor:pointer" @onclick='() => ToggleSort("AuctionFee")'>Auction Fee @SortIndicator("AuctionFee")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("InitiatedBy")'>Initiated By @SortIndicator("InitiatedBy")</th>
                         <th>Documents</th>
                     </tr>
                 </thead>
                 <tbody>
                     @if (GetUnsoldLots().Count == 0)
                     {
-                        <tr><td colspan="14" class="text-center text-muted py-4">All lots have been sold.</td></tr>
+                        <tr><td colspan="15" class="text-center text-muted py-4">All lots have been sold.</td></tr>
                     }
                     @foreach (var r in GetUnsoldLots())
                     {
@@ -331,6 +334,7 @@ else if (_activeTab == "unsold")
                             <td>€@r.PriceEur.ToString("N2")</td>
                             <td>€@((r.TotalSkins * r.PriceEur).ToString("N2"))</td>
                             <td>€@CalcAuctionFee(r.TotalSkins, r.PriceEur).ToString("N2")</td>
+                            <td>@(r.LastModifiedBy ?? "")</td>
                             <td>
                                 @if (link != null)
                                 {
