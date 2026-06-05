@@ -13,6 +13,7 @@ namespace AuctionSystem.Functions.Functions;
 public class TypistEntryFunctions
 {
     private readonly AuctionDbContext _db;
+    private readonly CatalogDbContext _catalogDb;
     private readonly ILogger<TypistEntryFunctions> _logger;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -21,9 +22,10 @@ public class TypistEntryFunctions
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public TypistEntryFunctions(AuctionDbContext db, ILogger<TypistEntryFunctions> logger)
+    public TypistEntryFunctions(AuctionDbContext db, CatalogDbContext catalogDb, ILogger<TypistEntryFunctions> logger)
     {
         _db = db;
+        _catalogDb = catalogDb;
         _logger = logger;
     }
 
@@ -172,20 +174,25 @@ public class TypistEntryFunctions
             entry1.MatchedWithEntryId = entry2.Id;
             entry2.MatchedWithEntryId = entry1.Id;
 
-            // Create the auction result (same as existing SubmitAuctionResult logic)
+            // Create the auction result from CatalogLot (preferred) or Lot data
             var auctionLot = await _db.Lots.FirstOrDefaultAsync(l => l.LotNumber == entry1.LotNumber);
+            var catalogLot = await _catalogDb.CatalogLots.FirstOrDefaultAsync(cl => cl.LotNumber == entry1.LotNumber);
 
             var result = new AuctionResult
             {
                 LotNumber = entry1.LotNumber,
                 BrokerId = entry1.BrokerId,
                 PriceEur = entry1.PriceEur,
-                SalesType = auctionLot?.Description?.Split(' ').FirstOrDefault(),
-                Gender = auctionLot != null ? ParseField(auctionLot.Description, 1) : null,
-                Group = auctionLot?.Category,
-                Color = auctionLot != null ? ParseField(auctionLot.Description, 2) : null,
-                Quality = auctionLot != null ? ParseField(auctionLot.Description, 3) : null,
-                TotalSkins = auctionLot?.Quantity ?? 0,
+                SalesType = catalogLot?.SalesType ?? auctionLot?.Description?.Split(' ').FirstOrDefault(),
+                Gender = catalogLot?.Gender ?? (auctionLot != null ? ParseField(auctionLot.Description, 1) : null),
+                Group = catalogLot?.Group ?? auctionLot?.Category,
+                Color = catalogLot?.Color ?? (auctionLot != null ? ParseField(auctionLot.Description, 2) : null),
+                Quality = catalogLot?.Quality ?? (auctionLot != null ? ParseField(auctionLot.Description, 3) : null),
+                Size = catalogLot?.Size,
+                HairLength = catalogLot?.HairLength,
+                Clarity = catalogLot?.Clarity,
+                TotalSkins = catalogLot?.TotalSkins ?? auctionLot?.Quantity ?? 0,
+                BoxCount = catalogLot?.BoxCount ?? 0,
                 Processed = false,
                 ReceivedAt = DateTime.UtcNow
             };

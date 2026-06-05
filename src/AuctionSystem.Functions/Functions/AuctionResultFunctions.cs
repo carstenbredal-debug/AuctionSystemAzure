@@ -16,6 +16,7 @@ namespace AuctionSystem.Functions.Functions;
 public class AuctionResultFunctions
 {
     private readonly AuctionDbContext _db;
+    private readonly CatalogDbContext _catalogDb;
     private readonly ILogger<AuctionResultFunctions> _logger;
     private readonly BlobStorageService? _blobStorage;
     private readonly BusinessCentralSyncService? _bcSyncService;
@@ -26,9 +27,10 @@ public class AuctionResultFunctions
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public AuctionResultFunctions(AuctionDbContext db, ILogger<AuctionResultFunctions> logger, BlobStorageService? blobStorage = null, BusinessCentralSyncService? bcSyncService = null)
+    public AuctionResultFunctions(AuctionDbContext db, CatalogDbContext catalogDb, ILogger<AuctionResultFunctions> logger, BlobStorageService? blobStorage = null, BusinessCentralSyncService? bcSyncService = null)
     {
         _db = db;
+        _catalogDb = catalogDb;
         _logger = logger;
         _blobStorage = blobStorage;
         _bcSyncService = bcSyncService;
@@ -51,21 +53,27 @@ public class AuctionResultFunctions
             return response;
         }
 
-        // Look up lot in auction.Lots
+        // Look up lot in auction.Lots and CatalogLots
         var auctionLot = await _db.Lots
             .FirstOrDefaultAsync(l => l.LotNumber == body.LotNumber);
+        var catalogLot = await _catalogDb.CatalogLots
+            .FirstOrDefaultAsync(cl => cl.LotNumber == body.LotNumber);
 
         var result = new AuctionResult
         {
             LotNumber = body.LotNumber,
             BrokerId = body.BrokerId,
             PriceEur = body.PriceEur,
-            SalesType = auctionLot?.Description?.Split(' ').FirstOrDefault(),
-            Gender = auctionLot != null ? ParseField(auctionLot.Description, 1) : null,
-            Group = auctionLot?.Category,
-            Color = auctionLot != null ? ParseField(auctionLot.Description, 2) : null,
-            Quality = auctionLot != null ? ParseField(auctionLot.Description, 3) : null,
-            TotalSkins = auctionLot?.Quantity ?? 0,
+            SalesType = catalogLot?.SalesType ?? auctionLot?.Description?.Split(' ').FirstOrDefault(),
+            Gender = catalogLot?.Gender ?? (auctionLot != null ? ParseField(auctionLot.Description, 1) : null),
+            Group = catalogLot?.Group ?? auctionLot?.Category,
+            Color = catalogLot?.Color ?? (auctionLot != null ? ParseField(auctionLot.Description, 2) : null),
+            Quality = catalogLot?.Quality ?? (auctionLot != null ? ParseField(auctionLot.Description, 3) : null),
+            Size = catalogLot?.Size,
+            HairLength = catalogLot?.HairLength,
+            Clarity = catalogLot?.Clarity,
+            TotalSkins = catalogLot?.TotalSkins ?? auctionLot?.Quantity ?? 0,
+            BoxCount = catalogLot?.BoxCount ?? 0,
             Processed = false,
             ReceivedAt = DateTime.UtcNow
         };
@@ -1026,6 +1034,43 @@ public class AuctionResultFunctions
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
         await response.WriteStringAsync(JsonSerializer.Serialize(result, JsonOptions));
+        return response;
+    }
+
+    [Function("BackfillCatalogData")]
+    public async Task<HttpResponseData> BackfillCatalogData(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auction-results/backfill-catalog")] HttpRequestData req)
+    {
+        var results = await _db.AuctionResults.Where(r => r.Size == null).ToListAsync();
+        var lotNumbers = results.Select(r => r.LotNumber).Distinct().ToList();
+        var catalogLots = await _catalogDb.CatalogLots
+            .Where(cl => lotNumbers.Contains(cl.LotNumber))
+            .ToListAsync();
+        var catalogMap = catalogLots.GroupBy(cl => cl.LotNumber).ToDictionary(g => g.Key, g => g.First());
+
+        int updated = 0;
+        foreach (var r in results)
+        {
+            if (catalogMap.TryGetValue(r.LotNumber, out var cl))
+            {
+                r.Size = cl.Size;
+                r.HairLength = cl.HairLength;
+                r.Clarity = cl.Clarity;
+                if (r.BoxCount == 0) r.BoxCount = cl.BoxCount;
+                if (r.TotalSkins == 0) r.TotalSkins = cl.TotalSkins;
+                if (string.IsNullOrEmpty(r.SalesType)) r.SalesType = cl.SalesType;
+                if (string.IsNullOrEmpty(r.Gender)) r.Gender = cl.Gender;
+                if (string.IsNullOrEmpty(r.Group)) r.Group = cl.Group;
+                if (string.IsNullOrEmpty(r.Color)) r.Color = cl.Color;
+                if (string.IsNullOrEmpty(r.Quality)) r.Quality = cl.Quality;
+                updated++;
+            }
+        }
+        await _db.SaveChangesAsync();
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(new { total = results.Count, updated, notFound = results.Count - updated }, JsonOptions));
         return response;
     }
 }
