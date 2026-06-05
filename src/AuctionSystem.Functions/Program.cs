@@ -25,7 +25,10 @@ var host = new HostBuilder()
             options.UseSqlServer(connectionString));
 
         var targetCatalogConnectionString = context.Configuration["TargetCatalogConnectionString"]
-            ?? context.Configuration["Values:TargetCatalogConnectionString"] ?? "";
+            ?? context.Configuration["Values:TargetCatalogConnectionString"]
+            ?? context.Configuration["ConnectionStrings:TargetCatalogConnectionString"]
+            ?? context.Configuration.GetConnectionString("TargetCatalogConnectionString")
+            ?? "";
         services.AddSingleton(new TargetCatalogDbOptions { ConnectionString = targetCatalogConnectionString });
 
         services.AddScoped<AuctionService>();
