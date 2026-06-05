@@ -797,6 +797,17 @@ public class AuctionApiClient
         return (true, null);
     }
 
+    // Shipping Parameters
+    public async Task<List<BoxTypeDimensionDto>> GetBoxTypeDimensionsAsync()
+        => await _http.GetFromJsonAsync<List<BoxTypeDimensionDto>>("api/shipping-parameters/box-types") ?? new();
+
+    public async Task<(bool Success, string? Error)> SaveAllBoxTypeDimensionsAsync(List<BoxTypeDimensionDto> items)
+    {
+        var resp = await _http.PostAsJsonAsync("api/shipping-parameters/box-types/bulk", items);
+        if (!resp.IsSuccessStatusCode) return (false, await GetErrorMessage(resp));
+        return (true, null);
+    }
+
     private static async Task<string> GetErrorMessage(HttpResponseMessage resp)
     {
         try

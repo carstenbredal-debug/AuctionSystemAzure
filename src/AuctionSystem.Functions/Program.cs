@@ -243,6 +243,21 @@ using (var scope = host.Services.CreateScope())
                 CREATE INDEX IX_LotSalesHistories_AuctionResultId ON auction.LotSalesHistories(AuctionResultId);
             END
         ");
+        // BoxTypeDimensions table
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'BoxTypeDimensions')
+            BEGIN
+                CREATE TABLE auction.BoxTypeDimensions (
+                    Id INT IDENTITY(1,1) PRIMARY KEY,
+                    BoxType NVARCHAR(100) NOT NULL,
+                    HeightM DECIMAL(10,4) NOT NULL DEFAULT 0,
+                    WidthM DECIMAL(10,4) NOT NULL DEFAULT 0,
+                    LengthM DECIMAL(10,4) NOT NULL DEFAULT 0,
+                    UpdatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE()
+                );
+                CREATE UNIQUE INDEX IX_BoxTypeDimensions_BoxType ON auction.BoxTypeDimensions(BoxType);
+            END
+        ");
         db.Database.Migrate();
     }
     catch (Exception ex)

@@ -26,6 +26,7 @@ public class AuctionDbContext : DbContext
     public DbSet<TypistEntry> TypistEntries => Set<TypistEntry>();
     public DbSet<AuctionTransaction> AuctionTransactions => Set<AuctionTransaction>();
     public DbSet<LotSalesHistory> LotSalesHistories => Set<LotSalesHistory>();
+    public DbSet<BoxTypeDimension> BoxTypeDimensions => Set<BoxTypeDimension>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -235,6 +236,16 @@ public class AuctionDbContext : DbContext
             e.Property(t => t.Description).HasMaxLength(500);
             e.Property(t => t.DebitAccount).HasMaxLength(50);
             e.Property(t => t.CreditAccount).HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<BoxTypeDimension>(e =>
+        {
+            e.HasKey(d => d.Id);
+            e.HasIndex(d => d.BoxType).IsUnique();
+            e.Property(d => d.BoxType).HasMaxLength(100).IsRequired();
+            e.Property(d => d.HeightM).HasColumnType("decimal(10,4)");
+            e.Property(d => d.WidthM).HasColumnType("decimal(10,4)");
+            e.Property(d => d.LengthM).HasColumnType("decimal(10,4)");
         });
 
         modelBuilder.Entity<TypistEntry>(e =>

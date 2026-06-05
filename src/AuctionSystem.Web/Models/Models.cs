@@ -902,3 +902,13 @@ public class CatalogNumberRuleDto
     public int StartNumber { get; set; }
     public bool IsActive { get; set; }
 }
+
+public class BoxTypeDimensionDto
+{
+    public string BoxType { get; set; } = "";
+    public decimal HeightM { get; set; }
+    public decimal WidthM { get; set; }
+    public decimal LengthM { get; set; }
+    public int? Id { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+}
