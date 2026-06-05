@@ -483,7 +483,7 @@ else if (_activeTab == "takeback")
                     <button class="btn btn-secondary" @onclick="CloseCommissionModal">Cancel</button>
                     <button class="btn btn-primary" @onclick="SellToBuyer" disabled="@_selling">
                         @if (_selling) { <span class="spinner-border spinner-border-sm me-1"></span> }
-                        Confirm Sale
+                        Confirm Commission
                     </button>
                 </div>
             </div>
@@ -503,7 +503,7 @@ else if (_activeTab == "takeback")
                 </div>
                 <div class="modal-body">
                     <p class="text-muted small">Enter your initials to @(_initialsAction == "sell" ? "confirm the sale" : "confirm re-invoicing")</p>
-                    <input type="text" class="form-control" maxlength="5" placeholder="e.g. CB" @bind="_initialsValue" @onkeydown="HandleInitialsKeydown" />
+                    <input type="text" class="form-control" maxlength="5" placeholder="e.g. CB" @bind="_initialsValue" @bind:event="oninput" @onkeydown="HandleInitialsKeydown" />
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" @onclick="CloseInitialsModal">Cancel</button>
