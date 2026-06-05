@@ -42,12 +42,21 @@ public class CatalogCopyFunctions
             return err;
         }
 
-        var rows = await CopyCatalogToTarget(truncateFirst: false);
-
-        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
-        response.Headers.Add("Content-Type", "application/json");
-        await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true, action = "append", rowsCopied = rows }, JsonOptions));
-        return response;
+        try
+        {
+            var rows = await CopyCatalogToTarget(truncateFirst: false);
+            var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+            response.Headers.Add("Content-Type", "application/json");
+            await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true, action = "append", rowsCopied = rows }, JsonOptions));
+            return response;
+        }
+        catch (Exception ex)
+        {
+            var errResp = req.CreateResponse(System.Net.HttpStatusCode.InternalServerError);
+            errResp.Headers.Add("Content-Type", "application/json");
+            await errResp.WriteStringAsync(JsonSerializer.Serialize(new { error = ex.Message, detail = ex.InnerException?.Message }, JsonOptions));
+            return errResp;
+        }
     }
 
     [Function("RecreateCatalog")]
@@ -62,12 +71,21 @@ public class CatalogCopyFunctions
             return err;
         }
 
-        var rows = await CopyCatalogToTarget(truncateFirst: true);
-
-        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
-        response.Headers.Add("Content-Type", "application/json");
-        await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true, action = "recreate", rowsCopied = rows }, JsonOptions));
-        return response;
+        try
+        {
+            var rows = await CopyCatalogToTarget(truncateFirst: true);
+            var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+            response.Headers.Add("Content-Type", "application/json");
+            await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true, action = "recreate", rowsCopied = rows }, JsonOptions));
+            return response;
+        }
+        catch (Exception ex)
+        {
+            var errResp = req.CreateResponse(System.Net.HttpStatusCode.InternalServerError);
+            errResp.Headers.Add("Content-Type", "application/json");
+            await errResp.WriteStringAsync(JsonSerializer.Serialize(new { error = ex.Message, detail = ex.InnerException?.Message }, JsonOptions));
+            return errResp;
+        }
     }
 
     private async Task<int> CopyCatalogToTarget(bool truncateFirst)
