@@ -587,7 +587,7 @@ else if (_activeTab == "takeback")
 
 @code {
     private List<AuctionResultDto> _allResults = new();
-    private List<AuctionResultDto> GetSoldLots() => _allResults.Where(r => r.SoldToBuyerId != null).ToList();
+    private List<AuctionResultDto> GetSoldLots() => _allResults.Where(r => r.SoldToBuyerId != null).OrderByDescending(r => r.SoldAt).ToList();
     private List<AuctionResultDto> GetUnsoldLots() => _allResults.Where(r => r.SoldToBuyerId == null).ToList();
     private List<BuyerDto> _buyers = new();
     private List<TakebackRequestDto> _pendingTakebacks = new();
