@@ -246,6 +246,7 @@ public class AuctionDbContext : DbContext
             e.Property(d => d.HeightM).HasColumnType("decimal(10,4)");
             e.Property(d => d.WidthM).HasColumnType("decimal(10,4)");
             e.Property(d => d.LengthM).HasColumnType("decimal(10,4)");
+            e.Property(d => d.WeightKg).HasColumnType("decimal(10,4)");
         });
 
         modelBuilder.Entity<TypistEntry>(e =>

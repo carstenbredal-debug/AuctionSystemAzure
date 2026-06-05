@@ -34,16 +34,17 @@ else
                 <thead class="table-dark">
                     <tr>
                         <th>Box Type</th>
-                        <th style="width:150px">Height (m)</th>
-                        <th style="width:150px">Width (m)</th>
-                        <th style="width:150px">Length (m)</th>
-                        <th style="width:150px">Volume (m³)</th>
+                        <th style="width:130px">Height (m)</th>
+                        <th style="width:130px">Width (m)</th>
+                        <th style="width:130px">Length (m)</th>
+                        <th style="width:130px">Volume (m³)</th>
+                        <th style="width:130px">Kilos (kg)</th>
                     </tr>
                 </thead>
                 <tbody>
                     @if (_items.Count == 0)
                     {
-                        <tr><td colspan="5" class="text-center text-muted py-4">No box types found.</td></tr>
+                        <tr><td colspan="6" class="text-center text-muted py-4">No box types found.</td></tr>
                     }
                     @foreach (var item in _items)
                     {
@@ -65,6 +66,10 @@ else
                                 <span class="fw-bold @(Volume(item) > 0 ? "text-success" : "text-muted")">
                                     @Volume(item).ToString("N4")
                                 </span>
+                            </td>
+                            <td>
+                                <input type="number" step="0.01" min="0" class="form-control form-control-sm"
+                                       @bind="item.WeightKg" @bind:event="oninput" />
                             </td>
                         </tr>
                     }

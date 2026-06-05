@@ -261,10 +261,13 @@ using (var scope = host.Services.CreateScope())
                     HeightM DECIMAL(10,4) NOT NULL DEFAULT 0,
                     WidthM DECIMAL(10,4) NOT NULL DEFAULT 0,
                     LengthM DECIMAL(10,4) NOT NULL DEFAULT 0,
+                    WeightKg DECIMAL(10,4) NOT NULL DEFAULT 0,
                     UpdatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE()
                 );
                 CREATE UNIQUE INDEX IX_BoxTypeDimensions_BoxType ON auction.BoxTypeDimensions(BoxType);
             END
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.BoxTypeDimensions') AND name = 'WeightKg')
+                ALTER TABLE auction.BoxTypeDimensions ADD WeightKg DECIMAL(10,4) NOT NULL DEFAULT 0;
         ");
         db.Database.Migrate();
     }

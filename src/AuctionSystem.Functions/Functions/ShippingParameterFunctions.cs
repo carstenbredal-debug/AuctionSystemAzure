@@ -46,6 +46,7 @@ public class ShippingParameterFunctions
                     heightM = dim?.HeightM ?? 0m,
                     widthM = dim?.WidthM ?? 0m,
                     lengthM = dim?.LengthM ?? 0m,
+                    weightKg = dim?.WeightKg ?? 0m,
                     id = dim?.Id,
                     updatedAt = dim?.UpdatedAt
                 };
@@ -73,6 +74,7 @@ public class ShippingParameterFunctions
             existing.HeightM = body.HeightM;
             existing.WidthM = body.WidthM;
             existing.LengthM = body.LengthM;
+            existing.WeightKg = body.WeightKg;
             existing.UpdatedAt = DateTime.UtcNow;
         }
         else
@@ -83,6 +85,7 @@ public class ShippingParameterFunctions
                 HeightM = body.HeightM,
                 WidthM = body.WidthM,
                 LengthM = body.LengthM,
+                WeightKg = body.WeightKg,
                 UpdatedAt = DateTime.UtcNow
             });
         }
@@ -114,6 +117,7 @@ public class ShippingParameterFunctions
                 dim.HeightM = item.HeightM;
                 dim.WidthM = item.WidthM;
                 dim.LengthM = item.LengthM;
+                dim.WeightKg = item.WeightKg;
                 dim.UpdatedAt = DateTime.UtcNow;
             }
             else
@@ -124,6 +128,7 @@ public class ShippingParameterFunctions
                     HeightM = item.HeightM,
                     WidthM = item.WidthM,
                     LengthM = item.LengthM,
+                    WeightKg = item.WeightKg,
                     UpdatedAt = DateTime.UtcNow
                 });
             }
@@ -149,4 +154,5 @@ public class SaveBoxTypeDimensionRequest
     public decimal HeightM { get; set; }
     public decimal WidthM { get; set; }
     public decimal LengthM { get; set; }
+    public decimal WeightKg { get; set; }
 }
