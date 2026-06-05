@@ -78,20 +78,20 @@ else if (_activeTab == "purchased")
             <table class="table table-striped table-hover mb-0">
                 <thead class="table-dark">
                     <tr>
-                        <th>Lot #</th>
-                        <th>Type</th>
-                        <th>Gender</th>
-                        <th>Group</th>
-                        <th>Color</th>
-                        <th>Quality</th>
-                        <th>Size</th>
-                        <th>Skins</th>
-                        <th>Boxes</th>
-                        <th>Price (EUR)</th>
-                        <th>Hammer Price</th>
-                        <th>Auction Fee</th>
-                        <th>Commission</th>
-                        <th>Status</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("LotNumber")'>Lot # @SortIndicator("LotNumber")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("Type")'>Type @SortIndicator("Type")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("Gender")'>Gender @SortIndicator("Gender")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("Group")'>Group @SortIndicator("Group")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("Color")'>Color @SortIndicator("Color")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("Quality")'>Quality @SortIndicator("Quality")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("Size")'>Size @SortIndicator("Size")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("Skins")'>Skins @SortIndicator("Skins")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("Boxes")'>Boxes @SortIndicator("Boxes")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("Price")'>Price (EUR) @SortIndicator("Price")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("HammerPrice")'>Hammer Price @SortIndicator("HammerPrice")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("AuctionFee")'>Auction Fee @SortIndicator("AuctionFee")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("Commission")'>Commission @SortIndicator("Commission")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("Status")'>Status @SortIndicator("Status")</th>
                         <th>Documents</th>
                     </tr>
                 </thead>
@@ -100,7 +100,7 @@ else if (_activeTab == "purchased")
                     {
                         <tr><td colspan="15" class="text-center text-muted py-4">No purchased lots yet.</td></tr>
                     }
-                    @foreach (var r in _allResults)
+                    @foreach (var r in ApplySort(_allResults))
                     {
                         var link = _invoiceLinks.GetValueOrDefault(r.Id);
                         <tr>
@@ -189,19 +189,19 @@ else if (_activeTab == "sold")
                         <th style="width: 40px;">
                             <input type="checkbox" @onchange="ToggleAllSold" checked="@_allSoldSelected" />
                         </th>
-                        <th>Lot #</th>
-                        <th>Type</th>
-                        <th>Gender</th>
-                        <th>Color</th>
-                        <th>Quality</th>
-                        <th>Skins</th>
-                        <th>Price (EUR)</th>
-                        <th>Hammer Price</th>
-                        <th>Auction Fee</th>
-                        <th>Commission</th>
-                        <th>Sold To</th>
-                        <th>Sold Date</th>
-                        <th>Initiated By</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("LotNumber")'>Lot # @SortIndicator("LotNumber")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("Type")'>Type @SortIndicator("Type")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("Gender")'>Gender @SortIndicator("Gender")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("Color")'>Color @SortIndicator("Color")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("Quality")'>Quality @SortIndicator("Quality")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("Skins")'>Skins @SortIndicator("Skins")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("Price")'>Price (EUR) @SortIndicator("Price")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("HammerPrice")'>Hammer Price @SortIndicator("HammerPrice")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("AuctionFee")'>Auction Fee @SortIndicator("AuctionFee")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("Commission")'>Commission @SortIndicator("Commission")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("SoldTo")'>Sold To @SortIndicator("SoldTo")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("SoldDate")'>Sold Date @SortIndicator("SoldDate")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("InitiatedBy")'>Initiated By @SortIndicator("InitiatedBy")</th>
                         <th>Documents</th>
                     </tr>
                 </thead>
@@ -292,18 +292,18 @@ else if (_activeTab == "unsold")
                         <th style="width: 40px;">
                             <input type="checkbox" @onchange="ToggleAll" checked="@_allSelected" />
                         </th>
-                        <th>Lot #</th>
-                        <th>Type</th>
-                        <th>Gender</th>
-                        <th>Group</th>
-                        <th>Color</th>
-                        <th>Quality</th>
-                        <th>Size</th>
-                        <th>Skins</th>
-                        <th>Boxes</th>
-                        <th>Price (EUR)</th>
-                        <th>Hammer Price</th>
-                        <th>Auction Fee</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("LotNumber")'>Lot # @SortIndicator("LotNumber")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("Type")'>Type @SortIndicator("Type")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("Gender")'>Gender @SortIndicator("Gender")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("Group")'>Group @SortIndicator("Group")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("Color")'>Color @SortIndicator("Color")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("Quality")'>Quality @SortIndicator("Quality")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("Size")'>Size @SortIndicator("Size")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("Skins")'>Skins @SortIndicator("Skins")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("Boxes")'>Boxes @SortIndicator("Boxes")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("Price")'>Price (EUR) @SortIndicator("Price")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("HammerPrice")'>Hammer Price @SortIndicator("HammerPrice")</th>
+                        <th style="cursor:pointer" @onclick='() => ToggleSort("AuctionFee")'>Auction Fee @SortIndicator("AuctionFee")</th>
                         <th>Documents</th>
                     </tr>
                 </thead>
@@ -587,8 +587,57 @@ else if (_activeTab == "takeback")
 
 @code {
     private List<AuctionResultDto> _allResults = new();
-    private List<AuctionResultDto> GetSoldLots() => _allResults.Where(r => r.SoldToBuyerId != null).OrderByDescending(r => r.SoldAt).ToList();
-    private List<AuctionResultDto> GetUnsoldLots() => _allResults.Where(r => r.SoldToBuyerId == null).ToList();
+    private string _sortColumn = "";
+    private bool _sortAsc = true;
+
+    private List<AuctionResultDto> GetSoldLots() => ApplySort(_allResults.Where(r => r.SoldToBuyerId != null));
+    private List<AuctionResultDto> GetUnsoldLots() => ApplySort(_allResults.Where(r => r.SoldToBuyerId == null));
+
+    private void ToggleSort(string column)
+    {
+        if (_sortColumn == column)
+            _sortAsc = !_sortAsc;
+        else
+        {
+            _sortColumn = column;
+            _sortAsc = true;
+        }
+    }
+
+    private string SortIndicator(string column) =>
+        _sortColumn != column ? "⇅" : (_sortAsc ? "▲" : "▼");
+
+    private List<AuctionResultDto> ApplySort(IEnumerable<AuctionResultDto> source)
+    {
+        if (string.IsNullOrEmpty(_sortColumn))
+            return source.ToList();
+
+        Func<AuctionResultDto, object?> keySelector = _sortColumn switch
+        {
+            "LotNumber" => r => r.LotNumber,
+            "Type" => r => r.SalesType ?? "",
+            "Gender" => r => r.Gender ?? "",
+            "Group" => r => r.Group ?? "",
+            "Color" => r => r.Color ?? "",
+            "Quality" => r => r.Quality ?? "",
+            "Size" => r => r.Size ?? "",
+            "Skins" => r => r.TotalSkins,
+            "Boxes" => r => r.BoxCount,
+            "Price" => r => r.PriceEur,
+            "HammerPrice" => r => r.TotalSkins * r.PriceEur,
+            "AuctionFee" => r => CalcAuctionFee(r.TotalSkins, r.PriceEur),
+            "Commission" => r => r.CommissionAmount ?? 0m,
+            "Status" => r => r.SoldToBuyerId != null ? 1 : 0,
+            "SoldTo" => r => r.SoldToBuyerNumber ?? "",
+            "SoldDate" => r => r.SoldAt ?? DateTime.MinValue,
+            "InitiatedBy" => r => r.LastModifiedBy ?? "",
+            _ => r => r.LotNumber
+        };
+
+        return _sortAsc
+            ? source.OrderBy(keySelector).ToList()
+            : source.OrderByDescending(keySelector).ToList();
+    }
     private List<BuyerDto> _buyers = new();
     private List<TakebackRequestDto> _pendingTakebacks = new();
     private decimal _auctionFeePercent;
