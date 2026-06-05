@@ -1,0 +1,22 @@
+@page "/admin/shipping-parameters"
+@attribute [Authorize(Roles = "Admin")]
+@inject AuctionApiClient Api
+
+<PageTitle>Shipping Parameter - Admin</PageTitle>
+
+<h1>Shipping Parameter</h1>
+<p class="text-muted">Configure shipping-related parameters and settings.</p>
+
+<div class="section-container mb-4">
+    <div class="card-header">
+        <strong>Shipping Settings</strong>
+    </div>
+    <div class="section-body p-4">
+        <p class="text-muted">Shipping parameters will be configured here.</p>
+        <div class="mt-3">
+            <a href="admin/shipping" class="btn btn-outline-primary">
+                Manage Boxes
+            </a>
+        </div>
+    </div>
+</div>
