@@ -69,7 +69,7 @@ jobs:
 
       - name: Set environment-specific API URL
         run: |
-          echo '{ "ApiBaseUrl": "${{ secrets.API_BASE_URL_PROD }}" }' > src/AuctionSystem.Web/wwwroot/appsettings.json
+          echo '{ "ApiBaseUrl": "" }' > src/AuctionSystem.Web/wwwroot/appsettings.json
 
       - name: Build And Deploy
         id: builddeploy
@@ -82,14 +82,44 @@ jobs:
           api_location: ""
           output_location: "wwwroot"
 
+  build_and_deploy_catalog_swa:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+    runs-on: ubuntu-latest
+    name: Build and Deploy Catalog SWA (PROD)
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          lfs: false
+
+      - name: Set environment-specific API URL
+        run: |
+          echo '{ "ApiBaseUrl": "${{ secrets.API_BASE_URL_PROD }}" }' > src/LotCatalogWeb/wwwroot/appsettings.json
+
+      - name: Build And Deploy
+        id: builddeploy
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_SWA_TOKEN_CATALOG_PROD }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: "upload"
+          app_location: "src/LotCatalogWeb"
+          api_location: ""
+          output_location: "wwwroot"
+
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
     runs-on: ubuntu-latest
     name: Close Pull Request Job
     steps:
-      - name: Close Pull Request
-        id: closepullrequest
+      - name: Close Pull Request (Admin SWA)
         uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_SWA_TOKEN_PROD }}
+          action: "close"
+
+      - name: Close Pull Request (Catalog SWA)
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_SWA_TOKEN_CATALOG_PROD }}
           action: "close"
