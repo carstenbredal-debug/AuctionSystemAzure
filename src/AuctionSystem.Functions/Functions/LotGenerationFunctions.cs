@@ -362,7 +362,8 @@ public class LotGenerationFunctions
                 CREATE INDEX IX_Boxes_SalesType_Gender_Group ON auction.Boxes(SalesType, Gender, [Group]);
             END", transaction: tx);
 
-        await connection.ExecuteAsync("DELETE FROM auction.Boxes;", transaction: tx);
+        await connection.ExecuteAsync("DELETE FROM auction.Boxes;",
+            transaction: tx, commandTimeout: 300);
 
         var count = await connection.ExecuteAsync(@"
             INSERT INTO auction.Boxes (BoxNumber, BoxType, SalesType, [Group], Gender, Size, HairLength, Color, Quality, Clarity, Damages, Skins, LastRefreshedAt)
@@ -374,7 +375,7 @@ public class LotGenerationFunctions
             WHERE s.BoxStatus IN ('Showlot', 'Storage') AND s.IsActive = 1
             GROUP BY s.BoxNumber, s.BoxType, s.SalesType, s.[Group], s.Gender,
                 s.Size, s.HairLength, s.Color, s.Quality, s.Clarity, s.Damages;",
-            transaction: tx);
+            transaction: tx, commandTimeout: 300);
 
         tx.Commit();
         _logger.LogInformation("Refreshed auction.Boxes: {Count} rows", count);

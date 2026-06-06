@@ -97,7 +97,7 @@ public class BoxRefreshFunctions
 
         await connection.ExecuteAsync(
             "DELETE FROM auction.Boxes;",
-            transaction: (SqlTransaction)transaction);
+            transaction: (SqlTransaction)transaction, commandTimeout: 300);
 
         var count = await connection.ExecuteAsync(@"
             INSERT INTO auction.Boxes (BoxNumber, BoxType, SalesType, [Group], Gender, Size, HairLength, Color, Quality, Clarity, Damages, Skins, LastRefreshedAt)
@@ -121,7 +121,7 @@ public class BoxRefreshFunctions
             GROUP BY
                 s.BoxNumber, s.BoxType, s.SalesType, s.[Group], s.Gender,
                 s.Size, s.HairLength, s.Color, s.Quality, s.Clarity, s.Damages;",
-            transaction: (SqlTransaction)transaction);
+            transaction: (SqlTransaction)transaction, commandTimeout: 300);
 
         transaction.Commit();
 
