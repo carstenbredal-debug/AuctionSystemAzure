@@ -92,6 +92,10 @@ jobs:
           submodules: true
           lfs: false
 
+      - name: Set environment-specific API URL
+        run: |
+          echo '{ "ApiBaseUrl": "${{ secrets.API_BASE_URL_DEV }}" }' > src/LotCatalogWeb/wwwroot/appsettings.json
+
       - name: Build And Deploy
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
