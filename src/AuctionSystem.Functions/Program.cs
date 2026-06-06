@@ -278,6 +278,30 @@ using (var scope = host.Services.CreateScope())
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.BoxTypeDimensions') AND name = 'WeightKg')
                 ALTER TABLE auction.BoxTypeDimensions ADD WeightKg DECIMAL(10,4) NOT NULL DEFAULT 0;
         ");
+        // auction.boxes table (materialized from dbo.SkinTable, refreshed hourly + on-demand)
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'Boxes')
+            BEGIN
+                CREATE TABLE auction.Boxes (
+                    BoxNumber INT NOT NULL,
+                    BoxType NVARCHAR(100) NULL,
+                    SalesType NVARCHAR(100) NULL,
+                    [Group] NVARCHAR(100) NULL,
+                    Gender NVARCHAR(100) NULL,
+                    Size NVARCHAR(100) NULL,
+                    HairLength NVARCHAR(100) NULL,
+                    Color NVARCHAR(100) NULL,
+                    Quality NVARCHAR(100) NULL,
+                    Clarity NVARCHAR(100) NULL,
+                    Damages NVARCHAR(100) NULL,
+                    Skins INT NOT NULL DEFAULT 0,
+                    LastRefreshedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+                    CONSTRAINT PK_Boxes PRIMARY KEY (BoxNumber)
+                );
+                CREATE INDEX IX_Boxes_BoxType ON auction.Boxes(BoxType);
+                CREATE INDEX IX_Boxes_SalesType_Gender_Group ON auction.Boxes(SalesType, Gender, [Group]);
+            END
+        ");
         db.Database.Migrate();
     }
     catch (Exception ex)

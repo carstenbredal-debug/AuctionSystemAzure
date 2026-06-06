@@ -37,7 +37,7 @@ public class CatalogDbContext : DbContext
 
         modelBuilder.Entity<Skin>(e =>
         {
-            e.ToTable("skintable", "auction");
+            e.ToTable("skintable", "dbo");
             e.HasKey(s => s.UniqueID);
         });
 

@@ -57,6 +57,10 @@ public class LotGenerationFunctions
             using var connection = new SqlConnection(connectionString);
             await connection.OpenAsync();
 
+            // Refresh auction.boxes from dbo.SkinTable before generating lots
+            _logger.LogInformation("Refreshing auction.boxes from dbo.SkinTable...");
+            await RefreshBoxTableAsync(connection);
+
             _logger.LogInformation("Loading data from database...");
 
             var boxes = await connection.QueryAsync<BoxRow>(@"
@@ -326,5 +330,27 @@ public class LotGenerationFunctions
             await response.WriteStringAsync(ex.ToString());
             return response;
         }
+    }
+
+    private async Task RefreshBoxTableAsync(SqlConnection connection)
+    {
+        using var tx = (SqlTransaction)await connection.BeginTransactionAsync();
+
+        await connection.ExecuteAsync("DELETE FROM auction.Boxes;", transaction: tx);
+
+        var count = await connection.ExecuteAsync(@"
+            INSERT INTO auction.Boxes (BoxNumber, BoxType, SalesType, [Group], Gender, Size, HairLength, Color, Quality, Clarity, Damages, Skins, LastRefreshedAt)
+            SELECT
+                s.BoxNumber, s.BoxType, s.SalesType, s.[Group], s.Gender,
+                CAST(s.Size AS NVARCHAR(100)), s.HairLength, s.Color, s.Quality, s.Clarity, s.Damages,
+                COUNT(DISTINCT s.Barcode), GETUTCDATE()
+            FROM dbo.SkinTable s
+            WHERE s.BoxStatus IN ('Showlot', 'Storage') AND s.IsActive = 1
+            GROUP BY s.BoxNumber, s.BoxType, s.SalesType, s.[Group], s.Gender,
+                s.Size, s.HairLength, s.Color, s.Quality, s.Clarity, s.Damages;",
+            transaction: tx);
+
+        tx.Commit();
+        _logger.LogInformation("Refreshed auction.Boxes: {Count} rows", count);
     }
 }
