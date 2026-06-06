@@ -1,0 +1,370 @@
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.Azure.Functions.Worker.Http;
+using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using Dapper;
+using AuctionSystem.Functions.Models;
+using AuctionSystem.Functions.Services;
+using System.Data;
+using System.Net;
+using System.Text.Json;
+
+namespace AuctionSystem.Functions.Functions;
+
+public class LotGenerationFunctions
+{
+    private readonly LotGenerationService _lotGenerationService;
+    private readonly CatalogBuildService _catalogBuildService;
+    private readonly IConfiguration _configuration;
+    private readonly ILogger<LotGenerationFunctions> _logger;
+
+    public LotGenerationFunctions(
+        LotGenerationService lotGenerationService,
+        CatalogBuildService catalogBuildService,
+        IConfiguration configuration,
+        ILogger<LotGenerationFunctions> logger)
+    {
+        _lotGenerationService = lotGenerationService;
+        _catalogBuildService = catalogBuildService;
+        _configuration = configuration;
+        _logger = logger;
+    }
+
+    private string GetCatalogConnectionString()
+    {
+        return _configuration["SqlConnectionString"]
+            ?? _configuration["Values:SqlConnectionString"]
+            ?? "";
+    }
+
+    [Function("GenerateLots")]
+    public async Task<HttpResponseData> GenerateLots(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", Route = "lots/generate")]
+        HttpRequestData req)
+    {
+        try
+        {
+            var connectionString = GetCatalogConnectionString();
+
+            if (string.IsNullOrWhiteSpace(connectionString))
+            {
+                _logger.LogError("SqlConnectionString missing.");
+                var response = req.CreateResponse(HttpStatusCode.InternalServerError);
+                await response.WriteStringAsync("Connection string missing.");
+                return response;
+            }
+
+            using var connection = new SqlConnection(connectionString);
+            await connection.OpenAsync();
+
+            _logger.LogInformation("Loading data from database...");
+
+            var boxes = await connection.QueryAsync<BoxRow>(@"
+                SELECT
+                    BoxNumber,
+                    BoxType,
+                    SalesType,
+                    Gender,
+                    [Group],
+                    Damages,
+                    CAST(Size AS nvarchar(50)) AS Size,
+                    HairLength,
+                    Color,
+                    Quality,
+                    Clarity,
+                    Skins
+                FROM auction.boxes
+                WHERE Skins IS NOT NULL;
+            ");
+
+            var rules = await connection.QueryAsync<LotSizeRuleDto>(@"
+                SELECT
+                    RuleID,
+                    Gender,
+                    Size,
+                    MaxBoxes,
+                    MaxSkinsPerBox,
+                    ShowlotSkins,
+                    MaxLotSizeExclShowlot,
+                    MaxLotSizeInclShowlot,
+                    Priority,
+                    IsActive
+                FROM auction.lotsizerule
+                WHERE IsActive = 1
+                ORDER BY Priority;
+            ");
+
+            var groupOrders = await connection.QueryAsync<LotGroupOrderDto>(@"
+                SELECT
+                    ColumnName,
+                    GroupOrder
+                FROM auction.lotgrouporder
+                ORDER BY GroupOrder;
+            ");
+
+            var sortOrders = await connection.QueryAsync<LotSortOrderDto>(@"
+                SELECT
+                    ColumnName,
+                    Value,
+                    SortOrder
+                FROM auction.lotsortorder;
+            ");
+
+            var stringDefinitions = await connection.QueryAsync<StringDefinitionDto>(@"
+                SELECT
+                    StringDefinitionID,
+                    ColumnName,
+                    IsActive
+                FROM auction.stringdefinition
+                WHERE IsActive = 1;
+            ");
+
+            var catalogNumberRules = await connection.QueryAsync<CatalogNumberRuleDto>(@"
+                SELECT
+                    CatalogNumberRuleID,
+                    SalesType,
+                    Gender,
+                    [Group],
+                    StartNumber,
+                    IsActive
+                FROM auction.catalognumberrule
+                WHERE IsActive = 1;
+            ");
+
+            _logger.LogInformation("Generating lots...");
+
+            var generationResult = _lotGenerationService.GenerateLots(
+                boxes,
+                rules,
+                groupOrders,
+                sortOrders
+            );
+
+            var lots = generationResult.Lots;
+            var skippedGroups = generationResult.SkippedGroups;
+
+            _logger.LogInformation("Building catalog...");
+
+            var catalogBuildResult = _catalogBuildService.BuildCatalogLots(
+                lots,
+                stringDefinitions,
+                groupOrders,
+                sortOrders,
+                catalogNumberRules,
+                generationResult.RunId
+            );
+
+            var catalogLots = catalogBuildResult.CatalogLots;
+            skippedGroups.AddRange(catalogBuildResult.SkippedGroups);
+
+            _logger.LogInformation("Writing results to database...");
+
+            await connection.ExecuteAsync("TRUNCATE TABLE auction.GeneratedLots;");
+            await connection.ExecuteAsync("TRUNCATE TABLE auction.lotgenerationskippedgroup;");
+            await connection.ExecuteAsync("TRUNCATE TABLE auction.cataloglots;");
+
+            if (lots.Any())
+            {
+                var table = new DataTable();
+                table.Columns.Add("UniqueID", typeof(Guid));
+                table.Columns.Add("IsShow", typeof(string));
+                table.Columns.Add("ShowlotBoxNumber", typeof(int));
+                table.Columns.Add("SalesType", typeof(string));
+                table.Columns.Add("Group", typeof(string));
+                table.Columns.Add("Gender", typeof(string));
+                table.Columns.Add("Size", typeof(string));
+                table.Columns.Add("Color", typeof(string));
+                table.Columns.Add("Quality", typeof(string));
+                table.Columns.Add("Clarity", typeof(string));
+                table.Columns.Add("HairLength", typeof(string));
+                table.Columns.Add("Damages", typeof(string));
+                table.Columns.Add("IncludedBoxNumbers", typeof(string));
+                table.Columns.Add("BoxCount", typeof(int));
+                table.Columns.Add("TotalSkins", typeof(int));
+
+                foreach (var lot in lots)
+                {
+                    table.Rows.Add(
+                        lot.UniqueID,
+                        lot.IsShow,
+                        lot.ShowlotBoxNumber.HasValue ? lot.ShowlotBoxNumber.Value : DBNull.Value,
+                        lot.SalesType,
+                        lot.Group,
+                        lot.Gender,
+                        lot.Size,
+                        lot.Color,
+                        lot.Quality,
+                        lot.Clarity,
+                        lot.HairLength,
+                        lot.Damages,
+                        lot.IncludedBoxNumbers,
+                        lot.BoxCount,
+                        lot.TotalSkins
+                    );
+                }
+
+                using var bulkCopy = new SqlBulkCopy(connection) { DestinationTableName = "auction.GeneratedLots", BatchSize = 1000 };
+                bulkCopy.ColumnMappings.Add("UniqueID", "UniqueID");
+                bulkCopy.ColumnMappings.Add("IsShow", "IsShow");
+                bulkCopy.ColumnMappings.Add("ShowlotBoxNumber", "ShowlotBoxNumber");
+                bulkCopy.ColumnMappings.Add("SalesType", "SalesType");
+                bulkCopy.ColumnMappings.Add("Group", "Group");
+                bulkCopy.ColumnMappings.Add("Gender", "Gender");
+                bulkCopy.ColumnMappings.Add("Size", "Size");
+                bulkCopy.ColumnMappings.Add("Color", "Color");
+                bulkCopy.ColumnMappings.Add("Quality", "Quality");
+                bulkCopy.ColumnMappings.Add("Clarity", "Clarity");
+                bulkCopy.ColumnMappings.Add("HairLength", "HairLength");
+                bulkCopy.ColumnMappings.Add("Damages", "Damages");
+                bulkCopy.ColumnMappings.Add("IncludedBoxNumbers", "IncludedBoxNumbers");
+                bulkCopy.ColumnMappings.Add("BoxCount", "BoxCount");
+                bulkCopy.ColumnMappings.Add("TotalSkins", "TotalSkins");
+                await bulkCopy.WriteToServerAsync(table);
+            }
+
+            if (catalogLots.Any())
+            {
+                var table = new DataTable();
+                table.Columns.Add("LotUniqueID", typeof(Guid));
+                table.Columns.Add("StringNumber", typeof(int));
+                table.Columns.Add("LotNumber", typeof(int));
+                table.Columns.Add("CatalogSortOrder", typeof(int));
+                table.Columns.Add("IsShow", typeof(string));
+                table.Columns.Add("SalesType", typeof(string));
+                table.Columns.Add("Gender", typeof(string));
+                table.Columns.Add("Group", typeof(string));
+                table.Columns.Add("HairLength", typeof(string));
+                table.Columns.Add("Size", typeof(string));
+                table.Columns.Add("Quality", typeof(string));
+                table.Columns.Add("Color", typeof(string));
+                table.Columns.Add("Clarity", typeof(string));
+                table.Columns.Add("Damages", typeof(string));
+                table.Columns.Add("IncludedBoxNumbers", typeof(string));
+                table.Columns.Add("BoxCount", typeof(int));
+                table.Columns.Add("TotalSkins", typeof(int));
+
+                foreach (var lot in catalogLots)
+                {
+                    table.Rows.Add(
+                        lot.LotUniqueID,
+                        lot.StringNumber,
+                        lot.LotNumber,
+                        lot.CatalogSortOrder,
+                        lot.IsShow,
+                        lot.SalesType,
+                        lot.Gender,
+                        lot.Group,
+                        lot.HairLength,
+                        lot.Size,
+                        lot.Quality,
+                        lot.Color,
+                        lot.Clarity,
+                        lot.Damages,
+                        lot.IncludedBoxNumbers,
+                        lot.BoxCount,
+                        lot.TotalSkins
+                    );
+                }
+
+                using var bulkCopy = new SqlBulkCopy(connection) { DestinationTableName = "auction.cataloglots", BatchSize = 1000 };
+                bulkCopy.ColumnMappings.Add("LotUniqueID", "LotUniqueID");
+                bulkCopy.ColumnMappings.Add("StringNumber", "StringNumber");
+                bulkCopy.ColumnMappings.Add("LotNumber", "LotNumber");
+                bulkCopy.ColumnMappings.Add("CatalogSortOrder", "CatalogSortOrder");
+                bulkCopy.ColumnMappings.Add("IsShow", "IsShow");
+                bulkCopy.ColumnMappings.Add("SalesType", "SalesType");
+                bulkCopy.ColumnMappings.Add("Gender", "Gender");
+                bulkCopy.ColumnMappings.Add("Group", "Group");
+                bulkCopy.ColumnMappings.Add("HairLength", "HairLength");
+                bulkCopy.ColumnMappings.Add("Size", "Size");
+                bulkCopy.ColumnMappings.Add("Quality", "Quality");
+                bulkCopy.ColumnMappings.Add("Color", "Color");
+                bulkCopy.ColumnMappings.Add("Clarity", "Clarity");
+                bulkCopy.ColumnMappings.Add("Damages", "Damages");
+                bulkCopy.ColumnMappings.Add("IncludedBoxNumbers", "IncludedBoxNumbers");
+                bulkCopy.ColumnMappings.Add("BoxCount", "BoxCount");
+                bulkCopy.ColumnMappings.Add("TotalSkins", "TotalSkins");
+                await bulkCopy.WriteToServerAsync(table);
+            }
+
+            if (skippedGroups.Any())
+            {
+                var table = new DataTable();
+                table.Columns.Add("RunID", typeof(Guid));
+                table.Columns.Add("Reason", typeof(string));
+                table.Columns.Add("SalesType", typeof(string));
+                table.Columns.Add("Group", typeof(string));
+                table.Columns.Add("Gender", typeof(string));
+                table.Columns.Add("Size", typeof(string));
+                table.Columns.Add("Color", typeof(string));
+                table.Columns.Add("Quality", typeof(string));
+                table.Columns.Add("Clarity", typeof(string));
+                table.Columns.Add("HairLength", typeof(string));
+                table.Columns.Add("Damages", typeof(string));
+                table.Columns.Add("BoxCount", typeof(int));
+                table.Columns.Add("ShowlotCount", typeof(int));
+                table.Columns.Add("TotalSkins", typeof(int));
+                table.Columns.Add("BoxNumbers", typeof(string));
+
+                foreach (var sg in skippedGroups)
+                {
+                    table.Rows.Add(
+                        sg.RunID,
+                        sg.Reason,
+                        sg.SalesType,
+                        sg.Group,
+                        sg.Gender,
+                        sg.Size,
+                        sg.Color,
+                        sg.Quality,
+                        sg.Clarity,
+                        sg.HairLength,
+                        sg.Damages,
+                        sg.BoxCount,
+                        sg.ShowlotCount,
+                        sg.TotalSkins,
+                        sg.BoxNumbers
+                    );
+                }
+
+                using var bulkCopy = new SqlBulkCopy(connection) { DestinationTableName = "auction.lotgenerationskippedgroup", BatchSize = 1000 };
+                bulkCopy.ColumnMappings.Add("RunID", "RunID");
+                bulkCopy.ColumnMappings.Add("Reason", "Reason");
+                bulkCopy.ColumnMappings.Add("SalesType", "SalesType");
+                bulkCopy.ColumnMappings.Add("Group", "Group");
+                bulkCopy.ColumnMappings.Add("Gender", "Gender");
+                bulkCopy.ColumnMappings.Add("Size", "Size");
+                bulkCopy.ColumnMappings.Add("Color", "Color");
+                bulkCopy.ColumnMappings.Add("Quality", "Quality");
+                bulkCopy.ColumnMappings.Add("Clarity", "Clarity");
+                bulkCopy.ColumnMappings.Add("HairLength", "HairLength");
+                bulkCopy.ColumnMappings.Add("Damages", "Damages");
+                bulkCopy.ColumnMappings.Add("BoxCount", "BoxCount");
+                bulkCopy.ColumnMappings.Add("ShowlotCount", "ShowlotCount");
+                bulkCopy.ColumnMappings.Add("TotalSkins", "TotalSkins");
+                bulkCopy.ColumnMappings.Add("BoxNumbers", "BoxNumbers");
+                await bulkCopy.WriteToServerAsync(table);
+            }
+
+            var summary =
+                $"Generated lots: {lots.Count}. " +
+                $"Catalog lots: {catalogLots.Count}. " +
+                $"Skipped groups: {skippedGroups.Count}.";
+
+            _logger.LogInformation(summary);
+
+            var ok = req.CreateResponse(HttpStatusCode.OK);
+            await ok.WriteStringAsync(summary);
+            return ok;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in GenerateLots");
+            var response = req.CreateResponse(HttpStatusCode.InternalServerError);
+            await response.WriteStringAsync(ex.ToString());
+            return response;
+        }
+    }
+
+}

@@ -13,6 +13,9 @@ public class CatalogDbContext : DbContext
     public DbSet<LotSizeRule> LotSizeRules => Set<LotSizeRule>();
     public DbSet<LotSortOrder> LotSortOrders => Set<LotSortOrder>();
     public DbSet<CatalogNumberRule> CatalogNumberRules => Set<CatalogNumberRule>();
+    public DbSet<StringDefinition> StringDefinitions => Set<StringDefinition>();
+    public DbSet<GeneratedLot> GeneratedLots => Set<GeneratedLot>();
+    public DbSet<LotGenerationSkippedGroup> SkippedGroups => Set<LotGenerationSkippedGroup>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -68,6 +71,25 @@ public class CatalogDbContext : DbContext
             e.Property(r => r.SalesType).HasMaxLength(50);
             e.Property(r => r.Gender).HasMaxLength(50);
             e.Property(r => r.Group).HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<StringDefinition>(e =>
+        {
+            e.ToTable("stringdefinition", "auction");
+            e.HasKey(s => s.StringDefinitionID);
+            e.Property(s => s.ColumnName).HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<GeneratedLot>(e =>
+        {
+            e.ToTable("GeneratedLots", "auction");
+            e.HasKey(l => l.LotID);
+        });
+
+        modelBuilder.Entity<LotGenerationSkippedGroup>(e =>
+        {
+            e.ToTable("lotgenerationskippedgroup", "auction");
+            e.HasKey(s => s.SkippedGroupID);
         });
     }
 }

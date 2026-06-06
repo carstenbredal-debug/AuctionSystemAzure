@@ -66,6 +66,10 @@ var host = new HostBuilder()
             services.AddScoped<BusinessCentralSyncService>();
         }
 
+        // Lot generation services
+        services.AddScoped<LotGenerationService>();
+        services.AddScoped<CatalogBuildService>();
+
         var storageConnectionString = context.Configuration["AzureWebJobsStorage"]
             ?? context.Configuration["Values:AzureWebJobsStorage"];
         if (!string.IsNullOrEmpty(storageConnectionString) && storageConnectionString != "UseDevelopmentStorage=true")
@@ -277,6 +281,25 @@ using (var scope = host.Services.CreateScope())
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.BoxTypeDimensions') AND name = 'WeightKg')
                 ALTER TABLE auction.BoxTypeDimensions ADD WeightKg DECIMAL(10,4) NOT NULL DEFAULT 0;
         ");
+        // Drop auction.Boxes table if it exists (replaced by view)
+        db.Database.ExecuteSqlRaw(@"
+            IF EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'Boxes')
+                DROP TABLE auction.Boxes;
+        ");
+        // auction.Boxes view (reads from dbo.SkinTable)
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.views WHERE schema_id = SCHEMA_ID('auction') AND name = 'Boxes')
+                EXEC('CREATE VIEW auction.Boxes AS
+                    SELECT
+                        s.BoxNumber, s.BoxType, s.SalesType, s.[Group], s.Gender,
+                        s.Size, s.HairLength, s.Color, s.Quality, s.Clarity, s.Damages,
+                        COUNT(*) AS Skins
+                    FROM dbo.SkinTable s
+                    WHERE s.BoxStatus IN (''Showlot'', ''Storage'') AND s.IsActive = 1
+                    GROUP BY s.BoxNumber, s.BoxType, s.SalesType, s.[Group], s.Gender,
+                        s.Size, s.HairLength, s.Color, s.Quality, s.Clarity, s.Damages');
+        ");
+        db.Database.Migrate();
     }
     catch (Exception ex)
     {

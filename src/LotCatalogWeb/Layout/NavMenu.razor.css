@@ -1,0 +1,66 @@
+.top-nav {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem 2rem;
+    background-color: white;
+    border-bottom: 2px solid #2d1b4e;
+}
+
+.nav-brand {
+    display: flex;
+    flex-direction: column;
+    margin-right: 2rem;
+}
+
+.brand-name {
+    color: #2d1b4e;
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    line-height: 1.2;
+}
+
+.nav-links {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex: 1;
+}
+
+::deep .nav-item {
+    color: #333;
+    text-decoration: none;
+    font-size: 0.82rem;
+    font-weight: 500;
+    padding: 0.5rem 0.75rem;
+    border-radius: 4px;
+    transition: color 0.15s;
+    white-space: nowrap;
+}
+
+::deep .nav-item:hover {
+    color: #2d1b4e;
+}
+
+.dropdown-arrow {
+    font-size: 0.7rem;
+    margin-left: 0.15rem;
+}
+
+::deep .btn-login {
+    background-color: #2d1b4e;
+    color: white;
+    text-decoration: none;
+    padding: 0.45rem 1.25rem;
+    border-radius: 4px;
+    font-family: 'PPPangramSans', sans-serif;
+    font-size: 0.82rem;
+    font-weight: 500;
+    white-space: nowrap;
+    transition: background-color 0.15s;
+}
+
+::deep .btn-login:hover {
+    background-color: #3d2a5e;
+    color: white;
+}

@@ -1,0 +1,254 @@
+.catalogue-page {
+    max-width: 100%;
+}
+
+.title-section {
+    text-align: center;
+    padding: 2rem 2rem 1.5rem;
+    background-color: #ffffff;
+}
+
+.page-title {
+    font-family: 'PPPangramSans', sans-serif;
+    font-size: 2.2rem;
+    font-weight: 500;
+    color: #2d1b4e;
+    margin: 0;
+    letter-spacing: 0.05em;
+}
+
+/* Filter section — dark purple background */
+.filter-section {
+    background-color: #2d1b4e;
+    padding: 2rem 3rem;
+}
+
+.filter-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.filter-item select {
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 0;
+    background-color: transparent;
+    font-size: 0.85rem;
+    color: white;
+    appearance: auto;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.15s;
+}
+
+.filter-item select:focus {
+    border-color: white;
+    color: white;
+}
+
+.filter-item select option {
+    background-color: #2d1b4e;
+    color: white;
+}
+
+/* Action buttons row */
+.action-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+    padding: 2rem 3rem;
+    max-width: 1200px;
+    margin: 0 auto;
+    background-color: #ffffff;
+}
+
+.btn-reset {
+    background-color: transparent;
+    color: #333;
+    border: 2px solid #333;
+    padding: 0.85rem 1.5rem;
+    border-radius: 0;
+    font-family: 'PPPangramSans', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.btn-reset:hover {
+    background-color: #333;
+    color: white;
+}
+
+.btn-generate {
+    background-color: #e8501e;
+    color: white;
+    border: none;
+    padding: 0.85rem 1.5rem;
+    border-radius: 4px;
+    font-family: 'PPPangramSans', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.15s;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.btn-generate:hover:not(:disabled) {
+    background-color: #d04518;
+}
+
+.btn-generate:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-pdf {
+    background-color: #2d1b4e;
+    color: white;
+    border: none;
+    padding: 0.85rem 1.5rem;
+    border-radius: 0;
+    font-family: 'PPPangramSans', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.15s;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.btn-pdf:hover:not(:disabled) {
+    background-color: #3d2a5e;
+}
+
+.btn-pdf:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Result messages */
+.result-message {
+    padding: 0.75rem 1rem;
+    margin: 0;
+    font-size: 0.85rem;
+    text-align: center;
+}
+
+.result-message.success {
+    background-color: #6ba5a1;
+    color: white;
+    border: none;
+}
+
+.result-message.error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+/* Results table */
+.results-table {
+    background: white;
+    overflow: hidden;
+    margin: 0;
+}
+
+.section-block {
+    margin-bottom: 0;
+}
+
+.section-header {
+    background-color: #2d1b4e;
+    padding: 0.6rem 0.75rem;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: white;
+    text-align: center;
+    letter-spacing: 0.05em;
+}
+
+.results-table table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+}
+
+.results-table th {
+    background-color: #8b7fa0;
+    color: white;
+    padding: 0.6rem 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    border: 1px solid #7a6e90;
+}
+
+.results-table td {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #ddd;
+    color: #333;
+}
+
+.results-table tbody tr:hover {
+    background-color: #f8f5f1;
+}
+
+.showlot-row {
+    background-color: #fef9e7;
+}
+
+/* Multi-lot string grouping — background on full row, borders on columns 1-4 */
+::deep .string-row {
+    background-color: #fef9e7;
+}
+
+::deep .string-first td:nth-child(-n+4) {
+    border-top: 2px solid #333;
+}
+
+::deep .string-first td:first-child {
+    border-left: 2px solid #333;
+}
+
+::deep .string-first td:nth-child(4) {
+    border-right: 2px solid #333;
+}
+
+::deep .string-last td:nth-child(-n+4) {
+    border-bottom: 2px solid #333;
+}
+
+::deep .string-last td:first-child {
+    border-left: 2px solid #333;
+}
+
+::deep .string-last td:nth-child(4) {
+    border-right: 2px solid #333;
+}
+
+::deep .string-row:not(.string-first):not(.string-last) td:first-child {
+    border-left: 2px solid #333;
+}
+
+::deep .string-row:not(.string-first):not(.string-last) td:nth-child(4) {
+    border-right: 2px solid #333;
+}
+
+@media (max-width: 768px) {
+    .filter-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 480px) {
+    .filter-grid {
+        grid-template-columns: 1fr;
+    }
+}

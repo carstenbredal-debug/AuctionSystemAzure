@@ -8,7 +8,8 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
-var apiBase = builder.Configuration["ApiBaseUrl"] ?? builder.HostEnvironment.BaseAddress;
+var configuredApiBase = builder.Configuration["ApiBaseUrl"];
+var apiBase = string.IsNullOrWhiteSpace(configuredApiBase) ? builder.HostEnvironment.BaseAddress : configuredApiBase;
 var swaBase = builder.HostEnvironment.BaseAddress;
 
 builder.Services.AddHttpClient("SwaAuth", client => client.BaseAddress = new Uri(swaBase));
