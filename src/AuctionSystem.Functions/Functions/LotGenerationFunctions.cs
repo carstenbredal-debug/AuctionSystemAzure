@@ -334,11 +334,9 @@ public class LotGenerationFunctions
 
     private async Task RefreshBoxTableAsync(SqlConnection connection)
     {
-        using var tx = (SqlTransaction)await connection.BeginTransactionAsync();
-
         await connection.ExecuteAsync(@"
             IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'auction')
-                EXEC('CREATE SCHEMA auction');", transaction: tx);
+                EXEC('CREATE SCHEMA auction');");
 
         await connection.ExecuteAsync(@"
             IF OBJECT_ID('auction.Boxes', 'U') IS NULL
@@ -360,12 +358,11 @@ public class LotGenerationFunctions
                 );
                 CREATE INDEX IX_Boxes_BoxType ON auction.Boxes(BoxType);
                 CREATE INDEX IX_Boxes_SalesType_Gender_Group ON auction.Boxes(SalesType, Gender, [Group]);
-            END", transaction: tx);
+            END");
 
-        await connection.ExecuteAsync("DELETE FROM auction.Boxes;",
-            transaction: tx, commandTimeout: 300);
+        await connection.ExecuteAsync(@"
+            TRUNCATE TABLE auction.Boxes;
 
-        var count = await connection.ExecuteAsync(@"
             INSERT INTO auction.Boxes (BoxNumber, BoxType, SalesType, [Group], Gender, Size, HairLength, Color, Quality, Clarity, Damages, Skins, LastRefreshedAt)
             SELECT
                 s.BoxNumber, s.BoxType, s.SalesType, s.[Group], s.Gender,
@@ -375,9 +372,8 @@ public class LotGenerationFunctions
             WHERE s.BoxStatus IN ('Showlot', 'Storage') AND s.IsActive = 1
             GROUP BY s.BoxNumber, s.BoxType, s.SalesType, s.[Group], s.Gender,
                 s.Size, s.HairLength, s.Color, s.Quality, s.Clarity, s.Damages;",
-            transaction: tx, commandTimeout: 300);
+            commandTimeout: 300);
 
-        tx.Commit();
-        _logger.LogInformation("Refreshed auction.Boxes: {Count} rows", count);
+        _logger.LogInformation("Refreshed auction.Boxes");
     }
 }

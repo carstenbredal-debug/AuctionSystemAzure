@@ -67,11 +67,9 @@ public class BoxRefreshFunctions
         using var connection = new SqlConnection(connStr);
         await connection.OpenAsync();
 
-        using var transaction = await connection.BeginTransactionAsync();
-
         await connection.ExecuteAsync(@"
             IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'auction')
-                EXEC('CREATE SCHEMA auction');", transaction: (SqlTransaction)transaction);
+                EXEC('CREATE SCHEMA auction');");
 
         await connection.ExecuteAsync(@"
             IF OBJECT_ID('auction.Boxes', 'U') IS NULL
@@ -93,39 +91,23 @@ public class BoxRefreshFunctions
                 );
                 CREATE INDEX IX_Boxes_BoxType ON auction.Boxes(BoxType);
                 CREATE INDEX IX_Boxes_SalesType_Gender_Group ON auction.Boxes(SalesType, Gender, [Group]);
-            END", transaction: (SqlTransaction)transaction);
-
-        await connection.ExecuteAsync(
-            "DELETE FROM auction.Boxes;",
-            transaction: (SqlTransaction)transaction, commandTimeout: 300);
+            END");
 
         var count = await connection.ExecuteAsync(@"
+            TRUNCATE TABLE auction.Boxes;
+
             INSERT INTO auction.Boxes (BoxNumber, BoxType, SalesType, [Group], Gender, Size, HairLength, Color, Quality, Clarity, Damages, Skins, LastRefreshedAt)
             SELECT
-                s.BoxNumber,
-                s.BoxType,
-                s.SalesType,
-                s.[Group],
-                s.Gender,
-                CAST(s.Size AS NVARCHAR(100)),
-                s.HairLength,
-                s.Color,
-                s.Quality,
-                s.Clarity,
-                s.Damages,
-                COUNT(*),
-                GETUTCDATE()
-            FROM dbo.SkinTable s
-            WHERE s.BoxStatus IN ('Showlot', 'Storage')
-              AND s.IsActive = 1
-            GROUP BY
                 s.BoxNumber, s.BoxType, s.SalesType, s.[Group], s.Gender,
+                CAST(s.Size AS NVARCHAR(100)), s.HairLength, s.Color, s.Quality, s.Clarity, s.Damages,
+                COUNT(*), GETUTCDATE()
+            FROM dbo.SkinTable s
+            WHERE s.BoxStatus IN ('Showlot', 'Storage') AND s.IsActive = 1
+            GROUP BY s.BoxNumber, s.BoxType, s.SalesType, s.[Group], s.Gender,
                 s.Size, s.HairLength, s.Color, s.Quality, s.Clarity, s.Damages;",
-            transaction: (SqlTransaction)transaction, commandTimeout: 300);
+            commandTimeout: 300);
 
-        transaction.Commit();
-
-        _logger.LogInformation("Refreshed auction.Boxes: {Count} rows", count);
+        _logger.LogInformation("Refreshed auction.Boxes");
         return count;
     }
 }
