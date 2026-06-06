@@ -66,6 +66,10 @@ var host = new HostBuilder()
             services.AddScoped<BusinessCentralSyncService>();
         }
 
+        // Lot generation services
+        services.AddScoped<LotGenerationService>();
+        services.AddScoped<CatalogBuildService>();
+
         var storageConnectionString = context.Configuration["AzureWebJobsStorage"]
             ?? context.Configuration["Values:AzureWebJobsStorage"];
         if (!string.IsNullOrEmpty(storageConnectionString) && storageConnectionString != "UseDevelopmentStorage=true")

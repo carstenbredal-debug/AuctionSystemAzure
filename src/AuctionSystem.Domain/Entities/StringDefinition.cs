@@ -3,13 +3,15 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace AuctionSystem.Domain.Entities;
 
-[Table("lotgrouporder", Schema = "auction")]
-public class LotGroupOrder
+[Table("stringdefinition", Schema = "auction")]
+public class StringDefinition
 {
     [Key]
-    [Column("ColumnName")]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    public int StringDefinitionID { get; set; }
+
     [MaxLength(50)]
     public string ColumnName { get; set; } = string.Empty;
 
-    public int GroupOrder { get; set; }
+    public bool IsActive { get; set; }
 }

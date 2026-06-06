@@ -1,0 +1,377 @@
+@page "/admin/catalog"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin")]
+@inject HttpClient Http
+@inject IJSRuntime JS
+@inject IConfiguration Config
+
+<h3>Generate Catalogue</h3>
+
+<div class="catalogue-page">
+    <div class="filter-section">
+        <div class="filter-grid">
+            <div class="filter-item">
+                <label>Sales Type</label>
+                <select @bind="SelectedSalesType" class="form-select form-select-sm">
+                    <option value="">All</option>
+                    @foreach (var val in SalesTypes) { <option value="@val">@val</option> }
+                </select>
+            </div>
+            <div class="filter-item">
+                <label>Gender</label>
+                <select @bind="SelectedGender" class="form-select form-select-sm">
+                    <option value="">All</option>
+                    @foreach (var val in Genders) { <option value="@val">@val</option> }
+                </select>
+            </div>
+            <div class="filter-item">
+                <label>Group</label>
+                <select @bind="SelectedGroup" class="form-select form-select-sm">
+                    <option value="">All</option>
+                    @foreach (var val in Groups) { <option value="@val">@val</option> }
+                </select>
+            </div>
+            <div class="filter-item">
+                <label>Hair Length</label>
+                <select @bind="SelectedHairLength" class="form-select form-select-sm">
+                    <option value="">All</option>
+                    @foreach (var val in HairLengths) { <option value="@val">@val</option> }
+                </select>
+            </div>
+            <div class="filter-item">
+                <label>Size</label>
+                <select @bind="SelectedSize" class="form-select form-select-sm">
+                    <option value="">All</option>
+                    @foreach (var val in Sizes) { <option value="@val">@val</option> }
+                </select>
+            </div>
+            <div class="filter-item">
+                <label>Color</label>
+                <select @bind="SelectedColor" class="form-select form-select-sm">
+                    <option value="">All</option>
+                    @foreach (var val in Colors) { <option value="@val">@val</option> }
+                </select>
+            </div>
+            <div class="filter-item">
+                <label>Quality</label>
+                <select @bind="SelectedQuality" class="form-select form-select-sm">
+                    <option value="">All</option>
+                    @foreach (var val in Qualities) { <option value="@val">@val</option> }
+                </select>
+            </div>
+            <div class="filter-item">
+                <label>Clarity</label>
+                <select @bind="SelectedClarity" class="form-select form-select-sm">
+                    <option value="">All</option>
+                    @foreach (var val in Clarities) { <option value="@val">@val</option> }
+                </select>
+            </div>
+            <div class="filter-item">
+                <label>Damages</label>
+                <select @bind="SelectedDamages" class="form-select form-select-sm">
+                    <option value="">All</option>
+                    @foreach (var val in Damages) { <option value="@val">@val</option> }
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div class="action-row mt-3 mb-3">
+        <button class="btn btn-outline-secondary" @onclick="ResetFilters">Reset</button>
+        <button class="btn btn-warning text-white ms-2" @onclick="GenerateLots" disabled="@IsGenerating">
+            @(IsGenerating ? "Generating..." : "Generate Lots")
+        </button>
+        <button class="btn btn-primary ms-2" @onclick="LoadCatalog" disabled="@IsLoading">
+            @(IsLoading ? "Loading..." : "View Catalog")
+        </button>
+        <button class="btn btn-dark ms-2" @onclick="DownloadPdf" disabled="@IsPdfLoading">
+            @(IsPdfLoading ? "Creating PDF..." : "Download PDF")
+        </button>
+    </div>
+
+    @if (!string.IsNullOrEmpty(ResultMessage))
+    {
+        <div class="alert @(IsError ? "alert-danger" : "alert-success") mt-2">@ResultMessage</div>
+    }
+
+    @if (CatalogLots.Any())
+    {
+        <div class="results-section mt-3">
+            @foreach (var catalogSection in GetSections())
+            {
+                <div class="section-block mb-3">
+                    <div class="section-header bg-dark text-white p-2 fw-bold">@catalogSection.Key</div>
+                    <table class="table table-sm table-bordered mb-0">
+                        <thead class="table-secondary">
+                            <tr>
+                                <th>Lot #</th>
+                                <th>String #</th>
+                                <th>Description</th>
+                                <th>Skins</th>
+                                <th>Price</th>
+                                <th>Comments</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @{
+                                var stringGroups = catalogSection.Value
+                                    .GroupBy(l => l.StringNumber)
+                                    .OrderBy(g => g.Min(l => l.CatalogSortOrder));
+                            }
+                            @foreach (var sg in stringGroups)
+                            {
+                                var sgList = sg.OrderBy(l => l.CatalogSortOrder).ToList();
+                                var isMulti = sgList.Count > 1;
+                                @for (int i = 0; i < sgList.Count; i++)
+                                {
+                                    var lot = sgList[i];
+                                    var isFirst = (i == 0);
+                                    var isLast = (i == sgList.Count - 1);
+                                    var cssClass = "";
+                                    if (isMulti)
+                                    {
+                                        cssClass = "string-row";
+                                        if (isFirst) cssClass += " string-first";
+                                        if (isLast) cssClass += " string-last";
+                                    }
+                                    if (lot.IsShow) cssClass += " table-warning";
+
+                                    var desc = BuildDescription(lot);
+                                    if (isMulti && !isFirst)
+                                    {
+                                        if (isLast)
+                                            desc = $"{sgList.Sum(l => l.TotalSkins):N0} skins";
+                                        else
+                                            desc = (i + 1).ToString();
+                                    }
+
+                                    <tr class="@cssClass">
+                                        <td>@lot.LotNumber</td>
+                                        <td>@lot.StringNumber</td>
+                                        <td>@desc</td>
+                                        <td>@lot.TotalSkins.ToString("N0")</td>
+                                        <td></td>
+                                        <td></td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private string SelectedSalesType = "";
+    private string SelectedGender = "";
+    private string SelectedGroup = "";
+    private string SelectedHairLength = "";
+    private string SelectedSize = "";
+    private string SelectedQuality = "";
+    private string SelectedColor = "";
+    private string SelectedClarity = "";
+    private string SelectedDamages = "";
+
+    private bool IsGenerating;
+    private bool IsLoading;
+    private bool IsPdfLoading;
+    private bool IsError;
+    private string ResultMessage = "";
+
+    private List<CatalogLotRow> CatalogLots = new();
+
+    private List<string> SalesTypes = new();
+    private List<string> Genders = new();
+    private List<string> Groups = new();
+    private List<string> HairLengths = new();
+    private List<string> Sizes = new();
+    private List<string> Qualities = new();
+    private List<string> Colors = new();
+    private List<string> Clarities = new();
+    private List<string> Damages = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var filters = await Http.GetFromJsonAsync<FilterOptions>("api/catalog/filters");
+            if (filters != null)
+            {
+                SalesTypes = filters.Types ?? new();
+                Genders = filters.Genders ?? new();
+                Groups = filters.Groups ?? new();
+                HairLengths = filters.HairLengths ?? new();
+                Sizes = filters.Sizes ?? new();
+                Qualities = filters.Qualities ?? new();
+                Colors = filters.Colors ?? new();
+                Clarities = filters.Clarities ?? new();
+                Damages = filters.Damages ?? new();
+            }
+        }
+        catch { }
+    }
+
+    private void ResetFilters()
+    {
+        SelectedSalesType = "";
+        SelectedGender = "";
+        SelectedGroup = "";
+        SelectedHairLength = "";
+        SelectedSize = "";
+        SelectedQuality = "";
+        SelectedColor = "";
+        SelectedClarity = "";
+        SelectedDamages = "";
+        ResultMessage = "";
+        IsError = false;
+        CatalogLots.Clear();
+    }
+
+    private async Task GenerateLots()
+    {
+        IsGenerating = true;
+        IsError = false;
+        ResultMessage = "";
+
+        try
+        {
+            var response = await Http.PostAsync($"api/lots/generate?{BuildQueryString()}", null);
+            var content = await response.Content.ReadAsStringAsync();
+
+            if (response.IsSuccessStatusCode)
+            {
+                ResultMessage = content;
+                await LoadCatalog();
+            }
+            else
+            {
+                IsError = true;
+                ResultMessage = $"Error: {content}";
+            }
+        }
+        catch (Exception ex)
+        {
+            IsError = true;
+            ResultMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            IsGenerating = false;
+        }
+    }
+
+    private async Task LoadCatalog()
+    {
+        IsLoading = true;
+
+        try
+        {
+            var lots = await Http.GetFromJsonAsync<List<CatalogLotRow>>(
+                $"api/catalog/lots?{BuildQueryString()}");
+            if (lots != null)
+                CatalogLots = lots;
+        }
+        catch (Exception ex)
+        {
+            IsError = true;
+            ResultMessage = $"Error loading catalog: {ex.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task DownloadPdf()
+    {
+        IsPdfLoading = true;
+        IsError = false;
+
+        try
+        {
+            var apiBase = Config["ApiBaseUrl"] ?? Http.BaseAddress?.ToString().TrimEnd('/');
+            var url = $"{apiBase}/api/catalog/pdf?{BuildQueryString()}";
+            await JS.InvokeVoidAsync("downloadFile", url, "lot-catalog.pdf");
+        }
+        catch (Exception ex)
+        {
+            IsError = true;
+            ResultMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            IsPdfLoading = false;
+        }
+    }
+
+    private string BuildQueryString()
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrEmpty(SelectedSalesType)) parts.Add($"type={Uri.EscapeDataString(SelectedSalesType)}");
+        if (!string.IsNullOrEmpty(SelectedGender)) parts.Add($"gender={Uri.EscapeDataString(SelectedGender)}");
+        if (!string.IsNullOrEmpty(SelectedGroup)) parts.Add($"group={Uri.EscapeDataString(SelectedGroup)}");
+        if (!string.IsNullOrEmpty(SelectedHairLength)) parts.Add($"hairLength={Uri.EscapeDataString(SelectedHairLength)}");
+        if (!string.IsNullOrEmpty(SelectedSize)) parts.Add($"size={Uri.EscapeDataString(SelectedSize)}");
+        if (!string.IsNullOrEmpty(SelectedQuality)) parts.Add($"quality={Uri.EscapeDataString(SelectedQuality)}");
+        if (!string.IsNullOrEmpty(SelectedColor)) parts.Add($"color={Uri.EscapeDataString(SelectedColor)}");
+        if (!string.IsNullOrEmpty(SelectedClarity)) parts.Add($"clarity={Uri.EscapeDataString(SelectedClarity)}");
+        if (!string.IsNullOrEmpty(SelectedDamages)) parts.Add($"damage={Uri.EscapeDataString(SelectedDamages)}");
+        return string.Join("&", parts);
+    }
+
+    private Dictionary<string, List<CatalogLotRow>> GetSections()
+    {
+        return CatalogLots
+            .GroupBy(l => $"{l.SalesType} - {l.Gender} - {l.Group}")
+            .ToDictionary(g => g.Key, g => g.ToList());
+    }
+
+    private string BuildDescription(CatalogLotRow lot)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(lot.HairLength)) parts.Add(lot.HairLength);
+        if (!string.IsNullOrWhiteSpace(lot.Size)) parts.Add(lot.Size);
+        if (!string.IsNullOrWhiteSpace(lot.Quality)) parts.Add(lot.Quality);
+        if (!string.IsNullOrWhiteSpace(lot.Color)) parts.Add(lot.Color);
+        if (!string.IsNullOrWhiteSpace(lot.Clarity)) parts.Add(lot.Clarity);
+        if (!string.IsNullOrWhiteSpace(lot.Damages) && !lot.Damages.Equals("None", StringComparison.OrdinalIgnoreCase))
+            parts.Add(lot.Damages);
+        return string.Join(" / ", parts);
+    }
+
+    public class FilterOptions
+    {
+        public List<string>? Types { get; set; }
+        public List<string>? Genders { get; set; }
+        public List<string>? Groups { get; set; }
+        public List<string>? HairLengths { get; set; }
+        public List<string>? Sizes { get; set; }
+        public List<string>? Qualities { get; set; }
+        public List<string>? Colors { get; set; }
+        public List<string>? Clarities { get; set; }
+        public List<string>? Damages { get; set; }
+    }
+
+    public class CatalogLotRow
+    {
+        public int LotNumber { get; set; }
+        public int StringNumber { get; set; }
+        public int CatalogSortOrder { get; set; }
+        public string SalesType { get; set; } = "";
+        public string Gender { get; set; } = "";
+        public string Group { get; set; } = "";
+        public string HairLength { get; set; } = "";
+        public string Size { get; set; } = "";
+        public string Quality { get; set; } = "";
+        public string Color { get; set; } = "";
+        public string Clarity { get; set; } = "";
+        public string Damages { get; set; } = "";
+        public int TotalSkins { get; set; }
+        public int LotsInString { get; set; }
+        public int LotSequenceInString { get; set; }
+        public int StringTotalSkins { get; set; }
+        public bool IsShow { get; set; }
+    }
+}
