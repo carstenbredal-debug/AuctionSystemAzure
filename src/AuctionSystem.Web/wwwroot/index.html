@@ -24,6 +24,14 @@
     </div>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <script>
+        window.downloadFile = function (url, fileName) {
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = fileName || '';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        };
         window.exportToExcel = function (fileName, sheetName, headers, rows) {
             var ws_data = [headers].concat(rows);
             var ws = XLSX.utils.aoa_to_sheet(ws_data);

@@ -30,7 +30,7 @@ public class ShippingParameterFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "shipping-parameters/box-types")] HttpRequestData req)
     {
         var distinctBoxTypes = await _catalogDb.Database
-            .SqlQueryRaw<BoxTypeResult>("SELECT DISTINCT BoxType FROM dbo.boxes WHERE BoxType IS NOT NULL AND BoxType <> ''")
+            .SqlQueryRaw<BoxTypeResult>("SELECT DISTINCT BoxType FROM auction.boxes WHERE BoxType IS NOT NULL AND BoxType <> ''")
             .ToListAsync();
 
         var saved = await _db.BoxTypeDimensions.ToListAsync();

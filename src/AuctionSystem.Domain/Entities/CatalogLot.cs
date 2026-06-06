@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace AuctionSystem.Domain.Entities;
 
-[Table("cataloglots", Schema = "dbo")]
+[Table("cataloglots", Schema = "auction")]
 public class CatalogLot
 {
     [Key]
