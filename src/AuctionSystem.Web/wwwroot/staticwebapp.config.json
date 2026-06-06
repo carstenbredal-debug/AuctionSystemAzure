@@ -3,7 +3,7 @@
     "identityProviders": {
       "azureActiveDirectory": {
         "registration": {
-          "openIdIssuer": "https://login.microsoftonline.com/a39a6ad1-89d2-4586-9383-4b19c32c2110/v2.0",
+          "openIdIssuer": "https://login.microsoftonline.com/982dbb71-b602-4c81-a7a7-d2244f22bc65/v2.0",
           "clientIdSettingName": "AAD_CLIENT_ID",
           "clientSecretSettingName": "AAD_CLIENT_SECRET"
         }
@@ -16,7 +16,7 @@
               "clientSecretSettingName": "EXTERNAL_AAD_CLIENT_SECRET"
             },
             "openIdConnectConfiguration": {
-              "wellKnownOpenIdConfiguration": "https://6999099c-c27e-449c-a369-fd0e2e4af001.ciamlogin.com/6999099c-c27e-449c-a369-fd0e2e4af001/v2.0/.well-known/openid-configuration"
+              "wellKnownOpenIdConfiguration": "https://8de8e158-e70a-49e4-b28b-7cf70917dc4a.ciamlogin.com/8de8e158-e70a-49e4-b28b-7cf70917dc4a/v2.0/.well-known/openid-configuration"
             }
           },
           "login": {

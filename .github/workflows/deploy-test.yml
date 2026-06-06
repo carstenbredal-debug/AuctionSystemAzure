@@ -71,12 +71,6 @@ jobs:
         run: |
           echo '{ "ApiBaseUrl": "${{ secrets.API_BASE_URL_TEST }}" }' > src/AuctionSystem.Web/wwwroot/appsettings.json
 
-      - name: Set environment-specific auth config
-        run: |
-          cat > src/AuctionSystem.Web/wwwroot/staticwebapp.config.json << 'AUTHEOF'
-          {"auth":{"identityProviders":{"azureActiveDirectory":{"registration":{"openIdIssuer":"https://login.microsoftonline.com/982dbb71-b602-4c81-a7a7-d2244f22bc65/v2.0","clientIdSettingName":"AAD_CLIENT_ID","clientSecretSettingName":"AAD_CLIENT_SECRET"}},"customOpenIdConnectProviders":{"externalid":{"registration":{"clientIdSettingName":"EXTERNAL_AAD_CLIENT_ID","clientCredential":{"clientSecretSettingName":"EXTERNAL_AAD_CLIENT_SECRET"},"openIdConnectConfiguration":{"wellKnownOpenIdConfiguration":"https://8de8e158-e70a-49e4-b28b-7cf70917dc4a.ciamlogin.com/8de8e158-e70a-49e4-b28b-7cf70917dc4a/v2.0/.well-known/openid-configuration"}},"login":{"nameClaimType":"http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name","scopes":["openid","profile","email"],"loginParameterNames":[]}}}}},"routes":[{"route":"/.auth/login/github","statusCode":404},{"route":"/.auth/login/twitter","statusCode":404}],"navigationFallback":{"rewrite":"/index.html","exclude":["/css/*","/js/*","/_framework/*","/bootstrap/*","/*.png","/*.css","/*.ico"]}}
-          AUTHEOF
-
       - name: Build And Deploy
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
