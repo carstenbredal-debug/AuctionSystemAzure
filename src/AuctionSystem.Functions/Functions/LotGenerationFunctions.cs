@@ -370,7 +370,7 @@ public class LotGenerationFunctions
             SELECT
                 s.BoxNumber, s.BoxType, s.SalesType, s.[Group], s.Gender,
                 CAST(s.Size AS NVARCHAR(100)), s.HairLength, s.Color, s.Quality, s.Clarity, s.Damages,
-                COUNT(DISTINCT s.Barcode), GETUTCDATE()
+                COUNT(*), GETUTCDATE()
             FROM dbo.SkinTable s
             WHERE s.BoxStatus IN ('Showlot', 'Storage') AND s.IsActive = 1
             GROUP BY s.BoxNumber, s.BoxType, s.SalesType, s.[Group], s.Gender,

@@ -113,7 +113,7 @@ public class BoxRefreshFunctions
                 s.Quality,
                 s.Clarity,
                 s.Damages,
-                COUNT(DISTINCT s.Barcode),
+                COUNT(*),
                 GETUTCDATE()
             FROM dbo.SkinTable s
             WHERE s.BoxStatus IN ('Showlot', 'Storage')
