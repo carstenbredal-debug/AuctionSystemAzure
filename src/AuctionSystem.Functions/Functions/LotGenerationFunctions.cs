@@ -39,7 +39,7 @@ public class LotGenerationFunctions
 
     [Function("GenerateLots")]
     public async Task<HttpResponseData> GenerateLots(
-        [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = "api/lots/generate")]
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", Route = "lots/generate")]
         HttpRequestData req)
     {
         try

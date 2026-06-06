@@ -32,7 +32,7 @@ public class CatalogApiFunctions
 
     [Function("GetCatalogFilters")]
     public async Task<HttpResponseData> GetFilters(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "api/catalog/filters")]
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "catalog/filters")]
         HttpRequestData req)
     {
         try
@@ -106,7 +106,7 @@ public class CatalogApiFunctions
 
     [Function("GetCatalogLots")]
     public async Task<HttpResponseData> GetCatalogLots(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "api/catalog/lots")]
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "catalog/lots")]
         HttpRequestData req)
     {
         try
@@ -185,7 +185,7 @@ public class CatalogApiFunctions
 
     [Function("GetCatalogLotCount")]
     public async Task<HttpResponseData> GenerateCount(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "api/catalog/count")]
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "catalog/count")]
         HttpRequestData req)
     {
         try

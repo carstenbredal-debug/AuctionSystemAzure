@@ -56,7 +56,7 @@ public class CatalogPdfFunctions
 
     [Function("GenerateCatalogPdf")]
     public async Task<HttpResponseData> GeneratePdf(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "api/catalog/pdf")]
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "catalog/pdf")]
         HttpRequestData req)
     {
         try
