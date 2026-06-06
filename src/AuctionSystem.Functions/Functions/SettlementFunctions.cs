@@ -474,7 +474,7 @@ public class SettlementFunctions
         if (allBoxNumbers.Count > 0)
         {
             var boxData = await _catalogDb.Database
-                .SqlQueryRaw<BoxViewInfo>("SELECT BoxNumber, Skins, BoxType FROM dbo.boxes WHERE BoxNumber IN (" +
+                .SqlQueryRaw<BoxViewInfo>("SELECT BoxNumber, Skins, BoxType FROM auction.boxes WHERE BoxNumber IN (" +
                     string.Join(",", allBoxNumbers) + ")")
                 .ToListAsync();
             foreach (var b in boxData)

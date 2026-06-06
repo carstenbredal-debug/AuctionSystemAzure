@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace AuctionSystem.Domain.Entities;
 
-[Table("lotgrouporder", Schema = "dbo")]
+[Table("lotgrouporder", Schema = "auction")]
 public class LotGroupOrder
 {
     [Key]

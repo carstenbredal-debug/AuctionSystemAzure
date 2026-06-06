@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AuctionSystem.Domain.Entities;
 
-[Table("lotsortorder", Schema = "dbo")]
+[Table("lotsortorder", Schema = "auction")]
 [PrimaryKey(nameof(ColumnName), nameof(Value))]
 public class LotSortOrder
 {

@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace AuctionSystem.Domain.Entities;
 
-[Table("catalognumberrule", Schema = "dbo")]
+[Table("catalognumberrule", Schema = "auction")]
 public class CatalogNumberRule
 {
     [Key]

@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace AuctionSystem.Domain.Entities;
 
-[Table("lotsizerule", Schema = "dbo")]
+[Table("lotsizerule", Schema = "auction")]
 public class LotSizeRule
 {
     [Key]
