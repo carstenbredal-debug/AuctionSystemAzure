@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace AuctionSystem.Domain.Entities;
 
-[Table("lots", Schema = "auction")]
+[Table("GeneratedLots", Schema = "auction")]
 public class GeneratedLot
 {
     [Key]

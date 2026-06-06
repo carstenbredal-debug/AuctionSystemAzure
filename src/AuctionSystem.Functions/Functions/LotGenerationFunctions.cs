@@ -166,7 +166,7 @@ public class LotGenerationFunctions
             using var transaction = connection.BeginTransaction();
 
             await connection.ExecuteAsync(
-                "TRUNCATE TABLE auction.lots;",
+                "TRUNCATE TABLE auction.GeneratedLots;",
                 transaction: transaction
             );
 
@@ -183,7 +183,7 @@ public class LotGenerationFunctions
             if (lots.Any())
             {
                 await connection.ExecuteAsync(@"
-                    INSERT INTO auction.lots
+                    INSERT INTO auction.GeneratedLots
                     (
                         UniqueID,
                         IsShow,

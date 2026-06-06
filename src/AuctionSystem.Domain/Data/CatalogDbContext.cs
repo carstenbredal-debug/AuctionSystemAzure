@@ -82,7 +82,7 @@ public class CatalogDbContext : DbContext
 
         modelBuilder.Entity<GeneratedLot>(e =>
         {
-            e.ToTable("lots", "auction");
+            e.ToTable("GeneratedLots", "auction");
             e.HasKey(l => l.LotID);
         });
 
