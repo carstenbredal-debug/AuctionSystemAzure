@@ -4,6 +4,34 @@
     flex-direction: column;
 }
 
+.dev-banner {
+    position: fixed;
+    z-index: 9999;
+    background-color: #e00;
+    color: white;
+    font-family: 'PPPangramSans', Arial, sans-serif;
+    font-weight: 700;
+    font-size: 18px;
+    width: 65px;
+    height: 65px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    pointer-events: none;
+}
+
+.dev-banner-right {
+    top: 80px;
+    right: 20px;
+}
+
+.dev-banner-left {
+    top: 80px;
+    left: 270px;
+}
+
 main {
     flex: 1;
 }

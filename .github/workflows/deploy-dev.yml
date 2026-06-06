@@ -69,7 +69,7 @@ jobs:
 
       - name: Set environment-specific API URL
         run: |
-          echo '{ "ApiBaseUrl": "${{ secrets.API_BASE_URL_DEV }}" }' > src/AuctionSystem.Web/wwwroot/appsettings.json
+          echo '{ "ApiBaseUrl": "" }' > src/AuctionSystem.Web/wwwroot/appsettings.json
 
       - name: Build And Deploy
         id: builddeploy
