@@ -32,8 +32,8 @@ public class LotGenerationFunctions
 
     private string GetCatalogConnectionString()
     {
-        return _configuration["TargetCatalogConnectionString"]
-            ?? _configuration.GetConnectionString("TargetCatalogConnectionString")
+        return _configuration["SqlConnectionString"]
+            ?? _configuration["Values:SqlConnectionString"]
             ?? "";
     }
 
@@ -48,7 +48,7 @@ public class LotGenerationFunctions
 
             if (string.IsNullOrWhiteSpace(connectionString))
             {
-                _logger.LogError("TargetCatalogConnectionString missing.");
+                _logger.LogError("SqlConnectionString missing.");
                 var response = req.CreateResponse(HttpStatusCode.InternalServerError);
                 await response.WriteStringAsync("Connection string missing.");
                 return response;
@@ -335,6 +335,32 @@ public class LotGenerationFunctions
     private async Task RefreshBoxTableAsync(SqlConnection connection)
     {
         using var tx = (SqlTransaction)await connection.BeginTransactionAsync();
+
+        await connection.ExecuteAsync(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'auction')
+                EXEC('CREATE SCHEMA auction');", transaction: tx);
+
+        await connection.ExecuteAsync(@"
+            IF OBJECT_ID('auction.Boxes', 'U') IS NULL
+            BEGIN
+                CREATE TABLE auction.Boxes (
+                    BoxNumber INT NOT NULL PRIMARY KEY,
+                    BoxType NVARCHAR(100) NULL,
+                    SalesType NVARCHAR(100) NULL,
+                    [Group] NVARCHAR(100) NULL,
+                    Gender NVARCHAR(100) NULL,
+                    Size NVARCHAR(100) NULL,
+                    HairLength NVARCHAR(100) NULL,
+                    Color NVARCHAR(100) NULL,
+                    Quality NVARCHAR(100) NULL,
+                    Clarity NVARCHAR(100) NULL,
+                    Damages NVARCHAR(100) NULL,
+                    Skins INT NOT NULL DEFAULT 0,
+                    LastRefreshedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE()
+                );
+                CREATE INDEX IX_Boxes_BoxType ON auction.Boxes(BoxType);
+                CREATE INDEX IX_Boxes_SalesType_Gender_Group ON auction.Boxes(SalesType, Gender, [Group]);
+            END", transaction: tx);
 
         await connection.ExecuteAsync("DELETE FROM auction.Boxes;", transaction: tx);
 

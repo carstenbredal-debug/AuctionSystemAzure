@@ -25,8 +25,8 @@ public class CatalogApiFunctions
 
     private string GetCatalogConnectionString()
     {
-        return _configuration["TargetCatalogConnectionString"]
-            ?? _configuration.GetConnectionString("TargetCatalogConnectionString")
+        return _configuration["SqlConnectionString"]
+            ?? _configuration["Values:SqlConnectionString"]
             ?? "";
     }
 
