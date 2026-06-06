@@ -1,0 +1,77 @@
+.page {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+main {
+    flex: 1;
+    background-color: #ffffff;
+}
+
+.content {
+    padding: 0;
+}
+
+/* Footer */
+.site-footer {
+    background-color: #2d1b4e;
+    color: white;
+    padding: 2.5rem 3rem;
+    font-family: 'PPPangramSans', sans-serif;
+}
+
+.footer-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.footer-links {
+    display: flex;
+    gap: 2rem;
+}
+
+.footer-column {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.footer-column a {
+    color: white;
+    text-decoration: none;
+    font-size: 1rem;
+}
+
+.footer-column a:hover {
+    color: white;
+}
+
+.footer-info {
+    text-align: center;
+    font-size: 0.9rem;
+    color: white;
+}
+
+.footer-info p {
+    margin: 0.15rem 0;
+}
+
+.footer-company-name {
+    font-weight: 700;
+    font-size: 1rem;
+    color: white;
+}
+
+.footer-brand {
+    display: flex;
+    align-items: center;
+}
+
+.footer-logo {
+    height: 120px;
+    width: auto;
+}
