@@ -112,8 +112,11 @@ using (var scope = host.Services.CreateScope())
                 EXEC sp_rename 'auction.Settlements.SellerId', 'FarmerId', 'COLUMN';
             END
             -- Update AppRole values from 'Seller' to 'Farmer'
-            UPDATE auction.AppUsers SET Role = 'Farmer' WHERE Role = 'Seller';
+            IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'auction' AND TABLE_NAME = 'AppUsers')
+                UPDATE auction.AppUsers SET Role = 'Farmer' WHERE Role = 'Seller';
         ");
+        // Run EF Core migrations first to create base tables
+        db.Database.Migrate();
         // Add columns not covered by EF migrations (no Designer file)
         db.Database.ExecuteSqlRaw(@"
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Brokers') AND name = 'CreditLimit')
@@ -274,7 +277,6 @@ using (var scope = host.Services.CreateScope())
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.BoxTypeDimensions') AND name = 'WeightKg')
                 ALTER TABLE auction.BoxTypeDimensions ADD WeightKg DECIMAL(10,4) NOT NULL DEFAULT 0;
         ");
-        db.Database.Migrate();
     }
     catch (Exception ex)
     {
