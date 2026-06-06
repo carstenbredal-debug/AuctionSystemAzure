@@ -60,14 +60,40 @@ public class BoxRefreshFunctions
 
     private async Task<int> RefreshBoxTableAsync()
     {
-        var connStr = _config.GetConnectionString("TargetCatalogConnectionString")
-                   ?? _config["TargetCatalogConnectionString"]
-                   ?? throw new InvalidOperationException("TargetCatalogConnectionString not configured");
+        var connStr = _config["SqlConnectionString"]
+                   ?? _config["Values:SqlConnectionString"]
+                   ?? throw new InvalidOperationException("SqlConnectionString not configured");
 
         using var connection = new SqlConnection(connStr);
         await connection.OpenAsync();
 
         using var transaction = await connection.BeginTransactionAsync();
+
+        await connection.ExecuteAsync(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'auction')
+                EXEC('CREATE SCHEMA auction');", transaction: (SqlTransaction)transaction);
+
+        await connection.ExecuteAsync(@"
+            IF OBJECT_ID('auction.Boxes', 'U') IS NULL
+            BEGIN
+                CREATE TABLE auction.Boxes (
+                    BoxNumber INT NOT NULL PRIMARY KEY,
+                    BoxType NVARCHAR(100) NULL,
+                    SalesType NVARCHAR(100) NULL,
+                    [Group] NVARCHAR(100) NULL,
+                    Gender NVARCHAR(100) NULL,
+                    Size NVARCHAR(100) NULL,
+                    HairLength NVARCHAR(100) NULL,
+                    Color NVARCHAR(100) NULL,
+                    Quality NVARCHAR(100) NULL,
+                    Clarity NVARCHAR(100) NULL,
+                    Damages NVARCHAR(100) NULL,
+                    Skins INT NOT NULL DEFAULT 0,
+                    LastRefreshedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE()
+                );
+                CREATE INDEX IX_Boxes_BoxType ON auction.Boxes(BoxType);
+                CREATE INDEX IX_Boxes_SalesType_Gender_Group ON auction.Boxes(SalesType, Gender, [Group]);
+            END", transaction: (SqlTransaction)transaction);
 
         await connection.ExecuteAsync(
             "DELETE FROM auction.Boxes;",
