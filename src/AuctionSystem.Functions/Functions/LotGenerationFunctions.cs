@@ -57,10 +57,6 @@ public class LotGenerationFunctions
             using var connection = new SqlConnection(connectionString);
             await connection.OpenAsync();
 
-            // Refresh auction.boxes from dbo.SkinTable before generating lots
-            _logger.LogInformation("Refreshing auction.boxes from dbo.SkinTable...");
-            await RefreshBoxTableAsync(connection);
-
             _logger.LogInformation("Loading data from database...");
 
             var boxes = await connection.QueryAsync<BoxRow>(@"
@@ -332,52 +328,4 @@ public class LotGenerationFunctions
         }
     }
 
-    private async Task RefreshBoxTableAsync(SqlConnection connection)
-    {
-        using var tx = (SqlTransaction)await connection.BeginTransactionAsync();
-
-        await connection.ExecuteAsync(@"
-            IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'auction')
-                EXEC('CREATE SCHEMA auction');", transaction: tx);
-
-        await connection.ExecuteAsync(@"
-            IF OBJECT_ID('auction.Boxes', 'U') IS NULL
-            BEGIN
-                CREATE TABLE auction.Boxes (
-                    BoxNumber INT NOT NULL PRIMARY KEY,
-                    BoxType NVARCHAR(100) NULL,
-                    SalesType NVARCHAR(100) NULL,
-                    [Group] NVARCHAR(100) NULL,
-                    Gender NVARCHAR(100) NULL,
-                    Size NVARCHAR(100) NULL,
-                    HairLength NVARCHAR(100) NULL,
-                    Color NVARCHAR(100) NULL,
-                    Quality NVARCHAR(100) NULL,
-                    Clarity NVARCHAR(100) NULL,
-                    Damages NVARCHAR(100) NULL,
-                    Skins INT NOT NULL DEFAULT 0,
-                    LastRefreshedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE()
-                );
-                CREATE INDEX IX_Boxes_BoxType ON auction.Boxes(BoxType);
-                CREATE INDEX IX_Boxes_SalesType_Gender_Group ON auction.Boxes(SalesType, Gender, [Group]);
-            END", transaction: tx);
-
-        await connection.ExecuteAsync("DELETE FROM auction.Boxes;",
-            transaction: tx, commandTimeout: 300);
-
-        var count = await connection.ExecuteAsync(@"
-            INSERT INTO auction.Boxes (BoxNumber, BoxType, SalesType, [Group], Gender, Size, HairLength, Color, Quality, Clarity, Damages, Skins, LastRefreshedAt)
-            SELECT
-                s.BoxNumber, s.BoxType, s.SalesType, s.[Group], s.Gender,
-                CAST(s.Size AS NVARCHAR(100)), s.HairLength, s.Color, s.Quality, s.Clarity, s.Damages,
-                COUNT(*), GETUTCDATE()
-            FROM dbo.SkinTable s
-            WHERE s.BoxStatus IN ('Showlot', 'Storage') AND s.IsActive = 1
-            GROUP BY s.BoxNumber, s.BoxType, s.SalesType, s.[Group], s.Gender,
-                s.Size, s.HairLength, s.Color, s.Quality, s.Clarity, s.Damages;",
-            transaction: tx, commandTimeout: 300);
-
-        tx.Commit();
-        _logger.LogInformation("Refreshed auction.Boxes: {Count} rows", count);
-    }
 }
