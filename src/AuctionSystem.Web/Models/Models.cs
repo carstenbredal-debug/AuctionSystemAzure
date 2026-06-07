@@ -441,9 +441,7 @@ public class ShippingBoxDto
     public int Skins { get; set; }
     public decimal PricePerSkin { get; set; }
     public decimal HammerPrice { get; set; }
-    public decimal? LengthM { get; set; }
-    public decimal? WidthM { get; set; }
-    public decimal? HeightM { get; set; }
+    public decimal? VolumeM3 { get; set; }
     public decimal? WeightKg { get; set; }
 }
 

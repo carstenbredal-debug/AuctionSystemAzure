@@ -508,8 +508,8 @@ public class SettlementFunctions
                     LotNumber = cl.LotNumber, BoxNumber = boxNumber,
                     BoxType = boxType, Skins = bi?.Skins ?? 0,
                     info.Line.PricePerSkin, HammerPrice = info.Line.HammerPrice,
-                    LengthM = dim?.LengthM, WidthM = dim?.WidthM,
-                    HeightM = dim?.HeightM, WeightKg = dim?.WeightKg
+                    VolumeM3 = dim != null ? dim.LengthM * dim.WidthM * dim.HeightM : (decimal?)null,
+                    WeightKg = dim?.WeightKg
                 });
             }
         }
