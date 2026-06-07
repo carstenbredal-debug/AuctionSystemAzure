@@ -277,6 +277,13 @@ public class BusinessCentralApiClient
         return items.FirstOrDefault();
     }
 
+    public async Task<BcItem?> GetItemByDisplayNameAsync(Guid companyId, string displayName)
+    {
+        var url = $"{_options.BaseUrl}/companies({companyId})/items?$filter=displayName eq '{displayName}'";
+        var items = await GetListAsync<BcItem>(url);
+        return items.FirstOrDefault();
+    }
+
     public async Task<BcItem> CreateItemAsync(Guid companyId, BcItem item)
     {
         var url = $"{_options.BaseUrl}/companies({companyId})/items";
