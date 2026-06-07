@@ -139,6 +139,13 @@ public class BusinessCentralFunctions
             return await JsonResponse(req, error!, HttpStatusCode.BadRequest);
 
         var companyName = await ResolveCompanyNameAsync();
+        // Diagnostics: also return raw OData response
+        var diag = req.Query["diag"];
+        if (diag == "1")
+        {
+            var rawJson = await _bcClient!.GetRawODataAsync(companyName, "VATBusinessPostingGroups");
+            return await JsonResponse(req, new { companyName, rawJson });
+        }
         var groups = await _bcClient!.GetVatBusinessPostingGroupsAsync(companyName);
         return await JsonResponse(req, groups);
     }
