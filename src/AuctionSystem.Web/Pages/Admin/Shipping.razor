@@ -84,7 +84,6 @@ else
                         <th>Box Type</th>
                         <th>Skins</th>
                         <th>Volume (m³)</th>
-                        <th>Weight (kg)</th>
                         <th>Gross Weight</th>
                         <th>Net Weight</th>
                         <th>Location</th>
@@ -101,7 +100,6 @@ else
                             <td>@box.BoxType</td>
                             <td>@box.Skins</td>
                             <td>@(box.VolumeM3.HasValue ? box.VolumeM3.Value.ToString("N4") : "—")</td>
-                            <td>@(box.WeightKg.HasValue ? box.WeightKg.Value.ToString("N2") : "—")</td>
                             <td>@(box.GrossWeight.HasValue ? box.GrossWeight.Value.ToString("N2") : "—")</td>
                             <td>@(box.NetWeight.HasValue ? box.NetWeight.Value.ToString("N2") : "—")</td>
                             <td>@(box.BoxLocation ?? "—")</td>
