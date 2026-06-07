@@ -69,6 +69,7 @@ public class BusinessCentralSyncService
                     result.Updated++;
                     _logger.LogInformation("Updated BC vendor for broker {Number}", broker.BrokerNumber);
                 }
+                broker.BcSyncedAt = DateTime.UtcNow;
             }
             catch (Exception ex)
             {
@@ -117,6 +118,7 @@ public class BusinessCentralSyncService
                     result.Updated++;
                     _logger.LogInformation("Updated BC customer for buyer {Number}", buyer.BuyerNumber);
                 }
+                buyer.BcSyncedAt = DateTime.UtcNow;
             }
             catch (Exception ex)
             {
@@ -568,6 +570,7 @@ public class BusinessCentralSyncService
                     result.Updated++;
                     _logger.LogInformation("Updated BC vendor for farmer {Number}", farmer.FarmerNumber);
                 }
+                farmer.BcSyncedAt = DateTime.UtcNow;
             }
             catch (Exception ex)
             {
@@ -610,19 +613,22 @@ public class BusinessCentralSyncService
         var invoices = await _db.Set<Invoice>().Where(i => !i.IsCreditNote).CountAsync();
         var creditNotes = await _db.Set<Invoice>().Where(i => i.IsCreditNote).CountAsync();
 
+        var brokersSynced = brokers.Count(b => b.BcSyncedAt.HasValue);
+        var buyersSynced = buyers.Count(b => b.BcSyncedAt.HasValue);
+
         return new
         {
             Brokers = new
             {
                 Total = brokers.Count,
-                Synced = brokers.Count,
-                Unsynced = 0
+                Synced = brokersSynced,
+                Unsynced = brokers.Count - brokersSynced
             },
             Buyers = new
             {
                 Total = buyers.Count,
-                Synced = buyers.Count,
-                Unsynced = 0
+                Synced = buyersSynced,
+                Unsynced = buyers.Count - buyersSynced
             },
             Invoices = invoices,
             CreditNotes = creditNotes
@@ -652,6 +658,8 @@ public class BusinessCentralSyncService
         }
         await PatchVendorVatRegAsync(companyId, result, broker.VatRegistrationNo);
         await SetDefaultDimensionSafeAsync(companyId, result.Id, VendorTypeDimensionId, VendorTypeBrokerValueId, "VENDORTYPE=BROKER", broker.BrokerNumber);
+        broker.BcSyncedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
     }
 
     public async Task PushSingleBuyerAsync(Buyer buyer)
@@ -674,6 +682,8 @@ public class BusinessCentralSyncService
             _logger.LogInformation("Updated BC customer for buyer {Number}", buyer.BuyerNumber);
         }
         await SetDefaultDimensionSafeAsync(companyId, result.Id, CustomerTypeDimensionId, CustomerTypeBuyerValueId, "CUSTOMERTYPE=BUYER", buyer.BuyerNumber);
+        buyer.BcSyncedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
     }
 
     public async Task PushSingleFarmerAsync(Farmer farmer)
@@ -697,6 +707,8 @@ public class BusinessCentralSyncService
         }
         await PatchVendorVatRegAsync(companyId, result, farmer.VatRegistrationNo);
         await SetDefaultDimensionSafeAsync(companyId, result.Id, VendorTypeDimensionId, VendorTypeFarmerValueId, "VENDORTYPE=FARMER", farmer.FarmerNumber);
+        farmer.BcSyncedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
     }
 
     private async Task SetDefaultDimensionSafeAsync(Guid companyId, Guid parentId, Guid dimensionId, Guid dimensionValueId, string label, string entityNumber)

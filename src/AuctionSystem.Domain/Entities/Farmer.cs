@@ -38,6 +38,7 @@ public class Farmer
     public string VatBusPostingGroup { get; set; } = string.Empty;
     public string VendorPostingGroup { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
+    public DateTime? BcSyncedAt { get; set; }
 
     [Obsolete("Use AddressLine1 instead")]
     public string Address { get; set; } = string.Empty;
