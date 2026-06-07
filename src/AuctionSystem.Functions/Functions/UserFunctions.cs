@@ -143,6 +143,7 @@ public class UserFunctions
             return errorResp;
         }
 
+        user.AzureAdObjectId = dto.AzureAdObjectId ?? user.AzureAdObjectId;
         user.Email = dto.Email ?? user.Email;
         user.DisplayName = dto.DisplayName ?? user.DisplayName;
         user.Role = dto.Role ?? user.Role;
