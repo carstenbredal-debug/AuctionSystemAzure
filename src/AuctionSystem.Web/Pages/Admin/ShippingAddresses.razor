@@ -1,0 +1,281 @@
+@page "/admin/shipping-addresses"
+@using AuctionSystem.Web.Models
+@using AuctionSystem.Web.Services
+@inject AuctionApiClient Api
+
+<h4 class="mb-4">Shipping Addresses</h4>
+
+@if (!string.IsNullOrEmpty(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+@if (!string.IsNullOrEmpty(_success))
+{
+    <div class="alert alert-success">@_success</div>
+}
+
+<div class="row mb-3">
+    <div class="col-md-4">
+        <select class="form-select" @bind="_buyerFilter">
+            <option value="0">All Buyers</option>
+            @foreach (var b in _buyers)
+            {
+                <option value="@b.Id">@b.BuyerNumber — @b.Name</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-2">
+        <button class="btn btn-primary" @onclick="ShowAddModal">+ Add Address</button>
+    </div>
+</div>
+
+<div class="section-container">
+    <div class="section-body">
+        <table class="table table-striped table-hover mb-0">
+            <thead class="table-dark">
+                <tr>
+                    <th>Buyer</th>
+                    <th>Contact</th>
+                    <th>Address</th>
+                    <th>City</th>
+                    <th>Postal Code</th>
+                    <th>Country</th>
+                    <th>Phone</th>
+                    <th>Mobile</th>
+                    <th>Email</th>
+                    <th>Default</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var addr in GetFiltered())
+                {
+                    <tr>
+                        <td>@addr.BuyerNumber — @addr.BuyerName</td>
+                        <td>@addr.ContactName</td>
+                        <td>@addr.AddressLine1 @(string.IsNullOrEmpty(addr.AddressLine2) ? "" : $", {addr.AddressLine2}")</td>
+                        <td>@addr.City</td>
+                        <td>@addr.PostalCode</td>
+                        <td>@addr.Country</td>
+                        <td>@addr.ContactPhone</td>
+                        <td>@addr.MobilePhone</td>
+                        <td>@addr.ContactEmail</td>
+                        <td>@(addr.IsDefault ? "Yes" : "")</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => ShowEditModal(addr)">Edit</button>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteAddress(addr.Id)">Delete</button>
+                        </td>
+                    </tr>
+                }
+                @if (!GetFiltered().Any())
+                {
+                    <tr><td colspan="11" class="text-center text-muted">No shipping addresses found.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@if (_showModal)
+{
+    <div class="modal show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(_editId.HasValue ? "Edit" : "Add") Shipping Address</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    @if (!_editId.HasValue)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Buyer</label>
+                            <select class="form-select" @bind="_formBuyerId">
+                                <option value="0">Select buyer...</option>
+                                @foreach (var b in _buyers)
+                                {
+                                    <option value="@b.Id">@b.BuyerNumber — @b.Name</option>
+                                }
+                            </select>
+                        </div>
+                    }
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Contact Name</label>
+                            <input class="form-control" @bind="_formContactName" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Email</label>
+                            <input class="form-control" @bind="_formContactEmail" />
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Address Line 1</label>
+                        <input class="form-control" @bind="_formAddressLine1" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Address Line 2</label>
+                        <input class="form-control" @bind="_formAddressLine2" />
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">City</label>
+                            <input class="form-control" @bind="_formCity" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Postal Code</label>
+                            <input class="form-control" @bind="_formPostalCode" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Country</label>
+                            <input class="form-control" @bind="_formCountry" />
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Phone</label>
+                            <input class="form-control" @bind="_formContactPhone" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Mobile</label>
+                            <input class="form-control" @bind="_formMobilePhone" />
+                        </div>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" @bind="_formIsDefault" id="defaultCheck" />
+                        <label class="form-check-label" for="defaultCheck">Default shipping address</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                    <button class="btn btn-primary" @onclick="SaveAddress" disabled="@_saving">
+                        @(_saving ? "Saving..." : "Save")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<ShippingAddressListDto> _addresses = new();
+    private List<BuyerDto> _buyers = new();
+    private int _buyerFilter;
+    private string? _error;
+    private string? _success;
+
+    // Modal state
+    private bool _showModal;
+    private bool _saving;
+    private int? _editId;
+    private int _formBuyerId;
+    private string _formContactName = "";
+    private string _formAddressLine1 = "";
+    private string _formAddressLine2 = "";
+    private string _formCountry = "";
+    private string _formPostalCode = "";
+    private string _formCity = "";
+    private string _formContactPhone = "";
+    private string _formMobilePhone = "";
+    private string _formContactEmail = "";
+    private bool _formIsDefault;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var buyerTask = Api.GetAllBuyersAsync();
+        var addrTask = Api.GetShippingAddressesAsync();
+        _buyers = await buyerTask;
+        _addresses = await addrTask;
+    }
+
+    private List<ShippingAddressListDto> GetFiltered()
+        => _buyerFilter == 0
+            ? _addresses
+            : _addresses.Where(a => a.BuyerId == _buyerFilter).ToList();
+
+    private void ShowAddModal()
+    {
+        _editId = null;
+        _formBuyerId = _buyerFilter;
+        _formContactName = "";
+        _formAddressLine1 = "";
+        _formAddressLine2 = "";
+        _formCountry = "";
+        _formPostalCode = "";
+        _formCity = "";
+        _formContactPhone = "";
+        _formMobilePhone = "";
+        _formContactEmail = "";
+        _formIsDefault = false;
+        _showModal = true;
+    }
+
+    private void ShowEditModal(ShippingAddressListDto addr)
+    {
+        _editId = addr.Id;
+        _formBuyerId = addr.BuyerId;
+        _formContactName = addr.ContactName;
+        _formAddressLine1 = addr.AddressLine1;
+        _formAddressLine2 = addr.AddressLine2;
+        _formCountry = addr.Country;
+        _formPostalCode = addr.PostalCode;
+        _formCity = addr.City;
+        _formContactPhone = addr.ContactPhone;
+        _formMobilePhone = addr.MobilePhone;
+        _formContactEmail = addr.ContactEmail;
+        _formIsDefault = addr.IsDefault;
+        _showModal = true;
+    }
+
+    private void CloseModal() => _showModal = false;
+
+    private async Task SaveAddress()
+    {
+        _saving = true;
+        _error = null;
+        _success = null;
+
+        var data = new
+        {
+            buyerId = _formBuyerId,
+            contactName = _formContactName,
+            addressLine1 = _formAddressLine1,
+            addressLine2 = _formAddressLine2,
+            country = _formCountry,
+            postalCode = _formPostalCode,
+            city = _formCity,
+            contactPhone = _formContactPhone,
+            mobilePhone = _formMobilePhone,
+            contactEmail = _formContactEmail,
+            isDefault = _formIsDefault
+        };
+
+        if (_editId.HasValue)
+        {
+            var (ok, err) = await Api.UpdateShippingAddressAsync(_editId.Value, data);
+            if (!ok) { _error = err ?? "Failed to update"; _saving = false; return; }
+            _success = "Address updated";
+        }
+        else
+        {
+            if (_formBuyerId == 0) { _error = "Please select a buyer"; _saving = false; return; }
+            var (ok, err) = await Api.CreateShippingAddressAsync(data);
+            if (!ok) { _error = err ?? "Failed to create"; _saving = false; return; }
+            _success = "Address created";
+        }
+
+        _showModal = false;
+        _saving = false;
+        _addresses = await Api.GetShippingAddressesAsync();
+    }
+
+    private async Task DeleteAddress(int id)
+    {
+        _error = null;
+        _success = null;
+        var (ok, err) = await Api.DeleteShippingAddressAsync(id);
+        if (!ok) { _error = err ?? "Failed to delete"; return; }
+        _success = "Address deleted";
+        _addresses = await Api.GetShippingAddressesAsync();
+    }
+}

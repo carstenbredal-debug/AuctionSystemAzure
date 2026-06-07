@@ -445,6 +445,24 @@ public class ShippingBoxDto
     public decimal? WeightKg { get; set; }
 }
 
+public class ShippingAddressListDto
+{
+    public int Id { get; set; }
+    public int BuyerId { get; set; }
+    public string BuyerName { get; set; } = "";
+    public string BuyerNumber { get; set; } = "";
+    public string ContactName { get; set; } = "";
+    public string AddressLine1 { get; set; } = "";
+    public string AddressLine2 { get; set; } = "";
+    public string Country { get; set; } = "";
+    public string PostalCode { get; set; } = "";
+    public string City { get; set; } = "";
+    public string ContactPhone { get; set; } = "";
+    public string MobilePhone { get; set; } = "";
+    public string ContactEmail { get; set; } = "";
+    public bool IsDefault { get; set; }
+}
+
 public class InvoiceLinkDto
 {
     public List<InvoiceDocDto> Documents { get; set; } = new();

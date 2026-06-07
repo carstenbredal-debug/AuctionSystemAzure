@@ -808,6 +808,35 @@ public class AuctionApiClient
         return (true, null);
     }
 
+    // Shipping Addresses
+    public async Task<List<ShippingAddressListDto>> GetShippingAddressesAsync()
+    {
+        var resp = await _http.GetAsync("api/shipping-addresses");
+        if (!resp.IsSuccessStatusCode) return new();
+        return await resp.Content.ReadFromJsonAsync<List<ShippingAddressListDto>>() ?? new();
+    }
+
+    public async Task<(bool Success, string? Error)> CreateShippingAddressAsync(object address)
+    {
+        var resp = await _http.PostAsJsonAsync("api/shipping-addresses", address);
+        if (!resp.IsSuccessStatusCode) return (false, await GetErrorMessage(resp));
+        return (true, null);
+    }
+
+    public async Task<(bool Success, string? Error)> UpdateShippingAddressAsync(int id, object address)
+    {
+        var resp = await _http.PutAsJsonAsync($"api/shipping-addresses/{id}", address);
+        if (!resp.IsSuccessStatusCode) return (false, await GetErrorMessage(resp));
+        return (true, null);
+    }
+
+    public async Task<(bool Success, string? Error)> DeleteShippingAddressAsync(int id)
+    {
+        var resp = await _http.DeleteAsync($"api/shipping-addresses/{id}");
+        if (!resp.IsSuccessStatusCode) return (false, await GetErrorMessage(resp));
+        return (true, null);
+    }
+
     // Catalog Copy
     public async Task<(bool Success, int RowsCopied, string? Error)> AppendCatalogAsync()
     {
