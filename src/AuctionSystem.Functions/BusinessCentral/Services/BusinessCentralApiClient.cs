@@ -246,6 +246,16 @@ public class BusinessCentralApiClient
         return await GetListAsync<BcPostingGroup>(url);
     }
 
+    public async Task<string> GetRawODataAsync(string companyName, string entitySet)
+    {
+        await SetAuthHeaderAsync();
+        var url = $"{ODataBaseUrl}/Company('{Uri.EscapeDataString(companyName)}')/{entitySet}";
+        _logger.LogInformation("RAW OData GET {Url}", url);
+        var response = await _httpClient.GetAsync(url);
+        var body = await response.Content.ReadAsStringAsync();
+        return $"URL: {url} | Status: {(int)response.StatusCode} | Body: {body}";
+    }
+
     public async Task<List<BcPostingGroup>> GetCustomerPostingGroupsAsync(string companyName)
     {
         var url = $"{ODataBaseUrl}/Company('{Uri.EscapeDataString(companyName)}')/CustomerPostingGroups";
