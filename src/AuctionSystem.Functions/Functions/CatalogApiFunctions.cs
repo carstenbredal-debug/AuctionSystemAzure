@@ -104,7 +104,7 @@ public class CatalogApiFunctions
         }
     }
 
-    [Function("GetCatalogLots")]
+    [Function("GetCatalogLotsApi")]
     public async Task<HttpResponseData> GetCatalogLots(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "catalog/lots")]
         HttpRequestData req)
