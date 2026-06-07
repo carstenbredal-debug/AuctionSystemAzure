@@ -526,7 +526,7 @@ public class BusinessCentralFunctions
         {
             var companies = await _bcClient.GetCompaniesAsync();
             if (companies.Count == 0)
-                return (false, "", "No companies found. Check BC_ENVIRONMENT value and App Registration permissions in BC.");
+                return (false, "", $"No companies found. API URL: {_options.BaseUrl}/companies. Check BC_ENVIRONMENT='{_options.Environment}' and ensure the App Registration has admin consent granted and permission sets assigned in BC.");
 
             // Try to find by CompanyId first, then by CompanyName
             var target = companies.FirstOrDefault(c => c.Id.ToString() == _options.CompanyId);
