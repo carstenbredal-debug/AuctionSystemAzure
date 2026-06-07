@@ -525,8 +525,21 @@ public class BusinessCentralFunctions
         try
         {
             var companies = await _bcClient.GetCompaniesAsync();
+            if (companies.Count == 0)
+                return (false, "", "No companies found. Check BC_ENVIRONMENT value and App Registration permissions in BC.");
+
+            // Try to find by CompanyId first, then by CompanyName
             var target = companies.FirstOrDefault(c => c.Id.ToString() == _options.CompanyId);
-            return (companies.Count > 0, target?.DisplayName ?? companies.FirstOrDefault()?.DisplayName ?? "", "");
+            if (target == null && !string.IsNullOrEmpty(_options.CompanyName))
+                target = companies.FirstOrDefault(c => c.DisplayName.Equals(_options.CompanyName, StringComparison.OrdinalIgnoreCase));
+            if (target == null)
+                target = companies.FirstOrDefault();
+
+            var availableNames = string.Join(", ", companies.Select(c => $"'{c.DisplayName}'"));
+            var matchNote = target != null && (target.Id.ToString() == _options.CompanyId || target.DisplayName.Equals(_options.CompanyName, StringComparison.OrdinalIgnoreCase))
+                ? "" : $"No exact match for CompanyId='{_options.CompanyId}' or CompanyName='{_options.CompanyName}'. Available: {availableNames}. Using: '{target?.DisplayName}'.";
+
+            return (true, target?.DisplayName ?? "", matchNote);
         }
         catch (Exception ex)
         {
