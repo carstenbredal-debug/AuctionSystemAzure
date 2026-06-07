@@ -426,7 +426,10 @@ public class SettlementFunctions
 
         var boxInfo = await FetchBoxInfoAsync(catalogLots);
 
-        var shippingBoxes = BuildShippingBoxList(catalogLots, lotInvoiceMap, boxInfo);
+        var dimensions = await _db.BoxTypeDimensions.ToListAsync();
+        var dimLookup = dimensions.ToDictionary(d => d.BoxType, d => d);
+
+        var shippingBoxes = BuildShippingBoxList(catalogLots, lotInvoiceMap, boxInfo, dimLookup);
         return await CreateJsonResponse(req, shippingBoxes);
     }
 
@@ -484,7 +487,7 @@ public class SettlementFunctions
     }
 
     private static List<object> BuildShippingBoxList(
-        List<CatalogLotInfo> catalogLots, Dictionary<int, (Invoice Inv, InvoiceLine Line)> lotInvoiceMap, Dictionary<int, BoxViewInfo> boxInfo)
+        List<CatalogLotInfo> catalogLots, Dictionary<int, (Invoice Inv, InvoiceLine Line)> lotInvoiceMap, Dictionary<int, BoxViewInfo> boxInfo, Dictionary<string, BoxTypeDimension> dimLookup)
     {
         var shippingBoxes = new List<object>();
         foreach (var cl in catalogLots)
@@ -496,13 +499,17 @@ public class SettlementFunctions
             {
                 if (!int.TryParse(boxStr.Trim(), out var boxNumber) || boxNumber <= 0) continue;
                 var bi = boxInfo.GetValueOrDefault(boxNumber);
+                var boxType = bi?.BoxType ?? "";
+                var dim = !string.IsNullOrEmpty(boxType) && dimLookup.TryGetValue(boxType, out var d) ? d : null;
                 shippingBoxes.Add(new
                 {
                     InvoiceId = info.Inv.Id, info.Inv.InvoiceNumber,
                     BrokerName = info.Inv.Broker?.CompanyName, BuyerName = info.Inv.Buyer?.Name,
                     LotNumber = cl.LotNumber, BoxNumber = boxNumber,
-                    BoxType = bi?.BoxType ?? "", Skins = bi?.Skins ?? 0,
-                    info.Line.PricePerSkin, HammerPrice = info.Line.HammerPrice
+                    BoxType = boxType, Skins = bi?.Skins ?? 0,
+                    info.Line.PricePerSkin, HammerPrice = info.Line.HammerPrice,
+                    LengthM = dim?.LengthM, WidthM = dim?.WidthM,
+                    HeightM = dim?.HeightM, WeightKg = dim?.WeightKg
                 });
             }
         }
