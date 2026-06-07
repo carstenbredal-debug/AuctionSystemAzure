@@ -57,8 +57,16 @@ else
         <div class="col-md-3">
             <div class="card text-center">
                 <div class="section-body p-3">
-                    <h5 class="card-title text-muted">Total Weight (kg)</h5>
-                    <h3>@GetFilteredBoxes().Sum(b => b.WeightKg ?? 0).ToString("N2")</h3>
+                    <h5 class="card-title text-muted">Gross Weight (kg)</h5>
+                    <h3>@GetFilteredBoxes().Sum(b => b.GrossWeight ?? 0).ToString("N2")</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="section-body p-3">
+                    <h5 class="card-title text-muted">Net Weight (kg)</h5>
+                    <h3>@GetFilteredBoxes().Sum(b => b.NetWeight ?? 0).ToString("N2")</h3>
                 </div>
             </div>
         </div>
@@ -77,7 +85,8 @@ else
                         <th>Skins</th>
                         <th>Volume (m³)</th>
                         <th>Weight (kg)</th>
-                        <th>Box Weight</th>
+                        <th>Gross Weight</th>
+                        <th>Net Weight</th>
                         <th>Location</th>
                     </tr>
                 </thead>
@@ -93,7 +102,8 @@ else
                             <td>@box.Skins</td>
                             <td>@(box.VolumeM3.HasValue ? box.VolumeM3.Value.ToString("N4") : "—")</td>
                             <td>@(box.WeightKg.HasValue ? box.WeightKg.Value.ToString("N2") : "—")</td>
-                            <td>@(box.BoxWeight.HasValue ? box.BoxWeight.Value.ToString("N2") : "—")</td>
+                            <td>@(box.GrossWeight.HasValue ? box.GrossWeight.Value.ToString("N2") : "—")</td>
+                            <td>@(box.NetWeight.HasValue ? box.NetWeight.Value.ToString("N2") : "—")</td>
                             <td>@(box.BoxLocation ?? "—")</td>
                         </tr>
                     }

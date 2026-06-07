@@ -543,8 +543,8 @@ public class SettlementFunctions
                     BoxType = boxType, Skins = bi?.Skins ?? 0,
                     info.Line.PricePerSkin, HammerPrice = info.Line.HammerPrice,
                     VolumeM3 = dim != null ? dim.LengthM * dim.WidthM * dim.HeightM : (decimal?)null,
-                    WeightKg = dim?.WeightKg,
-                    BoxWeight = boxStagingLookup.TryGetValue(boxNumber, out var stg) ? stg.BoxWeight : null,
+                    GrossWeight = boxStagingLookup.TryGetValue(boxNumber, out var stg) ? stg.BoxWeight : null,
+                    NetWeight = stg?.BoxWeight != null && dim?.WeightKg != null ? stg.BoxWeight - dim.WeightKg : stg?.BoxWeight,
                     BoxLocation = stg?.BoxLocation
                 });
             }

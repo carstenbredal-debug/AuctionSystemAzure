@@ -443,7 +443,8 @@ public class ShippingBoxDto
     public decimal HammerPrice { get; set; }
     public decimal? VolumeM3 { get; set; }
     public decimal? WeightKg { get; set; }
-    public decimal? BoxWeight { get; set; }
+    public decimal? GrossWeight { get; set; }
+    public decimal? NetWeight { get; set; }
     public string? BoxLocation { get; set; }
 }
 
