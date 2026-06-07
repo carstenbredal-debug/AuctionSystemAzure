@@ -297,6 +297,9 @@ using (var scope = host.Services.CreateScope())
                         s.Size, s.HairLength, s.Color, s.Quality, s.Clarity, s.Damages');
         ");
         db.Database.Migrate();
+        // Ensure CatalogDbContext tables exist (CatalogLots, GeneratedLots, etc.)
+        var catalogDb = scope.ServiceProvider.GetRequiredService<CatalogDbContext>();
+        catalogDb.Database.EnsureCreated();
     }
     catch (Exception ex)
     {
