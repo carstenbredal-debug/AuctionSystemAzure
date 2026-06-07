@@ -21,9 +21,16 @@ else
         </div>
     }
 
-    <div class="mb-3">
+    <div class="mb-3 d-flex gap-2">
         <button class="btn btn-primary" @onclick="ShowAddForm">
             <i class="bi bi-plus-circle"></i> Add User
+        </button>
+        <button class="btn btn-outline-success" @onclick="BulkCreateFromEntities" disabled="@_bulkCreating">
+            @if (_bulkCreating)
+            {
+                <span class="spinner-border spinner-border-sm me-1"></span>
+            }
+            <i class="bi bi-people"></i> Create Users for All Entities
         </button>
     </div>
 
@@ -574,6 +581,7 @@ else
                         <th>Email</th>
                         <th>Role</th>
                         <th>Linked Entity</th>
+                        <th>Azure AD Object ID</th>
                         <th>Active</th>
                         <th style="width: 150px;">Actions</th>
                     </tr>
@@ -581,7 +589,7 @@ else
                 <tbody>
                     @if (_users.Count == 0)
                     {
-                        <tr><td colspan="6" class="text-center text-muted py-4">No users registered. Click "Add User" to create the first user.</td></tr>
+                        <tr><td colspan="7" class="text-center text-muted py-4">No users registered. Click "Add User" to create the first user.</td></tr>
                     }
                     @foreach (var user in _users)
                     {
@@ -590,6 +598,16 @@ else
                             <td>@user.Email</td>
                             <td><span class="badge bg-@GetRoleBadgeColor(user.Role)">@user.Role</span></td>
                             <td>@GetLinkedEntity(user)</td>
+                            <td>
+                                @if (user.AzureAdObjectId?.StartsWith("PENDING-") == true)
+                                {
+                                    <span class="badge bg-warning text-dark">Pending</span>
+                                }
+                                else
+                                {
+                                    <span class="small text-truncate d-inline-block" style="max-width: 180px;" title="@user.AzureAdObjectId">@user.AzureAdObjectId</span>
+                                }
+                            </td>
                             <td>
                                 @if (user.IsActive)
                                 { <span class="badge bg-success">Active</span> }
@@ -621,6 +639,7 @@ else
     private bool _showForm;
     private string? _message;
     private bool _messageIsError;
+    private bool _bulkCreating;
     private List<BcCountryRegionDto> _bcCountries = new();
     private List<BcCurrencyDto> _bcCurrencies = new();
     private List<BcPostingGroupDto> _bcGenBusPostingGroups = new();
@@ -682,6 +701,25 @@ else
         _bcPaymentTerms = await Api.GetBcPaymentTermsAsync();
         try { _bcVendors = await Api.GetBcVendorsAsync(); } catch { }
         try { _bcCustomers = await Api.GetBcCustomersAsync(); } catch { }
+    }
+
+    private async Task BulkCreateFromEntities()
+    {
+        _bulkCreating = true;
+        _message = null;
+        try
+        {
+            var result = await Api.BulkCreateUsersFromEntitiesAsync();
+            _message = $"Created {result.CreatedCount} users ({result.Brokers} brokers, {result.Buyers} buyers, {result.Farmers} farmers). Edit each user to set the Azure AD Object ID.";
+            _messageIsError = false;
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            _message = $"Failed to create users: {ex.Message}";
+            _messageIsError = true;
+        }
+        _bulkCreating = false;
     }
 
     private void ShowAddForm()

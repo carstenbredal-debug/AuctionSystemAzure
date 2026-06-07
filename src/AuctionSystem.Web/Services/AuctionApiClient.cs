@@ -283,6 +283,13 @@ public class AuctionApiClient
     public async Task DeleteUserAsync(int id)
         => await _http.DeleteAsync($"api/users/{id}");
 
+    public async Task<BulkCreateResult> BulkCreateUsersFromEntitiesAsync()
+    {
+        var resp = await _http.PostAsync("api/users/bulk-create-from-entities", null);
+        resp.EnsureSuccessStatusCode();
+        return await resp.Content.ReadFromJsonAsync<BulkCreateResult>() ?? new();
+    }
+
     // Parameters
     public async Task<List<SystemParameterDto>> GetParametersAsync()
         => await _http.GetFromJsonAsync<List<SystemParameterDto>>("api/parameters") ?? new();

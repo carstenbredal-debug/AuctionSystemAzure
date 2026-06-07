@@ -246,6 +246,14 @@ public class AppUserDto
     public bool IsActive { get; set; } = true;
 }
 
+public class BulkCreateResult
+{
+    public int CreatedCount { get; set; }
+    public int Brokers { get; set; }
+    public int Buyers { get; set; }
+    public int Farmers { get; set; }
+}
+
 public enum CustomerRequestStatus { Pending, Approved, Declined }
 
 public class BrokerCustomerRequestDto

@@ -189,6 +189,77 @@ public class UserFunctions
         return req.CreateResponse(System.Net.HttpStatusCode.NoContent);
     }
 
+    [Function("BulkCreateUsersFromEntities")]
+    public async Task<HttpResponseData> BulkCreateFromEntities(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "users/bulk-create-from-entities")] HttpRequestData req)
+    {
+        var linkedBrokerIds = await _db.AppUsers.Where(u => u.BrokerId != null).Select(u => u.BrokerId!.Value).ToListAsync();
+        var linkedBuyerIds = await _db.AppUsers.Where(u => u.BuyerId != null).Select(u => u.BuyerId!.Value).ToListAsync();
+        var linkedFarmerIds = await _db.AppUsers.Where(u => u.FarmerId != null).Select(u => u.FarmerId!.Value).ToListAsync();
+
+        var unlinkedBrokers = await _db.Brokers.Where(b => !linkedBrokerIds.Contains(b.Id)).ToListAsync();
+        var unlinkedBuyers = await _db.Buyers.Where(b => !linkedBuyerIds.Contains(b.Id)).ToListAsync();
+        var unlinkedFarmers = await _db.Farmers.Where(f => !linkedFarmerIds.Contains(f.Id)).ToListAsync();
+
+        var created = new List<object>();
+
+        foreach (var broker in unlinkedBrokers)
+        {
+            var user = new AppUser
+            {
+                AzureAdObjectId = $"PENDING-broker-{broker.BrokerNumber}",
+                Email = broker.ContactEmail ?? $"broker-{broker.BrokerNumber}@pending.local",
+                DisplayName = broker.CompanyName ?? broker.BrokerNumber,
+                Role = AppRole.Broker,
+                BrokerId = broker.Id,
+                IsActive = true
+            };
+            _db.AppUsers.Add(user);
+            created.Add(new { type = "Broker", number = broker.BrokerNumber, name = broker.CompanyName });
+        }
+
+        foreach (var buyer in unlinkedBuyers)
+        {
+            var user = new AppUser
+            {
+                AzureAdObjectId = $"PENDING-buyer-{buyer.BuyerNumber}",
+                Email = buyer.ContactEmail ?? $"buyer-{buyer.BuyerNumber}@pending.local",
+                DisplayName = buyer.Name ?? buyer.BuyerNumber,
+                Role = AppRole.Buyer,
+                BuyerId = buyer.Id,
+                IsActive = true
+            };
+            _db.AppUsers.Add(user);
+            created.Add(new { type = "Buyer", number = buyer.BuyerNumber, name = buyer.Name });
+        }
+
+        foreach (var farmer in unlinkedFarmers)
+        {
+            var user = new AppUser
+            {
+                AzureAdObjectId = $"PENDING-farmer-{farmer.FarmerNumber}",
+                Email = farmer.ContactEmail ?? $"farmer-{farmer.FarmerNumber}@pending.local",
+                DisplayName = farmer.Name ?? farmer.FarmerNumber,
+                Role = AppRole.Farmer,
+                FarmerId = farmer.Id,
+                IsActive = true
+            };
+            _db.AppUsers.Add(user);
+            created.Add(new { type = "Farmer", number = farmer.FarmerNumber, name = farmer.Name });
+        }
+
+        await _db.SaveChangesAsync();
+
+        return await CreateJsonResponse(req, new
+        {
+            createdCount = created.Count,
+            brokers = unlinkedBrokers.Count,
+            buyers = unlinkedBuyers.Count,
+            farmers = unlinkedFarmers.Count,
+            created
+        }, System.Net.HttpStatusCode.Created);
+    }
+
     private static async Task<HttpResponseData> CreateJsonResponse<T>(
         HttpRequestData req, T data, System.Net.HttpStatusCode status = System.Net.HttpStatusCode.OK)
     {
