@@ -71,50 +71,60 @@ public class CatalogLotFunctions
     public async Task<HttpResponseData> ImportToAuction(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auctions/{auctionId:int}/import-catalog-lots")] HttpRequestData req, int auctionId)
     {
-        var auction = await _auctionDb.Auctions.FindAsync(auctionId);
-        if (auction == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
-
-        var body = await req.ReadFromJsonAsync<ImportCatalogLotsRequest>();
-        if (body == null || body.CatalogLotIds == null || body.CatalogLotIds.Count == 0)
-            return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
-
-        var catalogLots = await _catalogDb.CatalogLots
-            .Where(c => body.CatalogLotIds.Contains(c.CatalogLotID))
-            .ToListAsync();
-
-        var existingLotNumbers = await _auctionDb.Lots
-            .Where(l => l.AuctionId == auctionId)
-            .Select(l => l.LotNumber)
-            .ToListAsync();
-
-        var imported = new List<object>();
-        foreach (var cl in catalogLots)
+        try
         {
-            if (existingLotNumbers.Contains(cl.LotNumber))
-                continue;
+            var auction = await _auctionDb.Auctions.FindAsync(auctionId);
+            if (auction == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
 
-            var lot = new Domain.Entities.Lot
+            var body = await req.ReadFromJsonAsync<ImportCatalogLotsRequest>();
+            if (body == null || body.CatalogLotIds == null || body.CatalogLotIds.Count == 0)
+                return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+
+            var catalogLots = await _catalogDb.CatalogLots
+                .Where(c => body.CatalogLotIds.Contains(c.CatalogLotID))
+                .ToListAsync();
+
+            var existingLotNumbers = await _auctionDb.Lots
+                .Where(l => l.AuctionId == auctionId)
+                .Select(l => l.LotNumber)
+                .ToListAsync();
+
+            var imported = new List<object>();
+            foreach (var cl in catalogLots)
             {
-                AuctionId = auctionId,
-                LotNumber = cl.LotNumber,
-                Description = $"{cl.SalesType} {cl.Gender} {cl.Color} {cl.Quality}".Trim(),
-                Category = cl.Group,
-                Quantity = cl.TotalSkins,
-                Unit = "skins",
-                StartingPrice = 0,
-                Status = Domain.Enums.LotStatus.Pending,
-                FarmerId = body.FarmerId > 0 ? body.FarmerId : null
-            };
-            _auctionDb.Lots.Add(lot);
-            imported.Add(new { cl.CatalogLotID, cl.LotNumber, lot.Description, lot.Quantity });
+                if (existingLotNumbers.Contains(cl.LotNumber))
+                    continue;
+
+                var lot = new Domain.Entities.Lot
+                {
+                    AuctionId = auctionId,
+                    LotNumber = cl.LotNumber,
+                    Description = $"{cl.SalesType} {cl.Gender} {cl.Color} {cl.Quality}".Trim(),
+                    Category = cl.Group,
+                    Quantity = cl.TotalSkins,
+                    Unit = "skins",
+                    StartingPrice = 0,
+                    Status = Domain.Enums.LotStatus.Pending,
+                    FarmerId = body.FarmerId > 0 ? body.FarmerId : null
+                };
+                _auctionDb.Lots.Add(lot);
+                imported.Add(new { cl.CatalogLotID, cl.LotNumber, lot.Description, lot.Quantity });
+            }
+
+            await _auctionDb.SaveChangesAsync();
+
+            var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+            response.Headers.Add("Content-Type", "application/json");
+            await response.WriteStringAsync(JsonSerializer.Serialize(new { importedCount = imported.Count, lots = imported }, JsonOptions));
+            return response;
         }
-
-        await _auctionDb.SaveChangesAsync();
-
-        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
-        response.Headers.Add("Content-Type", "application/json");
-        await response.WriteStringAsync(JsonSerializer.Serialize(new { importedCount = imported.Count, lots = imported }, JsonOptions));
-        return response;
+        catch (Exception ex)
+        {
+            var response = req.CreateResponse(System.Net.HttpStatusCode.InternalServerError);
+            response.Headers.Add("Content-Type", "application/json");
+            await response.WriteStringAsync(JsonSerializer.Serialize(new { error = ex.Message, inner = ex.InnerException?.Message, stack = ex.StackTrace }, JsonOptions));
+            return response;
+        }
     }
 }
 
