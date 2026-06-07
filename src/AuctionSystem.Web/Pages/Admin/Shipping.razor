@@ -46,6 +46,30 @@ else
                 </div>
             </div>
         </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="section-body p-3">
+                    <h5 class="card-title text-muted">Total Volume (m³)</h5>
+                    <h3>@GetFilteredBoxes().Sum(b => b.VolumeM3 ?? 0).ToString("N2")</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="section-body p-3">
+                    <h5 class="card-title text-muted">Gross Weight (kg)</h5>
+                    <h3>@GetFilteredBoxes().Sum(b => b.GrossWeight ?? 0).ToString("N2")</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="section-body p-3">
+                    <h5 class="card-title text-muted">Net Weight (kg)</h5>
+                    <h3>@GetFilteredBoxes().Sum(b => b.NetWeight ?? 0).ToString("N2")</h3>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="section-container">
@@ -59,6 +83,10 @@ else
                         <th>Box #</th>
                         <th>Box Type</th>
                         <th>Skins</th>
+                        <th>Volume (m³)</th>
+                        <th>Gross Weight</th>
+                        <th>Net Weight</th>
+                        <th>Location</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -71,6 +99,10 @@ else
                             <td>@box.BoxNumber</td>
                             <td>@box.BoxType</td>
                             <td>@box.Skins</td>
+                            <td>@(box.VolumeM3.HasValue ? box.VolumeM3.Value.ToString("N4") : "—")</td>
+                            <td>@(box.GrossWeight.HasValue ? box.GrossWeight.Value.ToString("N2") : "—")</td>
+                            <td>@(box.NetWeight.HasValue ? box.NetWeight.Value.ToString("N2") : "—")</td>
+                            <td>@(box.BoxLocation ?? "—")</td>
                         </tr>
                     }
                 </tbody>

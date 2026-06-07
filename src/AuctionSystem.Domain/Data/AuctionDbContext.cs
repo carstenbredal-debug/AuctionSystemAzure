@@ -27,6 +27,7 @@ public class AuctionDbContext : DbContext
     public DbSet<AuctionTransaction> AuctionTransactions => Set<AuctionTransaction>();
     public DbSet<LotSalesHistory> LotSalesHistories => Set<LotSalesHistory>();
     public DbSet<BoxTypeDimension> BoxTypeDimensions => Set<BoxTypeDimension>();
+    public DbSet<ShippingAddress> ShippingAddresses => Set<ShippingAddress>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -259,6 +260,21 @@ public class AuctionDbContext : DbContext
             e.HasIndex(t => new { t.LotNumber, t.TypistSlot });
             e.HasIndex(t => t.TypistUserId);
             e.Property(t => t.PriceEur).HasColumnType("decimal(18,2)");
+        });
+
+        modelBuilder.Entity<ShippingAddress>(e =>
+        {
+            e.HasKey(s => s.Id);
+            e.HasOne(s => s.Buyer).WithMany().HasForeignKey(s => s.BuyerId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(s => s.ContactName).HasMaxLength(200);
+            e.Property(s => s.AddressLine1).HasMaxLength(200);
+            e.Property(s => s.AddressLine2).HasMaxLength(200);
+            e.Property(s => s.Country).HasMaxLength(100);
+            e.Property(s => s.PostalCode).HasMaxLength(20);
+            e.Property(s => s.City).HasMaxLength(100);
+            e.Property(s => s.ContactPhone).HasMaxLength(50);
+            e.Property(s => s.MobilePhone).HasMaxLength(50);
+            e.Property(s => s.ContactEmail).HasMaxLength(200);
         });
     }
 }

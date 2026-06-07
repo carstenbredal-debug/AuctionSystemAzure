@@ -281,6 +281,30 @@ using (var scope = host.Services.CreateScope())
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.BoxTypeDimensions') AND name = 'WeightKg')
                 ALTER TABLE auction.BoxTypeDimensions ADD WeightKg DECIMAL(10,4) NOT NULL DEFAULT 0;
         ");
+        // ShippingAddresses table
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'ShippingAddresses')
+            BEGIN
+                CREATE TABLE auction.ShippingAddresses (
+                    Id INT IDENTITY(1,1) PRIMARY KEY,
+                    BuyerId INT NOT NULL,
+                    ContactName NVARCHAR(200) NOT NULL DEFAULT '',
+                    AddressLine1 NVARCHAR(200) NOT NULL DEFAULT '',
+                    AddressLine2 NVARCHAR(200) NOT NULL DEFAULT '',
+                    Country NVARCHAR(100) NOT NULL DEFAULT '',
+                    PostalCode NVARCHAR(20) NOT NULL DEFAULT '',
+                    City NVARCHAR(100) NOT NULL DEFAULT '',
+                    ContactPhone NVARCHAR(50) NOT NULL DEFAULT '',
+                    MobilePhone NVARCHAR(50) NOT NULL DEFAULT '',
+                    ContactEmail NVARCHAR(200) NOT NULL DEFAULT '',
+                    IsDefault BIT NOT NULL DEFAULT 0,
+                    IsActive BIT NOT NULL DEFAULT 1,
+                    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+                    FOREIGN KEY (BuyerId) REFERENCES auction.Buyers(Id)
+                );
+                CREATE INDEX IX_ShippingAddresses_BuyerId ON auction.ShippingAddresses(BuyerId);
+            END
+        ");
         // Drop auction.Boxes table if it exists (replaced by view)
         db.Database.ExecuteSqlRaw(@"
             IF EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'Boxes')

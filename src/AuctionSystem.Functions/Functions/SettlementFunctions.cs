@@ -426,7 +426,12 @@ public class SettlementFunctions
 
         var boxInfo = await FetchBoxInfoAsync(catalogLots);
 
-        var shippingBoxes = BuildShippingBoxList(catalogLots, lotInvoiceMap, boxInfo);
+        var dimensions = await _db.BoxTypeDimensions.ToListAsync();
+        var dimLookup = dimensions.ToDictionary(d => d.BoxType, d => d);
+
+        var boxStagingLookup = await FetchBoxStagingAsync(catalogLots);
+
+        var shippingBoxes = BuildShippingBoxList(catalogLots, lotInvoiceMap, boxInfo, dimLookup, boxStagingLookup);
         return await CreateJsonResponse(req, shippingBoxes);
     }
 
@@ -483,8 +488,40 @@ public class SettlementFunctions
         return result;
     }
 
+    private async Task<Dictionary<int, BoxStagingInfo>> FetchBoxStagingAsync(List<CatalogLotInfo> catalogLots)
+    {
+        var allBoxNumbers = catalogLots
+            .Where(cl => !string.IsNullOrEmpty(cl.IncludedBoxNumbers))
+            .SelectMany(cl => cl.IncludedBoxNumbers!.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(b => int.TryParse(b.Trim(), out var n) ? n : 0).Where(n => n > 0))
+            .Distinct().ToList();
+
+        var result = new Dictionary<int, BoxStagingInfo>();
+        if (allBoxNumbers.Count > 0)
+        {
+            try
+            {
+                var staging = await _catalogDb.Database
+                    .SqlQueryRaw<BoxStagingInfo>("SELECT CAST(BoxNumber AS INT) AS BoxNumber, Weight AS BoxWeight, BoxLocation FROM dbo.boxstatingfromkphg WHERE BoxNumber IN (" +
+                        string.Join(",", allBoxNumbers) + ")")
+                    .ToListAsync();
+                foreach (var s in staging)
+                    result[s.BoxNumber] = s;
+            }
+            catch { /* table may not exist yet */ }
+        }
+        return result;
+    }
+
+    private class BoxStagingInfo
+    {
+        public int BoxNumber { get; set; }
+        public decimal? BoxWeight { get; set; }
+        public string? BoxLocation { get; set; }
+    }
+
     private static List<object> BuildShippingBoxList(
-        List<CatalogLotInfo> catalogLots, Dictionary<int, (Invoice Inv, InvoiceLine Line)> lotInvoiceMap, Dictionary<int, BoxViewInfo> boxInfo)
+        List<CatalogLotInfo> catalogLots, Dictionary<int, (Invoice Inv, InvoiceLine Line)> lotInvoiceMap, Dictionary<int, BoxViewInfo> boxInfo, Dictionary<string, BoxTypeDimension> dimLookup, Dictionary<int, BoxStagingInfo> boxStagingLookup)
     {
         var shippingBoxes = new List<object>();
         foreach (var cl in catalogLots)
@@ -496,13 +533,19 @@ public class SettlementFunctions
             {
                 if (!int.TryParse(boxStr.Trim(), out var boxNumber) || boxNumber <= 0) continue;
                 var bi = boxInfo.GetValueOrDefault(boxNumber);
+                var boxType = bi?.BoxType ?? "";
+                var dim = !string.IsNullOrEmpty(boxType) && dimLookup.TryGetValue(boxType, out var d) ? d : null;
                 shippingBoxes.Add(new
                 {
                     InvoiceId = info.Inv.Id, info.Inv.InvoiceNumber,
                     BrokerName = info.Inv.Broker?.CompanyName, BuyerName = info.Inv.Buyer?.Name,
                     LotNumber = cl.LotNumber, BoxNumber = boxNumber,
-                    BoxType = bi?.BoxType ?? "", Skins = bi?.Skins ?? 0,
-                    info.Line.PricePerSkin, HammerPrice = info.Line.HammerPrice
+                    BoxType = boxType, Skins = bi?.Skins ?? 0,
+                    info.Line.PricePerSkin, HammerPrice = info.Line.HammerPrice,
+                    VolumeM3 = dim != null ? dim.LengthM * dim.WidthM * dim.HeightM : (decimal?)null,
+                    GrossWeight = boxStagingLookup.TryGetValue(boxNumber, out var stg) ? stg.BoxWeight : null,
+                    NetWeight = stg?.BoxWeight != null && dim?.WeightKg != null ? stg.BoxWeight - dim.WeightKg : stg?.BoxWeight,
+                    BoxLocation = stg?.BoxLocation
                 });
             }
         }
