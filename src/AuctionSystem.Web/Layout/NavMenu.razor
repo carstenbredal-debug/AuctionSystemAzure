@@ -38,148 +38,191 @@
                 </div>
 
                 <AuthorizeView Roles="Admin">
+                    @* ADMIN *@
                     <div class="nav-item px-3 mt-2">
-                        <span class="nav-link section-label"><small><strong>ADMIN</strong></small></span>
+                        <span class="nav-link section-label section-toggle" @onclick="@(() => Toggle("admin"))" @onclick:stopPropagation="true">
+                            <small><strong>ADMIN</strong></small>
+                            <span class="toggle-arrow">@(_expanded.Contains("admin") ? "▾" : "▸")</span>
+                        </span>
                     </div>
-                    <div class="nav-item ps-5 pe-3">
-                        <NavLink class="nav-link" href="admin/users">
-                            Users & Roles
-                        </NavLink>
-                    </div>
-                    <div class="nav-item ps-5 pe-3">
-                        <NavLink class="nav-link" href="admin/brokers">
-                            Brokers
-                        </NavLink>
-                    </div>
-                    <div class="nav-item ps-5 pe-3">
-                        <NavLink class="nav-link" href="admin/farmers">
-                            Farmers
-                        </NavLink>
-                    </div>
-                    <div class="nav-item ps-5 pe-3">
-                        <NavLink class="nav-link" href="admin/buyers">
-                            Buyers
-                        </NavLink>
-                    </div>
-                    <div class="nav-item ps-5 pe-3">
-                        <NavLink class="nav-link" href="admin/customer-links">
-                            Link Customer to Broker
-                        </NavLink>
-                    </div>
-                    <div class="nav-item px-3 mt-2">
-                        <span class="nav-link section-label"><small><strong>AUCTION</strong></small></span>
-                    </div>
-                    <div class="nav-item ps-5 pe-3">
-                        <NavLink class="nav-link" href="auctions">
-                            Auctions
-                        </NavLink>
-                    </div>
+                    @if (_expanded.Contains("admin"))
+                    {
+                        <div class="nav-item ps-5 pe-3">
+                            <NavLink class="nav-link" href="admin/users">
+                                Users & Roles
+                            </NavLink>
+                        </div>
+                        <div class="nav-item ps-5 pe-3">
+                            <NavLink class="nav-link" href="admin/brokers">
+                                Brokers
+                            </NavLink>
+                        </div>
+                        <div class="nav-item ps-5 pe-3">
+                            <NavLink class="nav-link" href="admin/farmers">
+                                Farmers
+                            </NavLink>
+                        </div>
+                        <div class="nav-item ps-5 pe-3">
+                            <NavLink class="nav-link" href="admin/buyers">
+                                Buyers
+                            </NavLink>
+                        </div>
+                        <div class="nav-item ps-5 pe-3">
+                            <NavLink class="nav-link" href="admin/customer-links">
+                                Link Customer to Broker
+                            </NavLink>
+                        </div>
+                    }
 
-                    <div class="nav-item ps-5 pe-3">
-                        <NavLink class="nav-link" href="admin/auction-transactions">
-                            Auction Transactions
-                        </NavLink>
-                    </div>
-                    <div class="nav-item ps-5 pe-3">
-                        <NavLink class="nav-link" href="admin/skins">
-                            Skins
-                        </NavLink>
-                    </div>
-                    <div class="nav-item ps-5 pe-3">
-                        <NavLink class="nav-link" href="admin/catalog">
-                            Generate Catalogue
-                        </NavLink>
-                    </div>
+                    @* AUCTION *@
                     <div class="nav-item px-3 mt-2">
-                        <span class="nav-link section-label"><small><strong>PARAMETERS</strong></small></span>
+                        <span class="nav-link section-label section-toggle" @onclick="@(() => Toggle("auction"))" @onclick:stopPropagation="true">
+                            <small><strong>AUCTION</strong></small>
+                            <span class="toggle-arrow">@(_expanded.Contains("auction") ? "▾" : "▸")</span>
+                        </span>
                     </div>
-                    <div class="nav-item ps-5 pe-3">
-                        <NavLink class="nav-link" href="admin/sales-order-setup">
-                            Sales Order Setup
-                        </NavLink>
-                    </div>
-                    <div class="nav-item ps-5 pe-3">
-                        <NavLink class="nav-link" href="admin/parameters">
-                            Broker Parameters
-                        </NavLink>
-                    </div>
-                    <div class="nav-item ps-5 pe-3">
-                        <NavLink class="nav-link" href="admin/shipping-parameters">
-                            Shipping Parameter
-                        </NavLink>
-                    </div>
+                    @if (_expanded.Contains("auction"))
+                    {
+                        <div class="nav-item ps-5 pe-3">
+                            <NavLink class="nav-link" href="auctions">
+                                Auctions
+                            </NavLink>
+                        </div>
+                        <div class="nav-item ps-5 pe-3">
+                            <NavLink class="nav-link" href="admin/auction-transactions">
+                                Auction Transactions
+                            </NavLink>
+                        </div>
+                        <div class="nav-item ps-5 pe-3">
+                            <NavLink class="nav-link" href="admin/skins">
+                                Skins
+                            </NavLink>
+                        </div>
+                        <div class="nav-item ps-5 pe-3">
+                            <NavLink class="nav-link" href="admin/catalog">
+                                Generate Catalogue
+                            </NavLink>
+                        </div>
+                    }
 
+                    @* PARAMETERS *@
                     <div class="nav-item px-3 mt-2">
-                        <span class="nav-link section-label"><small><strong>FINANCE</strong></small></span>
+                        <span class="nav-link section-label section-toggle" @onclick="@(() => Toggle("parameters"))" @onclick:stopPropagation="true">
+                            <small><strong>PARAMETERS</strong></small>
+                            <span class="toggle-arrow">@(_expanded.Contains("parameters") ? "▾" : "▸")</span>
+                        </span>
                     </div>
-                    <div class="nav-item ps-5 pe-3">
-                        <NavLink class="nav-link" href="admin/invoices">
-                            Invoices
-                        </NavLink>
-                    </div>
-                    <div class="nav-item ps-5 pe-3">
-                        <NavLink class="nav-link" href="admin/payments">
-                            Payments
-                        </NavLink>
-                    </div>
-                    <div class="nav-item ps-5 pe-3">
-                        <NavLink class="nav-link" href="admin/buyer-balances">
-                            Buyer Balances
-                        </NavLink>
-                    </div>
+                    @if (_expanded.Contains("parameters"))
+                    {
+                        <div class="nav-item ps-5 pe-3">
+                            <NavLink class="nav-link" href="admin/sales-order-setup">
+                                Sales Order Setup
+                            </NavLink>
+                        </div>
+                        <div class="nav-item ps-5 pe-3">
+                            <NavLink class="nav-link" href="admin/parameters">
+                                Broker Parameters
+                            </NavLink>
+                        </div>
+                        <div class="nav-item ps-5 pe-3">
+                            <NavLink class="nav-link" href="admin/shipping-parameters">
+                                Shipping Parameter
+                            </NavLink>
+                        </div>
+                    }
 
+                    @* FINANCE *@
                     <div class="nav-item px-3 mt-2">
-                        <span class="nav-link section-label"><small><strong>SHIPPING</strong></small></span>
+                        <span class="nav-link section-label section-toggle" @onclick="@(() => Toggle("finance"))" @onclick:stopPropagation="true">
+                            <small><strong>FINANCE</strong></small>
+                            <span class="toggle-arrow">@(_expanded.Contains("finance") ? "▾" : "▸")</span>
+                        </span>
                     </div>
-                    <div class="nav-item ps-5 pe-3">
-                        <NavLink class="nav-link" href="admin/shipping">
-                            Boxes
-                        </NavLink>
-                    </div>
-                    <div class="nav-item ps-5 pe-3">
-                        <NavLink class="nav-link" href="admin/shipping-addresses">
-                            Addresses
-                        </NavLink>
-                    </div>
-                    <div class="nav-item ps-5 pe-3">
-                        <NavLink class="nav-link" href="admin/shippers">
-                            Shippers
-                        </NavLink>
-                    </div>
-                    <div class="nav-item ps-5 pe-3">
-                        <NavLink class="nav-link" href="admin/shipments">
-                            Shipments
-                        </NavLink>
-                    </div>
-                    <div class="nav-item ps-5 pe-3">
-                        <NavLink class="nav-link" href="admin/showlot">
-                            Showlot
-                        </NavLink>
-                    </div>
+                    @if (_expanded.Contains("finance"))
+                    {
+                        <div class="nav-item ps-5 pe-3">
+                            <NavLink class="nav-link" href="admin/invoices">
+                                Invoices
+                            </NavLink>
+                        </div>
+                        <div class="nav-item ps-5 pe-3">
+                            <NavLink class="nav-link" href="admin/payments">
+                                Payments
+                            </NavLink>
+                        </div>
+                        <div class="nav-item ps-5 pe-3">
+                            <NavLink class="nav-link" href="admin/buyer-balances">
+                                Buyer Balances
+                            </NavLink>
+                        </div>
+                    }
 
+                    @* SHIPPING *@
                     <div class="nav-item px-3 mt-2">
-                        <span class="nav-link section-label"><small><strong>DIAGNOSTICS</strong></small></span>
+                        <span class="nav-link section-label section-toggle" @onclick="@(() => Toggle("shipping"))" @onclick:stopPropagation="true">
+                            <small><strong>SHIPPING</strong></small>
+                            <span class="toggle-arrow">@(_expanded.Contains("shipping") ? "▾" : "▸")</span>
+                        </span>
                     </div>
-                    <div class="nav-item ps-5 pe-3">
-                        <NavLink class="nav-link" href="admin/connections">
-                            Connections
-                        </NavLink>
+                    @if (_expanded.Contains("shipping"))
+                    {
+                        <div class="nav-item ps-5 pe-3">
+                            <NavLink class="nav-link" href="admin/shipping">
+                                Boxes
+                            </NavLink>
+                        </div>
+                        <div class="nav-item ps-5 pe-3">
+                            <NavLink class="nav-link" href="admin/shipping-addresses">
+                                Addresses
+                            </NavLink>
+                        </div>
+                        <div class="nav-item ps-5 pe-3">
+                            <NavLink class="nav-link" href="admin/shippers">
+                                Shippers
+                            </NavLink>
+                        </div>
+                        <div class="nav-item ps-5 pe-3">
+                            <NavLink class="nav-link" href="admin/shipments">
+                                Shipments
+                            </NavLink>
+                        </div>
+                        <div class="nav-item ps-5 pe-3">
+                            <NavLink class="nav-link" href="admin/showlot">
+                                Showlot
+                            </NavLink>
+                        </div>
+                    }
+
+                    @* DIAGNOSTICS *@
+                    <div class="nav-item px-3 mt-2">
+                        <span class="nav-link section-label section-toggle" @onclick="@(() => Toggle("diagnostics"))" @onclick:stopPropagation="true">
+                            <small><strong>DIAGNOSTICS</strong></small>
+                            <span class="toggle-arrow">@(_expanded.Contains("diagnostics") ? "▾" : "▸")</span>
+                        </span>
                     </div>
-                    <div class="nav-item ps-5 pe-3">
-                        <NavLink class="nav-link" href="admin/business-central">
-                            Business Central
-                        </NavLink>
-                    </div>
-                    <div class="nav-item ps-5 pe-3">
-                        <NavLink class="nav-link" href="admin/data-integrity">
-                            Data Integrity
-                        </NavLink>
-                    </div>
-                    <div class="nav-item ps-5 pe-3">
-                        <NavLink class="nav-link" href="admin/test-packing">
-                            Test Packing
-                        </NavLink>
-                    </div>
+                    @if (_expanded.Contains("diagnostics"))
+                    {
+                        <div class="nav-item ps-5 pe-3">
+                            <NavLink class="nav-link" href="admin/connections">
+                                Connections
+                            </NavLink>
+                        </div>
+                        <div class="nav-item ps-5 pe-3">
+                            <NavLink class="nav-link" href="admin/business-central">
+                                Business Central
+                            </NavLink>
+                        </div>
+                        <div class="nav-item ps-5 pe-3">
+                            <NavLink class="nav-link" href="admin/data-integrity">
+                                Data Integrity
+                            </NavLink>
+                        </div>
+                        <div class="nav-item ps-5 pe-3">
+                            <NavLink class="nav-link" href="admin/test-packing">
+                                Test Packing
+                            </NavLink>
+                        </div>
+                    }
                 </AuthorizeView>
 
                 <AuthorizeView Roles="Broker">
@@ -262,4 +305,12 @@
     private bool collapseNavMenu = true;
     private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
     private void ToggleNavMenu() => collapseNavMenu = !collapseNavMenu;
+
+    private HashSet<string> _expanded = new();
+
+    private void Toggle(string section)
+    {
+        if (!_expanded.Remove(section))
+            _expanded.Add(section);
+    }
 }

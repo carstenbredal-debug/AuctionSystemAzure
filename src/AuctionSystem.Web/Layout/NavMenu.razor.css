@@ -50,6 +50,23 @@
     letter-spacing: 1px;
 }
 
+.section-toggle {
+    cursor: pointer !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    user-select: none;
+}
+
+.section-toggle:hover {
+    color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.toggle-arrow {
+    font-size: 0.7rem;
+    margin-left: 0.5rem;
+}
+
 .nav-item {
     font-size: 1.1rem;
     padding-bottom: 0.25rem;
