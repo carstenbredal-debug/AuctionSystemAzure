@@ -1,24 +1,63 @@
 codeunit 50150 "Auto Fill Delivery Date"
 {
-    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Sales-Post", 'OnBeforePostSalesDoc', '', false, false)]
-    local procedure AutoFillDeliveryDateOnPost(var SalesHeader: Record "Sales Header"; CommitIsSuppressed: Boolean; PreviewMode: Boolean; var HideProgressWindow: Boolean; var IsHandled: Boolean)
+    [EventSubscriber(ObjectType::Table, Database::"Sales Header", 'OnAfterInsertEvent', '', false, false)]
+    local procedure AutoFillDeliveryDateOnInsert(var Rec: Record "Sales Header"; RunTrigger: Boolean)
     var
         RecRef: RecordRef;
         FldRef: FieldRef;
+        DocDate: Date;
     begin
-        // Set standard Shipment Date (field 10) if empty — Polish localization validates this
-        if SalesHeader."Shipment Date" = 0D then begin
-            SalesHeader."Shipment Date" := SalesHeader."Document Date";
-        end;
+        DocDate := Rec."Document Date";
+        if DocDate = 0D then
+            DocDate := WorkDate();
 
-        // Also set Polish ITI Delivery Date (field 52063189) if it exists and is empty
-        RecRef.GetTable(SalesHeader);
+        // Set standard Shipment Date if empty
+        if Rec."Shipment Date" = 0D then
+            Rec."Shipment Date" := DocDate;
+
+        // Set Polish ITI Delivery Date (field 52063189) if it exists and is empty
+        RecRef.GetTable(Rec);
         if RecRef.FieldExist(52063189) then begin
             FldRef := RecRef.Field(52063189);
             if Format(FldRef.Value) = '' then begin
-                FldRef.Value := SalesHeader."Document Date";
-                RecRef.SetTable(SalesHeader);
+                FldRef.Value := DocDate;
+                RecRef.SetTable(Rec);
             end;
         end;
+
+        Rec.Modify(false);
+    end;
+
+    [EventSubscriber(ObjectType::Table, Database::"Sales Header", 'OnAfterModifyEvent', '', false, false)]
+    local procedure AutoFillDeliveryDateOnModify(var Rec: Record "Sales Header"; var xRec: Record "Sales Header"; RunTrigger: Boolean)
+    var
+        RecRef: RecordRef;
+        FldRef: FieldRef;
+        DocDate: Date;
+        NeedModify: Boolean;
+    begin
+        NeedModify := false;
+        DocDate := Rec."Document Date";
+        if DocDate = 0D then
+            DocDate := WorkDate();
+
+        // Set Polish ITI Delivery Date (field 52063189) if it exists and is empty
+        RecRef.GetTable(Rec);
+        if RecRef.FieldExist(52063189) then begin
+            FldRef := RecRef.Field(52063189);
+            if Format(FldRef.Value) = '' then begin
+                FldRef.Value := DocDate;
+                RecRef.SetTable(Rec);
+                NeedModify := true;
+            end;
+        end;
+
+        if Rec."Shipment Date" = 0D then begin
+            Rec."Shipment Date" := DocDate;
+            NeedModify := true;
+        end;
+
+        if NeedModify then
+            Rec.Modify(false);
     end;
 }
