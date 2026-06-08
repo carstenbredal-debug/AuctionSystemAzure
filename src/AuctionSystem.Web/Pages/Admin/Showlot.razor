@@ -59,6 +59,7 @@ else
                                 {
                                     <button class="btn btn-sm btn-success" @onclick="() => StartPacking(po)">Pack</button>
                                 }
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => DeletePackingOrder(po)">Delete</button>
                             </td>
                         </tr>
                         @if (_expandedId == po.Id)
@@ -369,6 +370,15 @@ else
         {
             po.Status = newStatus;
             StateHasChanged();
+        }
+    }
+
+    private async Task DeletePackingOrder(PackingOrderDto po)
+    {
+        var success = await Api.DeletePackingOrderAsync(po.Id);
+        if (success)
+        {
+            _orders.Remove(po);
         }
     }
 

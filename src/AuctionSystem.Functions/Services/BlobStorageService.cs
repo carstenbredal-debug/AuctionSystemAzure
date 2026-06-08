@@ -65,6 +65,17 @@ public class BlobStorageService
         _logger.LogInformation("Packing XML uploaded to {Uri}", blob.Uri);
     }
 
+    public async Task DeletePackingOrderXmlsAsync(string packingOrderNumber)
+    {
+        var container = await GetPackingContainerAsync();
+        foreach (var folder in new[] { "new", "processed", "completed" })
+        {
+            var blobClient = container.GetBlobClient($"{folder}/{packingOrderNumber}.xml");
+            await blobClient.DeleteIfExistsAsync();
+            _logger.LogInformation("Deleted packing XML {Folder}/{Number}.xml (if existed)", folder, packingOrderNumber);
+        }
+    }
+
     public async Task<List<(string FileName, string Folder, string Content)>> ListPackingOrderXmlsAsync()
     {
         var container = await GetPackingContainerAsync();

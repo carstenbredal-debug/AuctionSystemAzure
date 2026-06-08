@@ -763,6 +763,34 @@ public class ShipmentFunctions
         return response;
     }
 
+    [Function("DeletePackingOrder")]
+    public async Task<HttpResponseData> DeletePackingOrder(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "shipments/packing-orders/{id:int}")] HttpRequestData req,
+        int id)
+    {
+        var order = await _db.PackingOrders.Include(p => p.Lines).FirstOrDefaultAsync(p => p.Id == id);
+        if (order == null)
+            return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        // Delete XML files from blob storage
+        try
+        {
+            await _blobStorage.DeletePackingOrderXmlsAsync(order.PackingOrderNumber);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to delete packing order XMLs for {Number}", order.PackingOrderNumber);
+        }
+
+        _db.PackingOrders.Remove(order);
+        await _db.SaveChangesAsync();
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true, deletedNumber = order.PackingOrderNumber }, JsonOptions));
+        return response;
+    }
+
     [Function("GetPackingOrderXmls")]
     public async Task<HttpResponseData> GetPackingOrderXmls(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "shipments/packing-orders/xmls")] HttpRequestData req)

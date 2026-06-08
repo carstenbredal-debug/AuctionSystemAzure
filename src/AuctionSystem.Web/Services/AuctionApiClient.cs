@@ -891,6 +891,12 @@ public class AuctionApiClient
         return resp.IsSuccessStatusCode;
     }
 
+    public async Task<bool> DeletePackingOrderAsync(int id)
+    {
+        var resp = await _http.DeleteAsync($"api/shipments/packing-orders/{id}");
+        return resp.IsSuccessStatusCode;
+    }
+
     public async Task<List<PackingOrderXmlDto>> GetPackingOrderXmlsAsync()
     {
         var resp = await _http.GetAsync("api/shipments/packing-orders/xmls");
