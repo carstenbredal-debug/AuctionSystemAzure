@@ -395,12 +395,39 @@ public class BusinessCentralApiClient
     public async Task<byte[]?> GetSalesInvoicePdfAsync(Guid companyId, Guid invoiceId)
     {
         await SetAuthHeaderAsync();
-        // Use documented URL format: pdfDocument({id})/content
-        var url = $"{_options.BaseUrl}/companies({companyId})/salesInvoices({invoiceId})/pdfDocument({invoiceId})/content";
-        _logger.LogInformation("GET {Url} (PDF)", url);
+        // First get the pdfDocument entity to find its actual ID
+        var listUrl = $"{_options.BaseUrl}/companies({companyId})/salesInvoices({invoiceId})/pdfDocument";
+        _logger.LogInformation("GET {Url} (list pdfDocument)", listUrl);
+        var listResponse = await _httpClient.GetAsync(listUrl);
+        if (!listResponse.IsSuccessStatusCode)
+        {
+            var errBody = await listResponse.Content.ReadAsStringAsync();
+            _logger.LogWarning("Could not list pdfDocument: {Status} {Body}", (int)listResponse.StatusCode, errBody);
+            return null;
+        }
+        var listJson = await listResponse.Content.ReadAsStringAsync();
+        Guid pdfDocId;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(listJson);
+            var values = doc.RootElement.GetProperty("value");
+            if (values.GetArrayLength() == 0)
+            {
+                _logger.LogWarning("No pdfDocument found for invoice {InvoiceId}", invoiceId);
+                return null;
+            }
+            pdfDocId = values[0].GetProperty("id").GetGuid();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not parse pdfDocument list response: {Body}", listJson);
+            return null;
+        }
+
+        var url = $"{_options.BaseUrl}/companies({companyId})/salesInvoices({invoiceId})/pdfDocument({pdfDocId})/pdfDocumentContent";
+        _logger.LogInformation("GET {Url} (PDF content)", url);
 
         var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.Add("Accept-Language", "pl-PL");
         var response = await _httpClient.SendAsync(request);
 
         // BC may return non-success status (e.g. 501) but still include the PDF in the body.
@@ -582,11 +609,39 @@ public class BusinessCentralApiClient
     public async Task<byte[]?> GetSalesCreditMemoPdfAsync(Guid companyId, Guid creditMemoId)
     {
         await SetAuthHeaderAsync();
-        var url = $"{_options.BaseUrl}/companies({companyId})/salesCreditMemos({creditMemoId})/pdfDocument({creditMemoId})/content";
-        _logger.LogInformation("GET {Url} (PDF)", url);
+        // First get the pdfDocument entity to find its actual ID
+        var listUrl = $"{_options.BaseUrl}/companies({companyId})/salesCreditMemos({creditMemoId})/pdfDocument";
+        _logger.LogInformation("GET {Url} (list pdfDocument for credit memo)", listUrl);
+        var listResponse = await _httpClient.GetAsync(listUrl);
+        if (!listResponse.IsSuccessStatusCode)
+        {
+            var errBody = await listResponse.Content.ReadAsStringAsync();
+            _logger.LogWarning("Could not list pdfDocument for credit memo: {Status} {Body}", (int)listResponse.StatusCode, errBody);
+            return null;
+        }
+        var listJson = await listResponse.Content.ReadAsStringAsync();
+        Guid pdfDocId;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(listJson);
+            var values = doc.RootElement.GetProperty("value");
+            if (values.GetArrayLength() == 0)
+            {
+                _logger.LogWarning("No pdfDocument found for credit memo {CreditMemoId}", creditMemoId);
+                return null;
+            }
+            pdfDocId = values[0].GetProperty("id").GetGuid();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not parse pdfDocument list for credit memo: {Body}", listJson);
+            return null;
+        }
+
+        var url = $"{_options.BaseUrl}/companies({companyId})/salesCreditMemos({creditMemoId})/pdfDocument({pdfDocId})/pdfDocumentContent";
+        _logger.LogInformation("GET {Url} (credit memo PDF content)", url);
 
         var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.Add("Accept-Language", "pl-PL");
         var response = await _httpClient.SendAsync(request);
 
         var bytes = await response.Content.ReadAsByteArrayAsync();
@@ -623,8 +678,8 @@ public class BusinessCentralApiClient
         var url = $"{pdfApiBase}/companies({companyId})/invoicePdfRequests";
         _logger.LogInformation("POST {Url} (custom PDF generation for {DocNo})", url, documentNo);
 
-        var docTypeInt = documentType == "Credit Memo" ? 1 : 0;
-        var payload = new { documentNo, documentType = docTypeInt };
+        var docTypeStr = documentType == "Credit Memo" ? "Credit Memo" : "Sales Invoice";
+        var payload = new { documentNo, documentType = docTypeStr };
         var json = System.Text.Json.JsonSerializer.Serialize(payload);
         var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
 
