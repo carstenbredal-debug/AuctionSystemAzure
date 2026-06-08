@@ -920,6 +920,32 @@ public class BusinessCentralFunctions
         }
     }
 
+    [Function("BCItemsDiagnostic")]
+    public async Task<HttpResponseData> BCItemsDiagnostic(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "bc/items-diagnostic")] HttpRequestData req)
+    {
+        if (_bcClient == null)
+            return await JsonResponse(req, new { error = "BC not configured" });
+
+        try
+        {
+            var companyId = await _bcClient.ResolveCompanyIdAsync();
+            var items = await _bcClient.GetItemsAsync(companyId);
+            var serviceItems = items.Where(i => i.Type == "Service" || i.Type == "Non-Inventory").Select(i => new { i.Number, i.DisplayName, i.Type }).ToList();
+            return await JsonResponse(req, new
+            {
+                companyId,
+                hardcodedValues = new { lotSale = "LOTSALE", auctionFee = "AUCTFEE", commission = "BROKERCOMM" },
+                allServiceItems = serviceItems,
+                allItemCount = items.Count
+            });
+        }
+        catch (Exception ex)
+        {
+            return await JsonResponse(req, new { error = ex.Message }, HttpStatusCode.InternalServerError);
+        }
+    }
+
     [Function("BCTestPdfGeneration")]
     public async Task<HttpResponseData> BCTestPdfGeneration(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "bc/test-pdf-gen")] HttpRequestData req)
