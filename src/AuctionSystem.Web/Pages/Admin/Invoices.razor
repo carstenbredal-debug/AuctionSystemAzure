@@ -179,7 +179,10 @@ else
                                 <span class="badge bg-@GetStatusColor(creditStatus)">@creditStatus</span>
                             </td>
                             <td>
-                                @if (!inv.IsCreditNote && inv.Status != "Paid" && creditStatus != "Fully Credited")
+                                @{
+                                    var isFullyPaid = inv.Status == "Paid" || (inv.RemainingBalance.HasValue && inv.RemainingBalance.Value == 0);
+                                }
+                                @if (!inv.IsCreditNote && !isFullyPaid && creditStatus != "Fully Credited")
                                 {
                                     var invId = inv.Id;
                                     @if (inv.Status == "Downpayment")
@@ -195,16 +198,16 @@ else
                                         <span class="spinner-border spinner-border-sm text-primary me-2" role="status"></span>
                                         <span class="text-muted">Processing...</span>
                                     }
-                                    else if (inv.Status != "ReleasedToShip")
+                                    else
                                     {
                                         <button class="btn btn-sm btn-outline-info me-1" @onclick="() => OpenDownpaymentPopup(invId)" disabled="@_updatingId.HasValue">Partial Payment</button>
                                         <button class="btn btn-sm btn-outline-success" @onclick="() => OpenFullyPaidPopup(invId)" disabled="@_updatingId.HasValue">Full Payment</button>
                                     }
                                 }
-                                else if (inv.Status == "Paid")
+                                else if (isFullyPaid)
                                 {
                                     <span class="text-success">Paid</span>
-                                    @if (inv.ShippingStatus == "Released")
+                                    @if (inv.ShippingStatus == "Released" || inv.Status == "ReleasedToShip")
                                     {
                                         <span class="badge bg-primary ms-1">Shipped</span>
                                     }
