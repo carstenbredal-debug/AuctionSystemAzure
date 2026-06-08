@@ -93,7 +93,7 @@ public class ShipmentFunctions
         var q = _db.Invoices
             .Include(i => i.Buyer)
             .Include(i => i.Broker)
-            .Where(i => i.ShippingStatus == "Released" && !i.IsCreditNote)
+            .Where(i => (i.ShippingStatus == "Released" || i.Status == InvoiceStatus.ReleasedToShip) && !i.IsCreditNote)
             .AsQueryable();
 
         if (int.TryParse(buyerFilter, out var bId))
