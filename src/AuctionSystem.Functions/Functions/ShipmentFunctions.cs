@@ -501,6 +501,109 @@ public class ShipmentFunctions
         return response;
     }
 
+    [Function("GetShowLotShipments")]
+    public async Task<HttpResponseData> GetShowLotShipments(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "shipments/showlot")] HttpRequestData req)
+    {
+        // Get shipments with ShowLot Packing status
+        var shipments = await _db.Shipments
+            .Include(s => s.Shipper)
+            .Include(s => s.Buyer)
+            .Include(s => s.Lines)
+            .Where(s => s.Status == "ShowLot Packing")
+            .OrderByDescending(s => s.CreatedAt)
+            .ToListAsync();
+
+        var results = new List<object>();
+
+        foreach (var shipment in shipments)
+        {
+            var lotNumbers = shipment.Lines.Select(l => l.LotNumber).Distinct().ToList();
+
+            // Get CatalogLots to resolve box numbers
+            var catalogLots = await _catalogDb.CatalogLots
+                .Where(cl => lotNumbers.Contains(cl.LotNumber))
+                .Select(cl => new { cl.LotNumber, cl.IncludedBoxNumbers })
+                .ToListAsync();
+
+            var allBoxNumbers = catalogLots
+                .Where(cl => !string.IsNullOrEmpty(cl.IncludedBoxNumbers))
+                .SelectMany(cl => cl.IncludedBoxNumbers!.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(b => int.TryParse(b.Trim(), out var n) ? n : 0).Where(n => n > 0))
+                .Distinct().ToList();
+
+            // Get box info and filter for showlot type only
+            var showLotBoxes = new List<object>();
+            if (allBoxNumbers.Count > 0)
+            {
+                var boxData = await _catalogDb.Database
+                    .SqlQueryRaw<BoxViewResult>("SELECT BoxNumber, Skins, BoxType FROM auction.boxes WHERE BoxNumber IN (" +
+                        string.Join(",", allBoxNumbers) + ") AND LOWER(BoxType) = 'showlot'")
+                    .ToListAsync();
+
+                // Get box staging for location info
+                var boxStaging = new Dictionary<int, (decimal? Weight, string? Location)>();
+                var showLotBoxNumbers = boxData.Select(b => b.BoxNumber).ToList();
+                if (showLotBoxNumbers.Count > 0)
+                {
+                    try
+                    {
+                        var staging = await _catalogDb.Database
+                            .SqlQueryRaw<BoxStagingResult>("SELECT CAST(BoxNumber AS INT) AS BoxNumber, Weight AS BoxWeight, BoxLocation FROM dbo.boxstatingfromkphg WHERE BoxNumber IN (" +
+                                string.Join(",", showLotBoxNumbers) + ")")
+                            .ToListAsync();
+                        foreach (var s in staging)
+                            boxStaging[s.BoxNumber] = (s.BoxWeight, s.BoxLocation);
+                    }
+                    catch { /* table may not exist */ }
+                }
+
+                // Map box to lot
+                var boxToLot = new Dictionary<int, int>();
+                foreach (var cl in catalogLots)
+                {
+                    if (string.IsNullOrEmpty(cl.IncludedBoxNumbers)) continue;
+                    foreach (var boxStr in cl.IncludedBoxNumbers.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        if (int.TryParse(boxStr.Trim(), out var bn) && bn > 0)
+                            boxToLot[bn] = cl.LotNumber;
+                    }
+                }
+
+                foreach (var box in boxData)
+                {
+                    var stg = boxStaging.GetValueOrDefault(box.BoxNumber);
+                    showLotBoxes.Add(new
+                    {
+                        box.BoxNumber,
+                        box.Skins,
+                        box.BoxType,
+                        LotNumber = boxToLot.GetValueOrDefault(box.BoxNumber),
+                        Location = stg.Location ?? "",
+                        Weight = stg.Weight
+                    });
+                }
+            }
+
+            results.Add(new
+            {
+                shipment.Id,
+                shipment.ShipmentNumber,
+                ShipperName = shipment.Shipper?.Name ?? "",
+                BuyerName = shipment.Buyer?.Name ?? "",
+                BuyerNumber = shipment.Buyer?.BuyerNumber ?? "",
+                shipment.CreatedAt,
+                ShowLotBoxCount = showLotBoxes.Count,
+                ShowLotBoxes = showLotBoxes
+            });
+        }
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(results, JsonOptions));
+        return response;
+    }
+
     private class BoxViewResult
     {
         public int BoxNumber { get; set; }
