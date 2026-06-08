@@ -296,10 +296,10 @@ public class ShipmentFunctions
                 nextPoNum = num + 1;
         }
 
-        // Helper to add ALL boxes to a packing order
-        void AddAllBoxesToPackingOrder(PackingOrder po)
+        // Helper to add boxes to a packing order
+        void AddBoxesToPackingOrder(PackingOrder po, List<BoxViewResult> boxes)
         {
-            foreach (var box in allBoxData)
+            foreach (var box in boxes)
             {
                 po.Lines.Add(new PackingOrderLine
                 {
@@ -312,8 +312,11 @@ public class ShipmentFunctions
             }
         }
 
-        // Auto-create ShowLot packing order (all boxes)
-        if (hasShowLot)
+        var showLotBoxes = allBoxData.Where(b => b.BoxType.Equals("showlot", StringComparison.OrdinalIgnoreCase)).ToList();
+        var nonShowLotBoxes = allBoxData.Where(b => !b.BoxType.Equals("showlot", StringComparison.OrdinalIgnoreCase)).ToList();
+
+        // Auto-create ShowLot packing order (showlot boxes only)
+        if (showLotBoxes.Count > 0)
         {
             var packingOrder = new PackingOrder
             {
@@ -322,7 +325,7 @@ public class ShipmentFunctions
                 Status = "Ready to Pack",
                 Type = "ShowLot"
             };
-            AddAllBoxesToPackingOrder(packingOrder);
+            AddBoxesToPackingOrder(packingOrder, showLotBoxes);
 
             _db.PackingOrders.Add(packingOrder);
             await _db.SaveChangesAsync();
@@ -344,8 +347,8 @@ public class ShipmentFunctions
             }
         }
 
-        // Always create a Packing order with all boxes
-        if (allBoxData.Count > 0)
+        // Auto-create Packing order (non-showlot boxes only)
+        if (nonShowLotBoxes.Count > 0)
         {
             var packingOrder = new PackingOrder
             {
@@ -354,7 +357,7 @@ public class ShipmentFunctions
                 Status = "Ready to Pack",
                 Type = "Packing"
             };
-            AddAllBoxesToPackingOrder(packingOrder);
+            AddBoxesToPackingOrder(packingOrder, nonShowLotBoxes);
 
             _db.PackingOrders.Add(packingOrder);
             await _db.SaveChangesAsync();
