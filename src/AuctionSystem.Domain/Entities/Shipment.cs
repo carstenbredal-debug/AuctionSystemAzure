@@ -29,3 +29,25 @@ public class ShipmentLine
     public Invoice? Invoice { get; set; }
     public string Notes { get; set; } = string.Empty;
 }
+
+public class PackingOrder
+{
+    public int Id { get; set; }
+    public string PackingOrderNumber { get; set; } = string.Empty;
+    public int ShipmentId { get; set; }
+    public Shipment? Shipment { get; set; }
+    public string Status { get; set; } = "Ready to Pack"; // Ready to Pack, In Production
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public ICollection<PackingOrderLine> Lines { get; set; } = new List<PackingOrderLine>();
+}
+
+public class PackingOrderLine
+{
+    public int Id { get; set; }
+    public int PackingOrderId { get; set; }
+    public PackingOrder? PackingOrder { get; set; }
+    public int BoxNumber { get; set; }
+    public int LotNumber { get; set; }
+    public int Skins { get; set; }
+    public string BoxType { get; set; } = "";
+}

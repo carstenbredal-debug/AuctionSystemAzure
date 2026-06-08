@@ -395,6 +395,31 @@ using (var scope = host.Services.CreateScope())
             IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.ShipmentLines') AND name = 'BoxNumber')
                 ALTER TABLE auction.ShipmentLines DROP COLUMN BoxNumber;
         ");
+        // PackingOrders table
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'PackingOrders')
+            CREATE TABLE auction.PackingOrders (
+                Id INT IDENTITY(1,1) PRIMARY KEY,
+                PackingOrderNumber NVARCHAR(50) NOT NULL DEFAULT '',
+                ShipmentId INT NOT NULL,
+                Status NVARCHAR(50) NOT NULL DEFAULT 'Ready to Pack',
+                CreatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+                CONSTRAINT FK_PackingOrders_Shipment FOREIGN KEY (ShipmentId) REFERENCES auction.Shipments(Id) ON DELETE CASCADE
+            );
+        ");
+        // PackingOrderLines table
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'PackingOrderLines')
+            CREATE TABLE auction.PackingOrderLines (
+                Id INT IDENTITY(1,1) PRIMARY KEY,
+                PackingOrderId INT NOT NULL,
+                BoxNumber INT NOT NULL,
+                LotNumber INT NOT NULL,
+                Skins INT NOT NULL DEFAULT 0,
+                BoxType NVARCHAR(100) NOT NULL DEFAULT '',
+                CONSTRAINT FK_PackingOrderLines_PackingOrder FOREIGN KEY (PackingOrderId) REFERENCES auction.PackingOrders(Id) ON DELETE CASCADE
+            );
+        ");
         // Drop auction.Boxes table if it exists (replaced by view)
         db.Database.ExecuteSqlRaw(@"
             IF EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'Boxes')

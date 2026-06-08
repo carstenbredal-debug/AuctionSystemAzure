@@ -31,6 +31,8 @@ public class AuctionDbContext : DbContext
     public DbSet<Shipper> Shippers => Set<Shipper>();
     public DbSet<Shipment> Shipments => Set<Shipment>();
     public DbSet<ShipmentLine> ShipmentLines => Set<ShipmentLine>();
+    public DbSet<PackingOrder> PackingOrders => Set<PackingOrder>();
+    public DbSet<PackingOrderLine> PackingOrderLines => Set<PackingOrderLine>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -317,6 +319,21 @@ public class AuctionDbContext : DbContext
             e.Property(l => l.Notes).HasMaxLength(500);
             e.HasOne(l => l.Shipment).WithMany(s => s.Lines).HasForeignKey(l => l.ShipmentId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(l => l.Invoice).WithMany().HasForeignKey(l => l.InvoiceId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+        });
+
+        modelBuilder.Entity<PackingOrder>(e =>
+        {
+            e.HasKey(p => p.Id);
+            e.Property(p => p.PackingOrderNumber).HasMaxLength(50);
+            e.Property(p => p.Status).HasMaxLength(50);
+            e.HasOne(p => p.Shipment).WithMany().HasForeignKey(p => p.ShipmentId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PackingOrderLine>(e =>
+        {
+            e.HasKey(l => l.Id);
+            e.Property(l => l.BoxType).HasMaxLength(100);
+            e.HasOne(l => l.PackingOrder).WithMany(p => p.Lines).HasForeignKey(l => l.PackingOrderId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

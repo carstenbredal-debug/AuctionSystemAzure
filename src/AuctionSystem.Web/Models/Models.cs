@@ -990,26 +990,27 @@ public class ReleasedLotDto
     public decimal HammerPrice { get; set; }
 }
 
-public class ShowLotShipmentDto
+public class PackingOrderDto
 {
     public int Id { get; set; }
+    public string PackingOrderNumber { get; set; } = "";
     public string ShipmentNumber { get; set; } = "";
-    public string ShipperName { get; set; } = "";
+    public int ShipmentId { get; set; }
     public string BuyerName { get; set; } = "";
     public string BuyerNumber { get; set; } = "";
+    public string ShipperName { get; set; } = "";
+    public string Status { get; set; } = "";
     public DateTime CreatedAt { get; set; }
-    public int ShowLotBoxCount { get; set; }
-    public List<ShowLotBoxDto> ShowLotBoxes { get; set; } = new();
+    public int ShowLotCount { get; set; }
+    public List<PackingOrderLineDto> Lines { get; set; } = new();
 }
 
-public class ShowLotBoxDto
+public class PackingOrderLineDto
 {
     public int BoxNumber { get; set; }
+    public int LotNumber { get; set; }
     public int Skins { get; set; }
     public string BoxType { get; set; } = "";
-    public int LotNumber { get; set; }
-    public string Location { get; set; } = "";
-    public decimal? Weight { get; set; }
 }
 
 public class ShipmentPackingListDto

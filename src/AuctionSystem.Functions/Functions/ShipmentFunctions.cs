@@ -241,6 +241,63 @@ public class ShipmentFunctions
 
         await _db.SaveChangesAsync();
 
+        // Auto-create packing order if shipment has showlot boxes
+        if (hasShowLot)
+        {
+            // Generate packing order number
+            var maxPoNum = await _db.PackingOrders
+                .Where(p => p.PackingOrderNumber.StartsWith("PO"))
+                .Select(p => p.PackingOrderNumber)
+                .ToListAsync();
+            var nextPoNum = 1;
+            foreach (var n in maxPoNum)
+            {
+                if (int.TryParse(n.Replace("PO", ""), out var num) && num >= nextPoNum)
+                    nextPoNum = num + 1;
+            }
+
+            var packingOrder = new PackingOrder
+            {
+                PackingOrderNumber = $"PO{nextPoNum:D5}",
+                ShipmentId = shipment.Id,
+                Status = "Ready to Pack"
+            };
+
+            // Add showlot boxes as packing order lines
+            if (allBoxNumbers.Count > 0)
+            {
+                var showLotBoxData = await _catalogDb.Database
+                    .SqlQueryRaw<BoxViewResult>("SELECT BoxNumber, Skins, BoxType FROM auction.boxes WHERE BoxNumber IN (" +
+                        string.Join(",", allBoxNumbers) + ") AND LOWER(BoxType) = 'showlot'")
+                    .ToListAsync();
+
+                var boxToLotMap = new Dictionary<int, int>();
+                foreach (var cl in catalogLots)
+                {
+                    if (string.IsNullOrEmpty(cl.IncludedBoxNumbers)) continue;
+                    foreach (var boxStr in cl.IncludedBoxNumbers.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        if (int.TryParse(boxStr.Trim(), out var bn) && bn > 0)
+                            boxToLotMap[bn] = cl.LotNumber;
+                    }
+                }
+
+                foreach (var box in showLotBoxData)
+                {
+                    packingOrder.Lines.Add(new PackingOrderLine
+                    {
+                        BoxNumber = box.BoxNumber,
+                        LotNumber = boxToLotMap.GetValueOrDefault(box.BoxNumber),
+                        Skins = box.Skins,
+                        BoxType = box.BoxType
+                    });
+                }
+            }
+
+            _db.PackingOrders.Add(packingOrder);
+            await _db.SaveChangesAsync();
+        }
+
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
         await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true, id = shipment.Id, shipmentNumber = shipment.ShipmentNumber }, JsonOptions));
@@ -501,106 +558,79 @@ public class ShipmentFunctions
         return response;
     }
 
-    [Function("GetShowLotShipments")]
-    public async Task<HttpResponseData> GetShowLotShipments(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "shipments/showlot")] HttpRequestData req)
+    [Function("GetPackingOrders")]
+    public async Task<HttpResponseData> GetPackingOrders(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "shipments/packing-orders")] HttpRequestData req)
     {
-        // Get shipments with ShowLot Packing status
-        var shipments = await _db.Shipments
-            .Include(s => s.Shipper)
-            .Include(s => s.Buyer)
-            .Include(s => s.Lines)
-            .Where(s => s.Status == "ShowLot Packing")
-            .OrderByDescending(s => s.CreatedAt)
-            .ToListAsync();
+        var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+        var statusFilter = query["status"];
 
-        var results = new List<object>();
+        var poQuery = _db.PackingOrders
+            .Include(p => p.Shipment).ThenInclude(s => s!.Buyer)
+            .Include(p => p.Shipment).ThenInclude(s => s!.Shipper)
+            .Include(p => p.Lines)
+            .AsQueryable();
 
-        foreach (var shipment in shipments)
+        if (!string.IsNullOrEmpty(statusFilter))
+            poQuery = poQuery.Where(p => p.Status == statusFilter);
+
+        var orders = await poQuery.OrderByDescending(p => p.CreatedAt).ToListAsync();
+
+        var results = orders.Select(po => new
         {
-            var lotNumbers = shipment.Lines.Select(l => l.LotNumber).Distinct().ToList();
-
-            // Get CatalogLots to resolve box numbers
-            var catalogLots = await _catalogDb.CatalogLots
-                .Where(cl => lotNumbers.Contains(cl.LotNumber))
-                .Select(cl => new { cl.LotNumber, cl.IncludedBoxNumbers })
-                .ToListAsync();
-
-            var allBoxNumbers = catalogLots
-                .Where(cl => !string.IsNullOrEmpty(cl.IncludedBoxNumbers))
-                .SelectMany(cl => cl.IncludedBoxNumbers!.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                    .Select(b => int.TryParse(b.Trim(), out var n) ? n : 0).Where(n => n > 0))
-                .Distinct().ToList();
-
-            // Get box info and filter for showlot type only
-            var showLotBoxes = new List<object>();
-            if (allBoxNumbers.Count > 0)
+            po.Id,
+            po.PackingOrderNumber,
+            ShipmentNumber = po.Shipment?.ShipmentNumber ?? "",
+            ShipmentId = po.ShipmentId,
+            BuyerName = po.Shipment?.Buyer?.Name ?? "",
+            BuyerNumber = po.Shipment?.Buyer?.BuyerNumber ?? "",
+            ShipperName = po.Shipment?.Shipper?.Name ?? "",
+            po.Status,
+            po.CreatedAt,
+            ShowLotCount = po.Lines.Count,
+            Lines = po.Lines.Select(l => new
             {
-                var boxData = await _catalogDb.Database
-                    .SqlQueryRaw<BoxViewResult>("SELECT BoxNumber, Skins, BoxType FROM auction.boxes WHERE BoxNumber IN (" +
-                        string.Join(",", allBoxNumbers) + ") AND LOWER(BoxType) = 'showlot'")
-                    .ToListAsync();
-
-                // Get box staging for location info
-                var boxStaging = new Dictionary<int, (decimal? Weight, string? Location)>();
-                var showLotBoxNumbers = boxData.Select(b => b.BoxNumber).ToList();
-                if (showLotBoxNumbers.Count > 0)
-                {
-                    try
-                    {
-                        var staging = await _catalogDb.Database
-                            .SqlQueryRaw<BoxStagingResult>("SELECT CAST(BoxNumber AS INT) AS BoxNumber, Weight AS BoxWeight, BoxLocation FROM dbo.boxstatingfromkphg WHERE BoxNumber IN (" +
-                                string.Join(",", showLotBoxNumbers) + ")")
-                            .ToListAsync();
-                        foreach (var s in staging)
-                            boxStaging[s.BoxNumber] = (s.BoxWeight, s.BoxLocation);
-                    }
-                    catch { /* table may not exist */ }
-                }
-
-                // Map box to lot
-                var boxToLot = new Dictionary<int, int>();
-                foreach (var cl in catalogLots)
-                {
-                    if (string.IsNullOrEmpty(cl.IncludedBoxNumbers)) continue;
-                    foreach (var boxStr in cl.IncludedBoxNumbers.Split(',', StringSplitOptions.RemoveEmptyEntries))
-                    {
-                        if (int.TryParse(boxStr.Trim(), out var bn) && bn > 0)
-                            boxToLot[bn] = cl.LotNumber;
-                    }
-                }
-
-                foreach (var box in boxData)
-                {
-                    var stg = boxStaging.GetValueOrDefault(box.BoxNumber);
-                    showLotBoxes.Add(new
-                    {
-                        box.BoxNumber,
-                        box.Skins,
-                        box.BoxType,
-                        LotNumber = boxToLot.GetValueOrDefault(box.BoxNumber),
-                        Location = stg.Location ?? "",
-                        Weight = stg.Weight
-                    });
-                }
-            }
-
-            results.Add(new
-            {
-                shipment.Id,
-                shipment.ShipmentNumber,
-                ShipperName = shipment.Shipper?.Name ?? "",
-                BuyerName = shipment.Buyer?.Name ?? "",
-                BuyerNumber = shipment.Buyer?.BuyerNumber ?? "",
-                shipment.CreatedAt,
-                ShowLotBoxCount = showLotBoxes.Count,
-                ShowLotBoxes = showLotBoxes
-            });
-        }
+                l.BoxNumber,
+                l.LotNumber,
+                l.Skins,
+                l.BoxType
+            })
+        });
 
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
         await response.WriteStringAsync(JsonSerializer.Serialize(results, JsonOptions));
+        return response;
+    }
+
+    [Function("UpdatePackingOrderStatus")]
+    public async Task<HttpResponseData> UpdatePackingOrderStatus(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "shipments/packing-orders/{id:int}/status")] HttpRequestData req,
+        int id)
+    {
+        var body = await req.ReadFromJsonAsync<UpdatePackingOrderStatusDto>();
+        if (body == null || string.IsNullOrEmpty(body.Status))
+            return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+
+        var order = await _db.PackingOrders.FindAsync(id);
+        if (order == null)
+            return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        var validStatuses = new[] { "Ready to Pack", "In Production", "Packed" };
+        if (!validStatuses.Contains(body.Status))
+        {
+            var bad = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+            bad.Headers.Add("Content-Type", "application/json");
+            await bad.WriteStringAsync(JsonSerializer.Serialize(new { error = $"Invalid status. Valid: {string.Join(", ", validStatuses)}" }, JsonOptions));
+            return bad;
+        }
+
+        order.Status = body.Status;
+        await _db.SaveChangesAsync();
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true }, JsonOptions));
         return response;
     }
 
@@ -640,4 +670,9 @@ public class UpdateShipmentDto
     public int? ShippingAddressId { get; set; }
     public string? TrackingNumber { get; set; }
     public string? Notes { get; set; }
+}
+
+public class UpdatePackingOrderStatusDto
+{
+    public string Status { get; set; } = "";
 }

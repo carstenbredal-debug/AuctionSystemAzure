@@ -2,82 +2,168 @@
 @attribute [Authorize(Roles = "Admin")]
 @inject AuctionApiClient Api
 
-<h4 class="mb-4">Showlot — Boxes to Pack</h4>
+<h4 class="mb-4">Showlot — Packing Orders</h4>
+
+<div class="row mb-3 align-items-end">
+    <div class="col-auto">
+        <label class="form-label fw-bold">Filter by Status</label>
+        <select class="form-select" @onchange="OnStatusFilterChanged">
+            <option value="">All Statuses</option>
+            <option value="Ready to Pack">Ready to Pack</option>
+            <option value="In Production">In Production</option>
+            <option value="Packed">Packed</option>
+        </select>
+    </div>
+</div>
 
 @if (_loading)
 {
     <p><em>Loading...</em></p>
 }
-else if (_shipments.Count == 0)
+else if (_orders.Count == 0)
 {
-    <div class="alert alert-info">No shipments with ShowLot Packing status.</div>
+    <div class="alert alert-info">No packing orders found.</div>
 }
 else
 {
-    @foreach (var shipment in _shipments)
-    {
-        <div class="section-container mb-4">
-            <div class="section-header d-flex justify-content-between align-items-center">
-                <div>
-                    <strong>@shipment.ShipmentNumber</strong>
-                    <span class="text-muted ms-3">@shipment.BuyerName (@shipment.BuyerNumber)</span>
-                    <span class="text-muted ms-3">Shipper: @shipment.ShipperName</span>
-                    <span class="badge bg-info text-dark ms-3">@shipment.ShowLotBoxCount showlot boxes</span>
-                </div>
-                <small class="text-muted">@shipment.CreatedAt.ToString("yyyy-MM-dd")</small>
-            </div>
-            <div class="section-body">
-                @if (shipment.ShowLotBoxes.Count == 0)
-                {
-                    <p class="text-muted mb-0">No showlot boxes found.</p>
-                }
-                else
-                {
-                    <table class="table table-striped table-hover mb-0">
-                        <thead class="table-dark">
+    <div class="section-container">
+        <div class="section-body">
+            <table class="table table-striped table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Packing Order #</th>
+                        <th>Shipment #</th>
+                        <th>Buyer</th>
+                        <th>Status</th>
+                        <th>Showlots</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var po in _orders)
+                    {
+                        <tr>
+                            <td>
+                                <a href="javascript:void(0)" @onclick="() => ToggleExpand(po.Id)">
+                                    <strong>@po.PackingOrderNumber</strong>
+                                </a>
+                            </td>
+                            <td>@po.ShipmentNumber</td>
+                            <td>@po.BuyerName (@po.BuyerNumber)</td>
+                            <td><span class="badge @GetStatusBadgeClass(po.Status)">@po.Status</span></td>
+                            <td>@po.ShowLotCount</td>
+                            <td>@po.CreatedAt.ToString("yyyy-MM-dd")</td>
+                            <td>
+                                @if (po.Status == "Ready to Pack")
+                                {
+                                    <button class="btn btn-sm btn-primary" @onclick="() => UpdateStatus(po, _statusInProduction)">Start Production</button>
+                                }
+                                else if (po.Status == "In Production")
+                                {
+                                    <button class="btn btn-sm btn-success" @onclick="() => UpdateStatus(po, _statusPacked)">Mark Packed</button>
+                                }
+                            </td>
+                        </tr>
+                        @if (_expandedId == po.Id)
+                        {
                             <tr>
-                                <th>Box #</th>
-                                <th>Lot #</th>
-                                <th>Skins</th>
-                                <th>Weight (kg)</th>
-                                <th>Location</th>
+                                <td colspan="7" class="p-0">
+                                    <div class="bg-light p-3">
+                                        <h6 class="mb-2">Showlot Boxes to Pack</h6>
+                                        @if (po.Lines.Count == 0)
+                                        {
+                                            <p class="text-muted mb-0">No showlot boxes.</p>
+                                        }
+                                        else
+                                        {
+                                            <table class="table table-sm table-bordered mb-0">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Box #</th>
+                                                        <th>Lot #</th>
+                                                        <th>Skins</th>
+                                                        <th>Box Type</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var line in po.Lines)
+                                                    {
+                                                        <tr>
+                                                            <td>@line.BoxNumber</td>
+                                                            <td>@line.LotNumber</td>
+                                                            <td>@line.Skins</td>
+                                                            <td>@line.BoxType</td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                                <tfoot>
+                                                    <tr class="fw-bold">
+                                                        <td>Total</td>
+                                                        <td>@po.Lines.Select(l => l.LotNumber).Distinct().Count() lots</td>
+                                                        <td>@po.Lines.Sum(l => l.Skins)</td>
+                                                        <td></td>
+                                                    </tr>
+                                                </tfoot>
+                                            </table>
+                                        }
+                                    </div>
+                                </td>
                             </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var box in shipment.ShowLotBoxes)
-                            {
-                                <tr>
-                                    <td>@box.BoxNumber</td>
-                                    <td>@box.LotNumber</td>
-                                    <td>@box.Skins</td>
-                                    <td>@(box.Weight.HasValue ? box.Weight.Value.ToString("N2") : "—")</td>
-                                    <td>@(string.IsNullOrEmpty(box.Location) ? "—" : box.Location)</td>
-                                </tr>
-                            }
-                        </tbody>
-                        <tfoot>
-                            <tr class="fw-bold">
-                                <td>Total</td>
-                                <td>@shipment.ShowLotBoxes.Select(b => b.LotNumber).Distinct().Count() lots</td>
-                                <td>@shipment.ShowLotBoxes.Sum(b => b.Skins)</td>
-                                <td>@shipment.ShowLotBoxes.Where(b => b.Weight.HasValue).Sum(b => b.Weight!.Value).ToString("N2")</td>
-                                <td></td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                }
-            </div>
+                        }
+                    }
+                </tbody>
+            </table>
         </div>
-    }
+    </div>
 }
 
 @code {
-    private List<ShowLotShipmentDto> _shipments = new();
+    private List<PackingOrderDto> _orders = new();
     private bool _loading = true;
+    private int? _expandedId;
+    private string _statusFilter = "";
+    private const string _statusInProduction = "In Production";
+    private const string _statusPacked = "Packed";
 
     protected override async Task OnInitializedAsync()
     {
-        _shipments = await Api.GetShowLotShipmentsAsync();
+        await LoadOrders();
+    }
+
+    private async Task LoadOrders()
+    {
+        _loading = true;
+        _orders = await Api.GetPackingOrdersAsync(string.IsNullOrEmpty(_statusFilter) ? null : _statusFilter);
         _loading = false;
     }
+
+    private async Task OnStatusFilterChanged(ChangeEventArgs e)
+    {
+        _statusFilter = e.Value?.ToString() ?? "";
+        await LoadOrders();
+    }
+
+    private void ToggleExpand(int id)
+    {
+        _expandedId = _expandedId == id ? null : id;
+    }
+
+    private async Task UpdateStatus(PackingOrderDto po, string newStatus)
+    {
+        var success = await Api.UpdatePackingOrderStatusAsync(po.Id, newStatus);
+        if (success)
+        {
+            po.Status = newStatus;
+            StateHasChanged();
+        }
+    }
+
+    private static string GetStatusBadgeClass(string status) => status switch
+    {
+        "Ready to Pack" => "bg-warning text-dark",
+        "In Production" => "bg-primary",
+        "Packed" => "bg-success",
+        _ => "bg-secondary"
+    };
 }
