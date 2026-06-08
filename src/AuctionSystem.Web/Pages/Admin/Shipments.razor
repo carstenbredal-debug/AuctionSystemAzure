@@ -73,6 +73,7 @@ else
                             <td>@(s.ShippedAt?.ToString("yyyy-MM-dd") ?? "-")</td>
                             <td>@(s.DeliveredAt?.ToString("yyyy-MM-dd") ?? "-")</td>
                             <td>
+                                <a href="admin/shipments/@s.Id/packing-list" class="btn btn-sm btn-outline-secondary me-1" target="_blank">Packing List</a>
                                 @if (s.Status == "Pending")
                                 {
                                     <button class="btn btn-sm btn-success me-1" @onclick="() => MarkShipped(s)">Ship</button>

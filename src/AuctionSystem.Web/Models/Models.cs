@@ -988,6 +988,53 @@ public class ReleasedInvoiceDto
     public string ShippingStatus { get; set; } = "";
 }
 
+public class ShipmentPackingListDto
+{
+    public string ShipmentNumber { get; set; } = "";
+    public string ShipperName { get; set; } = "";
+    public string ShipperCode { get; set; } = "";
+    public string BuyerName { get; set; } = "";
+    public string BuyerNumber { get; set; } = "";
+    public ShipmentAddressDto? ShippingAddress { get; set; }
+    public string TrackingNumber { get; set; } = "";
+    public string Status { get; set; } = "";
+    public DateTime CreatedAt { get; set; }
+    public PackingTotalsDto Totals { get; set; } = new();
+    public List<PackingLineDto> PackingLines { get; set; } = new();
+}
+
+public class ShipmentAddressDto
+{
+    public string ContactName { get; set; } = "";
+    public string AddressLine1 { get; set; } = "";
+    public string AddressLine2 { get; set; } = "";
+    public string City { get; set; } = "";
+    public string PostalCode { get; set; } = "";
+    public string Country { get; set; } = "";
+}
+
+public class PackingTotalsDto
+{
+    public int Boxes { get; set; }
+    public int Skins { get; set; }
+    public decimal GrossWeightKg { get; set; }
+    public decimal NetWeightKg { get; set; }
+    public decimal VolumeM3 { get; set; }
+}
+
+public class PackingLineDto
+{
+    public int LotNumber { get; set; }
+    public int BoxNumber { get; set; }
+    public string BoxType { get; set; } = "";
+    public int Skins { get; set; }
+    public decimal GrossWeightKg { get; set; }
+    public decimal NetWeightKg { get; set; }
+    public decimal VolumeM3 { get; set; }
+    public decimal TareWeightKg { get; set; }
+    public string Location { get; set; } = "";
+}
+
 public class ShipperListDto
 {
     public int Id { get; set; }

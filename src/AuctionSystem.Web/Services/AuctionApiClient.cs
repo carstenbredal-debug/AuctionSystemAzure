@@ -915,6 +915,13 @@ public class AuctionApiClient
         return (true, null);
     }
 
+    public async Task<ShipmentPackingListDto?> GetShipmentPackingListAsync(int shipmentId)
+    {
+        var resp = await _http.GetAsync($"api/shipments/{shipmentId}/packing-list");
+        resp.EnsureSuccessStatusCode();
+        return await resp.Content.ReadFromJsonAsync<ShipmentPackingListDto>();
+    }
+
     // Shippers
     public async Task<List<ShipperListDto>> GetShippersAsync()
     {

@@ -1,0 +1,185 @@
+@page "/admin/shipments/{ShipmentId:int}/packing-list"
+@using AuctionSystem.Web.Models
+@using AuctionSystem.Web.Services
+@attribute [Authorize(Roles = "Admin")]
+@inject AuctionApiClient Api
+
+<style>
+    @@media print {
+        .no-print { display: none !important; }
+        .print-only { display: block !important; }
+        body { margin: 0; padding: 0; }
+        .print-container { padding: 20px; }
+        table { page-break-inside: auto; }
+        tr { page-break-inside: avoid; }
+    }
+    @@media screen {
+        .print-only { display: none; }
+    }
+    .shipping-invoice { max-width: 900px; margin: 0 auto; font-family: Arial, sans-serif; }
+    .shipping-invoice h2 { text-align: center; margin-bottom: 5px; }
+    .shipping-invoice .subtitle { text-align: center; color: #666; margin-bottom: 20px; }
+    .header-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px; }
+    .header-section { border: 1px solid #ddd; padding: 12px; border-radius: 4px; }
+    .header-section h6 { margin: 0 0 8px 0; color: #333; font-weight: bold; border-bottom: 1px solid #eee; padding-bottom: 4px; }
+    .header-section p { margin: 2px 0; font-size: 0.9em; }
+    .totals-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 25px; }
+    .total-card { border: 1px solid #ddd; padding: 10px; text-align: center; border-radius: 4px; background: #f8f9fa; }
+    .total-card .value { font-size: 1.3em; font-weight: bold; color: #333; }
+    .total-card .label { font-size: 0.8em; color: #666; }
+    .packing-table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+    .packing-table th { background: #333; color: white; padding: 8px 10px; text-align: left; }
+    .packing-table td { padding: 6px 10px; border-bottom: 1px solid #eee; }
+    .packing-table tr:hover { background: #f8f9fa; }
+    .packing-table tfoot td { font-weight: bold; border-top: 2px solid #333; padding-top: 10px; background: #f8f9fa; }
+    .text-right { text-align: right; }
+</style>
+
+<div class="no-print mb-3">
+    <button class="btn btn-primary" onclick="window.print()">Print Shipping Invoice</button>
+    <a href="admin/shipments" class="btn btn-outline-secondary ms-2">Back to Shipments</a>
+</div>
+
+@if (_loading)
+{
+    <p><em>Loading packing list...</em></p>
+}
+else if (_error != null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else if (_data != null)
+{
+    <div class="shipping-invoice print-container">
+        <h2>SHIPPING INVOICE</h2>
+        <p class="subtitle">@_data.ShipmentNumber — @_data.CreatedAt.ToString("yyyy-MM-dd")</p>
+
+        <div class="header-grid">
+            <div class="header-section">
+                <h6>Shipper</h6>
+                <p><strong>@_data.ShipperName</strong> (@_data.ShipperCode)</p>
+                @if (!string.IsNullOrEmpty(_data.TrackingNumber))
+                {
+                    <p>Tracking: <strong>@_data.TrackingNumber</strong></p>
+                }
+                <p>Status: <span class="badge @GetStatusBadgeClass(_data.Status)">@_data.Status</span></p>
+            </div>
+            <div class="header-section">
+                <h6>Ship To</h6>
+                <p><strong>@_data.BuyerNumber — @_data.BuyerName</strong></p>
+                @if (_data.ShippingAddress != null)
+                {
+                    if (!string.IsNullOrEmpty(_data.ShippingAddress.ContactName))
+                    {
+                        <p>@_data.ShippingAddress.ContactName</p>
+                    }
+                    <p>@_data.ShippingAddress.AddressLine1</p>
+                    @if (!string.IsNullOrEmpty(_data.ShippingAddress.AddressLine2))
+                    {
+                        <p>@_data.ShippingAddress.AddressLine2</p>
+                    }
+                    <p>@_data.ShippingAddress.PostalCode @_data.ShippingAddress.City</p>
+                    <p>@_data.ShippingAddress.Country</p>
+                }
+            </div>
+        </div>
+
+        <div class="totals-grid">
+            <div class="total-card">
+                <div class="value">@_data.Totals.Boxes</div>
+                <div class="label">Total Boxes</div>
+            </div>
+            <div class="total-card">
+                <div class="value">@_data.Totals.Skins</div>
+                <div class="label">Total Skins</div>
+            </div>
+            <div class="total-card">
+                <div class="value">@_data.Totals.GrossWeightKg.ToString("N2") kg</div>
+                <div class="label">Gross Weight</div>
+            </div>
+            <div class="total-card">
+                <div class="value">@_data.Totals.NetWeightKg.ToString("N2") kg</div>
+                <div class="label">Net Weight</div>
+            </div>
+            <div class="total-card">
+                <div class="value">@_data.Totals.VolumeM3.ToString("N3") m³</div>
+                <div class="label">Total Volume</div>
+            </div>
+        </div>
+
+        <h5 class="mb-2">Packing List</h5>
+        <table class="packing-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Lot</th>
+                    <th>Box</th>
+                    <th>Box Type</th>
+                    <th class="text-right">Skins</th>
+                    <th class="text-right">Gross (kg)</th>
+                    <th class="text-right">Tare (kg)</th>
+                    <th class="text-right">Net (kg)</th>
+                    <th class="text-right">Volume (m³)</th>
+                </tr>
+            </thead>
+            <tbody>
+                @{ var idx = 0; }
+                @foreach (var line in _data.PackingLines)
+                {
+                    idx++;
+                    <tr>
+                        <td>@idx</td>
+                        <td>@line.LotNumber</td>
+                        <td><strong>@line.BoxNumber</strong></td>
+                        <td>@line.BoxType</td>
+                        <td class="text-right">@line.Skins</td>
+                        <td class="text-right">@line.GrossWeightKg.ToString("N2")</td>
+                        <td class="text-right">@line.TareWeightKg.ToString("N2")</td>
+                        <td class="text-right">@line.NetWeightKg.ToString("N2")</td>
+                        <td class="text-right">@line.VolumeM3.ToString("N3")</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="4"><strong>TOTAL</strong></td>
+                    <td class="text-right">@_data.Totals.Skins</td>
+                    <td class="text-right">@_data.Totals.GrossWeightKg.ToString("N2")</td>
+                    <td class="text-right"></td>
+                    <td class="text-right">@_data.Totals.NetWeightKg.ToString("N2")</td>
+                    <td class="text-right">@_data.Totals.VolumeM3.ToString("N3")</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+}
+
+@code {
+    [Parameter] public int ShipmentId { get; set; }
+
+    private ShipmentPackingListDto? _data;
+    private bool _loading = true;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _data = await Api.GetShipmentPackingListAsync(ShipmentId);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        _loading = false;
+    }
+
+    private static string GetStatusBadgeClass(string status) => status switch
+    {
+        "Pending" => "bg-warning text-dark",
+        "Shipped" => "bg-primary",
+        "Delivered" => "bg-success",
+        "Cancelled" => "bg-secondary",
+        _ => "bg-secondary"
+    };
+}

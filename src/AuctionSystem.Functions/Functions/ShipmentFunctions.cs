@@ -12,6 +12,7 @@ namespace AuctionSystem.Functions.Functions;
 public class ShipmentFunctions
 {
     private readonly AuctionDbContext _db;
+    private readonly CatalogDbContext _catalogDb;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -19,9 +20,10 @@ public class ShipmentFunctions
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public ShipmentFunctions(AuctionDbContext db)
+    public ShipmentFunctions(AuctionDbContext db, CatalogDbContext catalogDb)
     {
         _db = db;
+        _catalogDb = catalogDb;
     }
 
     [Function("GetShipments")]
@@ -311,6 +313,158 @@ public class ShipmentFunctions
         response.Headers.Add("Content-Type", "application/json");
         await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true }, JsonOptions));
         return response;
+    }
+    [Function("GetShipmentPackingList")]
+    public async Task<HttpResponseData> GetPackingList(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "shipments/{id:int}/packing-list")] HttpRequestData req,
+        int id)
+    {
+        var shipment = await _db.Shipments
+            .Include(s => s.Shipper)
+            .Include(s => s.Buyer)
+            .Include(s => s.ShippingAddress)
+            .Include(s => s.Lines).ThenInclude(l => l.Invoice).ThenInclude(i => i!.Lines)
+            .FirstOrDefaultAsync(s => s.Id == id);
+        if (shipment == null)
+            return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        // Collect all lot numbers from all invoice lines
+        var lotNumbers = shipment.Lines
+            .Where(l => l.Invoice != null)
+            .SelectMany(l => l.Invoice!.Lines.Select(il => il.LotNumber))
+            .Distinct().ToList();
+
+        // Get CatalogLots to resolve box numbers
+        var catalogLots = await _catalogDb.CatalogLots
+            .Where(cl => lotNumbers.Contains(cl.LotNumber))
+            .Select(cl => new { cl.LotNumber, cl.IncludedBoxNumbers })
+            .ToListAsync();
+
+        var allBoxNumbers = catalogLots
+            .Where(cl => !string.IsNullOrEmpty(cl.IncludedBoxNumbers))
+            .SelectMany(cl => cl.IncludedBoxNumbers!.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(b => int.TryParse(b.Trim(), out var n) ? n : 0).Where(n => n > 0))
+            .Distinct().ToList();
+
+        // Get box info (skins, box type)
+        var boxInfo = new Dictionary<int, (int Skins, string BoxType)>();
+        if (allBoxNumbers.Count > 0)
+        {
+            var boxData = await _catalogDb.Database
+                .SqlQueryRaw<BoxViewResult>("SELECT BoxNumber, Skins, BoxType FROM auction.boxes WHERE BoxNumber IN (" +
+                    string.Join(",", allBoxNumbers) + ")")
+                .ToListAsync();
+            foreach (var b in boxData)
+                boxInfo[b.BoxNumber] = (b.Skins, b.BoxType);
+        }
+
+        // Get box staging (actual weight)
+        var boxStaging = new Dictionary<int, (decimal? Weight, string? Location)>();
+        if (allBoxNumbers.Count > 0)
+        {
+            try
+            {
+                var staging = await _catalogDb.Database
+                    .SqlQueryRaw<BoxStagingResult>("SELECT CAST(BoxNumber AS INT) AS BoxNumber, Weight AS BoxWeight, BoxLocation FROM dbo.boxstatingfromkphg WHERE BoxNumber IN (" +
+                        string.Join(",", allBoxNumbers) + ")")
+                    .ToListAsync();
+                foreach (var s in staging)
+                    boxStaging[s.BoxNumber] = (s.BoxWeight, s.BoxLocation);
+            }
+            catch { /* table may not exist */ }
+        }
+
+        // Get box type dimensions
+        var dimensions = await _db.BoxTypeDimensions.ToListAsync();
+        var dimLookup = dimensions.ToDictionary(d => d.BoxType, d => d);
+
+        // Build packing list
+        var packingLines = new List<object>();
+        decimal totalGrossWeight = 0, totalNetWeight = 0, totalVolume = 0;
+        int totalBoxes = 0, totalSkins = 0;
+
+        foreach (var cl in catalogLots)
+        {
+            if (string.IsNullOrEmpty(cl.IncludedBoxNumbers)) continue;
+            foreach (var boxStr in cl.IncludedBoxNumbers.Split(',', StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (!int.TryParse(boxStr.Trim(), out var boxNumber) || boxNumber <= 0) continue;
+                var bi = boxInfo.GetValueOrDefault(boxNumber);
+                var boxType = bi.BoxType ?? "";
+                var dim = !string.IsNullOrEmpty(boxType) && dimLookup.TryGetValue(boxType, out var d) ? d : null;
+                var stg = boxStaging.GetValueOrDefault(boxNumber);
+                var volumeM3 = dim != null ? dim.LengthM * dim.WidthM * dim.HeightM : 0m;
+                var grossWeight = stg.Weight ?? (dim?.WeightKg ?? 0m);
+                var netWeight = stg.Weight != null && dim?.WeightKg != null ? stg.Weight.Value - dim.WeightKg : grossWeight;
+
+                packingLines.Add(new
+                {
+                    LotNumber = cl.LotNumber,
+                    BoxNumber = boxNumber,
+                    BoxType = boxType,
+                    Skins = bi.Skins,
+                    GrossWeightKg = grossWeight,
+                    NetWeightKg = netWeight,
+                    VolumeM3 = volumeM3,
+                    TareWeightKg = dim?.WeightKg ?? 0m,
+                    Location = stg.Location ?? ""
+                });
+                totalGrossWeight += grossWeight;
+                totalNetWeight += netWeight;
+                totalVolume += volumeM3;
+                totalBoxes++;
+                totalSkins += bi.Skins;
+            }
+        }
+
+        var result = new
+        {
+            shipment.ShipmentNumber,
+            ShipperName = shipment.Shipper?.Name ?? "",
+            ShipperCode = shipment.Shipper?.Code ?? "",
+            BuyerName = shipment.Buyer?.Name ?? "",
+            BuyerNumber = shipment.Buyer?.BuyerNumber ?? "",
+            ShippingAddress = shipment.ShippingAddress != null ? new
+            {
+                shipment.ShippingAddress.ContactName,
+                shipment.ShippingAddress.AddressLine1,
+                shipment.ShippingAddress.AddressLine2,
+                shipment.ShippingAddress.City,
+                shipment.ShippingAddress.PostalCode,
+                shipment.ShippingAddress.Country
+            } : null,
+            shipment.TrackingNumber,
+            shipment.Status,
+            shipment.CreatedAt,
+            Totals = new
+            {
+                Boxes = totalBoxes,
+                Skins = totalSkins,
+                GrossWeightKg = totalGrossWeight,
+                NetWeightKg = totalNetWeight,
+                VolumeM3 = totalVolume
+            },
+            PackingLines = packingLines
+        };
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(result, JsonOptions));
+        return response;
+    }
+
+    private class BoxViewResult
+    {
+        public int BoxNumber { get; set; }
+        public int Skins { get; set; }
+        public string BoxType { get; set; } = "";
+    }
+
+    private class BoxStagingResult
+    {
+        public int BoxNumber { get; set; }
+        public decimal? BoxWeight { get; set; }
+        public string? BoxLocation { get; set; }
     }
 }
 
