@@ -46,7 +46,7 @@ else
                         <th>Buyer</th>
                         <th>Tracking #</th>
                         <th>Status</th>
-                        <th>Invoices</th>
+                        <th>Lots</th>
                         <th>Created</th>
                         <th>Shipped</th>
                         <th>Delivered</th>
@@ -65,8 +65,8 @@ else
                                 <span class="badge @GetStatusBadgeClass(s.Status)">@s.Status</span>
                             </td>
                             <td>
-                                <button class="btn btn-sm btn-link p-0" @onclick="() => ToggleInvoices(s.Id)">
-                                    @s.InvoiceCount invoice(s)
+                                <button class="btn btn-sm btn-link p-0" @onclick="() => ToggleLots(s.Id)">
+                                    @s.LotCount lot(s)
                                 </button>
                             </td>
                             <td>@s.CreatedAt.ToString("yyyy-MM-dd")</td>
@@ -90,7 +90,7 @@ else
                             <tr>
                                 <td colspan="10" class="bg-light">
                                     <div class="ps-4">
-                                        <strong>Invoices in this shipment:</strong>
+                                        <strong>Lots in this shipment:</strong>
                                         @if (!string.IsNullOrEmpty(s.ShippingAddressSummary))
                                         {
                                             <span class="ms-3 text-muted">Ship to: @s.ShippingAddressSummary</span>
@@ -102,27 +102,29 @@ else
                                         <table class="table table-sm mt-2 mb-0">
                                             <thead>
                                                 <tr>
+                                                    <th>Lot #</th>
                                                     <th>Invoice #</th>
                                                     <th>PDF</th>
                                                     <th>Notes</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                @foreach (var inv in s.Invoices)
+                                                @foreach (var lot in s.Lots)
                                                 {
                                                     <tr>
-                                                        <td><strong>@inv.InvoiceNumber</strong></td>
+                                                        <td><strong>@lot.LotNumber</strong></td>
+                                                        <td>@lot.InvoiceNumber</td>
                                                         <td>
-                                                            @if (!string.IsNullOrEmpty(inv.PdfUrl))
+                                                            @if (!string.IsNullOrEmpty(lot.PdfUrl))
                                                             {
-                                                                <a href="@inv.PdfUrl" target="_blank" class="btn btn-sm btn-outline-primary">View PDF</a>
+                                                                <a href="@lot.PdfUrl" target="_blank" class="btn btn-sm btn-outline-primary">View PDF</a>
                                                             }
                                                             else
                                                             {
                                                                 <span class="text-muted">—</span>
                                                             }
                                                         </td>
-                                                        <td>@inv.Notes</td>
+                                                        <td>@lot.Notes</td>
                                                     </tr>
                                                 }
                                             </tbody>
@@ -182,7 +184,7 @@ else
                 <div class="modal-body">
                     @if (_loadingCreate)
                     {
-                        <p><em>Loading available invoices...</em></p>
+                        <p><em>Loading available lots...</em></p>
                     }
                     else
                     {
@@ -234,34 +236,39 @@ else
                             </div>
 
                             <div class="mb-3">
-                                <label class="form-label fw-bold">Select Invoices to Ship</label>
-                                @if (!_buyerReleasedInvoices.Any())
+                                <label class="form-label fw-bold">Select Lots to Ship</label>
+                                @if (!_buyerReleasedLots.Any())
                                 {
-                                    <div class="text-muted">No released invoices found for this buyer.</div>
+                                    <div class="text-muted">No released lots found for this buyer.</div>
                                 }
                                 else
                                 {
                                     <table class="table table-sm table-hover">
                                         <thead>
                                             <tr>
-                                                <th><input type="checkbox" @onchange="ToggleAllInvoices" /></th>
+                                                <th><input type="checkbox" @onchange="ToggleAllLots" /></th>
+                                                <th>Lot #</th>
                                                 <th>Invoice #</th>
                                                 <th>Broker</th>
-                                                <th>Amount</th>
+                                                <th>Skins</th>
+                                                <th>Hammer Price</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            @foreach (var inv in _buyerReleasedInvoices)
+                                            @foreach (var lot in _buyerReleasedLots)
                                             {
                                                 <tr>
-                                                    <td><input type="checkbox" checked="@_selectedInvoiceIds.Contains(inv.Id)" @onchange="() => ToggleInvoiceSelection(inv.Id)" /></td>
-                                                    <td>@inv.InvoiceNumber</td>
-                                                    <td>@inv.BrokerName</td>
-                                                    <td>@inv.TotalAmount.ToString("N2") @inv.Currency</td>
+                                                    <td><input type="checkbox" checked="@_selectedLotNumbers.Contains(lot.LotNumber)" @onchange="() => ToggleLotSelection(lot.LotNumber)" /></td>
+                                                    <td><strong>@lot.LotNumber</strong></td>
+                                                    <td>@lot.InvoiceNumber</td>
+                                                    <td>@lot.BrokerName</td>
+                                                    <td>@lot.Skins</td>
+                                                    <td>€@lot.HammerPrice.ToString("N2")</td>
                                                 </tr>
                                             }
                                         </tbody>
                                     </table>
+                                    <div class="text-muted">@_selectedLotNumbers.Count lot(s) selected</div>
                                 }
                             </div>
                         }
@@ -269,7 +276,7 @@ else
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" @onclick="CloseCreateModal">Cancel</button>
-                    <button class="btn btn-primary" @onclick="CreateShipment" disabled="@(_saving || _createShipperId == 0 || _createBuyerId == 0 || !_selectedInvoiceIds.Any())">
+                    <button class="btn btn-primary" @onclick="CreateShipment" disabled="@(_saving || _createShipperId == 0 || _createBuyerId == 0 || !_selectedLotNumbers.Any())">
                         @(_saving ? "Creating..." : "Create Shipment")
                     </button>
                 </div>
@@ -281,7 +288,7 @@ else
 @code {
     private List<ShipmentListDto> _shipments = new();
     private List<ShipperListDto> _shippers = new();
-    private List<ReleasedInvoiceDto> _releasedInvoices = new();
+    private List<ReleasedLotDto> _releasedLots = new();
     private bool _loading = true;
     private string? _error;
     private string? _success;
@@ -301,9 +308,9 @@ else
     private int _createAddressId;
     private string _createTrackingNumber = "";
     private string _createNotes = "";
-    private List<ReleasedInvoiceDto> _buyerReleasedInvoices = new();
+    private List<ReleasedLotDto> _buyerReleasedLots = new();
     private List<ShippingAddressListDto> _buyerAddresses = new();
-    private HashSet<int> _selectedInvoiceIds = new();
+    private HashSet<int> _selectedLotNumbers = new();
 
     private List<(int BuyerId, string BuyerNumber, string BuyerName)> _availableBuyers = new();
 
@@ -334,7 +341,7 @@ else
         StateHasChanged();
     }
 
-    private void ToggleInvoices(int shipmentId)
+    private void ToggleLots(int shipmentId)
     {
         _expandedShipmentId = _expandedShipmentId == shipmentId ? null : shipmentId;
     }
@@ -389,17 +396,17 @@ else
         _createAddressId = 0;
         _createTrackingNumber = "";
         _createNotes = "";
-        _selectedInvoiceIds.Clear();
-        _buyerReleasedInvoices.Clear();
+        _selectedLotNumbers.Clear();
+        _buyerReleasedLots.Clear();
         _buyerAddresses.Clear();
         _error = null;
 
         try
         {
             _shippers = await Api.GetShippersAsync();
-            _releasedInvoices = await Api.GetReleasedInvoicesForShipmentAsync();
-            _availableBuyers = _releasedInvoices
-                .Select(i => (i.BuyerId, i.BuyerNumber, i.BuyerName))
+            _releasedLots = await Api.GetReleasedLotsForShipmentAsync();
+            _availableBuyers = _releasedLots
+                .Select(l => (l.BuyerId, l.BuyerNumber, l.BuyerName))
                 .Distinct()
                 .OrderBy(b => b.BuyerNumber)
                 .ToList();
@@ -416,8 +423,8 @@ else
         if (int.TryParse(e.Value?.ToString(), out var buyerId) && buyerId > 0)
         {
             _createBuyerId = buyerId;
-            _buyerReleasedInvoices = _releasedInvoices.Where(i => i.BuyerId == buyerId).ToList();
-            _selectedInvoiceIds.Clear();
+            _buyerReleasedLots = _releasedLots.Where(l => l.BuyerId == buyerId).ToList();
+            _selectedLotNumbers.Clear();
 
             try
             {
@@ -431,24 +438,24 @@ else
         else
         {
             _createBuyerId = 0;
-            _buyerReleasedInvoices.Clear();
+            _buyerReleasedLots.Clear();
             _buyerAddresses.Clear();
-            _selectedInvoiceIds.Clear();
+            _selectedLotNumbers.Clear();
         }
     }
 
-    private void ToggleInvoiceSelection(int invoiceId)
+    private void ToggleLotSelection(int lotNumber)
     {
-        if (!_selectedInvoiceIds.Remove(invoiceId))
-            _selectedInvoiceIds.Add(invoiceId);
+        if (!_selectedLotNumbers.Remove(lotNumber))
+            _selectedLotNumbers.Add(lotNumber);
     }
 
-    private void ToggleAllInvoices(ChangeEventArgs e)
+    private void ToggleAllLots(ChangeEventArgs e)
     {
         if ((bool)(e.Value ?? false))
-            _selectedInvoiceIds = _buyerReleasedInvoices.Select(i => i.Id).ToHashSet();
+            _selectedLotNumbers = _buyerReleasedLots.Select(l => l.LotNumber).ToHashSet();
         else
-            _selectedInvoiceIds.Clear();
+            _selectedLotNumbers.Clear();
     }
 
     private void CloseCreateModal()
@@ -470,14 +477,14 @@ else
             shippingAddressId = _createAddressId > 0 ? (int?)_createAddressId : null,
             trackingNumber = _createTrackingNumber,
             notes = _createNotes,
-            invoiceIds = _selectedInvoiceIds.ToList()
+            lotNumbers = _selectedLotNumbers.ToList()
         };
 
         try
         {
             var (ok, err, num) = await Api.CreateShipmentAsync(payload);
             if (!ok) { _error = err; _saving = false; return; }
-            _success = $"Shipment {num} created with {_selectedInvoiceIds.Count} invoice(s).";
+            _success = $"Shipment {num} created with {_selectedLotNumbers.Count} lot(s).";
             _showCreateModal = false;
             await LoadShipments();
         }

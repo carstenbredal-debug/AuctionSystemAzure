@@ -963,30 +963,31 @@ public class ShipmentListDto
     public DateTime CreatedAt { get; set; }
     public DateTime? ShippedAt { get; set; }
     public DateTime? DeliveredAt { get; set; }
-    public int InvoiceCount { get; set; }
-    public List<ShipmentInvoiceDto> Invoices { get; set; } = new();
+    public int LotCount { get; set; }
+    public List<ShipmentLotDto> Lots { get; set; } = new();
 }
 
-public class ShipmentInvoiceDto
+public class ShipmentLotDto
 {
-    public int InvoiceId { get; set; }
+    public int LotNumber { get; set; }
+    public int? InvoiceId { get; set; }
     public string InvoiceNumber { get; set; } = "";
     public string? PdfUrl { get; set; }
-    public int? BoxNumber { get; set; }
     public string Notes { get; set; } = "";
 }
 
-public class ReleasedInvoiceDto
+public class ReleasedLotDto
 {
-    public int Id { get; set; }
+    public int LotNumber { get; set; }
+    public int InvoiceId { get; set; }
     public string InvoiceNumber { get; set; } = "";
     public int BuyerId { get; set; }
     public string BuyerName { get; set; } = "";
     public string BuyerNumber { get; set; } = "";
     public string BrokerName { get; set; } = "";
-    public decimal TotalAmount { get; set; }
-    public string Currency { get; set; } = "";
-    public string ShippingStatus { get; set; } = "";
+    public int Skins { get; set; }
+    public decimal PricePerSkin { get; set; }
+    public decimal HammerPrice { get; set; }
 }
 
 public class ShipmentPackingListDto

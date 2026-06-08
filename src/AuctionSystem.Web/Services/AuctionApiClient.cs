@@ -876,13 +876,13 @@ public class AuctionApiClient
         return await resp.Content.ReadFromJsonAsync<List<ShipmentListDto>>() ?? new();
     }
 
-    public async Task<List<ReleasedInvoiceDto>> GetReleasedInvoicesForShipmentAsync(int? buyerId = null)
+    public async Task<List<ReleasedLotDto>> GetReleasedLotsForShipmentAsync(int? buyerId = null)
     {
-        var url = "api/shipments/released-invoices";
+        var url = "api/shipments/released-lots";
         if (buyerId.HasValue) url += $"?buyerId={buyerId}";
         var resp = await _http.GetAsync(url);
         resp.EnsureSuccessStatusCode();
-        return await resp.Content.ReadFromJsonAsync<List<ReleasedInvoiceDto>>() ?? new();
+        return await resp.Content.ReadFromJsonAsync<List<ReleasedLotDto>>() ?? new();
     }
 
     public async Task<(bool Success, string? Error, string? ShipmentNumber)> CreateShipmentAsync(object shipment)

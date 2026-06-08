@@ -362,15 +362,38 @@ using (var scope = host.Services.CreateScope())
                 CREATE TABLE auction.ShipmentLines (
                     Id INT IDENTITY(1,1) PRIMARY KEY,
                     ShipmentId INT NOT NULL,
-                    InvoiceId INT NOT NULL,
-                    BoxNumber INT NULL,
+                    LotNumber INT NOT NULL,
+                    InvoiceId INT NULL,
                     Notes NVARCHAR(500) NOT NULL DEFAULT '',
                     CONSTRAINT FK_ShipmentLines_Shipment FOREIGN KEY (ShipmentId) REFERENCES auction.Shipments(Id) ON DELETE CASCADE,
                     CONSTRAINT FK_ShipmentLines_Invoice FOREIGN KEY (InvoiceId) REFERENCES auction.Invoices(Id)
                 );
                 CREATE INDEX IX_ShipmentLines_ShipmentId ON auction.ShipmentLines(ShipmentId);
                 CREATE INDEX IX_ShipmentLines_InvoiceId ON auction.ShipmentLines(InvoiceId);
+                CREATE INDEX IX_ShipmentLines_LotNumber ON auction.ShipmentLines(LotNumber);
             END
+        ");
+        // Migrate ShipmentLines: add LotNumber column, make InvoiceId nullable, drop BoxNumber
+        db.Database.ExecuteSqlRaw(@"
+            IF EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'ShipmentLines')
+                AND NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.ShipmentLines') AND name = 'LotNumber')
+            BEGIN
+                ALTER TABLE auction.ShipmentLines ADD LotNumber INT NOT NULL DEFAULT 0;
+                CREATE INDEX IX_ShipmentLines_LotNumber ON auction.ShipmentLines(LotNumber);
+            END
+        ");
+        db.Database.ExecuteSqlRaw(@"
+            IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.ShipmentLines') AND name = 'InvoiceId' AND is_nullable = 0)
+            BEGIN
+                IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_ShipmentLines_Invoice')
+                    ALTER TABLE auction.ShipmentLines DROP CONSTRAINT FK_ShipmentLines_Invoice;
+                ALTER TABLE auction.ShipmentLines ALTER COLUMN InvoiceId INT NULL;
+                ALTER TABLE auction.ShipmentLines ADD CONSTRAINT FK_ShipmentLines_Invoice FOREIGN KEY (InvoiceId) REFERENCES auction.Invoices(Id);
+            END
+        ");
+        db.Database.ExecuteSqlRaw(@"
+            IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.ShipmentLines') AND name = 'BoxNumber')
+                ALTER TABLE auction.ShipmentLines DROP COLUMN BoxNumber;
         ");
         // Drop auction.Boxes table if it exists (replaced by view)
         db.Database.ExecuteSqlRaw(@"

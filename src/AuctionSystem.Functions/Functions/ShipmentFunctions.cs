@@ -68,13 +68,13 @@ public class ShipmentFunctions
                 s.CreatedAt,
                 s.ShippedAt,
                 s.DeliveredAt,
-                InvoiceCount = s.Lines.Count,
-                Invoices = s.Lines.Select(l => new
+                LotCount = s.Lines.Count,
+                Lots = s.Lines.Select(l => new
                 {
+                    l.LotNumber,
                     l.InvoiceId,
                     InvoiceNumber = l.Invoice != null ? l.Invoice.InvoiceNumber : "",
                     PdfUrl = l.Invoice != null ? l.Invoice.PdfUrl : null,
-                    l.BoxNumber,
                     l.Notes
                 }).ToList()
             })
@@ -86,46 +86,62 @@ public class ShipmentFunctions
         return response;
     }
 
-    [Function("GetReleasedInvoicesForShipment")]
-    public async Task<HttpResponseData> GetReleasedInvoices(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "shipments/released-invoices")] HttpRequestData req)
+    [Function("GetReleasedLotsForShipment")]
+    public async Task<HttpResponseData> GetReleasedLots(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "shipments/released-lots")] HttpRequestData req)
     {
         var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
         var buyerFilter = query["buyerId"];
 
-        var q = _db.Invoices
+        // Get released invoices (not credit notes)
+        var invoiceQuery = _db.Invoices
             .Include(i => i.Buyer)
             .Include(i => i.Broker)
-            .Where(i => (i.ShippingStatus == "Released" || i.Status == InvoiceStatus.ReleasedToShip) && !i.IsCreditNote)
-            .AsQueryable();
+            .Include(i => i.Lines)
+            .Where(i => (i.ShippingStatus == "Released" || i.Status == InvoiceStatus.ReleasedToShip) && !i.IsCreditNote);
 
         if (int.TryParse(buyerFilter, out var bId))
-            q = q.Where(i => i.BuyerId == bId);
+            invoiceQuery = invoiceQuery.Where(i => i.BuyerId == bId);
 
-        // Exclude invoices already in a shipment
-        var shippedInvoiceIds = await _db.ShipmentLines.Select(l => l.InvoiceId).Distinct().ToListAsync();
+        var invoices = await invoiceQuery.ToListAsync();
 
-        var invoices = await q
-            .Where(i => !shippedInvoiceIds.Contains(i.Id))
-            .OrderBy(i => i.BuyerId).ThenBy(i => i.InvoiceNumber)
-            .Select(i => new
-            {
-                i.Id,
-                i.InvoiceNumber,
-                i.BuyerId,
-                BuyerName = i.Buyer != null ? i.Buyer.Name : "",
-                BuyerNumber = i.Buyer != null ? i.Buyer.BuyerNumber : "",
-                BrokerName = i.Broker != null ? i.Broker.CompanyName : "",
-                i.TotalAmount,
-                i.Currency,
-                i.Status,
-                i.ShippingStatus
-            })
+        // Get lot numbers already in a shipment
+        var shippedLotNumbers = await _db.ShipmentLines.Select(l => l.LotNumber).Distinct().ToListAsync();
+
+        // Build lot list from invoice lines, excluding already-shipped lots and credited lots
+        var creditNotes = await _db.Invoices
+            .Include(i => i.Lines)
+            .Where(i => i.IsCreditNote && i.OriginalInvoiceId != null)
             .ToListAsync();
+        var creditedLotsByInvoice = creditNotes
+            .GroupBy(cn => cn.OriginalInvoiceId!.Value)
+            .ToDictionary(g => g.Key, g => g.SelectMany(cn => cn.Lines.Select(l => l.LotNumber)).Distinct().ToHashSet());
+
+        var lots = new List<object>();
+        foreach (var inv in invoices)
+        {
+            var creditedLots = creditedLotsByInvoice.GetValueOrDefault(inv.Id) ?? new HashSet<int>();
+            foreach (var line in inv.Lines.Where(l => !shippedLotNumbers.Contains(l.LotNumber) && !creditedLots.Contains(l.LotNumber)))
+            {
+                lots.Add(new
+                {
+                    line.LotNumber,
+                    InvoiceId = inv.Id,
+                    inv.InvoiceNumber,
+                    inv.BuyerId,
+                    BuyerName = inv.Buyer?.Name ?? "",
+                    BuyerNumber = inv.Buyer?.BuyerNumber ?? "",
+                    BrokerName = inv.Broker?.CompanyName ?? "",
+                    line.Skins,
+                    line.PricePerSkin,
+                    line.HammerPrice
+                });
+            }
+        }
 
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
-        await response.WriteStringAsync(JsonSerializer.Serialize(invoices, JsonOptions));
+        await response.WriteStringAsync(JsonSerializer.Serialize(lots, JsonOptions));
         return response;
     }
 
@@ -142,11 +158,11 @@ public class ShipmentFunctions
             return bad;
         }
 
-        if (body.InvoiceIds == null || !body.InvoiceIds.Any())
+        if (body.LotNumbers == null || !body.LotNumbers.Any())
         {
             var bad = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
             bad.Headers.Add("Content-Type", "application/json");
-            await bad.WriteStringAsync(JsonSerializer.Serialize(new { error = "At least one invoice is required" }, JsonOptions));
+            await bad.WriteStringAsync(JsonSerializer.Serialize(new { error = "At least one lot is required" }, JsonOptions));
             return bad;
         }
 
@@ -162,6 +178,14 @@ public class ShipmentFunctions
                 nextNum = num + 1;
         }
 
+        // Find invoice IDs for each lot
+        var lotInvoiceMap = await _db.Invoices
+            .Include(i => i.Lines)
+            .Where(i => !i.IsCreditNote && (i.ShippingStatus == "Released" || i.Status == InvoiceStatus.ReleasedToShip))
+            .SelectMany(i => i.Lines.Select(l => new { l.LotNumber, InvoiceId = i.Id }))
+            .Where(x => body.LotNumbers.Contains(x.LotNumber))
+            .ToDictionaryAsync(x => x.LotNumber, x => x.InvoiceId);
+
         var shipment = new Shipment
         {
             ShipmentNumber = $"SH{nextNum:D5}",
@@ -173,18 +197,20 @@ public class ShipmentFunctions
             Status = "Pending"
         };
 
-        foreach (var invoiceId in body.InvoiceIds)
+        foreach (var lotNumber in body.LotNumbers)
         {
             shipment.Lines.Add(new ShipmentLine
             {
-                InvoiceId = invoiceId
+                LotNumber = lotNumber,
+                InvoiceId = lotInvoiceMap.GetValueOrDefault(lotNumber)
             });
         }
 
         _db.Shipments.Add(shipment);
 
-        // Update invoice shipping status
-        var invoices = await _db.Invoices.Where(i => body.InvoiceIds.Contains(i.Id)).ToListAsync();
+        // Update invoice shipping status for affected invoices
+        var invoiceIds = lotInvoiceMap.Values.Distinct().ToList();
+        var invoices = await _db.Invoices.Where(i => invoiceIds.Contains(i.Id)).ToListAsync();
         foreach (var inv in invoices)
         {
             inv.ShippingStatus = "InShipment";
@@ -232,7 +258,7 @@ public class ShipmentFunctions
             shipment.DeliveredAt = DateTime.UtcNow;
 
         // Update invoice shipping statuses
-        var invoiceIds = shipment.Lines.Select(l => l.InvoiceId).ToList();
+        var invoiceIds = shipment.Lines.Where(l => l.InvoiceId.HasValue).Select(l => l.InvoiceId!.Value).Distinct().ToList();
         var invoices = await _db.Invoices.Where(i => invoiceIds.Contains(i.Id)).ToListAsync();
         foreach (var inv in invoices)
         {
@@ -300,7 +326,7 @@ public class ShipmentFunctions
         }
 
         // Release invoices back
-        var invoiceIds = shipment.Lines.Select(l => l.InvoiceId).ToList();
+        var invoiceIds = shipment.Lines.Where(l => l.InvoiceId.HasValue).Select(l => l.InvoiceId!.Value).Distinct().ToList();
         var invoices = await _db.Invoices.Where(i => invoiceIds.Contains(i.Id)).ToListAsync();
         foreach (var inv in invoices)
         {
@@ -315,6 +341,7 @@ public class ShipmentFunctions
         await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true }, JsonOptions));
         return response;
     }
+
     [Function("GetShipmentPackingList")]
     public async Task<HttpResponseData> GetPackingList(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "shipments/{id:int}/packing-list")] HttpRequestData req,
@@ -324,16 +351,13 @@ public class ShipmentFunctions
             .Include(s => s.Shipper)
             .Include(s => s.Buyer)
             .Include(s => s.ShippingAddress)
-            .Include(s => s.Lines).ThenInclude(l => l.Invoice).ThenInclude(i => i!.Lines)
+            .Include(s => s.Lines)
             .FirstOrDefaultAsync(s => s.Id == id);
         if (shipment == null)
             return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
 
-        // Collect all lot numbers from all invoice lines
-        var lotNumbers = shipment.Lines
-            .Where(l => l.Invoice != null)
-            .SelectMany(l => l.Invoice!.Lines.Select(il => il.LotNumber))
-            .Distinct().ToList();
+        // Collect lot numbers directly from shipment lines
+        var lotNumbers = shipment.Lines.Select(l => l.LotNumber).Distinct().ToList();
 
         // Get CatalogLots to resolve box numbers
         var catalogLots = await _catalogDb.CatalogLots
@@ -476,7 +500,7 @@ public class CreateShipmentDto
     public int? ShippingAddressId { get; set; }
     public string? TrackingNumber { get; set; }
     public string? Notes { get; set; }
-    public List<int> InvoiceIds { get; set; } = new();
+    public List<int> LotNumbers { get; set; } = new();
 }
 
 public class UpdateShipmentStatusDto

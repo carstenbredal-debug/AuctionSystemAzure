@@ -316,7 +316,7 @@ public class AuctionDbContext : DbContext
             e.HasKey(l => l.Id);
             e.Property(l => l.Notes).HasMaxLength(500);
             e.HasOne(l => l.Shipment).WithMany(s => s.Lines).HasForeignKey(l => l.ShipmentId).OnDelete(DeleteBehavior.Cascade);
-            e.HasOne(l => l.Invoice).WithMany().HasForeignKey(l => l.InvoiceId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(l => l.Invoice).WithMany().HasForeignKey(l => l.InvoiceId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
         });
     }
 }

@@ -24,8 +24,8 @@ public class ShipmentLine
     public int Id { get; set; }
     public int ShipmentId { get; set; }
     public Shipment? Shipment { get; set; }
-    public int InvoiceId { get; set; }
+    public int LotNumber { get; set; }
+    public int? InvoiceId { get; set; }
     public Invoice? Invoice { get; set; }
-    public int? BoxNumber { get; set; }
     public string Notes { get; set; } = string.Empty;
 }
