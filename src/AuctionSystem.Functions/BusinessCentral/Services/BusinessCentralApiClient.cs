@@ -332,32 +332,51 @@ public class BusinessCentralApiClient
         var response = await _httpClient.PostAsync(url, null);
         await EnsureSuccessAsync(response);
 
-        // After posting, try to re-fetch the invoice. BC may keep it at the same endpoint
-        // or move it. Try by ID first, then fall back to external document number lookup.
+        // Strategy 1: re-fetch from salesInvoices by ID
         try
         {
             var fetchUrl = $"{_options.BaseUrl}/companies({companyId})/salesInvoices({invoiceId})";
+            _logger.LogInformation("Re-fetch attempt 1 (by ID): {Url}", fetchUrl);
             var posted = await GetSingleAsync<BcSalesInvoice>(fetchUrl);
-            if (posted != null) return posted;
+            if (posted != null) { _logger.LogInformation("Re-fetch by ID succeeded"); return posted; }
         }
-        catch
+        catch (Exception ex)
         {
-            _logger.LogWarning("Re-fetch by ID failed after posting invoice {InvoiceId}, trying by external doc number", invoiceId);
+            _logger.LogWarning("Re-fetch by ID failed: {Error}", ex.Message);
         }
 
+        // Strategy 2: re-fetch from salesInvoices by external doc number
         if (!string.IsNullOrEmpty(externalDocNumber))
         {
             try
             {
+                _logger.LogInformation("Re-fetch attempt 2 (by external doc): {ExtDoc}", externalDocNumber);
                 var byDoc = await GetSalesInvoiceByExternalDocAsync(companyId, externalDocNumber);
-                if (byDoc != null) return byDoc;
+                if (byDoc != null) { _logger.LogInformation("Re-fetch by external doc succeeded"); return byDoc; }
             }
-            catch
+            catch (Exception ex)
             {
-                _logger.LogWarning("Re-fetch by external doc number also failed for {ExtDoc}", externalDocNumber);
+                _logger.LogWarning("Re-fetch by external doc failed: {Error}", ex.Message);
             }
         }
 
+        // Strategy 3: try the postedSalesInvoices endpoint (some BC versions move posted invoices there)
+        if (!string.IsNullOrEmpty(externalDocNumber))
+        {
+            try
+            {
+                var postedUrl = $"{_options.BaseUrl}/companies({companyId})/salesInvoices?$filter=number eq '{externalDocNumber}' or externalDocumentNumber eq '{externalDocNumber}'&$orderby=lastModifiedDateTime desc&$top=1";
+                _logger.LogInformation("Re-fetch attempt 3 (broad filter): {Url}", postedUrl);
+                var items = await GetListAsync<BcSalesInvoice>(postedUrl);
+                if (items.Count > 0) { _logger.LogInformation("Re-fetch by broad filter succeeded, found {Count} items", items.Count); return items[0]; }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("Re-fetch by broad filter failed: {Error}", ex.Message);
+            }
+        }
+
+        _logger.LogError("All re-fetch strategies failed for posted invoice {InvoiceId}, externalDoc={ExtDoc}", invoiceId, externalDocNumber);
         return null;
     }
 
