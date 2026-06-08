@@ -329,6 +329,49 @@ using (var scope = host.Services.CreateScope())
                 CREATE UNIQUE INDEX IX_Shippers_Code ON auction.Shippers(Code);
             END
         ");
+        // Shipments table
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'Shipments')
+            BEGIN
+                CREATE TABLE auction.Shipments (
+                    Id INT IDENTITY(1,1) PRIMARY KEY,
+                    ShipmentNumber NVARCHAR(50) NOT NULL DEFAULT '',
+                    ShipperId INT NOT NULL,
+                    BuyerId INT NOT NULL,
+                    ShippingAddressId INT NULL,
+                    TrackingNumber NVARCHAR(200) NOT NULL DEFAULT '',
+                    Status NVARCHAR(50) NOT NULL DEFAULT 'Pending',
+                    Notes NVARCHAR(1000) NOT NULL DEFAULT '',
+                    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+                    ShippedAt DATETIME2 NULL,
+                    DeliveredAt DATETIME2 NULL,
+                    CONSTRAINT FK_Shipments_Shipper FOREIGN KEY (ShipperId) REFERENCES auction.Shippers(Id),
+                    CONSTRAINT FK_Shipments_Buyer FOREIGN KEY (BuyerId) REFERENCES auction.Buyers(Id),
+                    CONSTRAINT FK_Shipments_ShippingAddress FOREIGN KEY (ShippingAddressId) REFERENCES auction.ShippingAddresses(Id)
+                );
+                CREATE UNIQUE INDEX IX_Shipments_ShipmentNumber ON auction.Shipments(ShipmentNumber);
+                CREATE INDEX IX_Shipments_BuyerId ON auction.Shipments(BuyerId);
+                CREATE INDEX IX_Shipments_ShipperId ON auction.Shipments(ShipperId);
+                CREATE INDEX IX_Shipments_Status ON auction.Shipments(Status);
+            END
+        ");
+        // ShipmentLines table
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'ShipmentLines')
+            BEGIN
+                CREATE TABLE auction.ShipmentLines (
+                    Id INT IDENTITY(1,1) PRIMARY KEY,
+                    ShipmentId INT NOT NULL,
+                    InvoiceId INT NOT NULL,
+                    BoxNumber INT NULL,
+                    Notes NVARCHAR(500) NOT NULL DEFAULT '',
+                    CONSTRAINT FK_ShipmentLines_Shipment FOREIGN KEY (ShipmentId) REFERENCES auction.Shipments(Id) ON DELETE CASCADE,
+                    CONSTRAINT FK_ShipmentLines_Invoice FOREIGN KEY (InvoiceId) REFERENCES auction.Invoices(Id)
+                );
+                CREATE INDEX IX_ShipmentLines_ShipmentId ON auction.ShipmentLines(ShipmentId);
+                CREATE INDEX IX_ShipmentLines_InvoiceId ON auction.ShipmentLines(InvoiceId);
+            END
+        ");
         // Drop auction.Boxes table if it exists (replaced by view)
         db.Database.ExecuteSqlRaw(@"
             IF EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'Boxes')

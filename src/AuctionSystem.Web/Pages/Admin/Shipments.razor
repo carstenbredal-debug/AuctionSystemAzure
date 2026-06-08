@@ -1,0 +1,487 @@
+@page "/admin/shipments"
+@using AuctionSystem.Web.Models
+@using AuctionSystem.Web.Services
+@attribute [Authorize(Roles = "Admin")]
+@inject AuctionApiClient Api
+
+<h4 class="mb-4">Shipments</h4>
+
+@if (!string.IsNullOrEmpty(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+@if (!string.IsNullOrEmpty(_success))
+{
+    <div class="alert alert-success">@_success</div>
+}
+
+<div class="row mb-3">
+    <div class="col-auto">
+        <button class="btn btn-primary" @onclick="ShowCreateModal">+ Create Shipment</button>
+    </div>
+    <div class="col-auto">
+        <select class="form-select" @onchange="OnStatusFilterChanged">
+            <option value="">All Statuses</option>
+            <option value="Pending">Pending</option>
+            <option value="Shipped">Shipped</option>
+            <option value="Delivered">Delivered</option>
+            <option value="Cancelled">Cancelled</option>
+        </select>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <div class="section-container">
+        <div class="section-body">
+            <table class="table table-striped table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Shipment #</th>
+                        <th>Shipper</th>
+                        <th>Buyer</th>
+                        <th>Tracking #</th>
+                        <th>Status</th>
+                        <th>Invoices</th>
+                        <th>Created</th>
+                        <th>Shipped</th>
+                        <th>Delivered</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in _shipments)
+                    {
+                        <tr>
+                            <td><strong>@s.ShipmentNumber</strong></td>
+                            <td>@s.ShipperName (@s.ShipperCode)</td>
+                            <td>@s.BuyerNumber - @s.BuyerName</td>
+                            <td>@s.TrackingNumber</td>
+                            <td>
+                                <span class="badge @GetStatusBadgeClass(s.Status)">@s.Status</span>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-link p-0" @onclick="() => ToggleInvoices(s.Id)">
+                                    @s.InvoiceCount invoice(s)
+                                </button>
+                            </td>
+                            <td>@s.CreatedAt.ToString("yyyy-MM-dd")</td>
+                            <td>@(s.ShippedAt?.ToString("yyyy-MM-dd") ?? "-")</td>
+                            <td>@(s.DeliveredAt?.ToString("yyyy-MM-dd") ?? "-")</td>
+                            <td>
+                                @if (s.Status == "Pending")
+                                {
+                                    <button class="btn btn-sm btn-success me-1" @onclick="() => MarkShipped(s)">Ship</button>
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteShipment(s.Id)">Delete</button>
+                                }
+                                else if (s.Status == "Shipped")
+                                {
+                                    <button class="btn btn-sm btn-primary" @onclick="() => MarkDelivered(s)">Delivered</button>
+                                }
+                            </td>
+                        </tr>
+                        @if (_expandedShipmentId == s.Id)
+                        {
+                            <tr>
+                                <td colspan="10" class="bg-light">
+                                    <div class="ps-4">
+                                        <strong>Invoices in this shipment:</strong>
+                                        @if (!string.IsNullOrEmpty(s.ShippingAddressSummary))
+                                        {
+                                            <span class="ms-3 text-muted">Ship to: @s.ShippingAddressSummary</span>
+                                        }
+                                        @if (!string.IsNullOrEmpty(s.Notes))
+                                        {
+                                            <span class="ms-3 text-muted">Notes: @s.Notes</span>
+                                        }
+                                        <table class="table table-sm mt-2 mb-0">
+                                            <thead>
+                                                <tr>
+                                                    <th>Invoice #</th>
+                                                    <th>Notes</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var inv in s.Invoices)
+                                                {
+                                                    <tr>
+                                                        <td>@inv.InvoiceNumber</td>
+                                                        <td>@inv.Notes</td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                    @if (!_shipments.Any())
+                    {
+                        <tr><td colspan="10" class="text-center text-muted">No shipments found.</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@* Mark Shipped Modal *@
+@if (_showShippedModal)
+{
+    <div class="modal show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Mark as Shipped — @_selectedShipment?.ShipmentNumber</h5>
+                    <button type="button" class="btn-close" @onclick="() => _showShippedModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Tracking Number</label>
+                        <input class="form-control" @bind="_trackingNumber" placeholder="Enter tracking number" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => _showShippedModal = false">Cancel</button>
+                    <button class="btn btn-success" @onclick="ConfirmShipped" disabled="@_saving">
+                        @(_saving ? "Updating..." : "Mark Shipped")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* Create Shipment Modal *@
+@if (_showCreateModal)
+{
+    <div class="modal show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create Shipment</h5>
+                    <button type="button" class="btn-close" @onclick="CloseCreateModal"></button>
+                </div>
+                <div class="modal-body">
+                    @if (_loadingCreate)
+                    {
+                        <p><em>Loading available invoices...</em></p>
+                    }
+                    else
+                    {
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Shipper</label>
+                                <select class="form-select" @bind="_createShipperId">
+                                    <option value="0">— Select Shipper —</option>
+                                    @foreach (var sh in _shippers)
+                                    {
+                                        <option value="@sh.Id">@sh.Code - @sh.Name</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Buyer</label>
+                                <select class="form-select" value="@_createBuyerId" @onchange="OnBuyerChanged">
+                                    <option value="0">— Select Buyer —</option>
+                                    @foreach (var b in _availableBuyers)
+                                    {
+                                        <option value="@b.BuyerId">@b.BuyerNumber - @b.BuyerName</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+
+                        @if (_createBuyerId > 0)
+                        {
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">Shipping Address</label>
+                                    <select class="form-select" @bind="_createAddressId">
+                                        <option value="0">— None —</option>
+                                        @foreach (var a in _buyerAddresses)
+                                        {
+                                            <option value="@a.Id">@a.AddressLine1, @a.City @a.Country @(a.IsDefault ? "(Default)" : "")</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Tracking Number</label>
+                                    <input class="form-control" @bind="_createTrackingNumber" placeholder="Optional — can add later" />
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Notes</label>
+                                <input class="form-control" @bind="_createNotes" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Select Invoices to Ship</label>
+                                @if (!_buyerReleasedInvoices.Any())
+                                {
+                                    <div class="text-muted">No released invoices found for this buyer.</div>
+                                }
+                                else
+                                {
+                                    <table class="table table-sm table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th><input type="checkbox" @onchange="ToggleAllInvoices" /></th>
+                                                <th>Invoice #</th>
+                                                <th>Broker</th>
+                                                <th>Amount</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var inv in _buyerReleasedInvoices)
+                                            {
+                                                <tr>
+                                                    <td><input type="checkbox" checked="@_selectedInvoiceIds.Contains(inv.Id)" @onchange="() => ToggleInvoiceSelection(inv.Id)" /></td>
+                                                    <td>@inv.InvoiceNumber</td>
+                                                    <td>@inv.BrokerName</td>
+                                                    <td>@inv.TotalAmount.ToString("N2") @inv.Currency</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                }
+                            </div>
+                        }
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseCreateModal">Cancel</button>
+                    <button class="btn btn-primary" @onclick="CreateShipment" disabled="@(_saving || _createShipperId == 0 || _createBuyerId == 0 || !_selectedInvoiceIds.Any())">
+                        @(_saving ? "Creating..." : "Create Shipment")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<ShipmentListDto> _shipments = new();
+    private List<ShipperListDto> _shippers = new();
+    private List<ReleasedInvoiceDto> _releasedInvoices = new();
+    private bool _loading = true;
+    private string? _error;
+    private string? _success;
+    private int? _expandedShipmentId;
+
+    // Ship modal
+    private bool _showShippedModal;
+    private ShipmentListDto? _selectedShipment;
+    private string _trackingNumber = "";
+    private bool _saving;
+
+    // Create modal
+    private bool _showCreateModal;
+    private bool _loadingCreate;
+    private int _createShipperId;
+    private int _createBuyerId;
+    private int _createAddressId;
+    private string _createTrackingNumber = "";
+    private string _createNotes = "";
+    private List<ReleasedInvoiceDto> _buyerReleasedInvoices = new();
+    private List<ShippingAddressListDto> _buyerAddresses = new();
+    private HashSet<int> _selectedInvoiceIds = new();
+
+    private List<(int BuyerId, string BuyerNumber, string BuyerName)> _availableBuyers = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadShipments();
+    }
+
+    private async Task LoadShipments(string? statusFilter = null)
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _shipments = await Api.GetShipmentsAsync(statusFilter);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        _loading = false;
+    }
+
+    private async void OnStatusFilterChanged(ChangeEventArgs e)
+    {
+        var val = e.Value?.ToString();
+        await LoadShipments(string.IsNullOrEmpty(val) ? null : val);
+        StateHasChanged();
+    }
+
+    private void ToggleInvoices(int shipmentId)
+    {
+        _expandedShipmentId = _expandedShipmentId == shipmentId ? null : shipmentId;
+    }
+
+    private void MarkShipped(ShipmentListDto s)
+    {
+        _selectedShipment = s;
+        _trackingNumber = s.TrackingNumber;
+        _showShippedModal = true;
+    }
+
+    private async Task ConfirmShipped()
+    {
+        if (_selectedShipment == null) return;
+        _saving = true;
+        _error = null;
+        _success = null;
+        var (ok, err) = await Api.UpdateShipmentStatusAsync(_selectedShipment.Id, new { status = "Shipped", trackingNumber = _trackingNumber });
+        if (!ok) { _error = err; _saving = false; return; }
+        _success = $"Shipment {_selectedShipment.ShipmentNumber} marked as Shipped.";
+        _showShippedModal = false;
+        _saving = false;
+        await LoadShipments();
+    }
+
+    private async Task MarkDelivered(ShipmentListDto s)
+    {
+        _error = null;
+        _success = null;
+        var (ok, err) = await Api.UpdateShipmentStatusAsync(s.Id, new { status = "Delivered" });
+        if (!ok) { _error = err; return; }
+        _success = $"Shipment {s.ShipmentNumber} marked as Delivered.";
+        await LoadShipments();
+    }
+
+    private async Task DeleteShipment(int id)
+    {
+        _error = null;
+        _success = null;
+        var (ok, err) = await Api.DeleteShipmentAsync(id);
+        if (!ok) { _error = err; return; }
+        _success = "Shipment deleted.";
+        await LoadShipments();
+    }
+
+    private async Task ShowCreateModal()
+    {
+        _showCreateModal = true;
+        _loadingCreate = true;
+        _createShipperId = 0;
+        _createBuyerId = 0;
+        _createAddressId = 0;
+        _createTrackingNumber = "";
+        _createNotes = "";
+        _selectedInvoiceIds.Clear();
+        _buyerReleasedInvoices.Clear();
+        _buyerAddresses.Clear();
+        _error = null;
+
+        try
+        {
+            _shippers = await Api.GetShippersAsync();
+            _releasedInvoices = await Api.GetReleasedInvoicesForShipmentAsync();
+            _availableBuyers = _releasedInvoices
+                .Select(i => (i.BuyerId, i.BuyerNumber, i.BuyerName))
+                .Distinct()
+                .OrderBy(b => b.BuyerNumber)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        _loadingCreate = false;
+    }
+
+    private async Task OnBuyerChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var buyerId) && buyerId > 0)
+        {
+            _createBuyerId = buyerId;
+            _buyerReleasedInvoices = _releasedInvoices.Where(i => i.BuyerId == buyerId).ToList();
+            _selectedInvoiceIds.Clear();
+
+            try
+            {
+                var allAddresses = await Api.GetShippingAddressesAsync();
+                _buyerAddresses = allAddresses.Where(a => a.BuyerId == buyerId).ToList();
+                var defaultAddr = _buyerAddresses.FirstOrDefault(a => a.IsDefault);
+                _createAddressId = defaultAddr?.Id ?? 0;
+            }
+            catch { _buyerAddresses.Clear(); }
+        }
+        else
+        {
+            _createBuyerId = 0;
+            _buyerReleasedInvoices.Clear();
+            _buyerAddresses.Clear();
+            _selectedInvoiceIds.Clear();
+        }
+    }
+
+    private void ToggleInvoiceSelection(int invoiceId)
+    {
+        if (!_selectedInvoiceIds.Remove(invoiceId))
+            _selectedInvoiceIds.Add(invoiceId);
+    }
+
+    private void ToggleAllInvoices(ChangeEventArgs e)
+    {
+        if ((bool)(e.Value ?? false))
+            _selectedInvoiceIds = _buyerReleasedInvoices.Select(i => i.Id).ToHashSet();
+        else
+            _selectedInvoiceIds.Clear();
+    }
+
+    private void CloseCreateModal()
+    {
+        _showCreateModal = false;
+        _error = null;
+    }
+
+    private async Task CreateShipment()
+    {
+        _saving = true;
+        _error = null;
+        _success = null;
+
+        var payload = new
+        {
+            shipperId = _createShipperId,
+            buyerId = _createBuyerId,
+            shippingAddressId = _createAddressId > 0 ? (int?)_createAddressId : null,
+            trackingNumber = _createTrackingNumber,
+            notes = _createNotes,
+            invoiceIds = _selectedInvoiceIds.ToList()
+        };
+
+        try
+        {
+            var (ok, err, num) = await Api.CreateShipmentAsync(payload);
+            if (!ok) { _error = err; _saving = false; return; }
+            _success = $"Shipment {num} created with {_selectedInvoiceIds.Count} invoice(s).";
+            _showCreateModal = false;
+            await LoadShipments();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        _saving = false;
+    }
+
+    private static string GetStatusBadgeClass(string status) => status switch
+    {
+        "Pending" => "bg-warning text-dark",
+        "Shipped" => "bg-primary",
+        "Delivered" => "bg-success",
+        "Cancelled" => "bg-secondary",
+        _ => "bg-secondary"
+    };
+}

@@ -863,6 +863,58 @@ public class AuctionApiClient
         return (true, rows, null);
     }
 
+    // Shipments
+    public async Task<List<ShipmentListDto>> GetShipmentsAsync(string? status = null, int? buyerId = null)
+    {
+        var url = "api/shipments";
+        var qs = new List<string>();
+        if (!string.IsNullOrEmpty(status)) qs.Add($"status={status}");
+        if (buyerId.HasValue) qs.Add($"buyerId={buyerId}");
+        if (qs.Any()) url += "?" + string.Join("&", qs);
+        var resp = await _http.GetAsync(url);
+        resp.EnsureSuccessStatusCode();
+        return await resp.Content.ReadFromJsonAsync<List<ShipmentListDto>>() ?? new();
+    }
+
+    public async Task<List<ReleasedInvoiceDto>> GetReleasedInvoicesForShipmentAsync(int? buyerId = null)
+    {
+        var url = "api/shipments/released-invoices";
+        if (buyerId.HasValue) url += $"?buyerId={buyerId}";
+        var resp = await _http.GetAsync(url);
+        resp.EnsureSuccessStatusCode();
+        return await resp.Content.ReadFromJsonAsync<List<ReleasedInvoiceDto>>() ?? new();
+    }
+
+    public async Task<(bool Success, string? Error, string? ShipmentNumber)> CreateShipmentAsync(object shipment)
+    {
+        var resp = await _http.PostAsJsonAsync("api/shipments", shipment);
+        if (!resp.IsSuccessStatusCode) return (false, await GetErrorMessage(resp), null);
+        var doc = System.Text.Json.JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+        var num = doc.RootElement.TryGetProperty("shipmentNumber", out var sn) ? sn.GetString() : null;
+        return (true, null, num);
+    }
+
+    public async Task<(bool Success, string? Error)> UpdateShipmentStatusAsync(int id, object status)
+    {
+        var resp = await _http.PutAsJsonAsync($"api/shipments/{id}/status", status);
+        if (!resp.IsSuccessStatusCode) return (false, await GetErrorMessage(resp));
+        return (true, null);
+    }
+
+    public async Task<(bool Success, string? Error)> UpdateShipmentAsync(int id, object shipment)
+    {
+        var resp = await _http.PutAsJsonAsync($"api/shipments/{id}", shipment);
+        if (!resp.IsSuccessStatusCode) return (false, await GetErrorMessage(resp));
+        return (true, null);
+    }
+
+    public async Task<(bool Success, string? Error)> DeleteShipmentAsync(int id)
+    {
+        var resp = await _http.DeleteAsync($"api/shipments/{id}");
+        if (!resp.IsSuccessStatusCode) return (false, await GetErrorMessage(resp));
+        return (true, null);
+    }
+
     // Shippers
     public async Task<List<ShipperListDto>> GetShippersAsync()
     {

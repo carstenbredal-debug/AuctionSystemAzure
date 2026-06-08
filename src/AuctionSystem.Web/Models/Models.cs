@@ -945,6 +945,49 @@ public class BoxTypeDimensionDto
     public DateTime? UpdatedAt { get; set; }
 }
 
+public class ShipmentListDto
+{
+    public int Id { get; set; }
+    public string ShipmentNumber { get; set; } = "";
+    public int ShipperId { get; set; }
+    public string ShipperName { get; set; } = "";
+    public string ShipperCode { get; set; } = "";
+    public int BuyerId { get; set; }
+    public string BuyerName { get; set; } = "";
+    public string BuyerNumber { get; set; } = "";
+    public int? ShippingAddressId { get; set; }
+    public string ShippingAddressSummary { get; set; } = "";
+    public string TrackingNumber { get; set; } = "";
+    public string Status { get; set; } = "";
+    public string Notes { get; set; } = "";
+    public DateTime CreatedAt { get; set; }
+    public DateTime? ShippedAt { get; set; }
+    public DateTime? DeliveredAt { get; set; }
+    public int InvoiceCount { get; set; }
+    public List<ShipmentInvoiceDto> Invoices { get; set; } = new();
+}
+
+public class ShipmentInvoiceDto
+{
+    public int InvoiceId { get; set; }
+    public string InvoiceNumber { get; set; } = "";
+    public int? BoxNumber { get; set; }
+    public string Notes { get; set; } = "";
+}
+
+public class ReleasedInvoiceDto
+{
+    public int Id { get; set; }
+    public string InvoiceNumber { get; set; } = "";
+    public int BuyerId { get; set; }
+    public string BuyerName { get; set; } = "";
+    public string BuyerNumber { get; set; } = "";
+    public string BrokerName { get; set; } = "";
+    public decimal TotalAmount { get; set; }
+    public string Currency { get; set; } = "";
+    public string ShippingStatus { get; set; } = "";
+}
+
 public class ShipperListDto
 {
     public int Id { get; set; }

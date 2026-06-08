@@ -29,6 +29,8 @@ public class AuctionDbContext : DbContext
     public DbSet<BoxTypeDimension> BoxTypeDimensions => Set<BoxTypeDimension>();
     public DbSet<ShippingAddress> ShippingAddresses => Set<ShippingAddress>();
     public DbSet<Shipper> Shippers => Set<Shipper>();
+    public DbSet<Shipment> Shipments => Set<Shipment>();
+    public DbSet<ShipmentLine> ShipmentLines => Set<ShipmentLine>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -294,6 +296,27 @@ public class AuctionDbContext : DbContext
             e.Property(s => s.Country).HasMaxLength(100);
             e.Property(s => s.Website).HasMaxLength(500);
             e.Property(s => s.TrackingUrlTemplate).HasMaxLength(500);
+        });
+
+        modelBuilder.Entity<Shipment>(e =>
+        {
+            e.HasKey(s => s.Id);
+            e.HasIndex(s => s.ShipmentNumber).IsUnique();
+            e.Property(s => s.ShipmentNumber).HasMaxLength(50);
+            e.Property(s => s.TrackingNumber).HasMaxLength(200);
+            e.Property(s => s.Status).HasMaxLength(50);
+            e.Property(s => s.Notes).HasMaxLength(1000);
+            e.HasOne(s => s.Shipper).WithMany().HasForeignKey(s => s.ShipperId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(s => s.Buyer).WithMany().HasForeignKey(s => s.BuyerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(s => s.ShippingAddress).WithMany().HasForeignKey(s => s.ShippingAddressId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<ShipmentLine>(e =>
+        {
+            e.HasKey(l => l.Id);
+            e.Property(l => l.Notes).HasMaxLength(500);
+            e.HasOne(l => l.Shipment).WithMany(s => s.Lines).HasForeignKey(l => l.ShipmentId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(l => l.Invoice).WithMany().HasForeignKey(l => l.InvoiceId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }
