@@ -2,7 +2,7 @@
   "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
   "name": "Auction System Ledger API",
   "publisher": "AuctionSystem",
-  "version": "1.0.0.11",
+  "version": "1.0.0.12",
   "brief": "Custom API pages for Auction System integration",
   "description": "Exposes Customer Ledger Entries and other BC data via custom API for the Auction System portal.",
   "privacyStatement": "",
