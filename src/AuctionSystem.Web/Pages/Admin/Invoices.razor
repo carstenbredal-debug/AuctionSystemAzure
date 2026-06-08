@@ -209,7 +209,19 @@ else
                                     <span class="text-success">Paid</span>
                                     @if (inv.ShippingStatus == "Released" || inv.Status == "ReleasedToShip")
                                     {
-                                        <span class="badge bg-primary ms-1">Shipped</span>
+                                        <span class="badge bg-primary ms-1">Released to Ship</span>
+                                    }
+                                    @if (inv.ShippingStatus == "InShipment")
+                                    {
+                                        <span class="badge bg-info ms-1">In Shipment</span>
+                                    }
+                                    @if (inv.ShippingStatus == "Shipped")
+                                    {
+                                        <span class="badge bg-success ms-1">Shipped</span>
+                                    }
+                                    @if (inv.ShippingStatus == "Delivered")
+                                    {
+                                        <span class="badge bg-success ms-1">Delivered</span>
                                     }
                                 }
                             </td>
