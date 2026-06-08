@@ -4,6 +4,7 @@
     flex-direction: column;
     min-height: 100vh;
     min-height: 100dvh;
+    background-color: #230A3C;
 }
 
 .dev-banner {
@@ -36,6 +37,7 @@
 
 main {
     flex: 1;
+    background-color: #E8E3DD;
 }
 
 .sidebar {
