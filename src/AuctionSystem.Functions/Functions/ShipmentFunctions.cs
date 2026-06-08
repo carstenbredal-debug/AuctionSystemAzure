@@ -208,12 +208,34 @@ public class ShipmentFunctions
 
         _db.Shipments.Add(shipment);
 
+        // Check if any box in the shipment lots has a showlot type
+        var catalogLots = await _catalogDb.CatalogLots
+            .Where(cl => body.LotNumbers.Contains(cl.LotNumber))
+            .Select(cl => new { cl.LotNumber, cl.IncludedBoxNumbers })
+            .ToListAsync();
+        var allBoxNumbers = catalogLots
+            .Where(cl => !string.IsNullOrEmpty(cl.IncludedBoxNumbers))
+            .SelectMany(cl => cl.IncludedBoxNumbers!.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(b => int.TryParse(b.Trim(), out var n) ? n : 0).Where(n => n > 0))
+            .Distinct().ToList();
+
+        var hasShowLot = false;
+        if (allBoxNumbers.Count > 0)
+        {
+            hasShowLot = await _catalogDb.Database
+                .SqlQueryRaw<int>("SELECT 1 AS Value FROM auction.boxes WHERE BoxNumber IN (" +
+                    string.Join(",", allBoxNumbers) + ") AND LOWER(BoxType) = 'showlot'")
+                .AnyAsync();
+        }
+
+        var shippingStatus = hasShowLot ? "ShowLot Packing" : "InShipment";
+
         // Update invoice shipping status for affected invoices
         var invoiceIds = lotInvoiceMap.Values.Distinct().ToList();
         var invoices = await _db.Invoices.Where(i => invoiceIds.Contains(i.Id)).ToListAsync();
         foreach (var inv in invoices)
         {
-            inv.ShippingStatus = "InShipment";
+            inv.ShippingStatus = shippingStatus;
         }
 
         await _db.SaveChangesAsync();
