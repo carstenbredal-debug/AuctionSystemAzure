@@ -1,0 +1,161 @@
+@page "/admin/packing"
+@attribute [Authorize(Roles = "Admin")]
+@inject AuctionApiClient Api
+
+<h4 class="mb-4">Packing Orders</h4>
+
+<div class="row mb-3 align-items-end">
+    <div class="col-auto">
+        <label class="form-label fw-bold">Filter by Status</label>
+        <select class="form-select" @onchange="OnStatusFilterChanged">
+            <option value="">All Statuses</option>
+            <option value="Ready to Pack">Ready to Pack</option>
+            <option value="Packed">Packed</option>
+        </select>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <p><em>Loading...</em></p>
+}
+else if (_orders.Count == 0)
+{
+    <div class="alert alert-info">No packing orders found.</div>
+}
+else
+{
+    <div class="section-container">
+        <div class="section-body">
+            <table class="table table-striped table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Packing Order #</th>
+                        <th>Shipment #</th>
+                        <th>Buyer</th>
+                        <th>Status</th>
+                        <th>Boxes</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var po in _orders)
+                    {
+                        <tr>
+                            <td>
+                                <a href="javascript:void(0)" @onclick="() => ToggleExpand(po.Id)">
+                                    <strong>@po.PackingOrderNumber</strong>
+                                </a>
+                            </td>
+                            <td>@po.ShipmentNumber</td>
+                            <td>@po.BuyerName (@po.BuyerNumber)</td>
+                            <td><span class="badge @GetStatusBadgeClass(po.Status)">@po.Status</span></td>
+                            <td>@po.BoxCount</td>
+                            <td>@po.CreatedAt.ToString("yyyy-MM-dd")</td>
+                            <td>
+                                @if (po.Status == "Ready to Pack")
+                                {
+                                    <button class="btn btn-sm btn-success" @onclick="() => MarkPacked(po)">Mark Packed</button>
+                                }
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => DeletePackingOrder(po)">Delete</button>
+                            </td>
+                        </tr>
+                        @if (_expandedId == po.Id)
+                        {
+                            <tr>
+                                <td colspan="7" class="p-0">
+                                    <div class="bg-light p-3">
+                                        <h6 class="mb-2">Boxes in Packing Order (@po.Lines.Count boxes)</h6>
+                                        <table class="table table-sm table-bordered mb-0">
+                                            <thead>
+                                                <tr>
+                                                    <th>Box #</th>
+                                                    <th>Lot #</th>
+                                                    <th>Skins</th>
+                                                    <th>Box Type</th>
+                                                    <th>Location</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var line in po.Lines.OrderBy(l => l.BoxNumber))
+                                                {
+                                                    <tr>
+                                                        <td>@line.BoxNumber</td>
+                                                        <td>@line.LotNumber</td>
+                                                        <td>@line.Skins</td>
+                                                        <td>@line.BoxType</td>
+                                                        <td>@(string.IsNullOrEmpty(line.Location) ? "—" : line.Location)</td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                        <div class="mt-2 text-muted">
+                                            <small>Total: @po.Lines.Count boxes, @po.Lines.Sum(l => l.Skins) skins</small>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private List<PackingOrderDto> _orders = new();
+    private bool _loading = true;
+    private int? _expandedId;
+    private string? _statusFilter;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadOrders();
+    }
+
+    private async Task LoadOrders()
+    {
+        _loading = true;
+        try
+        {
+            _orders = await Api.GetPackingOrdersAsync(status: _statusFilter, type: "Packing");
+        }
+        catch { _orders = new(); }
+        _loading = false;
+    }
+
+    private async Task OnStatusFilterChanged(ChangeEventArgs e)
+    {
+        _statusFilter = e.Value?.ToString();
+        if (string.IsNullOrEmpty(_statusFilter)) _statusFilter = null;
+        await LoadOrders();
+    }
+
+    private void ToggleExpand(int id)
+    {
+        _expandedId = _expandedId == id ? null : id;
+    }
+
+    private async Task MarkPacked(PackingOrderDto po)
+    {
+        var success = await Api.UpdatePackingOrderStatusAsync(po.Id, "Packed");
+        if (success)
+            po.Status = "Packed";
+    }
+
+    private async Task DeletePackingOrder(PackingOrderDto po)
+    {
+        var success = await Api.DeletePackingOrderAsync(po.Id);
+        if (success)
+            _orders.Remove(po);
+    }
+
+    private string GetStatusBadgeClass(string status) => status switch
+    {
+        "Ready to Pack" => "bg-warning text-dark",
+        "Packed" => "bg-success",
+        _ => "bg-secondary"
+    };
+}

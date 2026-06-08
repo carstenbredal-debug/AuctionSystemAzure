@@ -336,7 +336,7 @@ else
     private async Task LoadOrders()
     {
         _loading = true;
-        _orders = await Api.GetPackingOrdersAsync(string.IsNullOrEmpty(_statusFilter) ? null : _statusFilter);
+        _orders = await Api.GetPackingOrdersAsync(status: string.IsNullOrEmpty(_statusFilter) ? null : _statusFilter, type: "ShowLot");
         // Load packed boxes for expanded orders
         foreach (var po in _orders.Where(o => o.Lines.Any(l => l.PackedBoxId != null)))
         {

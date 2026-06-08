@@ -248,61 +248,82 @@ public class ShipmentFunctions
 
         await _db.SaveChangesAsync();
 
-        // Auto-create packing order if shipment has showlot boxes
+        // Build box-to-lot mapping
+        var boxToLotMap = new Dictionary<int, int>();
+        foreach (var cl in catalogLots)
+        {
+            if (string.IsNullOrEmpty(cl.IncludedBoxNumbers)) continue;
+            foreach (var boxStr in cl.IncludedBoxNumbers.Split(',', StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (int.TryParse(boxStr.Trim(), out var bn) && bn > 0)
+                    boxToLotMap[bn] = cl.LotNumber;
+            }
+        }
+
+        // Get all box data and locations
+        var allBoxData = new List<BoxViewResult>();
+        var boxLocations = new Dictionary<int, string>();
+        if (allBoxNumbers.Count > 0)
+        {
+            allBoxData = await _catalogDb.Database
+                .SqlQueryRaw<BoxViewResult>("SELECT BoxNumber, Skins, BoxType FROM auction.boxes WHERE BoxNumber IN (" +
+                    string.Join(",", allBoxNumbers) + ")")
+                .ToListAsync();
+
+            // Get locations from boxstatingfromkphg
+            try
+            {
+                var staging = await _catalogDb.Database
+                    .SqlQueryRaw<BoxStagingResult>("SELECT CAST(BoxNumber AS INT) AS BoxNumber, Weight AS BoxWeight, BoxLocation FROM dbo.boxstatingfromkphg WHERE BoxNumber IN (" +
+                        string.Join(",", allBoxNumbers) + ")")
+                    .ToListAsync();
+                foreach (var s in staging)
+                    if (!string.IsNullOrEmpty(s.BoxLocation))
+                        boxLocations[s.BoxNumber] = s.BoxLocation;
+            }
+            catch { /* table may not exist */ }
+        }
+
+        // Generate packing order number helper
+        var maxPoNum = await _db.PackingOrders
+            .Where(p => p.PackingOrderNumber.StartsWith("PO"))
+            .Select(p => p.PackingOrderNumber)
+            .ToListAsync();
+        var nextPoNum = 1;
+        foreach (var n in maxPoNum)
+        {
+            if (int.TryParse(n.Replace("PO", ""), out var num) && num >= nextPoNum)
+                nextPoNum = num + 1;
+        }
+
+        // Auto-create packing order for showlot boxes
         if (hasShowLot)
         {
-            // Generate packing order number
-            var maxPoNum = await _db.PackingOrders
-                .Where(p => p.PackingOrderNumber.StartsWith("PO"))
-                .Select(p => p.PackingOrderNumber)
-                .ToListAsync();
-            var nextPoNum = 1;
-            foreach (var n in maxPoNum)
-            {
-                if (int.TryParse(n.Replace("PO", ""), out var num) && num >= nextPoNum)
-                    nextPoNum = num + 1;
-            }
+            var showLotBoxes = allBoxData.Where(b => b.BoxType.Equals("showlot", StringComparison.OrdinalIgnoreCase)).ToList();
 
             var packingOrder = new PackingOrder
             {
                 PackingOrderNumber = $"PO{nextPoNum:D5}",
                 ShipmentId = shipment.Id,
-                Status = "Ready to Pack"
+                Status = "Ready to Pack",
+                Type = "ShowLot"
             };
 
-            // Add showlot boxes as packing order lines
-            if (allBoxNumbers.Count > 0)
+            foreach (var box in showLotBoxes)
             {
-                var showLotBoxData = await _catalogDb.Database
-                    .SqlQueryRaw<BoxViewResult>("SELECT BoxNumber, Skins, BoxType FROM auction.boxes WHERE BoxNumber IN (" +
-                        string.Join(",", allBoxNumbers) + ") AND LOWER(BoxType) = 'showlot'")
-                    .ToListAsync();
-
-                var boxToLotMap = new Dictionary<int, int>();
-                foreach (var cl in catalogLots)
+                packingOrder.Lines.Add(new PackingOrderLine
                 {
-                    if (string.IsNullOrEmpty(cl.IncludedBoxNumbers)) continue;
-                    foreach (var boxStr in cl.IncludedBoxNumbers.Split(',', StringSplitOptions.RemoveEmptyEntries))
-                    {
-                        if (int.TryParse(boxStr.Trim(), out var bn) && bn > 0)
-                            boxToLotMap[bn] = cl.LotNumber;
-                    }
-                }
-
-                foreach (var box in showLotBoxData)
-                {
-                    packingOrder.Lines.Add(new PackingOrderLine
-                    {
-                        BoxNumber = box.BoxNumber,
-                        LotNumber = boxToLotMap.GetValueOrDefault(box.BoxNumber),
-                        Skins = box.Skins,
-                        BoxType = box.BoxType
-                    });
-                }
+                    BoxNumber = box.BoxNumber,
+                    LotNumber = boxToLotMap.GetValueOrDefault(box.BoxNumber),
+                    Skins = box.Skins,
+                    BoxType = box.BoxType,
+                    Location = boxLocations.GetValueOrDefault(box.BoxNumber, "")
+                });
             }
 
             _db.PackingOrders.Add(packingOrder);
             await _db.SaveChangesAsync();
+            nextPoNum++;
 
             // Generate XML and push to blob storage
             if (_blobStorage != null)
@@ -317,6 +338,36 @@ public class ShipmentFunctions
                 {
                     _logger.LogError(ex, "Failed to upload packing order XML {Number}", packingOrder.PackingOrderNumber);
                 }
+            }
+        }
+
+        // Auto-create packing order for non-showlot boxes (regular packing)
+        {
+            var nonShowLotBoxes = allBoxData.Where(b => !b.BoxType.Equals("showlot", StringComparison.OrdinalIgnoreCase)).ToList();
+            if (nonShowLotBoxes.Count > 0)
+            {
+                var packingOrder = new PackingOrder
+                {
+                    PackingOrderNumber = $"PO{nextPoNum:D5}",
+                    ShipmentId = shipment.Id,
+                    Status = "Ready to Pack",
+                    Type = "Packing"
+                };
+
+                foreach (var box in nonShowLotBoxes)
+                {
+                    packingOrder.Lines.Add(new PackingOrderLine
+                    {
+                        BoxNumber = box.BoxNumber,
+                        LotNumber = boxToLotMap.GetValueOrDefault(box.BoxNumber),
+                        Skins = box.Skins,
+                        BoxType = box.BoxType,
+                        Location = boxLocations.GetValueOrDefault(box.BoxNumber, "")
+                    });
+                }
+
+                _db.PackingOrders.Add(packingOrder);
+                await _db.SaveChangesAsync();
             }
         }
 
@@ -342,14 +393,16 @@ public class ShipmentFunctions
                 new XElement("Shipper",
                     new XElement("Name", shipment.Shipper?.Name ?? "")
                 ),
-                new XElement("ShowLotBoxes",
+                new XElement("Type", packingOrder.Type),
+                new XElement("Boxes",
                     new XAttribute("Count", packingOrder.Lines.Count),
                     packingOrder.Lines.Select(line =>
                         new XElement("Box",
                             new XElement("BoxNumber", line.BoxNumber),
                             new XElement("LotNumber", line.LotNumber),
                             new XElement("Skins", line.Skins),
-                            new XElement("BoxType", line.BoxType)
+                            new XElement("BoxType", line.BoxType),
+                            new XElement("Location", line.Location)
                         )
                     )
                 )
@@ -691,6 +744,7 @@ public class ShipmentFunctions
     {
         var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
         var statusFilter = query["status"];
+        var typeFilter = query["type"];
 
         var poQuery = _db.PackingOrders
             .Include(p => p.Shipment).ThenInclude(s => s!.Buyer)
@@ -700,6 +754,8 @@ public class ShipmentFunctions
 
         if (!string.IsNullOrEmpty(statusFilter))
             poQuery = poQuery.Where(p => p.Status == statusFilter);
+        if (!string.IsNullOrEmpty(typeFilter))
+            poQuery = poQuery.Where(p => p.Type == typeFilter);
 
         var orders = await poQuery.OrderByDescending(p => p.CreatedAt).ToListAsync();
 
@@ -713,8 +769,9 @@ public class ShipmentFunctions
             BuyerNumber = po.Shipment?.Buyer?.BuyerNumber ?? "",
             ShipperName = po.Shipment?.Shipper?.Name ?? "",
             po.Status,
+            po.Type,
             po.CreatedAt,
-            ShowLotCount = po.Lines.Count,
+            BoxCount = po.Lines.Count,
             Lines = po.Lines.Select(l => new
             {
                 l.Id,
@@ -722,6 +779,7 @@ public class ShipmentFunctions
                 l.LotNumber,
                 l.Skins,
                 l.BoxType,
+                l.Location,
                 l.PackedBoxId
             })
         });

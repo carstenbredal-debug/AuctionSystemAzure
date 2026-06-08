@@ -36,7 +36,8 @@ public class PackingOrder
     public string PackingOrderNumber { get; set; } = string.Empty;
     public int ShipmentId { get; set; }
     public Shipment? Shipment { get; set; }
-    public string Status { get; set; } = "Ready to Pack"; // Ready to Pack, In Production
+    public string Status { get; set; } = "Ready to Pack"; // Ready to Pack, In Production, Packed
+    public string Type { get; set; } = "ShowLot"; // ShowLot or Packing
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public ICollection<PackingOrderLine> Lines { get; set; } = new List<PackingOrderLine>();
 }
@@ -50,6 +51,7 @@ public class PackingOrderLine
     public int LotNumber { get; set; }
     public int Skins { get; set; }
     public string BoxType { get; set; } = "";
+    public string Location { get; set; } = "";
     public int? PackedBoxId { get; set; }
     public PackedBox? PackedBox { get; set; }
 }

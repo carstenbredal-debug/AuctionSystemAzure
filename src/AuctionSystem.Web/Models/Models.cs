@@ -1000,8 +1000,10 @@ public class PackingOrderDto
     public string BuyerNumber { get; set; } = "";
     public string ShipperName { get; set; } = "";
     public string Status { get; set; } = "";
+    public string Type { get; set; } = "ShowLot";
     public DateTime CreatedAt { get; set; }
     public int ShowLotCount { get; set; }
+    public int BoxCount { get; set; }
     public List<PackingOrderLineDto> Lines { get; set; } = new();
 }
 
@@ -1012,6 +1014,7 @@ public class PackingOrderLineDto
     public int LotNumber { get; set; }
     public int Skins { get; set; }
     public string BoxType { get; set; } = "";
+    public string Location { get; set; } = "";
     public int? PackedBoxId { get; set; }
 }
 

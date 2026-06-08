@@ -444,6 +444,16 @@ using (var scope = host.Services.CreateScope())
                 ALTER TABLE auction.PackingOrderLines ADD CONSTRAINT FK_PackingOrderLines_PackedBox
                     FOREIGN KEY (PackedBoxId) REFERENCES auction.PackedBoxes(Id) ON DELETE NO ACTION;
         ");
+        // Add Type column to PackingOrders if missing
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.PackingOrders') AND name = 'Type')
+                ALTER TABLE auction.PackingOrders ADD Type NVARCHAR(50) NOT NULL DEFAULT 'ShowLot';
+        ");
+        // Add Location column to PackingOrderLines if missing
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.PackingOrderLines') AND name = 'Location')
+                ALTER TABLE auction.PackingOrderLines ADD Location NVARCHAR(100) NOT NULL DEFAULT '';
+        ");
         // Drop auction.Boxes table if it exists (replaced by view)
         db.Database.ExecuteSqlRaw(@"
             IF EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'Boxes')

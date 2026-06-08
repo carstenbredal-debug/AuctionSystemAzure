@@ -876,10 +876,13 @@ public class AuctionApiClient
         return await resp.Content.ReadFromJsonAsync<List<ShipmentListDto>>() ?? new();
     }
 
-    public async Task<List<PackingOrderDto>> GetPackingOrdersAsync(string? status = null)
+    public async Task<List<PackingOrderDto>> GetPackingOrdersAsync(string? status = null, string? type = null)
     {
         var url = "api/shipments/packing-orders";
-        if (!string.IsNullOrEmpty(status)) url += $"?status={status}";
+        var queryParams = new List<string>();
+        if (!string.IsNullOrEmpty(status)) queryParams.Add($"status={status}");
+        if (!string.IsNullOrEmpty(type)) queryParams.Add($"type={type}");
+        if (queryParams.Count > 0) url += "?" + string.Join("&", queryParams);
         var resp = await _http.GetAsync(url);
         resp.EnsureSuccessStatusCode();
         return await resp.Content.ReadFromJsonAsync<List<PackingOrderDto>>() ?? new();
