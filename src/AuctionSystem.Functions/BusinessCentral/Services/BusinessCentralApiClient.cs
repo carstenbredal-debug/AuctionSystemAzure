@@ -323,7 +323,7 @@ public class BusinessCentralApiClient
         return await PostAsync<BcSalesInvoiceLine>(url, line);
     }
 
-    public async Task<BcSalesInvoice?> PostSalesInvoiceAsync(Guid companyId, Guid invoiceId)
+    public async Task<BcSalesInvoice?> PostSalesInvoiceAsync(Guid companyId, Guid invoiceId, string? externalDocNumber = null)
     {
         await SetAuthHeaderAsync();
         var url = $"{_options.BaseUrl}/companies({companyId})/salesInvoices({invoiceId})/Microsoft.NAV.post";
@@ -332,18 +332,33 @@ public class BusinessCentralApiClient
         var response = await _httpClient.PostAsync(url, null);
         await EnsureSuccessAsync(response);
 
-        // After posting, the invoice may have a new number from the Posted Invoice Nos. series.
-        // Re-fetch it by ID (BC keeps the same ID but status changes to posted).
+        // After posting, try to re-fetch the invoice. BC may keep it at the same endpoint
+        // or move it. Try by ID first, then fall back to external document number lookup.
         try
         {
             var fetchUrl = $"{_options.BaseUrl}/companies({companyId})/salesInvoices({invoiceId})";
             var posted = await GetSingleAsync<BcSalesInvoice>(fetchUrl);
-            return posted;
+            if (posted != null) return posted;
         }
         catch
         {
-            return null;
+            _logger.LogWarning("Re-fetch by ID failed after posting invoice {InvoiceId}, trying by external doc number", invoiceId);
         }
+
+        if (!string.IsNullOrEmpty(externalDocNumber))
+        {
+            try
+            {
+                var byDoc = await GetSalesInvoiceByExternalDocAsync(companyId, externalDocNumber);
+                if (byDoc != null) return byDoc;
+            }
+            catch
+            {
+                _logger.LogWarning("Re-fetch by external doc number also failed for {ExtDoc}", externalDocNumber);
+            }
+        }
+
+        return null;
     }
 
     public async Task DeleteSalesInvoiceAsync(Guid companyId, Guid invoiceId, string? etag = null)
@@ -499,7 +514,7 @@ public class BusinessCentralApiClient
         return await PostAsync<BcSalesCreditMemoLine>(url, line);
     }
 
-    public async Task<BcSalesCreditMemo?> PostSalesCreditMemoAsync(Guid companyId, Guid creditMemoId)
+    public async Task<BcSalesCreditMemo?> PostSalesCreditMemoAsync(Guid companyId, Guid creditMemoId, string? externalDocNumber = null)
     {
         await SetAuthHeaderAsync();
         var url = $"{_options.BaseUrl}/companies({companyId})/salesCreditMemos({creditMemoId})/Microsoft.NAV.post";
@@ -512,12 +527,27 @@ public class BusinessCentralApiClient
         {
             var fetchUrl = $"{_options.BaseUrl}/companies({companyId})/salesCreditMemos({creditMemoId})";
             var posted = await GetSingleAsync<BcSalesCreditMemo>(fetchUrl);
-            return posted;
+            if (posted != null) return posted;
         }
         catch
         {
-            return null;
+            _logger.LogWarning("Re-fetch by ID failed after posting credit memo {CreditMemoId}, trying by external doc number", creditMemoId);
         }
+
+        if (!string.IsNullOrEmpty(externalDocNumber))
+        {
+            try
+            {
+                var byDoc = await GetSalesCreditMemoByExternalDocAsync(companyId, externalDocNumber);
+                if (byDoc != null) return byDoc;
+            }
+            catch
+            {
+                _logger.LogWarning("Re-fetch by external doc number also failed for credit memo {ExtDoc}", externalDocNumber);
+            }
+        }
+
+        return null;
     }
 
     public async Task<BcSalesCreditMemo?> GetSalesCreditMemoByExternalDocAsync(Guid companyId, string externalDocNumber)
