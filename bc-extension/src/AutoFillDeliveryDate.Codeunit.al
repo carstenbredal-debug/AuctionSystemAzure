@@ -15,10 +15,10 @@ codeunit 50150 "Auto Fill Delivery Date"
         if Rec."Shipment Date" = 0D then
             Rec."Shipment Date" := DocDate;
 
-        // Set Polish ITI Delivery Date (field 52063189) if it exists and is empty
+        // Set Polish ITI Delivery Date (field 52063188) if it exists and is empty
         RecRef.GetTable(Rec);
-        if RecRef.FieldExist(52063189) then begin
-            FldRef := RecRef.Field(52063189);
+        if RecRef.FieldExist(52063188) then begin
+            FldRef := RecRef.Field(52063188);
             if Format(FldRef.Value) = '' then begin
                 FldRef.Value := DocDate;
                 RecRef.SetTable(Rec);
@@ -41,10 +41,10 @@ codeunit 50150 "Auto Fill Delivery Date"
         if DocDate = 0D then
             DocDate := WorkDate();
 
-        // Set Polish ITI Delivery Date (field 52063189) if it exists and is empty
+        // Set Polish ITI Delivery Date (field 52063188) if it exists and is empty
         RecRef.GetTable(Rec);
-        if RecRef.FieldExist(52063189) then begin
-            FldRef := RecRef.Field(52063189);
+        if RecRef.FieldExist(52063188) then begin
+            FldRef := RecRef.Field(52063188);
             if Format(FldRef.Value) = '' then begin
                 FldRef.Value := DocDate;
                 RecRef.SetTable(Rec);
