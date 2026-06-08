@@ -250,13 +250,16 @@ public class BusinessCentralSyncService
         var created = await _bcClient.CreateSalesCreditMemoAsync(companyId, bcCreditMemo);
         await AddCreditMemoLinesToBcAsync(companyId, created.Id, creditNote);
 
-        var posted = await _bcClient.PostSalesCreditMemoAsync(companyId, created.Id);
+        var posted = await _bcClient.PostSalesCreditMemoAsync(companyId, created.Id, bcCreditMemo.ExternalDocumentNumber);
         var finalNumber = posted?.Number ?? created.Number;
         var finalId = posted?.Id ?? created.Id;
 
         creditNote.BcInvoiceNumber = finalNumber;
         creditNote.BcInvoiceId = finalId;
         creditNote.InvoiceNumber = finalNumber;
+
+        _logger.LogInformation("Posted credit memo: finalNumber={FinalNumber}, finalId={FinalId}, postedWasNull={PostedNull}",
+            finalNumber, finalId, posted == null);
 
         await TryFetchAndStoreCreditMemoPdfAsync(companyId, finalId, creditNote);
         await _db.SaveChangesAsync();
@@ -526,13 +529,16 @@ public class BusinessCentralSyncService
         var created = await _bcClient.CreateSalesInvoiceAsync(companyId, bcInvoice);
         await AddInvoiceLinesToBcAsync(companyId, created.Id, invoice);
 
-        var posted = await _bcClient.PostSalesInvoiceAsync(companyId, created.Id);
+        var posted = await _bcClient.PostSalesInvoiceAsync(companyId, created.Id, bcInvoice.ExternalDocumentNumber);
         var finalNumber = posted?.Number ?? created.Number;
         var finalId = posted?.Id ?? created.Id;
 
         invoice.BcInvoiceNumber = finalNumber;
         invoice.BcInvoiceId = finalId;
         invoice.InvoiceNumber = finalNumber;
+
+        _logger.LogInformation("Posted invoice: finalNumber={FinalNumber}, finalId={FinalId}, postedWasNull={PostedNull}",
+            finalNumber, finalId, posted == null);
 
         await TryFetchAndStorePdfAsync(companyId, finalId, invoice);
         await _db.SaveChangesAsync();
