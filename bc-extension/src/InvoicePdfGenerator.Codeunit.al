@@ -3,13 +3,7 @@ codeunit 50151 "Auction Invoice PDF Generator"
     procedure GenerateAndAttachInvoicePdf(var Buffer: Record "Auction Invoice PDF Buffer")
     var
         SalesInvoiceHeader: Record "Sales Invoice Header";
-        TempBlob: Codeunit "Temp Blob";
-        DocumentAttachment: Record "Document Attachment";
-        RecRef: RecordRef;
-        OutStr: OutStream;
-        InStr: InStream;
         ReportId: Integer;
-        FileName: Text;
     begin
         if not SalesInvoiceHeader.Get(Buffer."Document No.") then begin
             Buffer."Error Message" := 'Posted Sales Invoice not found: ' + Buffer."Document No.";
@@ -18,32 +12,86 @@ codeunit 50151 "Auction Invoice PDF Generator"
         end;
 
         SalesInvoiceHeader.SetRecFilter();
+
+        // Strategy 1: Try report from Report Selections (Polish report in test)
         ReportId := GetInvoiceReportId();
         Buffer."Report ID Used" := ReportId;
 
-        RecRef.GetTable(SalesInvoiceHeader);
-        TempBlob.CreateOutStream(OutStr);
-        if not Report.SaveAs(ReportId, '', ReportFormat::Pdf, OutStr, RecRef) then begin
-            Buffer."Error Message" := 'Report.SaveAs failed for Report ID ' + Format(ReportId);
+        if TryGenerateAndAttach(SalesInvoiceHeader, ReportId, 'Invoice_' + SalesInvoiceHeader."No.", Database::"Sales Invoice Header", Buffer) then
+            exit;
+
+        // Strategy 2: Fall back to Standard Sales Invoice report (1306)
+        Buffer."Error Message" := 'Report ' + Format(ReportId) + ' failed: ' + GetLastErrorText() + ' | Trying standard report 1306';
+        ReportId := 1306;
+        Buffer."Report ID Used" := ReportId;
+
+        if TryGenerateAndAttach(SalesInvoiceHeader, ReportId, 'Invoice_' + SalesInvoiceHeader."No.", Database::"Sales Invoice Header", Buffer) then begin
+            Buffer."Error Message" := 'Used fallback standard report 1306 (Polish report failed)';
+            exit;
+        end;
+
+        Buffer."Error Message" := 'Both reports failed. Last error: ' + GetLastErrorText();
+        Buffer.Success := false;
+    end;
+
+    procedure GenerateAndAttachCreditMemoPdf(var Buffer: Record "Auction Invoice PDF Buffer")
+    var
+        SalesCrMemoHeader: Record "Sales Cr.Memo Header";
+        ReportId: Integer;
+    begin
+        if not SalesCrMemoHeader.Get(Buffer."Document No.") then begin
+            Buffer."Error Message" := 'Posted Sales Credit Memo not found: ' + Buffer."Document No.";
             Buffer.Success := false;
             exit;
         end;
 
-        TempBlob.CreateInStream(InStr);
-        FileName := 'Invoice_' + SalesInvoiceHeader."No.";
+        SalesCrMemoHeader.SetRecFilter();
 
-        // Remove any existing PDF attachment with the same name
-        DocumentAttachment.SetRange("Table ID", Database::"Sales Invoice Header");
+        ReportId := GetCreditMemoReportId();
+        Buffer."Report ID Used" := ReportId;
+
+        if TryGenerateCrMemoAndAttach(SalesCrMemoHeader, ReportId, 'CreditMemo_' + SalesCrMemoHeader."No.", Database::"Sales Cr.Memo Header", Buffer) then
+            exit;
+
+        Buffer."Error Message" := 'Report ' + Format(ReportId) + ' failed: ' + GetLastErrorText() + ' | Trying standard report 1307';
+        ReportId := 1307;
+        Buffer."Report ID Used" := ReportId;
+
+        if TryGenerateCrMemoAndAttach(SalesCrMemoHeader, ReportId, 'CreditMemo_' + SalesCrMemoHeader."No.", Database::"Sales Cr.Memo Header", Buffer) then begin
+            Buffer."Error Message" := 'Used fallback standard report 1307 (Polish report failed)';
+            exit;
+        end;
+
+        Buffer."Error Message" := 'Both reports failed. Last error: ' + GetLastErrorText();
+        Buffer.Success := false;
+    end;
+
+    [TryFunction]
+    local procedure TryGenerateAndAttach(var SalesInvoiceHeader: Record "Sales Invoice Header"; ReportId: Integer; FileName: Text; TableId: Integer; var Buffer: Record "Auction Invoice PDF Buffer")
+    var
+        TempBlob: Codeunit "Temp Blob";
+        DocumentAttachment: Record "Document Attachment";
+        RecRef: RecordRef;
+        OutStr: OutStream;
+        InStr: InStream;
+    begin
+        RecRef.GetTable(SalesInvoiceHeader);
+        TempBlob.CreateOutStream(OutStr);
+        Report.SaveAs(ReportId, '', ReportFormat::Pdf, OutStr, RecRef);
+
+        TempBlob.CreateInStream(InStr);
+
+        // Remove existing attachment
+        DocumentAttachment.SetRange("Table ID", TableId);
         DocumentAttachment.SetRange("No.", SalesInvoiceHeader."No.");
         DocumentAttachment.SetRange("File Extension", 'pdf');
         DocumentAttachment.SetRange("File Name", FileName);
         if DocumentAttachment.FindFirst() then
             DocumentAttachment.Delete(true);
 
-        // Create new attachment
         Clear(DocumentAttachment);
         DocumentAttachment.Init();
-        DocumentAttachment.Validate("Table ID", Database::"Sales Invoice Header");
+        DocumentAttachment.Validate("Table ID", TableId);
         DocumentAttachment.Validate("No.", SalesInvoiceHeader."No.");
         DocumentAttachment.Validate("File Name", FileName);
         DocumentAttachment.Validate("File Extension", 'pdf');
@@ -54,39 +102,22 @@ codeunit 50151 "Auction Invoice PDF Generator"
         Buffer."Attachment Created" := true;
     end;
 
-    procedure GenerateAndAttachCreditMemoPdf(var Buffer: Record "Auction Invoice PDF Buffer")
+    [TryFunction]
+    local procedure TryGenerateCrMemoAndAttach(var SalesCrMemoHeader: Record "Sales Cr.Memo Header"; ReportId: Integer; FileName: Text; TableId: Integer; var Buffer: Record "Auction Invoice PDF Buffer")
     var
-        SalesCrMemoHeader: Record "Sales Cr.Memo Header";
         TempBlob: Codeunit "Temp Blob";
         DocumentAttachment: Record "Document Attachment";
         RecRef: RecordRef;
         OutStr: OutStream;
         InStr: InStream;
-        ReportId: Integer;
-        FileName: Text;
     begin
-        if not SalesCrMemoHeader.Get(Buffer."Document No.") then begin
-            Buffer."Error Message" := 'Posted Sales Credit Memo not found: ' + Buffer."Document No.";
-            Buffer.Success := false;
-            exit;
-        end;
-
-        SalesCrMemoHeader.SetRecFilter();
-        ReportId := GetCreditMemoReportId();
-        Buffer."Report ID Used" := ReportId;
-
         RecRef.GetTable(SalesCrMemoHeader);
         TempBlob.CreateOutStream(OutStr);
-        if not Report.SaveAs(ReportId, '', ReportFormat::Pdf, OutStr, RecRef) then begin
-            Buffer."Error Message" := 'Report.SaveAs failed for Report ID ' + Format(ReportId);
-            Buffer.Success := false;
-            exit;
-        end;
+        Report.SaveAs(ReportId, '', ReportFormat::Pdf, OutStr, RecRef);
 
         TempBlob.CreateInStream(InStr);
-        FileName := 'CreditMemo_' + SalesCrMemoHeader."No.";
 
-        DocumentAttachment.SetRange("Table ID", Database::"Sales Cr.Memo Header");
+        DocumentAttachment.SetRange("Table ID", TableId);
         DocumentAttachment.SetRange("No.", SalesCrMemoHeader."No.");
         DocumentAttachment.SetRange("File Extension", 'pdf');
         DocumentAttachment.SetRange("File Name", FileName);
@@ -95,7 +126,7 @@ codeunit 50151 "Auction Invoice PDF Generator"
 
         Clear(DocumentAttachment);
         DocumentAttachment.Init();
-        DocumentAttachment.Validate("Table ID", Database::"Sales Cr.Memo Header");
+        DocumentAttachment.Validate("Table ID", TableId);
         DocumentAttachment.Validate("No.", SalesCrMemoHeader."No.");
         DocumentAttachment.Validate("File Name", FileName);
         DocumentAttachment.Validate("File Extension", 'pdf');
