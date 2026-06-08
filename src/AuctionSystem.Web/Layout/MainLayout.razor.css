@@ -4,7 +4,6 @@
     flex-direction: column;
     min-height: 100vh;
     min-height: 100dvh;
-    background-color: #230A3C;
 }
 
 .dev-banner {
@@ -37,9 +36,6 @@
 
 main {
     flex: 1;
-    background-color: #E8E3DD;
-    min-height: 100vh;
-    min-height: 100dvh;
 }
 
 .sidebar {
@@ -86,6 +82,7 @@ main {
 @media (min-width: 641px) {
     .page {
         flex-direction: row;
+        background: linear-gradient(to right, #230A3C 250px, #E8E3DD 250px);
     }
 
     .sidebar {
