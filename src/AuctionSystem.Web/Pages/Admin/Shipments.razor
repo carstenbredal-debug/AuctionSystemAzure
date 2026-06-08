@@ -103,6 +103,7 @@ else
                                             <thead>
                                                 <tr>
                                                     <th>Invoice #</th>
+                                                    <th>PDF</th>
                                                     <th>Notes</th>
                                                 </tr>
                                             </thead>
@@ -110,7 +111,17 @@ else
                                                 @foreach (var inv in s.Invoices)
                                                 {
                                                     <tr>
-                                                        <td>@inv.InvoiceNumber</td>
+                                                        <td><strong>@inv.InvoiceNumber</strong></td>
+                                                        <td>
+                                                            @if (!string.IsNullOrEmpty(inv.PdfUrl))
+                                                            {
+                                                                <a href="@inv.PdfUrl" target="_blank" class="btn btn-sm btn-outline-primary">View PDF</a>
+                                                            }
+                                                            else
+                                                            {
+                                                                <span class="text-muted">—</span>
+                                                            }
+                                                        </td>
                                                         <td>@inv.Notes</td>
                                                     </tr>
                                                 }

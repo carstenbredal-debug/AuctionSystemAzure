@@ -73,6 +73,7 @@ public class ShipmentFunctions
                 {
                     l.InvoiceId,
                     InvoiceNumber = l.Invoice != null ? l.Invoice.InvoiceNumber : "",
+                    PdfUrl = l.Invoice != null ? l.Invoice.PdfUrl : null,
                     l.BoxNumber,
                     l.Notes
                 }).ToList()

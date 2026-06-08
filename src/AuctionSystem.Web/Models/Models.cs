@@ -971,6 +971,7 @@ public class ShipmentInvoiceDto
 {
     public int InvoiceId { get; set; }
     public string InvoiceNumber { get; set; } = "";
+    public string? PdfUrl { get; set; }
     public int? BoxNumber { get; set; }
     public string Notes { get; set; } = "";
 }
