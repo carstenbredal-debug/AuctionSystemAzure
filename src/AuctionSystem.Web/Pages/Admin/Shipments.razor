@@ -75,7 +75,7 @@ else
                             <td>@(s.DeliveredAt?.ToString("yyyy-MM-dd") ?? "-")</td>
                             <td>
                                 <a href="admin/shipments/@s.Id/packing-list" class="btn btn-sm btn-outline-secondary me-1" target="_blank">Packing List</a>
-                                @if (s.Status == "Pending" || s.Status == "ShowLot Packing")
+                                @if (s.Status == "Pending")
                                 {
                                     <button class="btn btn-sm btn-success me-1" @onclick="() => MarkShipped(s)">Ship</button>
                                     <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteShipment(s.Id)">Delete</button>
@@ -499,7 +499,7 @@ else
     private static string GetStatusBadgeClass(string status) => status switch
     {
         "Pending" => "bg-warning text-dark",
-        "ShowLot Packing" => "bg-info text-dark",
+        "ShowLot Packing" => "bg-light text-dark border",
         "Shipped" => "bg-primary",
         "Delivered" => "bg-success",
         "Cancelled" => "bg-secondary",
