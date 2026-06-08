@@ -29,6 +29,13 @@ html, body {
     font-family: 'PPPangramSans', 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif;
     background-color: #E8E3DD;
     color: #000000;
+    height: 100%;
+    margin: 0;
+}
+
+#app {
+    min-height: 100vh;
+    min-height: 100dvh;
 }
 
 h1, h2, h3, h4, h5, h6,
