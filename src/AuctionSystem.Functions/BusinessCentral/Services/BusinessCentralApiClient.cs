@@ -395,10 +395,13 @@ public class BusinessCentralApiClient
     public async Task<byte[]?> GetSalesInvoicePdfAsync(Guid companyId, Guid invoiceId)
     {
         await SetAuthHeaderAsync();
-        var url = $"{_options.BaseUrl}/companies({companyId})/salesInvoices({invoiceId})/pdfDocument/pdfDocumentContent";
+        // Use documented URL format: pdfDocument({id})/content
+        var url = $"{_options.BaseUrl}/companies({companyId})/salesInvoices({invoiceId})/pdfDocument({invoiceId})/content";
         _logger.LogInformation("GET {Url} (PDF)", url);
 
-        var response = await _httpClient.GetAsync(url);
+        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Add("Accept-Language", "pl-PL");
+        var response = await _httpClient.SendAsync(request);
 
         // BC may return non-success status (e.g. 501) but still include the PDF in the body.
         var bytes = await response.Content.ReadAsByteArrayAsync();
@@ -579,10 +582,12 @@ public class BusinessCentralApiClient
     public async Task<byte[]?> GetSalesCreditMemoPdfAsync(Guid companyId, Guid creditMemoId)
     {
         await SetAuthHeaderAsync();
-        var url = $"{_options.BaseUrl}/companies({companyId})/salesCreditMemos({creditMemoId})/pdfDocument/pdfDocumentContent";
+        var url = $"{_options.BaseUrl}/companies({companyId})/salesCreditMemos({creditMemoId})/pdfDocument({creditMemoId})/content";
         _logger.LogInformation("GET {Url} (PDF)", url);
 
-        var response = await _httpClient.GetAsync(url);
+        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Add("Accept-Language", "pl-PL");
+        var response = await _httpClient.SendAsync(request);
 
         var bytes = await response.Content.ReadAsByteArrayAsync();
         if (bytes.Length >= 4 && bytes[0] == 0x25 && bytes[1] == 0x50 && bytes[2] == 0x44 && bytes[3] == 0x46)
