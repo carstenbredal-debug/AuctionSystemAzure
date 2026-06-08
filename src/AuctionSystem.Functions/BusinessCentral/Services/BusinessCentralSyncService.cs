@@ -856,21 +856,24 @@ public class BusinessCentralSyncService
     {
         try
         {
+            // Strategy 1: Standard BC pdfDocument endpoint
             var pdfBytes = await _bcClient.GetSalesInvoicePdfAsync(companyId, bcInvoiceId);
-            if (pdfBytes is null || pdfBytes.Length == 0)
+            if (pdfBytes is { Length: > 0 })
             {
-                _logger.LogWarning("No PDF returned from BC for invoice {Number}", invoice.InvoiceNumber);
+                var fileName = $"bc-{invoice.InvoiceNumber}.pdf";
+                invoice.PdfUrl = await _blobStorage.UploadPdfAsync(fileName, pdfBytes);
+                _logger.LogInformation("Stored BC invoice PDF via standard endpoint for {Number} ({Bytes} bytes)", invoice.InvoiceNumber, pdfBytes.Length);
                 return;
             }
-
-            var fileName = $"bc-{invoice.InvoiceNumber}.pdf";
-            invoice.PdfUrl = await _blobStorage.UploadPdfAsync(fileName, pdfBytes);
-            _logger.LogInformation("Stored BC invoice PDF for {Number} ({Bytes} bytes)", invoice.InvoiceNumber, pdfBytes.Length);
+            _logger.LogWarning("Standard PDF endpoint returned empty for {Number}, trying custom endpoint", invoice.InvoiceNumber);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to fetch/store BC invoice PDF for {Number}", invoice.InvoiceNumber);
+            _logger.LogWarning(ex, "Standard PDF endpoint failed for {Number}, trying custom endpoint", invoice.InvoiceNumber);
         }
+
+        // Strategy 2: Custom BC extension endpoint (generates PDF and attaches to invoice)
+        await TryCustomPdfGenerationAsync(companyId, bcInvoiceId, invoice, "Sales Invoice", "salesInvoices");
     }
 
     private async Task TryFetchAndStoreCreditMemoPdfAsync(Guid companyId, Guid bcCreditMemoId, Invoice creditNote)
@@ -878,19 +881,63 @@ public class BusinessCentralSyncService
         try
         {
             var pdfBytes = await _bcClient.GetSalesCreditMemoPdfAsync(companyId, bcCreditMemoId);
-            if (pdfBytes is null || pdfBytes.Length == 0)
+            if (pdfBytes is { Length: > 0 })
             {
-                _logger.LogWarning("No PDF returned from BC for credit memo {Number}", creditNote.InvoiceNumber);
+                var fileName = $"bc-{creditNote.InvoiceNumber}.pdf";
+                creditNote.PdfUrl = await _blobStorage.UploadPdfAsync(fileName, pdfBytes);
+                _logger.LogInformation("Stored BC credit memo PDF via standard endpoint for {Number} ({Bytes} bytes)", creditNote.InvoiceNumber, pdfBytes.Length);
                 return;
             }
-
-            var fileName = $"bc-{creditNote.InvoiceNumber}.pdf";
-            creditNote.PdfUrl = await _blobStorage.UploadPdfAsync(fileName, pdfBytes);
-            _logger.LogInformation("Stored BC credit memo PDF for {Number} ({Bytes} bytes)", creditNote.InvoiceNumber, pdfBytes.Length);
+            _logger.LogWarning("Standard PDF endpoint returned empty for credit memo {Number}, trying custom endpoint", creditNote.InvoiceNumber);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to fetch/store BC credit memo PDF for {Number}", creditNote.InvoiceNumber);
+            _logger.LogWarning(ex, "Standard PDF endpoint failed for credit memo {Number}, trying custom endpoint", creditNote.InvoiceNumber);
+        }
+
+        await TryCustomPdfGenerationAsync(companyId, bcCreditMemoId, creditNote, "Credit Memo", "salesCreditMemos");
+    }
+
+    private async Task TryCustomPdfGenerationAsync(Guid companyId, Guid bcDocId, Invoice invoice, string documentType, string entityType)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(invoice.InvoiceNumber))
+            {
+                _logger.LogWarning("No invoice number for custom PDF generation");
+                return;
+            }
+
+            var (success, error, reportId) = await _bcClient.RequestPdfGenerationAsync(companyId, invoice.InvoiceNumber, documentType);
+            _logger.LogInformation("Custom PDF generation result: success={Success}, reportId={ReportId}, error={Error}",
+                success, reportId, error ?? "none");
+
+            if (!success)
+            {
+                _logger.LogWarning("Custom PDF generation failed for {Number}: {Error}", invoice.InvoiceNumber, error);
+                return;
+            }
+
+            // Wait a moment for BC to process the attachment
+            await Task.Delay(2000);
+
+            // Download the attached PDF
+            var pdfBytes = await _bcClient.GetDocumentAttachmentPdfAsync(companyId, bcDocId, entityType);
+            if (pdfBytes is { Length: > 0 })
+            {
+                var fileName = $"bc-{invoice.InvoiceNumber}.pdf";
+                invoice.PdfUrl = await _blobStorage.UploadPdfAsync(fileName, pdfBytes);
+                _logger.LogInformation("Stored PDF via custom endpoint for {Number} ({Bytes} bytes, report {ReportId})",
+                    invoice.InvoiceNumber, pdfBytes.Length, reportId);
+            }
+            else
+            {
+                _logger.LogWarning("Custom endpoint reported success but no attachment found for {Number}", invoice.InvoiceNumber);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Custom PDF generation failed for {Number}", invoice.InvoiceNumber);
         }
     }
 }

@@ -613,6 +613,88 @@ public class BusinessCentralApiClient
         return bytes;
     }
 
+    // ── Custom PDF Generation (via BC extension) ───────────────
+
+    public async Task<(bool success, string? error, int reportId)> RequestPdfGenerationAsync(
+        Guid companyId, string documentNo, string documentType = "Sales Invoice")
+    {
+        await SetAuthHeaderAsync();
+        var pdfApiBase = $"https://api.businesscentral.dynamics.com/v2.0/{_options.TenantId}/{_options.Environment}/api/auctionSystem/pdf/v1.0";
+        var url = $"{pdfApiBase}/companies({companyId})/invoicePdfRequests";
+        _logger.LogInformation("POST {Url} (custom PDF generation for {DocNo})", url, documentNo);
+
+        var docTypeInt = documentType == "Credit Memo" ? 1 : 0;
+        var payload = new { documentNo, documentType = docTypeInt };
+        var json = System.Text.Json.JsonSerializer.Serialize(payload);
+        var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+
+        var response = await _httpClient.PostAsync(url, content);
+        var body = await response.Content.ReadAsStringAsync();
+        _logger.LogInformation("Custom PDF response: {Status} {Body}", (int)response.StatusCode, body);
+
+        if (!response.IsSuccessStatusCode)
+            return (false, $"HTTP {(int)response.StatusCode}: {body}", 0);
+
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(body);
+            var root = doc.RootElement;
+            var success = root.TryGetProperty("success", out var successProp) && successProp.GetBoolean();
+            var errorMsg = root.TryGetProperty("errorMessage", out var errProp) ? errProp.GetString() : null;
+            var reportId = root.TryGetProperty("reportIdUsed", out var repProp) ? repProp.GetInt32() : 0;
+            return (success, errorMsg, reportId);
+        }
+        catch
+        {
+            return (false, $"Could not parse response: {body}", 0);
+        }
+    }
+
+    public async Task<byte[]?> GetDocumentAttachmentPdfAsync(Guid companyId, Guid invoiceId, string entityType = "salesInvoices")
+    {
+        await SetAuthHeaderAsync();
+        var url = $"{_options.BaseUrl}/companies({companyId})/{entityType}({invoiceId})/documentAttachments";
+        _logger.LogInformation("GET {Url} (document attachments)", url);
+
+        var response = await _httpClient.GetAsync(url);
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("Could not get document attachments: {Status}", (int)response.StatusCode);
+            return null;
+        }
+
+        var body = await response.Content.ReadAsStringAsync();
+        using var doc = System.Text.Json.JsonDocument.Parse(body);
+        var values = doc.RootElement.GetProperty("value");
+
+        // Find the PDF attachment
+        foreach (var att in values.EnumerateArray())
+        {
+            var fileName = att.TryGetProperty("fileName", out var fn) ? fn.GetString() : "";
+            if (fileName != null && fileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+            {
+                var attId = att.GetProperty("id").GetString();
+                // Download attachment content
+                var contentUrl = $"{_options.BaseUrl}/companies({companyId})/{entityType}({invoiceId})/documentAttachments({attId})/attachmentContent";
+                _logger.LogInformation("GET {Url} (attachment content)", contentUrl);
+
+                var contentResponse = await _httpClient.GetAsync(contentUrl);
+                if (contentResponse.IsSuccessStatusCode)
+                {
+                    var bytes = await contentResponse.Content.ReadAsByteArrayAsync();
+                    if (bytes.Length > 0)
+                    {
+                        _logger.LogInformation("Downloaded attachment PDF: {Bytes} bytes", bytes.Length);
+                        return bytes;
+                    }
+                }
+            }
+        }
+
+        _logger.LogWarning("No PDF attachment found for {EntityType}({InvoiceId})", entityType, invoiceId);
+        return null;
+    }
+
     // ── Diagnostics ─────────────────────────────────────────────
 
     public async Task<string> GetCompanyInformationRawAsync(Guid companyId)
