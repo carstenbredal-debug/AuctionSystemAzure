@@ -395,47 +395,62 @@ public class BusinessCentralApiClient
     public async Task<byte[]?> GetSalesInvoicePdfAsync(Guid companyId, Guid invoiceId)
     {
         await SetAuthHeaderAsync();
-        // First get the pdfDocument entity to find its actual ID
-        var listUrl = $"{_options.BaseUrl}/companies({companyId})/salesInvoices({invoiceId})/pdfDocument";
-        _logger.LogInformation("GET {Url} (list pdfDocument)", listUrl);
-        var listResponse = await _httpClient.GetAsync(listUrl);
-        if (!listResponse.IsSuccessStatusCode)
+        // Get the pdfDocument entity — BC returns a single entity (not an array)
+        var pdfDocUrl = $"{_options.BaseUrl}/companies({companyId})/salesInvoices({invoiceId})/pdfDocument";
+        _logger.LogInformation("GET {Url} (pdfDocument)", pdfDocUrl);
+        var pdfDocResponse = await _httpClient.GetAsync(pdfDocUrl);
+        if (!pdfDocResponse.IsSuccessStatusCode)
         {
-            var errBody = await listResponse.Content.ReadAsStringAsync();
-            _logger.LogWarning("Could not list pdfDocument: {Status} {Body}", (int)listResponse.StatusCode, errBody);
+            var errBody = await pdfDocResponse.Content.ReadAsStringAsync();
+            _logger.LogWarning("Could not get pdfDocument: {Status} {Body}", (int)pdfDocResponse.StatusCode, errBody);
             return null;
         }
-        var listJson = await listResponse.Content.ReadAsStringAsync();
-        Guid pdfDocId;
+        var pdfDocJson = await pdfDocResponse.Content.ReadAsStringAsync();
+
+        // Extract the mediaReadLink for the PDF content
+        string? contentUrl = null;
         try
         {
-            using var doc = System.Text.Json.JsonDocument.Parse(listJson);
-            var values = doc.RootElement.GetProperty("value");
-            if (values.GetArrayLength() == 0)
+            using var doc = System.Text.Json.JsonDocument.Parse(pdfDocJson);
+            var root = doc.RootElement;
+
+            // BC may return single entity or array — handle both
+            System.Text.Json.JsonElement entity;
+            if (root.TryGetProperty("value", out var arr) && arr.ValueKind == System.Text.Json.JsonValueKind.Array)
             {
-                _logger.LogWarning("No pdfDocument found for invoice {InvoiceId}", invoiceId);
-                return null;
+                if (arr.GetArrayLength() == 0) { _logger.LogWarning("No pdfDocument found for invoice {Id}", invoiceId); return null; }
+                entity = arr[0];
             }
-            pdfDocId = values[0].GetProperty("id").GetGuid();
+            else
+            {
+                entity = root;
+            }
+
+            // Use the mediaReadLink if available
+            if (entity.TryGetProperty("pdfDocumentContent@odata.mediaReadLink", out var linkProp))
+                contentUrl = linkProp.GetString();
+            else if (entity.TryGetProperty("id", out var idProp))
+                contentUrl = $"{_options.BaseUrl}/companies({companyId})/salesInvoices({invoiceId})/pdfDocument/pdfDocumentContent";
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Could not parse pdfDocument list response: {Body}", listJson);
+            _logger.LogWarning(ex, "Could not parse pdfDocument response: {Body}", pdfDocJson);
             return null;
         }
 
-        var url = $"{_options.BaseUrl}/companies({companyId})/salesInvoices({invoiceId})/pdfDocument({pdfDocId})/pdfDocumentContent";
-        _logger.LogInformation("GET {Url} (PDF content)", url);
+        if (string.IsNullOrEmpty(contentUrl))
+        {
+            _logger.LogWarning("No PDF content URL found for invoice {Id}", invoiceId);
+            return null;
+        }
 
-        var request = new HttpRequestMessage(HttpMethod.Get, url);
-        var response = await _httpClient.SendAsync(request);
-
-        // BC may return non-success status (e.g. 501) but still include the PDF in the body.
+        _logger.LogInformation("GET {Url} (PDF content)", contentUrl);
+        var response = await _httpClient.GetAsync(contentUrl);
         var bytes = await response.Content.ReadAsByteArrayAsync();
+
         if (bytes.Length >= 4 && bytes[0] == 0x25 && bytes[1] == 0x50 && bytes[2] == 0x44 && bytes[3] == 0x46)
         {
-            if (!response.IsSuccessStatusCode)
-                _logger.LogInformation("BC returned {Status} for PDF but body contains valid PDF ({Bytes} bytes)", (int)response.StatusCode, bytes.Length);
+            _logger.LogInformation("Downloaded invoice PDF ({Bytes} bytes, status {Status})", bytes.Length, (int)response.StatusCode);
             return bytes;
         }
 
@@ -609,46 +624,58 @@ public class BusinessCentralApiClient
     public async Task<byte[]?> GetSalesCreditMemoPdfAsync(Guid companyId, Guid creditMemoId)
     {
         await SetAuthHeaderAsync();
-        // First get the pdfDocument entity to find its actual ID
-        var listUrl = $"{_options.BaseUrl}/companies({companyId})/salesCreditMemos({creditMemoId})/pdfDocument";
-        _logger.LogInformation("GET {Url} (list pdfDocument for credit memo)", listUrl);
-        var listResponse = await _httpClient.GetAsync(listUrl);
-        if (!listResponse.IsSuccessStatusCode)
+        var pdfDocUrl = $"{_options.BaseUrl}/companies({companyId})/salesCreditMemos({creditMemoId})/pdfDocument";
+        _logger.LogInformation("GET {Url} (pdfDocument for credit memo)", pdfDocUrl);
+        var pdfDocResponse = await _httpClient.GetAsync(pdfDocUrl);
+        if (!pdfDocResponse.IsSuccessStatusCode)
         {
-            var errBody = await listResponse.Content.ReadAsStringAsync();
-            _logger.LogWarning("Could not list pdfDocument for credit memo: {Status} {Body}", (int)listResponse.StatusCode, errBody);
+            var errBody = await pdfDocResponse.Content.ReadAsStringAsync();
+            _logger.LogWarning("Could not get pdfDocument for credit memo: {Status} {Body}", (int)pdfDocResponse.StatusCode, errBody);
             return null;
         }
-        var listJson = await listResponse.Content.ReadAsStringAsync();
-        Guid pdfDocId;
+        var pdfDocJson = await pdfDocResponse.Content.ReadAsStringAsync();
+
+        string? contentUrl = null;
         try
         {
-            using var doc = System.Text.Json.JsonDocument.Parse(listJson);
-            var values = doc.RootElement.GetProperty("value");
-            if (values.GetArrayLength() == 0)
+            using var doc = System.Text.Json.JsonDocument.Parse(pdfDocJson);
+            var root = doc.RootElement;
+
+            System.Text.Json.JsonElement entity;
+            if (root.TryGetProperty("value", out var arr) && arr.ValueKind == System.Text.Json.JsonValueKind.Array)
             {
-                _logger.LogWarning("No pdfDocument found for credit memo {CreditMemoId}", creditMemoId);
-                return null;
+                if (arr.GetArrayLength() == 0) { _logger.LogWarning("No pdfDocument found for credit memo {Id}", creditMemoId); return null; }
+                entity = arr[0];
             }
-            pdfDocId = values[0].GetProperty("id").GetGuid();
+            else
+            {
+                entity = root;
+            }
+
+            if (entity.TryGetProperty("pdfDocumentContent@odata.mediaReadLink", out var linkProp))
+                contentUrl = linkProp.GetString();
+            else if (entity.TryGetProperty("id", out var idProp))
+                contentUrl = $"{_options.BaseUrl}/companies({companyId})/salesCreditMemos({creditMemoId})/pdfDocument/pdfDocumentContent";
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Could not parse pdfDocument list for credit memo: {Body}", listJson);
+            _logger.LogWarning(ex, "Could not parse pdfDocument response for credit memo: {Body}", pdfDocJson);
             return null;
         }
 
-        var url = $"{_options.BaseUrl}/companies({companyId})/salesCreditMemos({creditMemoId})/pdfDocument({pdfDocId})/pdfDocumentContent";
-        _logger.LogInformation("GET {Url} (credit memo PDF content)", url);
+        if (string.IsNullOrEmpty(contentUrl))
+        {
+            _logger.LogWarning("No PDF content URL found for credit memo {Id}", creditMemoId);
+            return null;
+        }
 
-        var request = new HttpRequestMessage(HttpMethod.Get, url);
-        var response = await _httpClient.SendAsync(request);
-
+        _logger.LogInformation("GET {Url} (credit memo PDF content)", contentUrl);
+        var response = await _httpClient.GetAsync(contentUrl);
         var bytes = await response.Content.ReadAsByteArrayAsync();
+
         if (bytes.Length >= 4 && bytes[0] == 0x25 && bytes[1] == 0x50 && bytes[2] == 0x44 && bytes[3] == 0x46)
         {
-            if (!response.IsSuccessStatusCode)
-                _logger.LogInformation("BC returned {Status} for credit memo PDF but body contains valid PDF ({Bytes} bytes)", (int)response.StatusCode, bytes.Length);
+            _logger.LogInformation("Downloaded credit memo PDF ({Bytes} bytes, status {Status})", bytes.Length, (int)response.StatusCode);
             return bytes;
         }
 
