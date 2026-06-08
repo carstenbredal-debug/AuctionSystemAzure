@@ -195,7 +195,7 @@ else
                                         <span class="spinner-border spinner-border-sm text-primary me-2" role="status"></span>
                                         <span class="text-muted">Processing...</span>
                                     }
-                                    else
+                                    else if (inv.Status != "ReleasedToShip")
                                     {
                                         <button class="btn btn-sm btn-outline-info me-1" @onclick="() => OpenDownpaymentPopup(invId)" disabled="@_updatingId.HasValue">Partial Payment</button>
                                         <button class="btn btn-sm btn-outline-success" @onclick="() => OpenFullyPaidPopup(invId)" disabled="@_updatingId.HasValue">Full Payment</button>
