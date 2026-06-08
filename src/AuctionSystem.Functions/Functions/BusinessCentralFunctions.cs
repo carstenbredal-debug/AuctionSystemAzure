@@ -920,6 +920,74 @@ public class BusinessCentralFunctions
         }
     }
 
+    [Function("BCTestPdfGeneration")]
+    public async Task<HttpResponseData> BCTestPdfGeneration(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "bc/test-pdf-gen")] HttpRequestData req)
+    {
+        if (_bcClient == null)
+            return await JsonResponse(req, new { error = "BC not configured" });
+
+        var invoiceNo = req.Query["invoiceNo"];
+        var docType = req.Query["docType"] ?? "Sales Invoice";
+        if (string.IsNullOrEmpty(invoiceNo))
+            return await JsonResponse(req, new { error = "Pass ?invoiceNo=BD00020" }, HttpStatusCode.BadRequest);
+
+        try
+        {
+            var companyId = await _bcClient.ResolveCompanyIdAsync();
+
+            // Step 1: Test standard pdfDocument endpoint
+            string? standardError = null;
+            int standardPdfSize = 0;
+            try
+            {
+                var inv = await _bcClient.GetSalesInvoiceByExternalDocAsync(companyId, invoiceNo);
+                if (inv != null)
+                {
+                    var pdfBytes = await _bcClient.GetSalesInvoicePdfAsync(companyId, inv.Id);
+                    standardPdfSize = pdfBytes?.Length ?? 0;
+                    if (standardPdfSize == 0) standardError = "PDF returned empty/null";
+                }
+                else
+                {
+                    standardError = $"No posted invoice found with number or externalDocNo '{invoiceNo}'";
+                }
+            }
+            catch (Exception ex)
+            {
+                standardError = ex.Message;
+            }
+
+            // Step 2: Test custom extension endpoint
+            string? customError = null;
+            bool customSuccess = false;
+            int customReportId = 0;
+            try
+            {
+                var (success, error, reportId) = await _bcClient.RequestPdfGenerationAsync(companyId, invoiceNo, docType);
+                customSuccess = success;
+                customError = error;
+                customReportId = reportId;
+            }
+            catch (Exception ex)
+            {
+                customError = $"Exception: {ex.Message}";
+            }
+
+            return await JsonResponse(req, new
+            {
+                invoiceNo,
+                docType,
+                standardEndpoint = new { pdfSizeBytes = standardPdfSize, error = standardError },
+                customEndpoint = new { success = customSuccess, reportIdUsed = customReportId, error = customError }
+            });
+        }
+        catch (Exception ex)
+        {
+            return await JsonResponse(req, new { error = ex.Message }, HttpStatusCode.InternalServerError);
+        }
+    }
+
     private static async Task<HttpResponseData> JsonResponse(HttpRequestData req, object data, HttpStatusCode status = HttpStatusCode.OK)
     {
         var response = req.CreateResponse(status);
