@@ -21,10 +21,6 @@ public class BcSalesInvoice
     [JsonPropertyName("dueDate")]
     public string DueDate { get; set; } = string.Empty;
 
-    [JsonPropertyName("shipmentDate")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? ShipmentDate { get; set; }
-
     [JsonPropertyName("customerNumber")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public string? CustomerNumber { get; set; }
