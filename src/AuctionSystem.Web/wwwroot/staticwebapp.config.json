@@ -16,7 +16,7 @@
               "clientSecretSettingName": "EXTERNAL_AAD_CLIENT_SECRET"
             },
             "openIdConnectConfiguration": {
-              "wellKnownOpenIdConfiguration": "https://8de8e158-e70a-49e4-b28b-7cf70917dc4a.ciamlogin.com/8de8e158-e70a-49e4-b28b-7cf70917dc4a/v2.0/.well-known/openid-configuration"
+              "wellKnownOpenIdConfiguration": "https://6999099c-c27e-449c-a369-fd0e2e4af001.ciamlogin.com/6999099c-c27e-449c-a369-fd0e2e4af001/v2.0/.well-known/openid-configuration"
             }
           },
           "login": {
