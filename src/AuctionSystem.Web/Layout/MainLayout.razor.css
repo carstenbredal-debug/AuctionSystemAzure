@@ -40,6 +40,9 @@ main {
 
 .sidebar {
     background-color: #230A3C;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 .top-row {
