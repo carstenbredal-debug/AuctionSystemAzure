@@ -459,18 +459,21 @@ using (var scope = host.Services.CreateScope())
             IF EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'Boxes')
                 DROP TABLE auction.Boxes;
         ");
-        // auction.Boxes view (reads from dbo.SkinTable)
+        // auction.Boxes view (reads from dbo.SkinTable) — recreate to include BoxStatus
         db.Database.ExecuteSqlRaw(@"
-            IF NOT EXISTS (SELECT 1 FROM sys.views WHERE schema_id = SCHEMA_ID('auction') AND name = 'Boxes')
-                EXEC('CREATE VIEW auction.Boxes AS
-                    SELECT
-                        s.BoxNumber, s.BoxType, s.SalesType, s.[Group], s.Gender,
-                        s.Size, s.HairLength, s.Color, s.Quality, s.Clarity, s.Damages,
-                        COUNT(*) AS Skins
-                    FROM dbo.SkinTable s
-                    WHERE s.BoxStatus IN (''Showlot'', ''Storage'') AND s.IsActive = 1
-                    GROUP BY s.BoxNumber, s.BoxType, s.SalesType, s.[Group], s.Gender,
-                        s.Size, s.HairLength, s.Color, s.Quality, s.Clarity, s.Damages');
+            IF EXISTS (SELECT 1 FROM sys.views WHERE schema_id = SCHEMA_ID('auction') AND name = 'Boxes')
+                DROP VIEW auction.Boxes;
+        ");
+        db.Database.ExecuteSqlRaw(@"
+            EXEC('CREATE VIEW auction.Boxes AS
+                SELECT
+                    s.BoxNumber, s.BoxType, s.BoxStatus, s.SalesType, s.[Group], s.Gender,
+                    s.Size, s.HairLength, s.Color, s.Quality, s.Clarity, s.Damages,
+                    COUNT(*) AS Skins
+                FROM dbo.SkinTable s
+                WHERE s.BoxStatus IN (''Showlot'', ''Storage'') AND s.IsActive = 1
+                GROUP BY s.BoxNumber, s.BoxType, s.BoxStatus, s.SalesType, s.[Group], s.Gender,
+                    s.Size, s.HairLength, s.Color, s.Quality, s.Clarity, s.Damages');
         ");
         db.Database.Migrate();
         // Ensure CatalogDbContext tables exist (CatalogLots, GeneratedLots, etc.)

@@ -231,7 +231,7 @@ public class ShipmentFunctions
         {
             hasShowLot = await _catalogDb.Database
                 .SqlQueryRaw<int>("SELECT 1 AS Value FROM auction.boxes WHERE BoxNumber IN (" +
-                    string.Join(",", allBoxNumbers) + ") AND LOWER(BoxType) = 'showlot'")
+                    string.Join(",", allBoxNumbers) + ") AND BoxStatus = 'Showlot'")
                 .AnyAsync();
         }
 
@@ -266,7 +266,7 @@ public class ShipmentFunctions
         if (allBoxNumbers.Count > 0)
         {
             allBoxData = await _catalogDb.Database
-                .SqlQueryRaw<BoxViewResult>("SELECT BoxNumber, Skins, BoxType FROM auction.boxes WHERE BoxNumber IN (" +
+                .SqlQueryRaw<BoxViewResult>("SELECT BoxNumber, Skins, BoxType, BoxStatus FROM auction.boxes WHERE BoxNumber IN (" +
                     string.Join(",", allBoxNumbers) + ")")
                 .ToListAsync();
 
@@ -312,8 +312,8 @@ public class ShipmentFunctions
             }
         }
 
-        var showLotBoxes = allBoxData.Where(b => b.BoxType.Equals("showlot", StringComparison.OrdinalIgnoreCase)).ToList();
-        var nonShowLotBoxes = allBoxData.Where(b => !b.BoxType.Equals("showlot", StringComparison.OrdinalIgnoreCase)).ToList();
+        var showLotBoxes = allBoxData.Where(b => b.BoxStatus.Equals("Showlot", StringComparison.OrdinalIgnoreCase)).ToList();
+        var nonShowLotBoxes = allBoxData.Where(b => !b.BoxStatus.Equals("Showlot", StringComparison.OrdinalIgnoreCase)).ToList();
 
         // Auto-create ShowLot packing order (showlot boxes only)
         if (showLotBoxes.Count > 0)
@@ -555,7 +555,7 @@ public class ShipmentFunctions
         if (allBoxNumbers.Count > 0)
         {
             var boxData = await _catalogDb.Database
-                .SqlQueryRaw<BoxViewResult>("SELECT BoxNumber, Skins, BoxType FROM auction.boxes WHERE BoxNumber IN (" +
+                .SqlQueryRaw<BoxViewResult>("SELECT BoxNumber, Skins, BoxType, BoxStatus FROM auction.boxes WHERE BoxNumber IN (" +
                     string.Join(",", allBoxNumbers) + ")")
                 .ToListAsync();
             foreach (var b in boxData)
@@ -1105,6 +1105,7 @@ public class ShipmentFunctions
         public int BoxNumber { get; set; }
         public int Skins { get; set; }
         public string BoxType { get; set; } = "";
+        public string BoxStatus { get; set; } = "";
     }
 
     private class BoxStagingResult
