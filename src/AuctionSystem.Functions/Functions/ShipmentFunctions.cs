@@ -576,6 +576,79 @@ public class ShipmentFunctions
             }
         }
 
+        // Replace individual showlot boxes with packed boxes if packing order exists
+        var packingOrder = await _db.PackingOrders
+            .Include(p => p.Lines)
+            .FirstOrDefaultAsync(p => p.ShipmentId == id);
+
+        if (packingOrder != null)
+        {
+            var packedBoxes = await _db.PackedBoxes
+                .Include(b => b.ShowLots)
+                .Where(b => b.PackingOrderId == packingOrder.Id && b.Status == "Approved")
+                .ToListAsync();
+
+            if (packedBoxes.Count > 0)
+            {
+                // Get box numbers that are packed (to remove from packing lines)
+                var packedBoxNumbers = packedBoxes
+                    .SelectMany(pb => pb.ShowLots.Select(sl => sl.BoxNumber))
+                    .ToHashSet();
+
+                // Remove individual showlot lines that are now in packed boxes
+                var remainingLines = new List<object>();
+                decimal newGross = 0, newNet = 0, newVol = 0;
+                int newBoxCount = 0, newSkins = 0;
+
+                foreach (var line in packingLines.Cast<dynamic>())
+                {
+                    if (!packedBoxNumbers.Contains((int)line.BoxNumber))
+                    {
+                        remainingLines.Add(line);
+                        newGross += (decimal)line.GrossWeightKg;
+                        newNet += (decimal)line.NetWeightKg;
+                        newVol += (decimal)line.VolumeM3;
+                        newBoxCount++;
+                        newSkins += (int)line.Skins;
+                    }
+                }
+
+                // Add packed boxes as new lines
+                foreach (var pb in packedBoxes)
+                {
+                    var vol = pb.LengthM * pb.WidthM * pb.HeightM;
+                    var pbDim = !string.IsNullOrEmpty(pb.BoxType) && dimLookup.TryGetValue(pb.BoxType, out var pbd) ? pbd : null;
+                    var tare = pbDim?.WeightKg ?? 0m;
+                    var pbSkins = pb.ShowLots.Sum(s => s.Skins);
+                    remainingLines.Add(new
+                    {
+                        LotNumber = 0,
+                        BoxNumber = pb.Id,
+                        BoxType = pb.BoxType + " (packed)",
+                        Skins = pbSkins,
+                        GrossWeightKg = pb.Weight,
+                        NetWeightKg = pb.Weight - tare,
+                        VolumeM3 = vol,
+                        TareWeightKg = tare,
+                        Location = "",
+                        PackedShowLots = pb.ShowLots.Select(sl => new { sl.BoxNumber, sl.LotNumber, sl.Skins }).ToList()
+                    });
+                    newGross += pb.Weight;
+                    newNet += pb.Weight - tare;
+                    newVol += vol;
+                    newBoxCount++;
+                    newSkins += pbSkins;
+                }
+
+                packingLines = remainingLines;
+                totalGrossWeight = newGross;
+                totalNetWeight = newNet;
+                totalVolume = newVol;
+                totalBoxes = newBoxCount;
+                totalSkins = newSkins;
+            }
+        }
+
         var result = new
         {
             shipment.ShipmentNumber,
