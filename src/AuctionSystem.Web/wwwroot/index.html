@@ -40,29 +40,6 @@
             XLSX.writeFile(wb, fileName);
         };
     </script>
-    <script>
-        // Diagnostic: capture all errors and show details
-        window.addEventListener('error', function(e) {
-            var d = document.getElementById('blazor-error-detail');
-            if (!d) {
-                d = document.createElement('pre');
-                d.id = 'blazor-error-detail';
-                d.style.cssText = 'position:fixed;bottom:40px;left:0;right:0;background:#fee;color:red;padding:1rem;z-index:99999;max-height:300px;overflow:auto;font-size:12px;border-top:2px solid red;';
-                document.body.appendChild(d);
-            }
-            d.textContent += '[ERROR] ' + e.message + ' at ' + (e.filename||'') + ':' + (e.lineno||'') + '\n';
-        });
-        window.addEventListener('unhandledrejection', function(e) {
-            var d = document.getElementById('blazor-error-detail');
-            if (!d) {
-                d = document.createElement('pre');
-                d.id = 'blazor-error-detail';
-                d.style.cssText = 'position:fixed;bottom:40px;left:0;right:0;background:#fee;color:red;padding:1rem;z-index:99999;max-height:300px;overflow:auto;font-size:12px;border-top:2px solid red;';
-                document.body.appendChild(d);
-            }
-            d.textContent += '[REJECTION] ' + (e.reason ? (e.reason.message || e.reason) : 'unknown') + '\n' + (e.reason && e.reason.stack ? e.reason.stack : '') + '\n';
-        });
-    </script>
     <script src="_framework/blazor.webassembly.js"></script>
 </body>
 </html>
