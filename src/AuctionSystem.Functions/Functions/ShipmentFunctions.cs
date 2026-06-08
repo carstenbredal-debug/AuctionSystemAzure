@@ -644,10 +644,12 @@ public class ShipmentFunctions
             ShowLotCount = po.Lines.Count,
             Lines = po.Lines.Select(l => new
             {
+                l.Id,
                 l.BoxNumber,
                 l.LotNumber,
                 l.Skins,
-                l.BoxType
+                l.BoxType,
+                l.PackedBoxId
             })
         });
 
@@ -686,6 +688,265 @@ public class ShipmentFunctions
         response.Headers.Add("Content-Type", "application/json");
         await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true }, JsonOptions));
         return response;
+    }
+
+    [Function("GetPackingOrderXmls")]
+    public async Task<HttpResponseData> GetPackingOrderXmls(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "shipments/packing-orders/xmls")] HttpRequestData req)
+    {
+        if (_blobStorage == null)
+        {
+            var err = req.CreateResponse(System.Net.HttpStatusCode.ServiceUnavailable);
+            err.Headers.Add("Content-Type", "application/json");
+            await err.WriteStringAsync(JsonSerializer.Serialize(new { error = "Blob storage not configured" }, JsonOptions));
+            return err;
+        }
+
+        var xmlFiles = await _blobStorage.ListPackingOrderXmlsAsync();
+        var results = new List<object>();
+
+        foreach (var (fileName, folder, content) in xmlFiles)
+        {
+            try
+            {
+                var doc = XDocument.Parse(content);
+                var root = doc.Root!;
+                var boxes = root.Element("ShowLotBoxes")?.Elements("Box").Select(b => new
+                {
+                    BoxNumber = int.TryParse(b.Element("BoxNumber")?.Value, out var bn) ? bn : 0,
+                    LotNumber = int.TryParse(b.Element("LotNumber")?.Value, out var ln) ? ln : 0,
+                    Skins = int.TryParse(b.Element("Skins")?.Value, out var sk) ? sk : 0,
+                    BoxType = b.Element("BoxType")?.Value ?? ""
+                }).ToList() ?? new();
+
+                results.Add(new
+                {
+                    FileName = fileName,
+                    Folder = folder,
+                    PackingOrderNumber = root.Element("PackingOrderNumber")?.Value ?? "",
+                    ShipmentNumber = root.Element("ShipmentNumber")?.Value ?? "",
+                    Status = root.Element("Status")?.Value ?? "",
+                    CreatedAt = root.Element("CreatedAt")?.Value ?? "",
+                    BuyerName = root.Element("Buyer")?.Element("Name")?.Value ?? "",
+                    BuyerNumber = root.Element("Buyer")?.Element("BuyerNumber")?.Value ?? "",
+                    ShipperName = root.Element("Shipper")?.Element("Name")?.Value ?? "",
+                    ShowLotCount = boxes.Count,
+                    Lines = boxes
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to parse XML {FileName}", fileName);
+                results.Add(new
+                {
+                    FileName = fileName,
+                    Folder = folder,
+                    PackingOrderNumber = "",
+                    ShipmentNumber = "",
+                    Status = "Error",
+                    CreatedAt = "",
+                    BuyerName = "",
+                    BuyerNumber = "",
+                    ShipperName = "",
+                    ShowLotCount = 0,
+                    Lines = new List<object>()
+                });
+            }
+        }
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(results, JsonOptions));
+        return response;
+    }
+
+    [Function("PackShowLots")]
+    public async Task<HttpResponseData> PackShowLots(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "shipments/packing-orders/{packingOrderId:int}/pack")] HttpRequestData req,
+        int packingOrderId)
+    {
+        var body = await req.ReadFromJsonAsync<PackShowLotsDto>();
+        if (body == null || string.IsNullOrEmpty(body.BoxType) || body.ShowLotLineIds == null || body.ShowLotLineIds.Count == 0)
+            return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+
+        var order = await _db.PackingOrders
+            .Include(o => o.Lines)
+            .Include(o => o.Shipment).ThenInclude(s => s!.Buyer)
+            .Include(o => o.Shipment).ThenInclude(s => s!.Shipper)
+            .FirstOrDefaultAsync(o => o.Id == packingOrderId);
+        if (order == null)
+            return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        // Get box type dimensions
+        var dimensions = await _db.Set<BoxTypeDimension>()
+            .FirstOrDefaultAsync(d => d.BoxType == body.BoxType);
+
+        var packedBox = new PackedBox
+        {
+            PackingOrderId = packingOrderId,
+            BoxType = body.BoxType,
+            Weight = body.Weight,
+            HeightM = dimensions?.HeightM ?? 0,
+            WidthM = dimensions?.WidthM ?? 0,
+            LengthM = dimensions?.LengthM ?? 0,
+            Status = "Packed"
+        };
+        _db.PackedBoxes.Add(packedBox);
+        await _db.SaveChangesAsync();
+
+        // Assign selected showlot lines to this packed box
+        var lines = order.Lines.Where(l => body.ShowLotLineIds.Contains(l.Id)).ToList();
+        foreach (var line in lines)
+        {
+            line.PackedBoxId = packedBox.Id;
+        }
+        await _db.SaveChangesAsync();
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(new
+        {
+            success = true,
+            packedBoxId = packedBox.Id,
+            boxType = packedBox.BoxType,
+            weight = packedBox.Weight,
+            showLotCount = lines.Count,
+            totalSkins = lines.Sum(l => l.Skins)
+        }, JsonOptions));
+        return response;
+    }
+
+    [Function("ApprovePackedBox")]
+    public async Task<HttpResponseData> ApprovePackedBox(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "shipments/packed-boxes/{packedBoxId:int}/approve")] HttpRequestData req,
+        int packedBoxId)
+    {
+        var packedBox = await _db.PackedBoxes
+            .Include(b => b.ShowLots)
+            .Include(b => b.PackingOrder).ThenInclude(o => o!.Shipment).ThenInclude(s => s!.Buyer)
+            .Include(b => b.PackingOrder).ThenInclude(o => o!.Shipment).ThenInclude(s => s!.Shipper)
+            .FirstOrDefaultAsync(b => b.Id == packedBoxId);
+        if (packedBox == null)
+            return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        packedBox.Status = "Approved";
+        await _db.SaveChangesAsync();
+
+        // Generate response XML and upload to blob
+        if (_blobStorage != null)
+        {
+            try
+            {
+                var xml = GeneratePackedBoxResponseXml(packedBox);
+                var blobName = $"completed/{packedBox.PackingOrder!.PackingOrderNumber}-BOX{packedBox.Id}.xml";
+                await _blobStorage.UploadPackingXmlAsync(blobName, xml);
+                _logger.LogInformation("Packed box response XML {Name} uploaded", blobName);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to upload packed box response XML for box {Id}", packedBoxId);
+            }
+        }
+
+        // Check if all showlot lines are packed — if so, update packing order status
+        var order = await _db.PackingOrders
+            .Include(o => o.Lines)
+            .FirstOrDefaultAsync(o => o.Id == packedBox.PackingOrderId);
+        if (order != null)
+        {
+            var allPacked = order.Lines.All(l => l.PackedBoxId != null);
+            if (allPacked)
+            {
+                order.Status = "Packed";
+
+                // Update shipment status from ShowLot Packing to Pending
+                var shipment = await _db.Shipments.FindAsync(order.ShipmentId);
+                if (shipment != null && shipment.Status == "ShowLot Packing")
+                {
+                    shipment.Status = "Pending";
+                }
+                await _db.SaveChangesAsync();
+            }
+        }
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true }, JsonOptions));
+        return response;
+    }
+
+    [Function("GetPackedBoxes")]
+    public async Task<HttpResponseData> GetPackedBoxes(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "shipments/packing-orders/{packingOrderId:int}/packed-boxes")] HttpRequestData req,
+        int packingOrderId)
+    {
+        var boxes = await _db.PackedBoxes
+            .Where(b => b.PackingOrderId == packingOrderId)
+            .Include(b => b.ShowLots)
+            .OrderBy(b => b.Id)
+            .ToListAsync();
+
+        var results = boxes.Select(b => new
+        {
+            b.Id,
+            b.BoxType,
+            b.Weight,
+            b.HeightM,
+            b.WidthM,
+            b.LengthM,
+            b.Status,
+            b.CreatedAt,
+            ShowLotCount = b.ShowLots.Count,
+            TotalSkins = b.ShowLots.Sum(l => l.Skins),
+            ShowLots = b.ShowLots.Select(l => new { l.Id, l.BoxNumber, l.LotNumber, l.Skins, l.BoxType })
+        });
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(results, JsonOptions));
+        return response;
+    }
+
+    private static string GeneratePackedBoxResponseXml(PackedBox packedBox)
+    {
+        var order = packedBox.PackingOrder!;
+        var shipment = order.Shipment!;
+        var doc = new XDocument(
+            new XDeclaration("1.0", "utf-8", "yes"),
+            new XElement("PackedBoxResponse",
+                new XElement("PackingOrderNumber", order.PackingOrderNumber),
+                new XElement("ShipmentNumber", shipment.ShipmentNumber),
+                new XElement("PackedBoxId", packedBox.Id),
+                new XElement("BoxType", packedBox.BoxType),
+                new XElement("Weight", packedBox.Weight),
+                new XElement("Dimensions",
+                    new XElement("HeightM", packedBox.HeightM),
+                    new XElement("WidthM", packedBox.WidthM),
+                    new XElement("LengthM", packedBox.LengthM)
+                ),
+                new XElement("Buyer",
+                    new XElement("Name", shipment.Buyer?.Name ?? ""),
+                    new XElement("BuyerNumber", shipment.Buyer?.BuyerNumber ?? "")
+                ),
+                new XElement("Shipper",
+                    new XElement("Name", shipment.Shipper?.Name ?? "")
+                ),
+                new XElement("ShowLots",
+                    new XAttribute("Count", packedBox.ShowLots.Count),
+                    new XAttribute("TotalSkins", packedBox.ShowLots.Sum(l => l.Skins)),
+                    packedBox.ShowLots.Select(l =>
+                        new XElement("ShowLot",
+                            new XElement("BoxNumber", l.BoxNumber),
+                            new XElement("LotNumber", l.LotNumber),
+                            new XElement("Skins", l.Skins),
+                            new XElement("OriginalBoxType", l.BoxType)
+                        )
+                    )
+                ),
+                new XElement("ApprovedAt", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"))
+            )
+        );
+        return doc.ToString();
     }
 
     private class BoxViewResult
@@ -729,4 +990,11 @@ public class UpdateShipmentDto
 public class UpdatePackingOrderStatusDto
 {
     public string Status { get; set; } = "";
+}
+
+public class PackShowLotsDto
+{
+    public string BoxType { get; set; } = "";
+    public decimal Weight { get; set; }
+    public List<int> ShowLotLineIds { get; set; } = new();
 }

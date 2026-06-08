@@ -50,4 +50,21 @@ public class PackingOrderLine
     public int LotNumber { get; set; }
     public int Skins { get; set; }
     public string BoxType { get; set; } = "";
+    public int? PackedBoxId { get; set; }
+    public PackedBox? PackedBox { get; set; }
+}
+
+public class PackedBox
+{
+    public int Id { get; set; }
+    public int PackingOrderId { get; set; }
+    public PackingOrder? PackingOrder { get; set; }
+    public string BoxType { get; set; } = "";
+    public decimal Weight { get; set; }
+    public decimal HeightM { get; set; }
+    public decimal WidthM { get; set; }
+    public decimal LengthM { get; set; }
+    public string Status { get; set; } = "Packed"; // Packed, Approved
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public ICollection<PackingOrderLine> ShowLots { get; set; } = new List<PackingOrderLine>();
 }

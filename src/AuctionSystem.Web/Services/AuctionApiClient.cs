@@ -891,6 +891,32 @@ public class AuctionApiClient
         return resp.IsSuccessStatusCode;
     }
 
+    public async Task<List<PackingOrderXmlDto>> GetPackingOrderXmlsAsync()
+    {
+        var resp = await _http.GetAsync("api/shipments/packing-orders/xmls");
+        resp.EnsureSuccessStatusCode();
+        return await resp.Content.ReadFromJsonAsync<List<PackingOrderXmlDto>>() ?? new();
+    }
+
+    public async Task<bool> PackShowLotsAsync(int packingOrderId, string boxType, decimal weight, List<int> showLotLineIds)
+    {
+        var resp = await _http.PostAsJsonAsync($"api/shipments/packing-orders/{packingOrderId}/pack", new { boxType, weight, showLotLineIds });
+        return resp.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> ApprovePackedBoxAsync(int packedBoxId)
+    {
+        var resp = await _http.PostAsync($"api/shipments/packed-boxes/{packedBoxId}/approve", null);
+        return resp.IsSuccessStatusCode;
+    }
+
+    public async Task<List<PackedBoxDto>> GetPackedBoxesAsync(int packingOrderId)
+    {
+        var resp = await _http.GetAsync($"api/shipments/packing-orders/{packingOrderId}/packed-boxes");
+        resp.EnsureSuccessStatusCode();
+        return await resp.Content.ReadFromJsonAsync<List<PackedBoxDto>>() ?? new();
+    }
+
     public async Task<List<ReleasedLotDto>> GetReleasedLotsForShipmentAsync(int? buyerId = null)
     {
         var url = "api/shipments/released-lots";

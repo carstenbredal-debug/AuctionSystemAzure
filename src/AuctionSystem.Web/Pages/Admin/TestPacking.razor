@@ -1,0 +1,144 @@
+@page "/admin/test-packing"
+@attribute [Authorize(Roles = "Admin")]
+@inject AuctionApiClient Api
+
+<h4 class="mb-4">Test Packing — XML Files from Blob Storage</h4>
+
+<button class="btn btn-primary mb-3" @onclick="LoadXmls" disabled="@_loading">
+    @(_loading ? "Loading..." : "Refresh")
+</button>
+
+@if (_error != null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else if (_xmls.Count == 0 && !_loading)
+{
+    <div class="alert alert-info">No packing order XML files found in blob storage.</div>
+}
+else
+{
+    <div class="section-container">
+        <div class="section-body">
+            <table class="table table-striped table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Packing Order #</th>
+                        <th>Shipment #</th>
+                        <th>Buyer</th>
+                        <th>Status</th>
+                        <th>Folder</th>
+                        <th>Showlots</th>
+                        <th>Created</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var xml in _xmls)
+                    {
+                        <tr>
+                            <td>
+                                <a href="javascript:void(0)" @onclick="() => ToggleExpand(xml.FileName)">
+                                    <strong>@xml.PackingOrderNumber</strong>
+                                </a>
+                            </td>
+                            <td>@xml.ShipmentNumber</td>
+                            <td>@xml.BuyerName (@xml.BuyerNumber)</td>
+                            <td><span class="badge @GetStatusBadgeClass(xml.Status)">@xml.Status</span></td>
+                            <td><span class="badge @(xml.Folder == "new" ? "bg-warning text-dark" : "bg-success")">@xml.Folder</span></td>
+                            <td>@xml.ShowLotCount</td>
+                            <td>@xml.CreatedAt</td>
+                        </tr>
+                        @if (_expandedFile == xml.FileName)
+                        {
+                            <tr>
+                                <td colspan="7" class="p-0">
+                                    <div class="bg-light p-3">
+                                        <h6 class="mb-2">Showlot Boxes</h6>
+                                        @if (xml.Lines.Count == 0)
+                                        {
+                                            <p class="text-muted mb-0">No showlot boxes.</p>
+                                        }
+                                        else
+                                        {
+                                            <table class="table table-sm table-bordered mb-0">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Box #</th>
+                                                        <th>Lot #</th>
+                                                        <th>Skins</th>
+                                                        <th>Box Type</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var line in xml.Lines)
+                                                    {
+                                                        <tr>
+                                                            <td>@line.BoxNumber</td>
+                                                            <td>@line.LotNumber</td>
+                                                            <td>@line.Skins</td>
+                                                            <td>@line.BoxType</td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                                <tfoot>
+                                                    <tr class="fw-bold">
+                                                        <td>Total</td>
+                                                        <td>@xml.Lines.Select(l => l.LotNumber).Distinct().Count() lots</td>
+                                                        <td>@xml.Lines.Sum(l => l.Skins)</td>
+                                                        <td></td>
+                                                    </tr>
+                                                </tfoot>
+                                            </table>
+                                        }
+                                        <div class="mt-2 text-muted small">File: @xml.FileName</div>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private List<PackingOrderXmlDto> _xmls = new();
+    private bool _loading = true;
+    private string? _error;
+    private string? _expandedFile;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadXmls();
+    }
+
+    private async Task LoadXmls()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _xmls = await Api.GetPackingOrderXmlsAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        _loading = false;
+    }
+
+    private void ToggleExpand(string fileName)
+    {
+        _expandedFile = _expandedFile == fileName ? null : fileName;
+    }
+
+    private static string GetStatusBadgeClass(string status) => status switch
+    {
+        "Ready to Pack" => "bg-warning text-dark",
+        "In Production" => "bg-primary",
+        "Packed" => "bg-success",
+        "Error" => "bg-danger",
+        _ => "bg-secondary"
+    };
+}

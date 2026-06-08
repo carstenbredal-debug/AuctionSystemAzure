@@ -420,6 +420,30 @@ using (var scope = host.Services.CreateScope())
                 CONSTRAINT FK_PackingOrderLines_PackingOrder FOREIGN KEY (PackingOrderId) REFERENCES auction.PackingOrders(Id) ON DELETE CASCADE
             );
         ");
+        // PackedBoxes table
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'PackedBoxes')
+            CREATE TABLE auction.PackedBoxes (
+                Id INT IDENTITY(1,1) PRIMARY KEY,
+                PackingOrderId INT NOT NULL,
+                BoxType NVARCHAR(100) NOT NULL DEFAULT '',
+                Weight DECIMAL(18,4) NOT NULL DEFAULT 0,
+                HeightM DECIMAL(18,4) NOT NULL DEFAULT 0,
+                WidthM DECIMAL(18,4) NOT NULL DEFAULT 0,
+                LengthM DECIMAL(18,4) NOT NULL DEFAULT 0,
+                Status NVARCHAR(50) NOT NULL DEFAULT 'Packed',
+                CreatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+                CONSTRAINT FK_PackedBoxes_PackingOrder FOREIGN KEY (PackingOrderId) REFERENCES auction.PackingOrders(Id) ON DELETE CASCADE
+            );
+        ");
+        // Add PackedBoxId column to PackingOrderLines if missing
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.PackingOrderLines') AND name = 'PackedBoxId')
+                ALTER TABLE auction.PackingOrderLines ADD PackedBoxId INT NULL;
+            IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_PackingOrderLines_PackedBox')
+                ALTER TABLE auction.PackingOrderLines ADD CONSTRAINT FK_PackingOrderLines_PackedBox
+                    FOREIGN KEY (PackedBoxId) REFERENCES auction.PackedBoxes(Id) ON DELETE NO ACTION;
+        ");
         // Drop auction.Boxes table if it exists (replaced by view)
         db.Database.ExecuteSqlRaw(@"
             IF EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'Boxes')

@@ -1007,10 +1007,42 @@ public class PackingOrderDto
 
 public class PackingOrderLineDto
 {
+    public int Id { get; set; }
     public int BoxNumber { get; set; }
     public int LotNumber { get; set; }
     public int Skins { get; set; }
     public string BoxType { get; set; } = "";
+    public int? PackedBoxId { get; set; }
+}
+
+public class PackingOrderXmlDto
+{
+    public string FileName { get; set; } = "";
+    public string Folder { get; set; } = "";
+    public string PackingOrderNumber { get; set; } = "";
+    public string ShipmentNumber { get; set; } = "";
+    public string Status { get; set; } = "";
+    public string CreatedAt { get; set; } = "";
+    public string BuyerName { get; set; } = "";
+    public string BuyerNumber { get; set; } = "";
+    public string ShipperName { get; set; } = "";
+    public int ShowLotCount { get; set; }
+    public List<PackingOrderLineDto> Lines { get; set; } = new();
+}
+
+public class PackedBoxDto
+{
+    public int Id { get; set; }
+    public string BoxType { get; set; } = "";
+    public decimal Weight { get; set; }
+    public decimal HeightM { get; set; }
+    public decimal WidthM { get; set; }
+    public decimal LengthM { get; set; }
+    public string Status { get; set; } = "";
+    public DateTime CreatedAt { get; set; }
+    public int ShowLotCount { get; set; }
+    public int TotalSkins { get; set; }
+    public List<PackingOrderLineDto> ShowLots { get; set; } = new();
 }
 
 public class ShipmentPackingListDto

@@ -33,6 +33,7 @@ public class AuctionDbContext : DbContext
     public DbSet<ShipmentLine> ShipmentLines => Set<ShipmentLine>();
     public DbSet<PackingOrder> PackingOrders => Set<PackingOrder>();
     public DbSet<PackingOrderLine> PackingOrderLines => Set<PackingOrderLine>();
+    public DbSet<PackedBox> PackedBoxes => Set<PackedBox>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -334,6 +335,19 @@ public class AuctionDbContext : DbContext
             e.HasKey(l => l.Id);
             e.Property(l => l.BoxType).HasMaxLength(100);
             e.HasOne(l => l.PackingOrder).WithMany(p => p.Lines).HasForeignKey(l => l.PackingOrderId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(l => l.PackedBox).WithMany(b => b.ShowLots).HasForeignKey(l => l.PackedBoxId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<PackedBox>(e =>
+        {
+            e.HasKey(b => b.Id);
+            e.Property(b => b.BoxType).HasMaxLength(100);
+            e.Property(b => b.Status).HasMaxLength(50);
+            e.Property(b => b.Weight).HasColumnType("decimal(18,4)");
+            e.Property(b => b.HeightM).HasColumnType("decimal(18,4)");
+            e.Property(b => b.WidthM).HasColumnType("decimal(18,4)");
+            e.Property(b => b.LengthM).HasColumnType("decimal(18,4)");
+            e.HasOne(b => b.PackingOrder).WithMany().HasForeignKey(b => b.PackingOrderId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

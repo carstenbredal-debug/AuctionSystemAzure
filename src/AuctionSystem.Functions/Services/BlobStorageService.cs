@@ -49,16 +49,41 @@ public class BlobStorageService
 
     public async Task UploadPackingOrderXmlAsync(string packingOrderNumber, string xmlContent)
     {
+        await UploadPackingXmlAsync($"new/{packingOrderNumber}.xml", xmlContent);
+    }
+
+    public async Task UploadPackingXmlAsync(string blobPath, string xmlContent)
+    {
         var container = await GetPackingContainerAsync();
-        var blobName = $"new/{packingOrderNumber}.xml";
-        var blob = container.GetBlobClient(blobName);
-        _logger.LogInformation("Uploading packing order XML {BlobName}", blobName);
+        var blob = container.GetBlobClient(blobPath);
+        _logger.LogInformation("Uploading packing XML {BlobName}", blobPath);
         using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(xmlContent));
         await blob.UploadAsync(stream, new BlobUploadOptions
         {
             HttpHeaders = new BlobHttpHeaders { ContentType = "application/xml" }
         });
-        _logger.LogInformation("Packing order XML uploaded to {Uri}", blob.Uri);
+        _logger.LogInformation("Packing XML uploaded to {Uri}", blob.Uri);
+    }
+
+    public async Task<List<(string FileName, string Folder, string Content)>> ListPackingOrderXmlsAsync()
+    {
+        var container = await GetPackingContainerAsync();
+        var results = new List<(string FileName, string Folder, string Content)>();
+
+        foreach (var folder in new[] { "new", "processed", "completed" })
+        {
+            await foreach (var blob in container.GetBlobsAsync(BlobTraits.None, BlobStates.None, $"{folder}/", default))
+            {
+                if (!blob.Name.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)) continue;
+                var blobClient = container.GetBlobClient(blob.Name);
+                var download = await blobClient.DownloadContentAsync();
+                var content = download.Value.Content.ToString();
+                var fileName = blob.Name.Split('/').Last();
+                results.Add((fileName, folder, content));
+            }
+        }
+
+        return results;
     }
 
     public async Task<string> UploadPdfAsync(string fileName, byte[] pdfData)

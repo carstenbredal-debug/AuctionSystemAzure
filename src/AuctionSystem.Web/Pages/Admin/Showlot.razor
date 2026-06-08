@@ -61,7 +61,7 @@ else
                                 }
                                 else if (po.Status == "In Production")
                                 {
-                                    <button class="btn btn-sm btn-success" @onclick="() => UpdateStatus(po, _statusPacked)">Mark Packed</button>
+                                    <button class="btn btn-sm btn-success" @onclick="() => StartPacking(po)">Pack</button>
                                 }
                             </td>
                         </tr>
@@ -70,14 +70,14 @@ else
                             <tr>
                                 <td colspan="7" class="p-0">
                                     <div class="bg-light p-3">
-                                        <h6 class="mb-2">Showlot Boxes to Pack</h6>
-                                        @if (po.Lines.Count == 0)
-                                        {
-                                            <p class="text-muted mb-0">No showlot boxes.</p>
+                                        @{
+                                            var unpackedLines = po.Lines.Where(l => l.PackedBoxId == null).ToList();
+                                            var packedLines = po.Lines.Where(l => l.PackedBoxId != null).ToList();
                                         }
-                                        else
+                                        <h6 class="mb-2">Showlot Boxes to Pack (@unpackedLines.Count unpacked)</h6>
+                                        @if (unpackedLines.Count > 0)
                                         {
-                                            <table class="table table-sm table-bordered mb-0">
+                                            <table class="table table-sm table-bordered mb-2">
                                                 <thead>
                                                     <tr>
                                                         <th>Box #</th>
@@ -87,7 +87,7 @@ else
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    @foreach (var line in po.Lines)
+                                                    @foreach (var line in unpackedLines)
                                                     {
                                                         <tr>
                                                             <td>@line.BoxNumber</td>
@@ -100,12 +100,32 @@ else
                                                 <tfoot>
                                                     <tr class="fw-bold">
                                                         <td>Total</td>
-                                                        <td>@po.Lines.Select(l => l.LotNumber).Distinct().Count() lots</td>
-                                                        <td>@po.Lines.Sum(l => l.Skins)</td>
+                                                        <td>@unpackedLines.Select(l => l.LotNumber).Distinct().Count() lots</td>
+                                                        <td>@unpackedLines.Sum(l => l.Skins)</td>
                                                         <td></td>
                                                     </tr>
                                                 </tfoot>
                                             </table>
+                                        }
+                                        @if (packedLines.Count > 0)
+                                        {
+                                            <h6 class="mt-3 mb-2 text-success">Packed Boxes (@packedLines.Count showlots packed)</h6>
+                                            @if (_packedBoxes.ContainsKey(po.Id) && _packedBoxes[po.Id].Count > 0)
+                                            {
+                                                @foreach (var box in _packedBoxes[po.Id])
+                                                {
+                                                    <div class="card mb-2">
+                                                        <div class="card-body p-2">
+                                                            <strong>@box.BoxType</strong> — @box.Weight kg — @box.ShowLotCount showlots, @box.TotalSkins skins
+                                                            <span class="badge @(box.Status == "Approved" ? "bg-success" : "bg-warning text-dark") ms-2">@box.Status</span>
+                                                            @if (box.Status == "Packed")
+                                                            {
+                                                                <button class="btn btn-sm btn-success ms-2" @onclick="() => ApproveBox(box)">Approve</button>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                }
+                                            }
                                         }
                                     </div>
                                 </td>
@@ -118,6 +138,180 @@ else
     </div>
 }
 
+@* Packing Modal — Step 1: Select Box Type *@
+@if (_packingStep == 1)
+{
+    <div class="modal show d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Pack — Step 1: Select Box Type</h5>
+                    <button type="button" class="btn-close" @onclick="CancelPacking"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Packing Order: <strong>@_packingOrder?.PackingOrderNumber</strong></p>
+                    <label class="form-label fw-bold">Box Type</label>
+                    <select class="form-select" @bind="_selectedBoxType">
+                        <option value="">— Select Box Type —</option>
+                        @foreach (var bt in _boxTypes)
+                        {
+                            <option value="@bt.BoxType">@bt.BoxType (@bt.LengthM×@bt.WidthM×@bt.HeightM m, @bt.WeightKg kg)</option>
+                        }
+                    </select>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CancelPacking">Cancel</button>
+                    <button class="btn btn-primary" disabled="@(string.IsNullOrEmpty(_selectedBoxType))" @onclick="GoToStep2">Next</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* Packing Modal — Step 2: Select Showlots *@
+@if (_packingStep == 2)
+{
+    <div class="modal show d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Pack — Step 2: Select Showlots</h5>
+                    <button type="button" class="btn-close" @onclick="CancelPacking"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Box Type: <strong>@_selectedBoxType</strong></p>
+                    @{
+                        var available = _packingOrder?.Lines.Where(l => l.PackedBoxId == null).ToList() ?? new();
+                    }
+                    @if (available.Count == 0)
+                    {
+                        <div class="alert alert-info">All showlots already packed.</div>
+                    }
+                    else
+                    {
+                        <table class="table table-sm table-bordered">
+                            <thead>
+                                <tr>
+                                    <th><input type="checkbox" @onchange="ToggleSelectAll" /></th>
+                                    <th>Box #</th>
+                                    <th>Lot #</th>
+                                    <th>Skins</th>
+                                    <th>Box Type</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var line in available)
+                                {
+                                    <tr>
+                                        <td><input type="checkbox" checked="@_selectedLineIds.Contains(line.Id)" @onchange="() => ToggleLine(line.Id)" /></td>
+                                        <td>@line.BoxNumber</td>
+                                        <td>@line.LotNumber</td>
+                                        <td>@line.Skins</td>
+                                        <td>@line.BoxType</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        <p class="text-muted">Selected: @_selectedLineIds.Count showlots, @available.Where(l => _selectedLineIds.Contains(l.Id)).Sum(l => l.Skins) skins</p>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => { _packingStep = 1; }">Back</button>
+                    <button class="btn btn-primary" disabled="@(_selectedLineIds.Count == 0)" @onclick="GoToStep3">Pack</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* Packing Modal — Step 3: Enter Weight *@
+@if (_packingStep == 3)
+{
+    <div class="modal show d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Pack — Step 3: Enter Weight</h5>
+                    <button type="button" class="btn-close" @onclick="CancelPacking"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Box Type: <strong>@_selectedBoxType</strong> — @_selectedLineIds.Count showlots selected</p>
+                    <label class="form-label fw-bold">Weight (kg)</label>
+                    <input type="number" class="form-control" step="0.01" @bind="_enteredWeight" />
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => { _packingStep = 2; }">Back</button>
+                    <button class="btn btn-primary" disabled="@(_enteredWeight <= 0)" @onclick="GoToStep4">Next</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* Packing Modal — Step 4: Summary & Approve *@
+@if (_packingStep == 4)
+{
+    <div class="modal show d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Pack — Summary</h5>
+                    <button type="button" class="btn-close" @onclick="CancelPacking"></button>
+                </div>
+                <div class="modal-body">
+                    @{
+                        var selectedLines = _packingOrder?.Lines.Where(l => _selectedLineIds.Contains(l.Id)).ToList() ?? new();
+                        var dims = _boxTypes.FirstOrDefault(b => b.BoxType == _selectedBoxType);
+                    }
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <strong>Packing Order:</strong> @_packingOrder?.PackingOrderNumber<br />
+                            <strong>Box Type:</strong> @_selectedBoxType<br />
+                            <strong>Weight:</strong> @_enteredWeight kg
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Dimensions:</strong> @(dims?.LengthM ?? 0) × @(dims?.WidthM ?? 0) × @(dims?.HeightM ?? 0) m<br />
+                            <strong>Showlots:</strong> @selectedLines.Count<br />
+                            <strong>Total Skins:</strong> @selectedLines.Sum(l => l.Skins)
+                        </div>
+                    </div>
+                    <table class="table table-sm table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Box #</th>
+                                <th>Lot #</th>
+                                <th>Skins</th>
+                                <th>Box Type</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var line in selectedLines)
+                            {
+                                <tr>
+                                    <td>@line.BoxNumber</td>
+                                    <td>@line.LotNumber</td>
+                                    <td>@line.Skins</td>
+                                    <td>@line.BoxType</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    @if (!string.IsNullOrEmpty(_packError))
+                    {
+                        <div class="alert alert-danger mt-2">@_packError</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => { _packingStep = 3; }">Back</button>
+                    <button class="btn btn-success" disabled="@_packing" @onclick="ConfirmPacking">
+                        @(_packing ? "Packing..." : "Approve & Pack")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private List<PackingOrderDto> _orders = new();
     private bool _loading = true;
@@ -125,6 +319,17 @@ else
     private string _statusFilter = "";
     private const string _statusInProduction = "In Production";
     private const string _statusPacked = "Packed";
+
+    // Packing flow state
+    private int _packingStep;
+    private PackingOrderDto? _packingOrder;
+    private List<BoxTypeDimensionDto> _boxTypes = new();
+    private string _selectedBoxType = "";
+    private HashSet<int> _selectedLineIds = new();
+    private decimal _enteredWeight;
+    private bool _packing;
+    private string? _packError;
+    private Dictionary<int, List<PackedBoxDto>> _packedBoxes = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -135,6 +340,12 @@ else
     {
         _loading = true;
         _orders = await Api.GetPackingOrdersAsync(string.IsNullOrEmpty(_statusFilter) ? null : _statusFilter);
+        // Load packed boxes for expanded orders
+        foreach (var po in _orders.Where(o => o.Lines.Any(l => l.PackedBoxId != null)))
+        {
+            try { _packedBoxes[po.Id] = await Api.GetPackedBoxesAsync(po.Id); }
+            catch { _packedBoxes[po.Id] = new(); }
+        }
         _loading = false;
     }
 
@@ -144,9 +355,15 @@ else
         await LoadOrders();
     }
 
-    private void ToggleExpand(int id)
+    private async Task ToggleExpand(int id)
     {
-        _expandedId = _expandedId == id ? null : id;
+        if (_expandedId == id) { _expandedId = null; return; }
+        _expandedId = id;
+        if (!_packedBoxes.ContainsKey(id))
+        {
+            try { _packedBoxes[id] = await Api.GetPackedBoxesAsync(id); }
+            catch { _packedBoxes[id] = new(); }
+        }
     }
 
     private async Task UpdateStatus(PackingOrderDto po, string newStatus)
@@ -157,6 +374,92 @@ else
             po.Status = newStatus;
             StateHasChanged();
         }
+    }
+
+    private async Task StartPacking(PackingOrderDto po)
+    {
+        _packingOrder = po;
+        _selectedBoxType = "";
+        _selectedLineIds = new();
+        _enteredWeight = 0;
+        _packError = null;
+        _packing = false;
+        if (_boxTypes.Count == 0)
+        {
+            try { _boxTypes = await Api.GetBoxTypeDimensionsAsync(); }
+            catch { _boxTypes = new(); }
+        }
+        _packingStep = 1;
+    }
+
+    private void CancelPacking()
+    {
+        _packingStep = 0;
+        _packingOrder = null;
+    }
+
+    private void GoToStep2() => _packingStep = 2;
+
+    private void GoToStep3() => _packingStep = 3;
+
+    private void GoToStep4() => _packingStep = 4;
+
+    private void ToggleLine(int lineId)
+    {
+        if (!_selectedLineIds.Remove(lineId))
+            _selectedLineIds.Add(lineId);
+    }
+
+    private void ToggleSelectAll(ChangeEventArgs e)
+    {
+        var available = _packingOrder?.Lines.Where(l => l.PackedBoxId == null).ToList() ?? new();
+        if ((bool)(e.Value ?? false))
+            _selectedLineIds = new HashSet<int>(available.Select(l => l.Id));
+        else
+            _selectedLineIds.Clear();
+    }
+
+    private async Task ConfirmPacking()
+    {
+        if (_packingOrder == null) return;
+        _packing = true;
+        _packError = null;
+        try
+        {
+            // Pack the showlots into a box
+            var packed = await Api.PackShowLotsAsync(_packingOrder.Id, _selectedBoxType, _enteredWeight, _selectedLineIds.ToList());
+            if (!packed) { _packError = "Failed to pack showlots."; _packing = false; return; }
+
+            // Get the latest packed boxes to find the new one and auto-approve
+            var boxes = await Api.GetPackedBoxesAsync(_packingOrder.Id);
+            var newBox = boxes.LastOrDefault();
+            if (newBox != null && newBox.Status == "Packed")
+            {
+                await Api.ApprovePackedBoxAsync(newBox.Id);
+            }
+
+            // Refresh
+            await LoadOrders();
+            _packingStep = 0;
+            _packingOrder = null;
+        }
+        catch (Exception ex)
+        {
+            _packError = ex.Message;
+        }
+        _packing = false;
+    }
+
+    private async Task ApproveBox(PackedBoxDto box)
+    {
+        await Api.ApprovePackedBoxAsync(box.Id);
+        // Refresh packed boxes for this order
+        var po = _orders.FirstOrDefault(o => _packedBoxes.ContainsKey(o.Id) && _packedBoxes[o.Id].Any(b => b.Id == box.Id));
+        if (po != null)
+        {
+            _packedBoxes[po.Id] = await Api.GetPackedBoxesAsync(po.Id);
+        }
+        await LoadOrders();
     }
 
     private static string GetStatusBadgeClass(string status) => status switch
