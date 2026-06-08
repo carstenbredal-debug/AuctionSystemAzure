@@ -4,7 +4,6 @@ codeunit 50150 "Auto Fill Delivery Date"
     local procedure AutoFillDeliveryDateOnInsert(var Rec: Record "Sales Header"; RunTrigger: Boolean)
     var
         RecRef: RecordRef;
-        FldRef: FieldRef;
         DocDate: Date;
     begin
         DocDate := Rec."Document Date";
@@ -16,7 +15,6 @@ codeunit 50150 "Auto Fill Delivery Date"
 
         RecRef.GetTable(Rec);
         SetDateFieldIfEmpty(RecRef, 52063188, DocDate); // ITI Delivery Date
-        SetDateFieldIfEmpty(RecRef, 52063044, DocDate); // VAT Settlement Date
         RecRef.SetTable(Rec);
 
         Rec.Modify(false);
@@ -35,12 +33,10 @@ codeunit 50150 "Auto Fill Delivery Date"
             DocDate := WorkDate();
 
         RecRef.GetTable(Rec);
-        if SetDateFieldIfEmpty(RecRef, 52063188, DocDate) then // ITI Delivery Date
-            NeedModify := true;
-        if SetDateFieldIfEmpty(RecRef, 52063044, DocDate) then // VAT Settlement Date
-            NeedModify := true;
-        if NeedModify then
+        if SetDateFieldIfEmpty(RecRef, 52063188, DocDate) then begin // ITI Delivery Date
             RecRef.SetTable(Rec);
+            NeedModify := true;
+        end;
 
         if Rec."Shipment Date" = 0D then begin
             Rec."Shipment Date" := DocDate;
