@@ -1,11 +1,14 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Xml.Linq;
 using AuctionSystem.Domain.Data;
 using AuctionSystem.Domain.Entities;
 using AuctionSystem.Domain.Enums;
+using AuctionSystem.Functions.Services;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace AuctionSystem.Functions.Functions;
 
@@ -13,6 +16,8 @@ public class ShipmentFunctions
 {
     private readonly AuctionDbContext _db;
     private readonly CatalogDbContext _catalogDb;
+    private readonly BlobStorageService? _blobStorage;
+    private readonly ILogger<ShipmentFunctions> _logger;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -20,10 +25,12 @@ public class ShipmentFunctions
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public ShipmentFunctions(AuctionDbContext db, CatalogDbContext catalogDb)
+    public ShipmentFunctions(AuctionDbContext db, CatalogDbContext catalogDb, ILogger<ShipmentFunctions> logger, BlobStorageService? blobStorage = null)
     {
         _db = db;
         _catalogDb = catalogDb;
+        _logger = logger;
+        _blobStorage = blobStorage;
     }
 
     [Function("GetShipments")]
@@ -296,12 +303,59 @@ public class ShipmentFunctions
 
             _db.PackingOrders.Add(packingOrder);
             await _db.SaveChangesAsync();
+
+            // Generate XML and push to blob storage
+            if (_blobStorage != null)
+            {
+                try
+                {
+                    var xml = GeneratePackingOrderXml(packingOrder, shipment);
+                    await _blobStorage.UploadPackingOrderXmlAsync(packingOrder.PackingOrderNumber, xml);
+                    _logger.LogInformation("Packing order XML {Number} uploaded to blob storage", packingOrder.PackingOrderNumber);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to upload packing order XML {Number}", packingOrder.PackingOrderNumber);
+                }
+            }
         }
 
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
         await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true, id = shipment.Id, shipmentNumber = shipment.ShipmentNumber }, JsonOptions));
         return response;
+    }
+
+    private static string GeneratePackingOrderXml(PackingOrder packingOrder, Shipment shipment)
+    {
+        var doc = new XDocument(
+            new XDeclaration("1.0", "utf-8", "yes"),
+            new XElement("PackingOrder",
+                new XElement("PackingOrderNumber", packingOrder.PackingOrderNumber),
+                new XElement("ShipmentNumber", shipment.ShipmentNumber),
+                new XElement("Status", packingOrder.Status),
+                new XElement("CreatedAt", packingOrder.CreatedAt.ToString("yyyy-MM-ddTHH:mm:ssZ")),
+                new XElement("Buyer",
+                    new XElement("Name", shipment.Buyer?.Name ?? ""),
+                    new XElement("BuyerNumber", shipment.Buyer?.BuyerNumber ?? "")
+                ),
+                new XElement("Shipper",
+                    new XElement("Name", shipment.Shipper?.Name ?? "")
+                ),
+                new XElement("ShowLotBoxes",
+                    new XAttribute("Count", packingOrder.Lines.Count),
+                    packingOrder.Lines.Select(line =>
+                        new XElement("Box",
+                            new XElement("BoxNumber", line.BoxNumber),
+                            new XElement("LotNumber", line.LotNumber),
+                            new XElement("Skins", line.Skins),
+                            new XElement("BoxType", line.BoxType)
+                        )
+                    )
+                )
+            )
+        );
+        return doc.ToString();
     }
 
     [Function("UpdateShipmentStatus")]

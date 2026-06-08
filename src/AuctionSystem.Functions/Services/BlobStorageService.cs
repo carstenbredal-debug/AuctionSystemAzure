@@ -8,14 +8,16 @@ namespace AuctionSystem.Functions.Services;
 public class BlobStorageService
 {
     private readonly BlobContainerClient _container;
+    private readonly BlobServiceClient _serviceClient;
     private readonly ILogger<BlobStorageService> _logger;
     private bool _containerEnsured;
+    private bool _packingContainerEnsured;
 
     public BlobStorageService(string connectionString, ILogger<BlobStorageService> logger, string containerName = "invoices")
     {
         _logger = logger;
-        var client = new BlobServiceClient(connectionString);
-        _container = client.GetBlobContainerClient(containerName);
+        _serviceClient = new BlobServiceClient(connectionString);
+        _container = _serviceClient.GetBlobContainerClient(containerName);
     }
 
     private async Task EnsureContainerAsync()
@@ -33,6 +35,30 @@ public class BlobStorageService
             _logger.LogError(ex, "Failed to ensure blob container '{Container}' exists", _container.Name);
             throw;
         }
+    }
+
+    private BlobContainerClient? _packingContainer;
+    private async Task<BlobContainerClient> GetPackingContainerAsync()
+    {
+        if (_packingContainer != null && _packingContainerEnsured) return _packingContainer;
+        _packingContainer = _serviceClient.GetBlobContainerClient("packing-orders");
+        await _packingContainer.CreateIfNotExistsAsync(PublicAccessType.None);
+        _packingContainerEnsured = true;
+        return _packingContainer;
+    }
+
+    public async Task UploadPackingOrderXmlAsync(string packingOrderNumber, string xmlContent)
+    {
+        var container = await GetPackingContainerAsync();
+        var blobName = $"new/{packingOrderNumber}.xml";
+        var blob = container.GetBlobClient(blobName);
+        _logger.LogInformation("Uploading packing order XML {BlobName}", blobName);
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(xmlContent));
+        await blob.UploadAsync(stream, new BlobUploadOptions
+        {
+            HttpHeaders = new BlobHttpHeaders { ContentType = "application/xml" }
+        });
+        _logger.LogInformation("Packing order XML uploaded to {Uri}", blob.Uri);
     }
 
     public async Task<string> UploadPdfAsync(string fileName, byte[] pdfData)
