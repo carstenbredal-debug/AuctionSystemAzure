@@ -4,6 +4,7 @@ codeunit 50150 "Auto Fill Delivery Date"
     local procedure AutoFillDeliveryDateOnInsert(var Rec: Record "Sales Header"; RunTrigger: Boolean)
     var
         RecRef: RecordRef;
+        FldRef: FieldRef;
         DocDate: Date;
     begin
         DocDate := Rec."Document Date";
@@ -14,9 +15,23 @@ codeunit 50150 "Auto Fill Delivery Date"
             Rec."Shipment Date" := DocDate;
 
         RecRef.GetTable(Rec);
-        SetDateFieldIfEmpty(RecRef, 52063188, DocDate); // ITI Delivery Date
-        RecRef.SetTable(Rec);
 
+        // Validate ITI Delivery Date — triggers Polish Localization logic
+        // which auto-populates VAT Settlement Date and other derived fields
+        if RecRef.FieldExist(52063188) then begin
+            FldRef := RecRef.Field(52063188);
+            if Format(FldRef.Value) = '' then
+                FldRef.Validate(DocDate);
+        end;
+
+        // Also directly set VAT Settlement Date as fallback
+        if RecRef.FieldExist(52063044) then begin
+            FldRef := RecRef.Field(52063044);
+            if Format(FldRef.Value) = '' then
+                FldRef.Value := DocDate;
+        end;
+
+        RecRef.SetTable(Rec);
         Rec.Modify(false);
     end;
 
@@ -24,6 +39,7 @@ codeunit 50150 "Auto Fill Delivery Date"
     local procedure AutoFillDeliveryDateOnModify(var Rec: Record "Sales Header"; var xRec: Record "Sales Header"; RunTrigger: Boolean)
     var
         RecRef: RecordRef;
+        FldRef: FieldRef;
         DocDate: Date;
         NeedModify: Boolean;
     begin
@@ -33,10 +49,25 @@ codeunit 50150 "Auto Fill Delivery Date"
             DocDate := WorkDate();
 
         RecRef.GetTable(Rec);
-        if SetDateFieldIfEmpty(RecRef, 52063188, DocDate) then begin // ITI Delivery Date
-            RecRef.SetTable(Rec);
-            NeedModify := true;
+
+        if RecRef.FieldExist(52063188) then begin
+            FldRef := RecRef.Field(52063188);
+            if Format(FldRef.Value) = '' then begin
+                FldRef.Validate(DocDate);
+                NeedModify := true;
+            end;
         end;
+
+        if RecRef.FieldExist(52063044) then begin
+            FldRef := RecRef.Field(52063044);
+            if Format(FldRef.Value) = '' then begin
+                FldRef.Value := DocDate;
+                NeedModify := true;
+            end;
+        end;
+
+        if NeedModify then
+            RecRef.SetTable(Rec);
 
         if Rec."Shipment Date" = 0D then begin
             Rec."Shipment Date" := DocDate;
@@ -45,18 +76,5 @@ codeunit 50150 "Auto Fill Delivery Date"
 
         if NeedModify then
             Rec.Modify(false);
-    end;
-
-    local procedure SetDateFieldIfEmpty(var RecRef: RecordRef; FieldNo: Integer; DateValue: Date): Boolean
-    var
-        FldRef: FieldRef;
-    begin
-        if not RecRef.FieldExist(FieldNo) then
-            exit(false);
-        FldRef := RecRef.Field(FieldNo);
-        if Format(FldRef.Value) <> '' then
-            exit(false);
-        FldRef.Value := DateValue;
-        exit(true);
     end;
 }
