@@ -1,18 +1,39 @@
 <CascadingAuthenticationState>
-    <Router AppAssembly="@typeof(App).Assembly">
-        <Found Context="routeData">
-            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(Layout.MainLayout)">
-                <NotAuthorized>
-                    <RedirectToLogin />
-                </NotAuthorized>
-            </AuthorizeRouteView>
-            <FocusOnNavigate RouteData="@routeData" Selector="h1" />
-        </Found>
-        <NotFound>
-            <PageTitle>Not found</PageTitle>
-            <LayoutView Layout="@typeof(Layout.MainLayout)">
-                <p role="alert">Sorry, there's nothing at this address.</p>
-            </LayoutView>
-        </NotFound>
-    </Router>
+    <ErrorBoundary @ref="_errorBoundary">
+        <ChildContent>
+            <Router AppAssembly="@typeof(App).Assembly">
+                <Found Context="routeData">
+                    <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(Layout.MainLayout)">
+                        <NotAuthorized>
+                            <RedirectToLogin />
+                        </NotAuthorized>
+                    </AuthorizeRouteView>
+                    <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+                </Found>
+                <NotFound>
+                    <PageTitle>Not found</PageTitle>
+                    <LayoutView Layout="@typeof(Layout.MainLayout)">
+                        <p role="alert">Sorry, there's nothing at this address.</p>
+                    </LayoutView>
+                </NotFound>
+            </Router>
+        </ChildContent>
+        <ErrorContent Context="ex">
+            <div style="padding:2rem;background:#fee;border:2px solid red;margin:1rem;">
+                <h3 style="color:red;">Unhandled Error</h3>
+                <pre style="white-space:pre-wrap;word-break:break-all;">@ex.GetType().FullName: @ex.Message</pre>
+                <details>
+                    <summary>Stack trace</summary>
+                    <pre style="white-space:pre-wrap;word-break:break-all;font-size:0.8rem;">@ex.StackTrace</pre>
+                </details>
+                <button class="btn btn-primary mt-2" @onclick="Recover">Dismiss &amp; Retry</button>
+            </div>
+        </ErrorContent>
+    </ErrorBoundary>
 </CascadingAuthenticationState>
+
+@code {
+    private ErrorBoundary? _errorBoundary;
+
+    private void Recover() => _errorBoundary?.Recover();
+}
