@@ -25,17 +25,25 @@
    Black:      #000000
    ================================= */
 
-html, body {
+html {
+    height: 100%;
+    overflow: hidden;
+}
+
+body {
     font-family: 'PPPangramSans', 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-    background-color: #E8E3DD;
+    background-color: #230A3C;
     color: #000000;
     height: 100%;
     margin: 0;
+    overflow: hidden;
 }
 
 #app {
-    min-height: 100vh;
-    min-height: 100dvh;
+    height: 100vh;
+    height: 100dvh;
+    overflow-y: auto;
+    background-color: #230A3C;
 }
 
 h1, h2, h3, h4, h5, h6,
