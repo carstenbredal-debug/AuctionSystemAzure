@@ -519,7 +519,6 @@ public class BusinessCentralSyncService
             ExternalDocumentNumber = extDocRef,
             InvoiceDate = postingDate.ToString("yyyy-MM-dd"),
             DueDate = (invoice.PromptDate ?? postingDate.AddDays(30)).ToString("yyyy-MM-dd"),
-            ShipmentDate = postingDate.ToString("yyyy-MM-dd"),
             CustomerId = buyer.Value.BcCustomerId,
             CurrencyCode = ""
         };
