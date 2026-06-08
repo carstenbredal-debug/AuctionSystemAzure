@@ -23,6 +23,7 @@
         <select class="form-select" @onchange="OnStatusFilterChanged">
             <option value="">All Statuses</option>
             <option value="Pending">Pending</option>
+            <option value="ShowLot Packing">ShowLot Packing</option>
             <option value="Shipped">Shipped</option>
             <option value="Delivered">Delivered</option>
             <option value="Cancelled">Cancelled</option>
@@ -74,7 +75,7 @@ else
                             <td>@(s.DeliveredAt?.ToString("yyyy-MM-dd") ?? "-")</td>
                             <td>
                                 <a href="admin/shipments/@s.Id/packing-list" class="btn btn-sm btn-outline-secondary me-1" target="_blank">Packing List</a>
-                                @if (s.Status == "Pending")
+                                @if (s.Status == "Pending" || s.Status == "ShowLot Packing")
                                 {
                                     <button class="btn btn-sm btn-success me-1" @onclick="() => MarkShipped(s)">Ship</button>
                                     <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteShipment(s.Id)">Delete</button>
@@ -498,6 +499,7 @@ else
     private static string GetStatusBadgeClass(string status) => status switch
     {
         "Pending" => "bg-warning text-dark",
+        "ShowLot Packing" => "bg-info text-dark",
         "Shipped" => "bg-primary",
         "Delivered" => "bg-success",
         "Cancelled" => "bg-secondary",

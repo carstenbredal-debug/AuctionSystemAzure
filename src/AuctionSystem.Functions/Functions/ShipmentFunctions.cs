@@ -228,14 +228,15 @@ public class ShipmentFunctions
                 .AnyAsync();
         }
 
-        var shippingStatus = hasShowLot ? "ShowLot Packing" : "InShipment";
+        if (hasShowLot)
+            shipment.Status = "ShowLot Packing";
 
         // Update invoice shipping status for affected invoices
         var invoiceIds = lotInvoiceMap.Values.Distinct().ToList();
         var invoices = await _db.Invoices.Where(i => invoiceIds.Contains(i.Id)).ToListAsync();
         foreach (var inv in invoices)
         {
-            inv.ShippingStatus = shippingStatus;
+            inv.ShippingStatus = "InShipment";
         }
 
         await _db.SaveChangesAsync();
@@ -261,7 +262,7 @@ public class ShipmentFunctions
         if (shipment == null)
             return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
 
-        var validStatuses = new[] { "Pending", "Shipped", "Delivered", "Cancelled" };
+        var validStatuses = new[] { "Pending", "ShowLot Packing", "Shipped", "Delivered", "Cancelled" };
         if (!validStatuses.Contains(body.Status))
         {
             var bad = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
@@ -339,11 +340,11 @@ public class ShipmentFunctions
         if (shipment == null)
             return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
 
-        if (shipment.Status != "Pending")
+        if (shipment.Status != "Pending" && shipment.Status != "ShowLot Packing")
         {
             var bad = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
             bad.Headers.Add("Content-Type", "application/json");
-            await bad.WriteStringAsync(JsonSerializer.Serialize(new { error = "Can only delete pending shipments" }, JsonOptions));
+            await bad.WriteStringAsync(JsonSerializer.Serialize(new { error = "Can only delete pending or ShowLot Packing shipments" }, JsonOptions));
             return bad;
         }
 
