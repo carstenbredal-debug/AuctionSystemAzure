@@ -900,6 +900,26 @@ public class BusinessCentralFunctions
         }
     }
 
+    [Function("BCPaymentInfoDiagnostic")]
+    public async Task<HttpResponseData> BCPaymentInfoDiagnostic(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "bc/payment-info-diagnostic")] HttpRequestData req)
+    {
+        if (_bcClient == null)
+            return await JsonResponse(req, new { error = "BC not configured" });
+
+        try
+        {
+            var companyId = await _bcClient.ResolveCompanyIdAsync();
+            var companyInfo = await _bcClient.GetCompanyInformationRawAsync(companyId);
+            var bankAccounts = await _bcClient.GetBankAccountsRawAsync(companyId);
+            return await JsonResponse(req, new { companyId, companyInformation = companyInfo, bankAccounts });
+        }
+        catch (Exception ex)
+        {
+            return await JsonResponse(req, new { error = ex.Message }, HttpStatusCode.InternalServerError);
+        }
+    }
+
     private static async Task<HttpResponseData> JsonResponse(HttpRequestData req, object data, HttpStatusCode status = HttpStatusCode.OK)
     {
         var response = req.CreateResponse(status);

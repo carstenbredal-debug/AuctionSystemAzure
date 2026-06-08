@@ -613,6 +613,26 @@ public class BusinessCentralApiClient
         return bytes;
     }
 
+    // ── Diagnostics ─────────────────────────────────────────────
+
+    public async Task<string> GetCompanyInformationRawAsync(Guid companyId)
+    {
+        await SetAuthHeaderAsync();
+        var url = $"{_options.BaseUrl}/companies({companyId})/companyInformation";
+        _logger.LogInformation("GET {Url} (diagnostic)", url);
+        var response = await _httpClient.GetAsync(url);
+        return await response.Content.ReadAsStringAsync();
+    }
+
+    public async Task<string> GetBankAccountsRawAsync(Guid companyId)
+    {
+        await SetAuthHeaderAsync();
+        var url = $"{_options.BaseUrl}/companies({companyId})/bankAccounts";
+        _logger.LogInformation("GET {Url} (diagnostic)", url);
+        var response = await _httpClient.GetAsync(url);
+        return await response.Content.ReadAsStringAsync();
+    }
+
     // ── HTTP helpers ───────────────────────────────────────────
 
     private async Task SetAuthHeaderAsync()
