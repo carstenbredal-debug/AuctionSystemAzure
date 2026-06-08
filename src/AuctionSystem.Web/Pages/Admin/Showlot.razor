@@ -55,10 +55,6 @@ else
                             <td>@po.ShowLotCount</td>
                             <td>@po.CreatedAt.ToString("yyyy-MM-dd")</td>
                             <td>
-                                @if (po.Status == "Ready to Pack" || po.Status == "In Production")
-                                {
-                                    <button class="btn btn-sm btn-success" @onclick="() => StartPacking(po)">Pack</button>
-                                }
                                 <button class="btn btn-sm btn-outline-danger" @onclick="() => DeletePackingOrder(po)">Delete</button>
                             </td>
                         </tr>

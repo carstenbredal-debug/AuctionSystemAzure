@@ -296,22 +296,12 @@ public class ShipmentFunctions
                 nextPoNum = num + 1;
         }
 
-        // Auto-create packing order for showlot boxes
-        if (hasShowLot)
+        // Helper to add ALL boxes to a packing order
+        void AddAllBoxesToPackingOrder(PackingOrder po)
         {
-            var showLotBoxes = allBoxData.Where(b => b.BoxType.Equals("showlot", StringComparison.OrdinalIgnoreCase)).ToList();
-
-            var packingOrder = new PackingOrder
+            foreach (var box in allBoxData)
             {
-                PackingOrderNumber = $"PO{nextPoNum:D5}",
-                ShipmentId = shipment.Id,
-                Status = "Ready to Pack",
-                Type = "ShowLot"
-            };
-
-            foreach (var box in showLotBoxes)
-            {
-                packingOrder.Lines.Add(new PackingOrderLine
+                po.Lines.Add(new PackingOrderLine
                 {
                     BoxNumber = box.BoxNumber,
                     LotNumber = boxToLotMap.GetValueOrDefault(box.BoxNumber),
@@ -320,6 +310,19 @@ public class ShipmentFunctions
                     Location = boxLocations.GetValueOrDefault(box.BoxNumber, "")
                 });
             }
+        }
+
+        // Auto-create ShowLot packing order (all boxes)
+        if (hasShowLot)
+        {
+            var packingOrder = new PackingOrder
+            {
+                PackingOrderNumber = $"PO{nextPoNum:D5}",
+                ShipmentId = shipment.Id,
+                Status = "Ready to Pack",
+                Type = "ShowLot"
+            };
+            AddAllBoxesToPackingOrder(packingOrder);
 
             _db.PackingOrders.Add(packingOrder);
             await _db.SaveChangesAsync();
@@ -341,34 +344,20 @@ public class ShipmentFunctions
             }
         }
 
-        // Auto-create packing order for non-showlot boxes (regular packing)
+        // Always create a Packing order with all boxes
+        if (allBoxData.Count > 0)
         {
-            var nonShowLotBoxes = allBoxData.Where(b => !b.BoxType.Equals("showlot", StringComparison.OrdinalIgnoreCase)).ToList();
-            if (nonShowLotBoxes.Count > 0)
+            var packingOrder = new PackingOrder
             {
-                var packingOrder = new PackingOrder
-                {
-                    PackingOrderNumber = $"PO{nextPoNum:D5}",
-                    ShipmentId = shipment.Id,
-                    Status = "Ready to Pack",
-                    Type = "Packing"
-                };
+                PackingOrderNumber = $"PO{nextPoNum:D5}",
+                ShipmentId = shipment.Id,
+                Status = "Ready to Pack",
+                Type = "Packing"
+            };
+            AddAllBoxesToPackingOrder(packingOrder);
 
-                foreach (var box in nonShowLotBoxes)
-                {
-                    packingOrder.Lines.Add(new PackingOrderLine
-                    {
-                        BoxNumber = box.BoxNumber,
-                        LotNumber = boxToLotMap.GetValueOrDefault(box.BoxNumber),
-                        Skins = box.Skins,
-                        BoxType = box.BoxType,
-                        Location = boxLocations.GetValueOrDefault(box.BoxNumber, "")
-                    });
-                }
-
-                _db.PackingOrders.Add(packingOrder);
-                await _db.SaveChangesAsync();
-            }
+            _db.PackingOrders.Add(packingOrder);
+            await _db.SaveChangesAsync();
         }
 
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);

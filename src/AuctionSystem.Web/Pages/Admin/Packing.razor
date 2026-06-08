@@ -54,10 +54,6 @@ else
                             <td>@po.BoxCount</td>
                             <td>@po.CreatedAt.ToString("yyyy-MM-dd")</td>
                             <td>
-                                @if (po.Status == "Ready to Pack")
-                                {
-                                    <button class="btn btn-sm btn-success" @onclick="() => MarkPacked(po)">Mark Packed</button>
-                                }
                                 <button class="btn btn-sm btn-outline-danger" @onclick="() => DeletePackingOrder(po)">Delete</button>
                             </td>
                         </tr>
@@ -136,13 +132,6 @@ else
     private void ToggleExpand(int id)
     {
         _expandedId = _expandedId == id ? null : id;
-    }
-
-    private async Task MarkPacked(PackingOrderDto po)
-    {
-        var success = await Api.UpdatePackingOrderStatusAsync(po.Id, "Packed");
-        if (success)
-            po.Status = "Packed";
     }
 
     private async Task DeletePackingOrder(PackingOrderDto po)
