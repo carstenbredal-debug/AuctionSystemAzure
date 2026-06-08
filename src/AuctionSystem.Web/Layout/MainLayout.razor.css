@@ -38,6 +38,8 @@
 main {
     flex: 1;
     background-color: #E8E3DD;
+    min-height: 100vh;
+    min-height: 100dvh;
 }
 
 .sidebar {
