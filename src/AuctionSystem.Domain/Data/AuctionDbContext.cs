@@ -28,6 +28,7 @@ public class AuctionDbContext : DbContext
     public DbSet<LotSalesHistory> LotSalesHistories => Set<LotSalesHistory>();
     public DbSet<BoxTypeDimension> BoxTypeDimensions => Set<BoxTypeDimension>();
     public DbSet<ShippingAddress> ShippingAddresses => Set<ShippingAddress>();
+    public DbSet<Shipper> Shippers => Set<Shipper>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -275,6 +276,24 @@ public class AuctionDbContext : DbContext
             e.Property(s => s.ContactPhone).HasMaxLength(50);
             e.Property(s => s.MobilePhone).HasMaxLength(50);
             e.Property(s => s.ContactEmail).HasMaxLength(200);
+        });
+
+        modelBuilder.Entity<Shipper>(e =>
+        {
+            e.HasKey(s => s.Id);
+            e.HasIndex(s => s.Code).IsUnique();
+            e.Property(s => s.Name).HasMaxLength(200);
+            e.Property(s => s.Code).HasMaxLength(50);
+            e.Property(s => s.ContactName).HasMaxLength(200);
+            e.Property(s => s.Phone).HasMaxLength(50);
+            e.Property(s => s.Email).HasMaxLength(200);
+            e.Property(s => s.AddressLine1).HasMaxLength(200);
+            e.Property(s => s.AddressLine2).HasMaxLength(200);
+            e.Property(s => s.City).HasMaxLength(100);
+            e.Property(s => s.PostalCode).HasMaxLength(20);
+            e.Property(s => s.Country).HasMaxLength(100);
+            e.Property(s => s.Website).HasMaxLength(500);
+            e.Property(s => s.TrackingUrlTemplate).HasMaxLength(500);
         });
     }
 }

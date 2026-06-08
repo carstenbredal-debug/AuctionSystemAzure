@@ -863,6 +863,35 @@ public class AuctionApiClient
         return (true, rows, null);
     }
 
+    // Shippers
+    public async Task<List<ShipperListDto>> GetShippersAsync()
+    {
+        var resp = await _http.GetAsync("api/shippers");
+        resp.EnsureSuccessStatusCode();
+        return await resp.Content.ReadFromJsonAsync<List<ShipperListDto>>() ?? new();
+    }
+
+    public async Task<(bool Success, string? Error)> CreateShipperAsync(object shipper)
+    {
+        var resp = await _http.PostAsJsonAsync("api/shippers", shipper);
+        if (!resp.IsSuccessStatusCode) return (false, await GetErrorMessage(resp));
+        return (true, null);
+    }
+
+    public async Task<(bool Success, string? Error)> UpdateShipperAsync(int id, object shipper)
+    {
+        var resp = await _http.PutAsJsonAsync($"api/shippers/{id}", shipper);
+        if (!resp.IsSuccessStatusCode) return (false, await GetErrorMessage(resp));
+        return (true, null);
+    }
+
+    public async Task<(bool Success, string? Error)> DeleteShipperAsync(int id)
+    {
+        var resp = await _http.DeleteAsync($"api/shippers/{id}");
+        if (!resp.IsSuccessStatusCode) return (false, await GetErrorMessage(resp));
+        return (true, null);
+    }
+
     private static async Task<string> GetErrorMessage(HttpResponseMessage resp)
     {
         try

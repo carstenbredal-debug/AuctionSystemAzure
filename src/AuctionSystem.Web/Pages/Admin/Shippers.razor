@@ -1,0 +1,307 @@
+@page "/admin/shippers"
+@using AuctionSystem.Web.Models
+@using AuctionSystem.Web.Services
+@attribute [Authorize(Roles = "Admin")]
+@inject AuctionApiClient Api
+
+<h4 class="mb-4">Shippers</h4>
+
+@if (!string.IsNullOrEmpty(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+@if (!string.IsNullOrEmpty(_success))
+{
+    <div class="alert alert-success">@_success</div>
+}
+
+<div class="row mb-3">
+    <div class="col">
+        <button class="btn btn-primary" @onclick="ShowAddModal">+ Add Shipper</button>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <div class="section-container">
+        <div class="section-body">
+            <table class="table table-striped table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Code</th>
+                        <th>Name</th>
+                        <th>Contact</th>
+                        <th>Phone</th>
+                        <th>Email</th>
+                        <th>City</th>
+                        <th>Country</th>
+                        <th>Website</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in _shippers)
+                    {
+                        <tr>
+                            <td>@s.Code</td>
+                            <td>@s.Name</td>
+                            <td>@s.ContactName</td>
+                            <td>@s.Phone</td>
+                            <td>@s.Email</td>
+                            <td>@s.City</td>
+                            <td>@s.Country</td>
+                            <td>
+                                @if (!string.IsNullOrEmpty(s.Website))
+                                {
+                                    <a href="@s.Website" target="_blank">@s.Website</a>
+                                }
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => ShowEditModal(s)">Edit</button>
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteShipper(s.Id)">Delete</button>
+                            </td>
+                        </tr>
+                    }
+                    @if (!_shippers.Any())
+                    {
+                        <tr><td colspan="9" class="text-center text-muted">No shippers found.</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@if (_showModal)
+{
+    <div class="modal show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(_editId.HasValue ? "Edit" : "Add") Shipper</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Code</label>
+                            <input class="form-control" @bind="_formCode" placeholder="e.g. DHL, UPS" />
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label fw-bold">Name</label>
+                            <input class="form-control" @bind="_formName" />
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Contact Name</label>
+                            <input class="form-control" @bind="_formContactName" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Phone</label>
+                            <input class="form-control" @bind="_formPhone" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Email</label>
+                            <input class="form-control" @bind="_formEmail" />
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Address Line 1</label>
+                        <input class="form-control" @bind="_formAddressLine1" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Address Line 2</label>
+                        <input class="form-control" @bind="_formAddressLine2" />
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">City</label>
+                            <input class="form-control" @bind="_formCity" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Postal Code</label>
+                            <input class="form-control" @bind="_formPostalCode" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Country</label>
+                            <input class="form-control" @bind="_formCountry" />
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Website</label>
+                            <input class="form-control" @bind="_formWebsite" placeholder="https://..." />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Tracking URL Template</label>
+                            <input class="form-control" @bind="_formTrackingUrlTemplate" placeholder="https://track.example.com/?id={0}" />
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                    <button class="btn btn-primary" @onclick="SaveShipper" disabled="@_saving">
+                        @(_saving ? "Saving..." : "Save")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<ShipperListDto> _shippers = new();
+    private bool _loading = true;
+    private string? _error;
+    private string? _success;
+
+    private bool _showModal;
+    private bool _saving;
+    private int? _editId;
+    private string _formCode = "";
+    private string _formName = "";
+    private string _formContactName = "";
+    private string _formPhone = "";
+    private string _formEmail = "";
+    private string _formAddressLine1 = "";
+    private string _formAddressLine2 = "";
+    private string _formCity = "";
+    private string _formPostalCode = "";
+    private string _formCountry = "";
+    private string _formWebsite = "";
+    private string _formTrackingUrlTemplate = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadShippers();
+    }
+
+    private async Task LoadShippers()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _shippers = await Api.GetShippersAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        _loading = false;
+    }
+
+    private void ShowAddModal()
+    {
+        _editId = null;
+        _formCode = "";
+        _formName = "";
+        _formContactName = "";
+        _formPhone = "";
+        _formEmail = "";
+        _formAddressLine1 = "";
+        _formAddressLine2 = "";
+        _formCity = "";
+        _formPostalCode = "";
+        _formCountry = "";
+        _formWebsite = "";
+        _formTrackingUrlTemplate = "";
+        _showModal = true;
+    }
+
+    private void ShowEditModal(ShipperListDto s)
+    {
+        _editId = s.Id;
+        _formCode = s.Code;
+        _formName = s.Name;
+        _formContactName = s.ContactName;
+        _formPhone = s.Phone;
+        _formEmail = s.Email;
+        _formAddressLine1 = s.AddressLine1;
+        _formAddressLine2 = s.AddressLine2;
+        _formCity = s.City;
+        _formPostalCode = s.PostalCode;
+        _formCountry = s.Country;
+        _formWebsite = s.Website;
+        _formTrackingUrlTemplate = s.TrackingUrlTemplate;
+        _showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        _showModal = false;
+        _error = null;
+    }
+
+    private async Task SaveShipper()
+    {
+        if (string.IsNullOrWhiteSpace(_formName))
+        {
+            _error = "Name is required.";
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+        _success = null;
+
+        var payload = new
+        {
+            name = _formName,
+            code = _formCode,
+            contactName = _formContactName,
+            phone = _formPhone,
+            email = _formEmail,
+            addressLine1 = _formAddressLine1,
+            addressLine2 = _formAddressLine2,
+            city = _formCity,
+            postalCode = _formPostalCode,
+            country = _formCountry,
+            website = _formWebsite,
+            trackingUrlTemplate = _formTrackingUrlTemplate
+        };
+
+        try
+        {
+            if (_editId.HasValue)
+            {
+                var (ok, err) = await Api.UpdateShipperAsync(_editId.Value, payload);
+                if (!ok) { _error = err; _saving = false; return; }
+                _success = "Shipper updated.";
+            }
+            else
+            {
+                var (ok, err) = await Api.CreateShipperAsync(payload);
+                if (!ok) { _error = err; _saving = false; return; }
+                _success = "Shipper created.";
+            }
+
+            _showModal = false;
+            await LoadShippers();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        _saving = false;
+    }
+
+    private async Task DeleteShipper(int id)
+    {
+        _error = null;
+        _success = null;
+        var (ok, err) = await Api.DeleteShipperAsync(id);
+        if (!ok)
+        {
+            _error = err;
+            return;
+        }
+        _success = "Shipper deleted.";
+        await LoadShippers();
+    }
+}

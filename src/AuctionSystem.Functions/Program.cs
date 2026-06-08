@@ -305,6 +305,30 @@ using (var scope = host.Services.CreateScope())
                 CREATE INDEX IX_ShippingAddresses_BuyerId ON auction.ShippingAddresses(BuyerId);
             END
         ");
+        // Shippers table
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'Shippers')
+            BEGIN
+                CREATE TABLE auction.Shippers (
+                    Id INT IDENTITY(1,1) PRIMARY KEY,
+                    Name NVARCHAR(200) NOT NULL DEFAULT '',
+                    Code NVARCHAR(50) NOT NULL DEFAULT '',
+                    ContactName NVARCHAR(200) NOT NULL DEFAULT '',
+                    Phone NVARCHAR(50) NOT NULL DEFAULT '',
+                    Email NVARCHAR(200) NOT NULL DEFAULT '',
+                    AddressLine1 NVARCHAR(200) NOT NULL DEFAULT '',
+                    AddressLine2 NVARCHAR(200) NOT NULL DEFAULT '',
+                    City NVARCHAR(100) NOT NULL DEFAULT '',
+                    PostalCode NVARCHAR(20) NOT NULL DEFAULT '',
+                    Country NVARCHAR(100) NOT NULL DEFAULT '',
+                    Website NVARCHAR(500) NOT NULL DEFAULT '',
+                    TrackingUrlTemplate NVARCHAR(500) NOT NULL DEFAULT '',
+                    IsActive BIT NOT NULL DEFAULT 1,
+                    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+                );
+                CREATE UNIQUE INDEX IX_Shippers_Code ON auction.Shippers(Code);
+            END
+        ");
         // Drop auction.Boxes table if it exists (replaced by view)
         db.Database.ExecuteSqlRaw(@"
             IF EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'Boxes')
