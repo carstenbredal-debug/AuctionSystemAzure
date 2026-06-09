@@ -94,18 +94,15 @@ public class SkinFunctions
             }
         }
 
-        // Total value from auction results (sum of TotalSkins * PriceEur per sold lot)
-        var soldResultsQuery = _auctionDb.AuctionResults
-            .Where(r => r.SoldToBuyerId != null);
-        if (auctionId.HasValue)
-        {
-            var auctionLotNumbers = await _auctionDb.Lots
-                .Where(l => l.AuctionId == auctionId.Value)
-                .Select(l => l.LotNumber)
-                .ToListAsync();
-            soldResultsQuery = soldResultsQuery.Where(r => auctionLotNumbers.Contains(r.LotNumber));
-        }
-        var totalValue = await soldResultsQuery.SumAsync(r => r.TotalSkins * r.PriceEur);
+        // Total value: count actual skins per box × price per skin
+        var skinsPerBox = await _catalogDb.Skins
+            .Where(s => s.IsActive && soldBoxNumbers.Contains(s.BoxNumber))
+            .GroupBy(s => s.BoxNumber)
+            .Select(g => new { BoxNumber = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.BoxNumber, x => x.Count);
+
+        var totalValue = skinsPerBox.Sum(kvp =>
+            saleInfoByBox.TryGetValue(kvp.Key, out var info) ? kvp.Value * info.PriceEur : 0m);
 
         var result = new
         {
