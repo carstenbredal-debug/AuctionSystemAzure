@@ -205,7 +205,7 @@ public class AuctionFunctions
                 );
             ");
 
-            // 4. Create auction.["261.Boxes"] — aggregated box view + location from boxstatingfromkphg
+            // 4. Create auction.["261.Boxes"] — aggregated box view + location + weight from boxstatingfromkphg
             var boxesTable = $"{auctionNum}.Boxes";
             await ExecuteSql(sqlConn, $@"
                 IF OBJECT_ID('auction.[{boxesTable}]', 'U') IS NOT NULL DROP TABLE auction.[{boxesTable}];
@@ -213,13 +213,14 @@ public class AuctionFunctions
                     s.BoxNumber, s.BoxType, s.BoxStatus, s.SalesType, s.[Group], s.Gender,
                     s.Size, s.HairLength, s.Color, s.Quality, s.Clarity, s.Damages,
                     COUNT(*) AS Skins,
-                    ISNULL(b.BoxLocation, '') AS BoxLocation
+                    ISNULL(b.BoxLocation, '') AS BoxLocation,
+                    CAST(ISNULL(b.Weight, 0) AS DECIMAL(18,2)) AS BoxWeight
                 INTO auction.[{boxesTable}]
                 FROM auction.[{skinsTable}] s
                 LEFT JOIN dbo.boxstatingfromkphg b ON b.BoxNumber = s.BoxNumber
                 GROUP BY s.BoxNumber, s.BoxType, s.BoxStatus, s.SalesType, s.[Group], s.Gender,
                     s.Size, s.HairLength, s.Color, s.Quality, s.Clarity, s.Damages,
-                    b.BoxLocation;
+                    b.BoxLocation, b.Weight;
             ");
 
             // Get counts

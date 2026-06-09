@@ -540,6 +540,37 @@ using (var scope = host.Services.CreateScope())
                 ALTER TABLE auction.ShippingAddresses ALTER COLUMN BuyerId INT NULL;
             END
         ");
+        // Add BoxWeight column to existing snapshot boxes tables
+        db.Database.ExecuteSqlRaw(@"
+            DECLARE @tbl NVARCHAR(200);
+            DECLARE tbl_cursor CURSOR FOR
+                SELECT name FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name LIKE '%.Boxes';
+            OPEN tbl_cursor;
+            FETCH NEXT FROM tbl_cursor INTO @tbl;
+            WHILE @@FETCH_STATUS = 0
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.[' + @tbl + ']') AND name = 'BoxWeight')
+                    EXEC('ALTER TABLE auction.[' + @tbl + '] ADD BoxWeight DECIMAL(18,2) NOT NULL DEFAULT 0');
+                FETCH NEXT FROM tbl_cursor INTO @tbl;
+            END
+            CLOSE tbl_cursor;
+            DEALLOCATE tbl_cursor;
+        ");
+        // Try to populate BoxWeight from staging table for existing snapshot boxes
+        db.Database.ExecuteSqlRaw(@"
+            DECLARE @tbl2 NVARCHAR(200);
+            DECLARE tbl2_cursor CURSOR FOR
+                SELECT name FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name LIKE '%.Boxes';
+            OPEN tbl2_cursor;
+            FETCH NEXT FROM tbl2_cursor INTO @tbl2;
+            WHILE @@FETCH_STATUS = 0
+            BEGIN
+                EXEC('UPDATE t SET t.BoxWeight = ISNULL(b.Weight, 0) FROM auction.[' + @tbl2 + '] t LEFT JOIN dbo.boxstatingfromkphg b ON b.BoxNumber = t.BoxNumber WHERE t.BoxWeight = 0');
+                FETCH NEXT FROM tbl2_cursor INTO @tbl2;
+            END
+            CLOSE tbl2_cursor;
+            DEALLOCATE tbl2_cursor;
+        ");
         db.Database.Migrate();
         // Ensure CatalogDbContext tables exist (CatalogLots, GeneratedLots, etc.)
         var catalogDb = scope.ServiceProvider.GetRequiredService<CatalogDbContext>();
