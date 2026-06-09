@@ -105,7 +105,7 @@ public static class PackingListPdfService
                     left.Item().Height(3);
                     left.Item().Row(infoRow =>
                     {
-                        infoRow.RelativeItem().Text("Shipping").FontSize(6.5f);
+                        infoRow.RelativeItem().Text("POLAND").FontSize(6.5f);
                         infoRow.RelativeItem().Text("TEL +45 4326 1000").FontSize(6.5f);
                         infoRow.RelativeItem().Text("shipping@kopenhagenfur.com").FontSize(6.5f);
                     });
