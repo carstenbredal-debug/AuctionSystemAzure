@@ -171,7 +171,7 @@ public class AuctionFunctions
             var lotsTable = $"{auctionNum}.Lots";
             await ExecuteSql(sqlConn, $@"
                 IF OBJECT_ID('auction.[{lotsTable}]', 'U') IS NOT NULL DROP TABLE auction.[{lotsTable}];
-                SELECT * INTO auction.[{lotsTable}] FROM dbo.CatalogLots WHERE LotNumber IN ({lotsCsv});
+                SELECT * INTO auction.[{lotsTable}] FROM auction.cataloglots WHERE LotNumber IN ({lotsCsv});
             ");
 
             // 2. Get all box numbers from the imported lots
