@@ -822,13 +822,24 @@ public class AuctionResultFunctions
         List<AuctionResult> results, HttpRequestData req, string errorPrefix)
     {
         var lotNumbers = results.Select(r => r.LotNumber).ToList();
-        var shippedLotNumbers = await _db.Invoices
+
+        // Check invoices with shipping status
+        var shippedViaInvoice = await _db.Invoices
             .Where(i => i.ShippingStatus == "Released" && !i.IsCreditNote)
             .SelectMany(i => i.Lines)
             .Where(l => lotNumbers.Contains(l.LotNumber))
             .Select(l => l.LotNumber)
             .Distinct()
             .ToListAsync();
+
+        // Also check shipment lines directly
+        var shippedViaShipment = await _db.ShipmentLines
+            .Where(sl => lotNumbers.Contains(sl.LotNumber))
+            .Select(sl => sl.LotNumber)
+            .Distinct()
+            .ToListAsync();
+
+        var shippedLotNumbers = shippedViaInvoice.Union(shippedViaShipment).Distinct().ToList();
 
         if (shippedLotNumbers.Count == 0) return null;
 
@@ -837,7 +848,7 @@ public class AuctionResultFunctions
         await errorResp.WriteStringAsync(JsonSerializer.Serialize(new
         {
             error = "Lot Sold",
-            message = $"{errorPrefix} lot(s) {string.Join(", ", shippedLotNumbers)} — already released to ship.",
+            message = $"{errorPrefix} lot(s) {string.Join(", ", shippedLotNumbers)} — already on a shipment order.",
             shippedLotNumbers
         }, JsonOptions));
         return errorResp;
