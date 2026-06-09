@@ -1,10 +1,20 @@
 @page "/admin/shipping"
 @attribute [Authorize(Roles = "Admin")]
 @inject AuctionApiClient Api
+@inject NavigationManager Nav
 
 <PageTitle>Shipping - Admin</PageTitle>
 
 <h3 class="mb-4">Shipping — Boxes Ready for Shipping</h3>
+
+@if (!string.IsNullOrEmpty(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+@if (!string.IsNullOrEmpty(_success))
+{
+    <div class="alert alert-success">@_success</div>
+}
 
 @if (_loading)
 {
@@ -17,7 +27,7 @@ else if (_boxes.Count == 0)
 else
 {
     <div class="row mb-3">
-        <div class="col-md-4">
+        <div class="col-md-3">
             <label class="form-label fw-bold">Filter by Customer</label>
             <select class="form-select" @bind="_selectedBuyer">
                 <option value="">All Customers</option>
@@ -27,7 +37,7 @@ else
                 }
             </select>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
             <label class="form-label fw-bold">Filter by Invoice</label>
             <select class="form-select" @bind="_selectedInvoice">
                 <option value="">All Invoices</option>
@@ -36,6 +46,21 @@ else
                     <option value="@inv">@inv</option>
                 }
             </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label fw-bold">Shipping Address</label>
+            <select class="form-select" @bind="_selectedAddressId">
+                <option value="0">— Select Address —</option>
+                @foreach (var a in _addresses)
+                {
+                    <option value="@a.Id">@a.Name — @a.AddressLine1, @a.City @a.Country @(a.IsDefault ? "(Default)" : "")</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+            <button class="btn btn-primary" @onclick="CreateShipmentFromSelected" disabled="@(_creating || _selectedBoxNumbers.Count == 0 || _selectedAddressId == 0)">
+                @(_creating ? "Creating..." : $"Create Shipment ({_selectedBoxNumbers.Count} boxes)")
+            </button>
         </div>
     </div>
 
@@ -53,14 +78,6 @@ else
                 <div class="section-body p-3">
                     <h5 class="card-title text-muted">Total Skins</h5>
                     <h3>@GetFilteredBoxes().Sum(b => b.Skins)</h3>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card text-center">
-                <div class="section-body p-3">
-                    <h5 class="card-title text-muted">Total Volume (m³)</h5>
-                    <h3>@GetFilteredBoxes().Sum(b => b.VolumeM3 ?? 0).ToString("N2")</h3>
                 </div>
             </div>
         </div>
@@ -87,6 +104,7 @@ else
             <table class="table table-striped table-hover mb-0">
                 <thead class="table-dark">
                     <tr>
+                        <th><input type="checkbox" @onchange="ToggleSelectAll" checked="@(_selectedBoxNumbers.Count == GetFilteredBoxes().Count && GetFilteredBoxes().Count > 0)" /></th>
                         <th>Invoice</th>
                         <th>Buyer</th>
                         <th>Lot #</th>
@@ -102,7 +120,8 @@ else
                 <tbody>
                     @foreach (var box in GetFilteredBoxes())
                     {
-                        <tr>
+                        <tr class="@(_selectedBoxNumbers.Contains(box.BoxNumber) ? "table-primary" : "")">
+                            <td><input type="checkbox" checked="@_selectedBoxNumbers.Contains(box.BoxNumber)" @onchange="() => ToggleBoxSelection(box.BoxNumber)" /></td>
                             <td>@box.InvoiceNumber</td>
                             <td>@(box.BuyerName ?? "—")</td>
                             <td>@box.LotNumber</td>
@@ -123,11 +142,17 @@ else
 
 @code {
     private List<ShippingBoxDto> _boxes = new();
+    private List<ShippingAddressListDto> _addresses = new();
     private bool _loading = true;
+    private bool _creating;
     private string _selectedBuyer = "";
     private string _selectedInvoice = "";
+    private int _selectedAddressId;
     private List<string> _buyerNames = new();
     private List<string> _invoiceNumbers = new();
+    private HashSet<int> _selectedBoxNumbers = new();
+    private string? _error;
+    private string? _success;
 
     private List<ShippingBoxDto> GetFilteredBoxes()
     {
@@ -142,8 +167,78 @@ else
     protected override async Task OnInitializedAsync()
     {
         _boxes = await Api.GetShippingBoxesAsync();
+        _addresses = await Api.GetShippingAddressesAsync();
         _buyerNames = _boxes.Select(b => b.BuyerName ?? "—").Distinct().OrderBy(n => n).ToList();
         _invoiceNumbers = _boxes.Select(b => b.InvoiceNumber ?? "—").Distinct().OrderBy(n => n).ToList();
+        var defaultAddr = _addresses.FirstOrDefault(a => a.IsDefault);
+        _selectedAddressId = defaultAddr?.Id ?? 0;
         _loading = false;
+    }
+
+    private void ToggleBoxSelection(int boxNumber)
+    {
+        if (!_selectedBoxNumbers.Remove(boxNumber))
+            _selectedBoxNumbers.Add(boxNumber);
+    }
+
+    private void ToggleSelectAll(ChangeEventArgs e)
+    {
+        if ((bool)(e.Value ?? false))
+            _selectedBoxNumbers = GetFilteredBoxes().Select(b => b.BoxNumber).ToHashSet();
+        else
+            _selectedBoxNumbers.Clear();
+    }
+
+    private async Task CreateShipmentFromSelected()
+    {
+        _creating = true;
+        _error = null;
+        _success = null;
+        StateHasChanged();
+
+        var selectedBoxes = _boxes.Where(b => _selectedBoxNumbers.Contains(b.BoxNumber)).ToList();
+        var lotNumbers = selectedBoxes.Select(b => b.LotNumber).Distinct().ToList();
+        var buyerId = selectedBoxes.Select(b => b.BuyerId).FirstOrDefault();
+
+        // Need a shipper — use first available or default
+        var shippers = await Api.GetShippersAsync();
+        var shipperId = shippers.FirstOrDefault()?.Id ?? 0;
+        if (shipperId == 0)
+        {
+            _error = "No shippers configured. Please add a shipper first.";
+            _creating = false;
+            return;
+        }
+
+        var payload = new
+        {
+            shipperId,
+            buyerId,
+            shippingAddressId = _selectedAddressId > 0 ? (int?)_selectedAddressId : null,
+            trackingNumber = "",
+            notes = "",
+            lotNumbers
+        };
+
+        try
+        {
+            var (ok, err, num) = await Api.CreateShipmentAsync(payload);
+            if (!ok)
+            {
+                _error = err;
+                _creating = false;
+                return;
+            }
+            _success = $"Shipment {num} created with {selectedBoxes.Count} box(es) from {lotNumbers.Count} lot(s).";
+            _selectedBoxNumbers.Clear();
+            _boxes = await Api.GetShippingBoxesAsync();
+            _buyerNames = _boxes.Select(b => b.BuyerName ?? "—").Distinct().OrderBy(n => n).ToList();
+            _invoiceNumbers = _boxes.Select(b => b.InvoiceNumber ?? "—").Distinct().OrderBy(n => n).ToList();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        _creating = false;
     }
 }

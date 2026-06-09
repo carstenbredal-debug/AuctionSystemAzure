@@ -443,7 +443,9 @@ public class ShippingBoxDto
     public int InvoiceId { get; set; }
     public string InvoiceNumber { get; set; } = "";
     public string? BrokerName { get; set; }
+    public int BuyerId { get; set; }
     public string? BuyerName { get; set; }
+    public string? BuyerNumber { get; set; }
     public int LotNumber { get; set; }
     public int BoxNumber { get; set; }
     public string BoxType { get; set; } = "";

@@ -584,7 +584,8 @@ public class SettlementFunctions
                 shippingBoxes.Add(new
                 {
                     InvoiceId = info.Inv.Id, info.Inv.InvoiceNumber,
-                    BrokerName = info.Inv.Broker?.CompanyName, BuyerName = info.Inv.Buyer?.Name,
+                    BrokerName = info.Inv.Broker?.CompanyName,
+                    BuyerId = info.Inv.BuyerId, BuyerName = info.Inv.Buyer?.Name, BuyerNumber = info.Inv.Buyer?.BuyerNumber,
                     LotNumber = cl.LotNumber, BoxNumber = boxNumber,
                     BoxType = boxType, Skins = bi?.Skins ?? 0,
                     info.Line.PricePerSkin, HammerPrice = info.Line.HammerPrice,
