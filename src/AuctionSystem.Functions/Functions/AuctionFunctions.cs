@@ -280,29 +280,33 @@ public class AuctionFunctions
                 catch (Exception ex) { _logger.LogWarning(ex, "Failed to drop snapshot tables for auction {Num}", auctionNum); }
             }
 
-            // Delete related data using AuctionId subquery
+            // Delete related data using AuctionId subquery — correct column names
+            var lotNumSubquery = "SELECT LotNumber FROM auction.Lots WHERE AuctionId = {0}";
+            var shipmentSubquery = "SELECT Id FROM auction.Shipments WHERE Id IN (SELECT ShipmentId FROM auction.ShipmentLines WHERE LotNumber IN (" + lotNumSubquery + "))";
+            var poSubquery = "SELECT Id FROM auction.PackingOrders WHERE ShipmentId IN (" + shipmentSubquery + ")";
+
             await _db.Database.ExecuteSqlRawAsync(
-                "DELETE FROM auction.PackedBoxes WHERE PackingOrderLineId IN (SELECT Id FROM auction.PackingOrderLines WHERE PackingOrderId IN (SELECT Id FROM auction.PackingOrders WHERE ShipmentId IN (SELECT Id FROM auction.Shipments WHERE Id IN (SELECT ShipmentId FROM auction.ShipmentLines WHERE LotId IN (SELECT Id FROM auction.Lots WHERE AuctionId = {0})))))", auctionId);
+                "DELETE FROM auction.PackedBoxes WHERE PackingOrderId IN (" + poSubquery + ")", auctionId);
             await _db.Database.ExecuteSqlRawAsync(
-                "DELETE FROM auction.PackingOrderLines WHERE PackingOrderId IN (SELECT Id FROM auction.PackingOrders WHERE ShipmentId IN (SELECT Id FROM auction.Shipments WHERE Id IN (SELECT ShipmentId FROM auction.ShipmentLines WHERE LotId IN (SELECT Id FROM auction.Lots WHERE AuctionId = {0}))))", auctionId);
+                "DELETE FROM auction.PackingOrderLines WHERE PackingOrderId IN (" + poSubquery + ")", auctionId);
             await _db.Database.ExecuteSqlRawAsync(
-                "DELETE FROM auction.PackingOrders WHERE ShipmentId IN (SELECT Id FROM auction.Shipments WHERE Id IN (SELECT ShipmentId FROM auction.ShipmentLines WHERE LotId IN (SELECT Id FROM auction.Lots WHERE AuctionId = {0})))", auctionId);
+                "DELETE FROM auction.PackingOrders WHERE ShipmentId IN (" + shipmentSubquery + ")", auctionId);
             await _db.Database.ExecuteSqlRawAsync(
-                "DELETE FROM auction.ShipmentLines WHERE LotId IN (SELECT Id FROM auction.Lots WHERE AuctionId = {0})", auctionId);
+                "DELETE FROM auction.ShipmentLines WHERE LotNumber IN (" + lotNumSubquery + ")", auctionId);
             await _db.Database.ExecuteSqlRawAsync(
                 "DELETE FROM auction.Shipments WHERE Id NOT IN (SELECT DISTINCT ShipmentId FROM auction.ShipmentLines)");
             await _db.Database.ExecuteSqlRawAsync(
-                "DELETE FROM auction.InvoiceLines WHERE LotNumber IN (SELECT LotNumber FROM auction.Lots WHERE AuctionId = {0})", auctionId);
+                "DELETE FROM auction.InvoiceLines WHERE LotNumber IN (" + lotNumSubquery + ")", auctionId);
             await _db.Database.ExecuteSqlRawAsync(
                 "DELETE FROM auction.Invoices WHERE Id NOT IN (SELECT DISTINCT InvoiceId FROM auction.InvoiceLines)");
             await _db.Database.ExecuteSqlRawAsync(
                 "DELETE FROM auction.LotAllocations WHERE LotId IN (SELECT Id FROM auction.Lots WHERE AuctionId = {0})", auctionId);
             await _db.Database.ExecuteSqlRawAsync(
-                "DELETE FROM auction.TypistEntries WHERE LotNumber IN (SELECT LotNumber FROM auction.Lots WHERE AuctionId = {0})", auctionId);
+                "DELETE FROM auction.TypistEntries WHERE LotNumber IN (" + lotNumSubquery + ")", auctionId);
             await _db.Database.ExecuteSqlRawAsync(
-                "DELETE FROM auction.AuctionTransactions WHERE LotNumber IN (SELECT LotNumber FROM auction.Lots WHERE AuctionId = {0})", auctionId);
+                "DELETE FROM auction.AuctionTransactions WHERE LotNumber IN (" + lotNumSubquery + ")", auctionId);
             await _db.Database.ExecuteSqlRawAsync(
-                "DELETE FROM auction.AuctionResults WHERE LotNumber IN (SELECT LotNumber FROM auction.Lots WHERE AuctionId = {0})", auctionId);
+                "DELETE FROM auction.AuctionResults WHERE LotNumber IN (" + lotNumSubquery + ")", auctionId);
 
             _db.Lots.RemoveRange(auction.Lots);
             _db.Auctions.Remove(auction);
