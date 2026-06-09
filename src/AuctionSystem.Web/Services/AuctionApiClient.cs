@@ -89,6 +89,9 @@ public class AuctionApiClient
     public async Task<List<BuyerDto>> GetAllBuyersAsync()
         => await _http.GetFromJsonAsync<List<BuyerDto>>("api/buyers") ?? new();
 
+    public async Task<List<BuyerDto>> GetBrokerLinkedBuyersAsync(int brokerId)
+        => await _http.GetFromJsonAsync<List<BuyerDto>>($"api/brokers/{brokerId}/buyers") ?? new();
+
     public async Task<BuyerDto?> GetBuyerAsync(int id)
         => await _http.GetFromJsonAsync<BuyerDto>($"api/buyers/{id}");
 

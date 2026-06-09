@@ -346,6 +346,7 @@ public class AuctionResultDto
     public decimal? CommissionAmount { get; set; }
     public string? LastModifiedBy { get; set; }
     public DateTime? LastModifiedAt { get; set; }
+    public int AuctionId { get; set; }
 }
 
 public class LotSalesHistoryDto

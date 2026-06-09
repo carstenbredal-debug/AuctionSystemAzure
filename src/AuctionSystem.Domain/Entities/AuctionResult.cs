@@ -3,6 +3,7 @@ namespace AuctionSystem.Domain.Entities;
 public class AuctionResult
 {
     public int Id { get; set; }
+    public int AuctionId { get; set; }
     public int LotNumber { get; set; }
     public int BrokerId { get; set; }
     public Broker Broker { get; set; } = null!;

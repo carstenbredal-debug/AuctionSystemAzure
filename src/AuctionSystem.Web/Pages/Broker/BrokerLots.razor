@@ -12,11 +12,24 @@
 
 @if (!_loading)
 {
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <label class="form-label fw-bold">Auction</label>
+            <select class="form-select" @bind="_selectedAuctionId" @bind:after="OnAuctionFilterChanged">
+                <option value="0">All Auctions</option>
+                @foreach (var a in _auctions)
+                {
+                    <option value="@a.Id">@a.AuctionNumber - @a.Title</option>
+                }
+            </select>
+        </div>
+    </div>
+
     <div class="row mb-4">
         <div class="col-md-3">
             <div class="summary-card">
                 <div class="card-title">Total Purchase</div>
-                <div class="card-value">€@_allResults.Sum(r => r.TotalSkins * r.PriceEur).ToString("N2")</div>
+                <div class="card-value">€@GetFilteredResults().Sum(r => r.TotalSkins * r.PriceEur).ToString("N2")</div>
             </div>
         </div>
         <div class="col-md-3">
@@ -34,7 +47,7 @@
         <div class="col-md-3">
             <div class="summary-card">
                 <div class="card-title">Total Auction Fees</div>
-                <div class="card-value">€@_allResults.Sum(r => CalcAuctionFee(r.TotalSkins, r.PriceEur)).ToString("N2")</div>
+                <div class="card-value">€@GetFilteredResults().Sum(r => CalcAuctionFee(r.TotalSkins, r.PriceEur)).ToString("N2")</div>
             </div>
         </div>
     </div>
@@ -43,7 +56,7 @@
 <ul class="nav nav-tabs mb-3">
     <li class="nav-item">
         <a class="nav-link @(_activeTab == "purchased" ? "active" : "")" href="javascript:void(0)" @onclick='() => _activeTab = "purchased"'>
-            Purchased Lots <span class="badge bg-secondary">@_allResults.Count</span>
+            Purchased Lots <span class="badge bg-secondary">@GetFilteredResults().Count</span>
         </a>
     </li>
     <li class="nav-item">
@@ -97,11 +110,11 @@ else if (_activeTab == "purchased")
                     </tr>
                 </thead>
                 <tbody>
-                    @if (_allResults.Count == 0)
+                    @if (GetFilteredResults().Count == 0)
                     {
                         <tr><td colspan="16" class="text-center text-muted py-4">No purchased lots yet.</td></tr>
                     }
-                    @foreach (var r in ApplySort(_allResults))
+                    @foreach (var r in ApplySort(GetFilteredResults()))
                     {
                         var link = _invoiceLinks.GetValueOrDefault(r.Id);
                         <tr>
@@ -594,8 +607,8 @@ else if (_activeTab == "takeback")
     private string _sortColumn = "";
     private bool _sortAsc = true;
 
-    private List<AuctionResultDto> GetSoldLots() => ApplySort(_allResults.Where(r => r.SoldToBuyerId != null));
-    private List<AuctionResultDto> GetUnsoldLots() => ApplySort(_allResults.Where(r => r.SoldToBuyerId == null));
+    private List<AuctionResultDto> GetSoldLots() => ApplySort(GetFilteredResults().Where(r => r.SoldToBuyerId != null));
+    private List<AuctionResultDto> GetUnsoldLots() => ApplySort(GetFilteredResults().Where(r => r.SoldToBuyerId == null));
 
     private void ToggleSort(string column)
     {
@@ -642,6 +655,8 @@ else if (_activeTab == "takeback")
             ? source.OrderBy(keySelector).ToList()
             : source.OrderByDescending(keySelector).ToList();
     }
+    private List<AuctionDto> _auctions = new();
+    private int _selectedAuctionId;
     private List<BuyerDto> _buyers = new();
     private List<TakebackRequestDto> _pendingTakebacks = new();
     private decimal _auctionFeePercent;
@@ -690,14 +705,23 @@ else if (_activeTab == "takeback")
             if (user?.BrokerId != null)
             {
                 _brokerId = user.BrokerId.Value;
+                _auctions = (await Api.GetAuctionsAsync())
+                    .Where(a => a.Status == AuctionStatus.Active || a.Status == AuctionStatus.Closed)
+                    .ToList();
                 _allResults = await Api.GetAuctionResultsByBrokerAsync(_brokerId);
+                // Get buyers from junction table (direct links) + customer requests
+                var linkedBuyers = await Api.GetBrokerLinkedBuyersAsync(_brokerId);
                 var allRequests = await Api.GetCustomerRequestsByBrokerAsync(_brokerId);
                 var approvedBuyerIds = allRequests
                     .Where(r => r.Status == CustomerRequestStatus.Approved)
                     .Select(r => r.BuyerId)
                     .ToHashSet();
                 var allBuyers = await Api.GetAllBuyersAsync();
-                _buyers = allBuyers.Where(b => approvedBuyerIds.Contains(b.Id)).ToList();
+                var requestBuyers = allBuyers.Where(b => approvedBuyerIds.Contains(b.Id)).ToList();
+                var linkedBuyerIds = linkedBuyers.Select(b => b.Id).ToHashSet();
+                _buyers = linkedBuyers
+                    .Concat(requestBuyers.Where(b => !linkedBuyerIds.Contains(b.Id)))
+                    .ToList();
                 _pendingTakebacks = await Api.GetTakebackRequestsByBrokerAsync(_brokerId);
                 _invoiceLinks = await Api.GetInvoiceLinksForBrokerAsync(_brokerId);
                 await LoadFeeParameters();
@@ -705,6 +729,18 @@ else if (_activeTab == "takeback")
         }
 
         _loading = false;
+    }
+
+    private List<AuctionResultDto> GetFilteredResults()
+    {
+        if (_selectedAuctionId <= 0) return _allResults;
+        return _allResults.Where(r => r.AuctionId == _selectedAuctionId).ToList();
+    }
+
+    private async Task OnAuctionFilterChanged()
+    {
+        _selectedIds.Clear();
+        _selectedSoldIds.Clear();
     }
 
     private async Task LoadFeeParameters()
@@ -985,7 +1021,7 @@ else if (_activeTab == "takeback")
     private async Task ExportPurchasedToExcel()
     {
         var headers = new[] { "Lot #", "Type", "Gender", "Group", "Color", "Quality", "Size", "Skins", "Boxes", "Price (EUR)", "Hammer Price", "Auction Fee", "Commission", "Status" };
-        var rows = _allResults.Select(r => new object[]
+        var rows = GetFilteredResults().Select(r => new object[]
         {
             r.LotNumber,
             r.SalesType ?? "",

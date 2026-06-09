@@ -480,6 +480,11 @@ using (var scope = host.Services.CreateScope())
                 GROUP BY s.BoxNumber, s.BoxType, s.BoxStatus, s.SalesType, s.[Group], s.Gender,
                     s.Size, s.HairLength, s.Color, s.Quality, s.Clarity, s.Damages');
         ");
+        // Add AuctionId to AuctionResults
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.AuctionResults') AND name = 'AuctionId')
+                ALTER TABLE auction.AuctionResults ADD AuctionId INT NOT NULL DEFAULT 0;
+        ");
         db.Database.Migrate();
         // Ensure CatalogDbContext tables exist (CatalogLots, GeneratedLots, etc.)
         var catalogDb = scope.ServiceProvider.GetRequiredService<CatalogDbContext>();

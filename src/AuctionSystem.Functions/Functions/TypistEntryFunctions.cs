@@ -194,6 +194,7 @@ public class TypistEntryFunctions
 
             var result = new AuctionResult
             {
+                AuctionId = entry1.AuctionId,
                 LotNumber = entry1.LotNumber,
                 BrokerId = entry1.BrokerId,
                 PriceEur = entry1.PriceEur,

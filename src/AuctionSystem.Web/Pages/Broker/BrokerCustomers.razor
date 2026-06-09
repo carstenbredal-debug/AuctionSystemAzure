@@ -102,33 +102,47 @@ else
                         <th>Email</th>
                         <th>Phone</th>
                         <th>Status</th>
-                        <th>Requested</th>
-                        <th style="width: 100px;">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @if (_requests.Count == 0)
-                    {
-                        <tr><td colspan="7" class="text-center text-muted py-4">No customers yet. Use the dropdown above to invite a customer.</td></tr>
+                    @{
+                        var approvedRequestBuyerIds = _requests
+                            .Where(r => r.Status == CustomerRequestStatus.Approved)
+                            .Select(r => r.BuyerId)
+                            .ToHashSet();
+                        var allCustomers = _linkedBuyers
+                            .Where(b => !approvedRequestBuyerIds.Contains(b.Id))
+                            .Select(b => new { b.Id, b.BuyerNumber, b.Name, b.ContactEmail, b.ContactPhone, Status = "Linked" })
+                            .Concat(_requests
+                                .Where(r => r.Status == CustomerRequestStatus.Approved)
+                                .Select(r => new { Id = r.BuyerId, BuyerNumber = r.Buyer?.BuyerNumber ?? "—", Name = r.Buyer?.Name ?? "—", ContactEmail = r.Buyer?.ContactEmail ?? "—", ContactPhone = r.Buyer?.ContactPhone ?? "—", Status = "Approved" }))
+                            .ToList();
+                        var pendingRequests = _requests.Where(r => r.Status == CustomerRequestStatus.Pending).ToList();
                     }
-                    @foreach (var req in _requests)
+                    @if (allCustomers.Count == 0 && pendingRequests.Count == 0)
                     {
-                        <tr style="@(req.Status == CustomerRequestStatus.Approved ? "cursor: pointer;" : "")" @onclick="() => GoToCustomerDetail(req)">
+                        <tr><td colspan="5" class="text-center text-muted py-4">No customers yet. Use the dropdown above to invite a customer.</td></tr>
+                    }
+                    @foreach (var c in allCustomers)
+                    {
+                        <tr style="cursor: pointer;" @onclick="() => GoToCustomer(c.Id)">
+                            <td>@c.BuyerNumber</td>
+                            <td><strong>@c.Name</strong></td>
+                            <td>@c.ContactEmail</td>
+                            <td>@c.ContactPhone</td>
+                            <td><span class="badge bg-success">Active</span></td>
+                        </tr>
+                    }
+                    @foreach (var req in pendingRequests)
+                    {
+                        <tr>
                             <td>@(req.Buyer?.BuyerNumber ?? "—")</td>
                             <td><strong>@(req.Buyer?.Name ?? "—")</strong></td>
                             <td>@(req.Buyer?.ContactEmail ?? "—")</td>
                             <td>@(req.Buyer?.ContactPhone ?? "—")</td>
                             <td>
-                                <span class="badge bg-@GetStatusColor(req.Status)">
-                                    @GetStatusText(req.Status)
-                                </span>
-                            </td>
-                            <td>@req.RequestedAt.ToString("g")</td>
-                            <td>
-                                @if (req.Status == CustomerRequestStatus.Pending)
-                                {
-                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => CancelRequest(req)" @onclick:stopPropagation="true">Cancel</button>
-                                }
+                                <span class="badge bg-warning">Pending</span>
+                                <button class="btn btn-sm btn-outline-danger ms-2" @onclick="() => CancelRequest(req)" @onclick:stopPropagation="true">Cancel</button>
                             </td>
                         </tr>
                     }
@@ -147,6 +161,7 @@ else
 
     private List<BrokerCustomerRequestDto> _requests = new();
     private List<BrokerCustomerRequestDto> _buyerPendingRequests = new();
+    private List<BuyerDto> _linkedBuyers = new();
     private List<BuyerDto> _allBuyers = new();
     private List<BuyerDto> _availableBuyers = new();
 
@@ -176,11 +191,16 @@ else
         _requests = allRequests
             .Where(r => !(r.Status == CustomerRequestStatus.Pending && r.InitiatedBy == "Buyer"))
             .ToList();
+
+        // Get buyers linked via junction table (may exist without customer requests)
+        _linkedBuyers = await Api.GetBrokerLinkedBuyersAsync(_brokerId);
+
         _allBuyers = await Api.GetAllBuyersAsync();
 
         var requestedBuyerIds = allRequests.Select(r => r.BuyerId).ToHashSet();
+        var linkedBuyerIds = _linkedBuyers.Select(b => b.Id).ToHashSet();
         _availableBuyers = _allBuyers
-            .Where(b => !requestedBuyerIds.Contains(b.Id))
+            .Where(b => !requestedBuyerIds.Contains(b.Id) && !linkedBuyerIds.Contains(b.Id))
             .OrderBy(b => b.Name)
             .ToList();
     }
@@ -248,6 +268,11 @@ else
         CustomerRequestStatus.Declined => "Declined",
         _ => "Unknown"
     };
+
+    private void GoToCustomer(int buyerId)
+    {
+        Nav.NavigateTo($"/broker/customers/{buyerId}");
+    }
 
     private void GoToCustomerDetail(BrokerCustomerRequestDto req)
     {

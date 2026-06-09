@@ -76,6 +76,7 @@ public class AuctionResultFunctions
 
         var result = new AuctionResult
         {
+            AuctionId = auctionLot?.AuctionId ?? 0,
             LotNumber = body.LotNumber,
             BrokerId = body.BrokerId,
             PriceEur = body.PriceEur,
@@ -285,7 +286,7 @@ public class AuctionResultFunctions
             .OrderByDescending(r => r.ReceivedAt)
             .Select(r => new
             {
-                r.Id, r.LotNumber, r.BrokerId,
+                r.Id, r.AuctionId, r.LotNumber, r.BrokerId,
                 brokerName = r.Broker.CompanyName,
                 brokerNumber = r.Broker.BrokerNumber,
                 r.PriceEur, r.SalesType, r.Gender, r.Group, r.Color, r.Quality,
