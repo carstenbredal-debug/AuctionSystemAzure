@@ -1030,6 +1030,14 @@ public class AuctionApiClient
         return await resp.Content.ReadFromJsonAsync<ShipmentPackingListDto>();
     }
 
+    public async Task<string?> GeneratePackingListPdfAsync(int shipmentId)
+    {
+        var resp = await _http.PostAsync($"api/shipments/{shipmentId}/packing-list-pdf", null);
+        if (!resp.IsSuccessStatusCode) return null;
+        // Return the PDF URL from the response header or use the shipment to get it
+        return $"api/shipments/{shipmentId}/packing-list-pdf";
+    }
+
     // Shippers
     public async Task<List<ShipperListDto>> GetShippersAsync()
     {

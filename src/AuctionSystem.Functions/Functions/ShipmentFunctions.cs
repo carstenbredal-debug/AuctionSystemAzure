@@ -72,6 +72,7 @@ public class ShipmentFunctions
                 s.TrackingNumber,
                 s.Status,
                 s.Notes,
+                s.PackingListPdfUrl,
                 s.CreatedAt,
                 s.ShippedAt,
                 s.DeliveredAt,
@@ -869,6 +870,319 @@ public class ShipmentFunctions
         return response;
     }
 
+    [Function("GeneratePackingListPdf")]
+    public async Task<HttpResponseData> GeneratePackingListPdf(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "shipments/{id:int}/packing-list-pdf")] HttpRequestData req,
+        int id)
+    {
+        var shipment = await _db.Shipments
+            .Include(s => s.Shipper)
+            .Include(s => s.Buyer)
+            .Include(s => s.ShippingAddress)
+            .Include(s => s.Lines)
+            .FirstOrDefaultAsync(s => s.Id == id);
+        if (shipment == null)
+            return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        // Collect lot numbers from shipment lines
+        var pdfLotNumbers = shipment.Lines.Select(l => l.LotNumber).Distinct().ToList();
+
+        // Determine auction for snapshot
+        var pdfAuctionNum = await _db.Lots
+            .Where(l => pdfLotNumbers.Contains(l.LotNumber))
+            .Select(l => l.Auction.AuctionNumber)
+            .FirstOrDefaultAsync();
+        var pdfSnapshotBoxes = pdfAuctionNum != null ? $"auction.[{pdfAuctionNum}.Boxes]" : null;
+        var pdfUseSnapshot = false;
+        if (pdfSnapshotBoxes != null)
+        {
+            try
+            {
+                await _catalogDb.Database.SqlQueryRaw<int>($"SELECT TOP 1 1 AS Value FROM {pdfSnapshotBoxes}").FirstOrDefaultAsync();
+                pdfUseSnapshot = true;
+            }
+            catch { }
+        }
+
+        // Get catalog lots for box numbers
+        var pdfSnapshotLots = pdfAuctionNum != null ? $"auction.[{pdfAuctionNum}.Lots]" : null;
+        List<CatalogLotResult> pdfCatalogLots;
+        if (pdfUseSnapshot && pdfSnapshotLots != null)
+        {
+            pdfCatalogLots = await _catalogDb.Database
+                .SqlQueryRaw<CatalogLotResult>($"SELECT LotNumber, IncludedBoxNumbers FROM {pdfSnapshotLots} WHERE LotNumber IN (" +
+                    string.Join(",", pdfLotNumbers) + ")")
+                .ToListAsync();
+        }
+        else
+        {
+            pdfCatalogLots = await _catalogDb.CatalogLots
+                .Where(cl => pdfLotNumbers.Contains(cl.LotNumber))
+                .Select(cl => new CatalogLotResult { LotNumber = cl.LotNumber, IncludedBoxNumbers = cl.IncludedBoxNumbers ?? "" })
+                .ToListAsync();
+        }
+
+        var pdfAllBoxNumbers = pdfCatalogLots
+            .Where(cl => !string.IsNullOrEmpty(cl.IncludedBoxNumbers))
+            .SelectMany(cl => cl.IncludedBoxNumbers!.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(b => int.TryParse(b.Trim(), out var n) ? n : 0).Where(n => n > 0))
+            .Distinct().ToList();
+
+        // Get box info (skins, type)
+        var pdfBoxInfo = new Dictionary<int, (int Skins, string BoxType)>();
+        if (pdfAllBoxNumbers.Count > 0)
+        {
+            var pdfBoxTable = pdfUseSnapshot ? pdfSnapshotBoxes! : "auction.boxes";
+            var pdfBoxData = await _catalogDb.Database
+                .SqlQueryRaw<BoxViewResult>($"SELECT BoxNumber, Skins, BoxType, BoxStatus FROM {pdfBoxTable} WHERE BoxNumber IN (" +
+                    string.Join(",", pdfAllBoxNumbers) + ")")
+                .ToListAsync();
+            foreach (var b in pdfBoxData)
+                pdfBoxInfo[b.BoxNumber] = (b.Skins, b.BoxType);
+        }
+
+        // Get box descriptions (SalesType, Group, Gender, Size, etc.)
+        var pdfBoxDesc = new Dictionary<int, string>();
+        if (pdfAllBoxNumbers.Count > 0)
+        {
+            try
+            {
+                var pdfDescTable = pdfUseSnapshot ? pdfSnapshotBoxes! : "auction.boxes";
+                var descData = await _catalogDb.Database
+                    .SqlQueryRaw<BoxDescriptionResult>($"SELECT BoxNumber, ISNULL(SalesType,'') AS SalesType, ISNULL([Group],'') AS [Group], ISNULL(Gender,'') AS Gender, ISNULL(Size,'') AS Size, ISNULL(HairLength,'') AS HairLength, ISNULL(Color,'') AS Color, ISNULL(Quality,'') AS Quality, ISNULL(Clarity,'') AS Clarity, ISNULL(Damages,'') AS Damages FROM {pdfDescTable} WHERE BoxNumber IN (" +
+                        string.Join(",", pdfAllBoxNumbers) + ")")
+                    .ToListAsync();
+                foreach (var d in descData)
+                {
+                    var parts = new List<string>();
+                    if (!string.IsNullOrWhiteSpace(d.SalesType)) parts.Add(d.SalesType.Trim());
+                    if (!string.IsNullOrWhiteSpace(d.Group)) parts.Add(d.Group.Trim());
+                    if (!string.IsNullOrWhiteSpace(d.Gender)) parts.Add(d.Gender.Trim());
+                    if (!string.IsNullOrWhiteSpace(d.Size)) parts.Add(d.Size.Trim());
+                    if (!string.IsNullOrWhiteSpace(d.Quality)) parts.Add(d.Quality.Trim());
+                    if (!string.IsNullOrWhiteSpace(d.Color)) parts.Add(d.Color.Trim());
+                    pdfBoxDesc[d.BoxNumber] = string.Join(", ", parts);
+                }
+            }
+            catch { }
+        }
+
+        // Get staging (weight)
+        var pdfStaging = new Dictionary<int, decimal?>();
+        if (pdfAllBoxNumbers.Count > 0)
+        {
+            try
+            {
+                var staging = await _catalogDb.Database
+                    .SqlQueryRaw<BoxStagingResult>("SELECT CAST(BoxNumber AS INT) AS BoxNumber, Weight AS BoxWeight, BoxLocation FROM dbo.boxstatingfromkphg WHERE BoxNumber IN (" +
+                        string.Join(",", pdfAllBoxNumbers) + ")")
+                    .ToListAsync();
+                foreach (var s in staging)
+                    pdfStaging[s.BoxNumber] = s.BoxWeight;
+            }
+            catch { }
+
+            // Also try snapshot weights
+            if (pdfUseSnapshot && pdfSnapshotBoxes != null)
+            {
+                try
+                {
+                    var missing = pdfAllBoxNumbers.Where(b => !pdfStaging.ContainsKey(b)).ToList();
+                    if (missing.Count > 0)
+                    {
+                        var snapW = await _catalogDb.Database
+                            .SqlQueryRaw<BoxStagingResult>($"SELECT BoxNumber, ISNULL(BoxWeight, 0) AS BoxWeight, BoxLocation FROM {pdfSnapshotBoxes} WHERE BoxNumber IN (" +
+                                string.Join(",", missing) + ")")
+                            .ToListAsync();
+                        foreach (var s in snapW)
+                            if (!pdfStaging.ContainsKey(s.BoxNumber))
+                                pdfStaging[s.BoxNumber] = s.BoxWeight;
+                    }
+                }
+                catch { }
+            }
+        }
+
+        // Get box type dimensions
+        var pdfDimensions = await _db.BoxTypeDimensions.ToListAsync();
+        var pdfDimLookup = pdfDimensions.ToDictionary(d => d.BoxType, d => d);
+
+        // Build packing lines
+        var pdfLines = new List<PackingListLine>();
+        int pdfTotalSkins = 0, pdfTotalBoxes = 0;
+        decimal pdfTotalVol = 0, pdfTotalNet = 0, pdfTotalGross = 0;
+
+        foreach (var cl in pdfCatalogLots)
+        {
+            if (string.IsNullOrEmpty(cl.IncludedBoxNumbers)) continue;
+            foreach (var boxStr in cl.IncludedBoxNumbers.Split(',', StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (!int.TryParse(boxStr.Trim(), out var boxNum) || boxNum <= 0) continue;
+                var bi = pdfBoxInfo.GetValueOrDefault(boxNum);
+                var boxType = bi.BoxType ?? "";
+                var dim = !string.IsNullOrEmpty(boxType) && pdfDimLookup.TryGetValue(boxType, out var d) ? d : null;
+                var vol = dim != null ? dim.LengthM * dim.WidthM * dim.HeightM : 0m;
+                var weight = pdfStaging.GetValueOrDefault(boxNum);
+                var gross = weight ?? (dim?.WeightKg ?? 0m);
+                var net = weight != null && dim?.WeightKg != null ? weight.Value - dim.WeightKg : gross;
+                var text = pdfBoxDesc.GetValueOrDefault(boxNum, "");
+
+                pdfLines.Add(new PackingListLine
+                {
+                    Text = text,
+                    LotNo = cl.LotNumber.ToString(),
+                    Carton = boxNum.ToString(),
+                    Skins = bi.Skins,
+                    VolumeM3 = vol,
+                    NetWeight = net,
+                    GrossWeight = gross
+                });
+                pdfTotalSkins += bi.Skins;
+                pdfTotalBoxes++;
+                pdfTotalVol += vol;
+                pdfTotalNet += net;
+                pdfTotalGross += gross;
+            }
+        }
+
+        // Replace showlots with packed boxes
+        var pdfPackingOrders = await _db.PackingOrders
+            .Include(p => p.Lines)
+            .Where(p => p.ShipmentId == id)
+            .ToListAsync();
+        var pdfPoIds = pdfPackingOrders.Select(p => p.Id).ToList();
+        if (pdfPoIds.Count > 0)
+        {
+            var pdfPackedBoxes = await _db.PackedBoxes
+                .Include(b => b.ShowLots)
+                .Where(b => pdfPoIds.Contains(b.PackingOrderId) && (b.Status == "Approved" || b.Status == "Closed"))
+                .ToListAsync();
+            if (pdfPackedBoxes.Count > 0)
+            {
+                var pdfPackedNums = pdfPackedBoxes
+                    .SelectMany(pb => pb.ShowLots.Select(sl => sl.BoxNumber))
+                    .ToHashSet();
+
+                var remaining = new List<PackingListLine>();
+                int newSkins = 0, newBoxes = 0;
+                decimal newVol = 0, newNet = 0, newGross = 0;
+
+                foreach (var line in pdfLines)
+                {
+                    if (!int.TryParse(line.Carton, out var cn) || !pdfPackedNums.Contains(cn))
+                    {
+                        remaining.Add(line);
+                        newSkins += line.Skins;
+                        newBoxes++;
+                        newVol += line.VolumeM3;
+                        newNet += line.NetWeight;
+                        newGross += line.GrossWeight;
+                    }
+                }
+
+                foreach (var pb in pdfPackedBoxes)
+                {
+                    var vol = pb.LengthM * pb.WidthM * pb.HeightM;
+                    var pbSkins = pb.ShowLots.Sum(s => s.Skins);
+                    var gross = pb.GrossWeight > 0 ? pb.GrossWeight : pb.Weight;
+                    var net = pb.NetWeight > 0 ? pb.NetWeight : gross - pb.TareWeight;
+                    remaining.Add(new PackingListLine
+                    {
+                        Text = $"Packed Box {pb.BoxNumber} ({pb.BoxType})",
+                        LotNo = "",
+                        Carton = pb.BoxNumber,
+                        Skins = pbSkins,
+                        VolumeM3 = vol,
+                        NetWeight = net,
+                        GrossWeight = gross
+                    });
+                    newSkins += pbSkins;
+                    newBoxes++;
+                    newVol += vol;
+                    newNet += net;
+                    newGross += gross;
+                }
+
+                pdfLines = remaining;
+                pdfTotalSkins = newSkins;
+                pdfTotalBoxes = newBoxes;
+                pdfTotalVol = newVol;
+                pdfTotalNet = newNet;
+                pdfTotalGross = newGross;
+            }
+        }
+
+        // Build address info
+        var buyerAddrLines = new List<string>();
+        if (shipment.Buyer != null)
+        {
+            if (!string.IsNullOrWhiteSpace(shipment.Buyer.Name2)) buyerAddrLines.Add(shipment.Buyer.Name2);
+            if (!string.IsNullOrWhiteSpace(shipment.Buyer.AddressLine1)) buyerAddrLines.Add(shipment.Buyer.AddressLine1);
+            if (!string.IsNullOrWhiteSpace(shipment.Buyer.AddressLine2)) buyerAddrLines.Add(shipment.Buyer.AddressLine2);
+            var cityLine = string.Join(" ", new[] { shipment.Buyer.PostalCode, shipment.Buyer.City }.Where(s => !string.IsNullOrEmpty(s)));
+            if (!string.IsNullOrEmpty(cityLine)) buyerAddrLines.Add(cityLine);
+            if (!string.IsNullOrWhiteSpace(shipment.Buyer.Country)) buyerAddrLines.Add(shipment.Buyer.Country);
+        }
+
+        var shipToLines = new List<string>();
+        var shipToName = "";
+        if (shipment.ShippingAddress != null)
+        {
+            shipToName = shipment.ShippingAddress.Name ?? shipment.ShippingAddress.ContactName ?? "";
+            if (!string.IsNullOrWhiteSpace(shipment.ShippingAddress.AddressLine1)) shipToLines.Add(shipment.ShippingAddress.AddressLine1);
+            if (!string.IsNullOrWhiteSpace(shipment.ShippingAddress.AddressLine2)) shipToLines.Add(shipment.ShippingAddress.AddressLine2);
+            var shipCityLine = string.Join(" ", new[] { shipment.ShippingAddress.PostalCode, shipment.ShippingAddress.City }.Where(s => !string.IsNullOrEmpty(s)));
+            if (!string.IsNullOrEmpty(shipCityLine)) shipToLines.Add(shipCityLine);
+            if (!string.IsNullOrWhiteSpace(shipment.ShippingAddress.Country)) shipToLines.Add(shipment.ShippingAddress.Country);
+        }
+
+        var pdfData = new PackingListData
+        {
+            ShipmentNumber = shipment.ShipmentNumber,
+            ForwardingAgent = shipment.Shipper?.Name ?? "",
+            InvoiceAccount = shipment.Buyer?.BuyerNumber ?? "",
+            AwbNumber = shipment.TrackingNumber ?? "",
+            Date = shipment.CreatedAt.ToString("dd/MM/yyyy"),
+            Destination = shipment.ShippingAddress?.City ?? "",
+            Marking = "",
+            BuyerName = shipment.Buyer?.Name ?? "",
+            BuyerAddressLines = buyerAddrLines,
+            ShipToName = shipToName,
+            ShipToAddressLines = shipToLines,
+            Lines = pdfLines,
+            TotalCartons = pdfTotalBoxes,
+            TotalSkins = pdfTotalSkins,
+            TotalVolume = pdfTotalVol,
+            TotalNetWeight = pdfTotalNet,
+            TotalGrossWeight = pdfTotalGross
+        };
+
+        // Generate PDF
+        var pdfBytes = PackingListPdfService.GeneratePdf(pdfData);
+
+        // Upload to blob
+        if (_blobStorage != null)
+        {
+            try
+            {
+                var fileName = $"packing-lists/{shipment.ShipmentNumber}.pdf";
+                var url = await _blobStorage.UploadPdfAsync(fileName, pdfBytes);
+                shipment.PackingListPdfUrl = url;
+                await _db.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to upload packing list PDF for {ShipmentNumber}", shipment.ShipmentNumber);
+            }
+        }
+
+        var pdfResponse = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        pdfResponse.Headers.Add("Content-Type", "application/pdf");
+        pdfResponse.Headers.Add("Content-Disposition", $"attachment; filename=\"Packing list - {shipment.ShipmentNumber}.pdf\"");
+        await pdfResponse.Body.WriteAsync(pdfBytes);
+        return pdfResponse;
+    }
+
     [Function("GetPackingOrders")]
     public async Task<HttpResponseData> GetPackingOrders(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "shipments/packing-orders")] HttpRequestData req)
@@ -1484,6 +1798,20 @@ public class ShipmentFunctions
         public int Skins { get; set; }
         public string BoxType { get; set; } = "";
         public string BoxStatus { get; set; } = "";
+    }
+
+    private class BoxDescriptionResult
+    {
+        public int BoxNumber { get; set; }
+        public string SalesType { get; set; } = "";
+        public string Group { get; set; } = "";
+        public string Gender { get; set; } = "";
+        public string Size { get; set; } = "";
+        public string HairLength { get; set; } = "";
+        public string Color { get; set; } = "";
+        public string Quality { get; set; } = "";
+        public string Clarity { get; set; } = "";
+        public string Damages { get; set; } = "";
     }
 
     private class BoxStagingResult

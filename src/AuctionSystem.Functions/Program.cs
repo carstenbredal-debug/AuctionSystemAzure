@@ -484,6 +484,11 @@ using (var scope = host.Services.CreateScope())
                 INSERT INTO auction.SystemParameters ([Key], Value, Description, DataType, UpdatedAt)
                 VALUES ('BoxTareWeight_Small', '1.5', 'Tare weight (kg) for Small box type', 'decimal', GETUTCDATE());
         ");
+        // Add PackingListPdfUrl column to Shipments if missing
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Shipments') AND name = 'PackingListPdfUrl')
+                ALTER TABLE auction.Shipments ADD PackingListPdfUrl NVARCHAR(MAX) NULL;
+        ");
         // Drop auction.Boxes table if it exists (replaced by view)
         db.Database.ExecuteSqlRaw(@"
             IF EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'Boxes')

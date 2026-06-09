@@ -13,6 +13,7 @@ public class Shipment
     public string TrackingNumber { get; set; } = string.Empty;
     public string Status { get; set; } = "Pending";
     public string Notes { get; set; } = string.Empty;
+    public string? PackingListPdfUrl { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? ShippedAt { get; set; }
     public DateTime? DeliveredAt { get; set; }

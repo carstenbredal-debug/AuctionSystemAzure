@@ -968,6 +968,7 @@ public class ShipmentListDto
     public string TrackingNumber { get; set; } = "";
     public string Status { get; set; } = "";
     public string Notes { get; set; } = "";
+    public string? PackingListPdfUrl { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? ShippedAt { get; set; }
     public DateTime? DeliveredAt { get; set; }

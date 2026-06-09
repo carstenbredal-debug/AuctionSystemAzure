@@ -75,6 +75,19 @@ else
                             <td>@(s.DeliveredAt?.ToString("yyyy-MM-dd") ?? "-")</td>
                             <td>
                                 <a href="admin/shipments/@s.Id/packing-list" class="btn btn-sm btn-outline-secondary me-1" target="_blank">Packing List</a>
+                                @if (s.Status == "Packed" || s.Status == "Shipped" || s.Status == "Delivered")
+                                {
+                                    @if (!string.IsNullOrEmpty(s.PackingListPdfUrl))
+                                    {
+                                        <a href="@s.PackingListPdfUrl" class="btn btn-sm btn-outline-primary me-1" target="_blank">PDF</a>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => GeneratePackingListPdf(s)" disabled="@_generatingPdf">
+                                            @(_generatingPdfId == s.Id ? "Generating..." : "Generate PDF")
+                                        </button>
+                                    }
+                                }
                                 @if (s.Status == "Pending" || s.Status == "ShowLot Packing" || s.Status == "Packing" || s.Status == "Packed")
                                 {
                                     <button class="btn btn-sm btn-success me-1" @onclick="() => MarkShipped(s)">Ship</button>
@@ -315,6 +328,10 @@ else
 
     private List<(int BuyerId, string BuyerNumber, string BuyerName)> _availableBuyers = new();
 
+    // PDF generation
+    private bool _generatingPdf;
+    private int _generatingPdfId;
+
     protected override async Task OnInitializedAsync()
     {
         await LoadShipments();
@@ -487,6 +504,35 @@ else
             _error = ex.Message;
         }
         _saving = false;
+    }
+
+    private async Task GeneratePackingListPdf(ShipmentListDto shipment)
+    {
+        _generatingPdf = true;
+        _generatingPdfId = shipment.Id;
+        _error = null;
+        StateHasChanged();
+
+        try
+        {
+            var url = await Api.GeneratePackingListPdfAsync(shipment.Id);
+            if (url != null)
+            {
+                _success = $"Packing list PDF generated for {shipment.ShipmentNumber}.";
+                await LoadShipments();
+            }
+            else
+            {
+                _error = "Failed to generate packing list PDF.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+
+        _generatingPdf = false;
+        _generatingPdfId = 0;
     }
 
     private static string GetStatusBadgeClass(string status) => status switch
