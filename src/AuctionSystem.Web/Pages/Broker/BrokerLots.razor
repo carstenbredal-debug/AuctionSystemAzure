@@ -474,7 +474,7 @@ else if (_activeTab == "takeback")
                     </div>
                     <div class="mb-3">
                         <label class="form-label">@(_commissionType == "percentage" ? "Commission (%)" : "Commission Amount (€)")</label>
-                        <input type="number" class="form-control" step="0.01" @bind="_commissionValue" />
+                        <input type="number" class="form-control" step="0.01" @bind="_commissionValue" @onkeydown="HandleCommissionKeydown" />
                     </div>
                     @if (_commissionType == "percentage" && _commissionValue > 0)
                     {
@@ -796,10 +796,17 @@ else if (_activeTab == "takeback")
 
     private void InitialsNextToCommission()
     {
+        if (string.IsNullOrWhiteSpace(_initialsValue)) return;
         _showInitialsModal = false;
         _commissionType = "percentage";
         _commissionValue = 0;
         _showCommissionModal = true;
+    }
+
+    private async Task HandleCommissionKeydown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && _selectedIds.Count > 0 && _selectedBuyerId > 0)
+            await SellToBuyer();
     }
 
     private void OpenInitialsForReinvoice()
@@ -818,11 +825,17 @@ else if (_activeTab == "takeback")
     private async Task HandleInitialsKeydown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
     {
         if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_initialsValue))
-            await ConfirmInitials();
+        {
+            if (_initialsAction == "sell")
+                InitialsNextToCommission();
+            else
+                await ConfirmInitials();
+        }
     }
 
     private async Task ConfirmInitials()
     {
+        if (string.IsNullOrWhiteSpace(_initialsValue)) return;
         _showInitialsModal = false;
         if (_initialsAction == "sell")
             await SellToBuyer();
