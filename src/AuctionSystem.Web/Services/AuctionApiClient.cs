@@ -612,9 +612,9 @@ public class AuctionApiClient
     }
 
     // Typist Entry methods
-    public async Task<TypistSubmitResult?> SubmitTypistEntryAsync(int lotNumber, int brokerId, decimal priceEur, int typistUserId)
+    public async Task<TypistSubmitResult?> SubmitTypistEntryAsync(int lotNumber, int brokerId, decimal priceEur, int typistUserId, int auctionId = 0)
     {
-        var resp = await _http.PostAsJsonAsync("api/typist-entries", new { lotNumber, brokerId, priceEur, typistUserId });
+        var resp = await _http.PostAsJsonAsync("api/typist-entries", new { lotNumber, brokerId, priceEur, typistUserId, auctionId });
         if (resp.IsSuccessStatusCode)
             return await resp.Content.ReadFromJsonAsync<TypistSubmitResult>();
         return null;
@@ -643,20 +643,25 @@ public class AuctionApiClient
         catch { return null; }
     }
 
-    public async Task<NextUnsoldLotDto?> GetNextUnsoldLotForTypistAsync(int? typistUserId = null)
+    public async Task<NextUnsoldLotDto?> GetNextUnsoldLotForTypistAsync(int? typistUserId = null, int auctionId = 0)
     {
         try
         {
             var url = "api/typist-entries/next-unsold-lot";
-            if (typistUserId.HasValue)
-                url += $"?typistUserId={typistUserId.Value}";
+            var sep = '?';
+            if (typistUserId.HasValue) { url += $"{sep}typistUserId={typistUserId.Value}"; sep = '&'; }
+            if (auctionId > 0) url += $"{sep}auctionId={auctionId}";
             return await _http.GetFromJsonAsync<NextUnsoldLotDto>(url);
         }
         catch { return null; }
     }
 
-    public async Task<List<TypistEntryDto>> GetRecentTypistEntriesAsync()
-        => await _http.GetFromJsonAsync<List<TypistEntryDto>>("api/typist-entries/recent") ?? new();
+    public async Task<List<TypistEntryDto>> GetRecentTypistEntriesAsync(int auctionId = 0)
+    {
+        var url = "api/typist-entries/recent";
+        if (auctionId > 0) url += $"?auctionId={auctionId}";
+        return await _http.GetFromJsonAsync<List<TypistEntryDto>>(url) ?? new();
+    }
 
     // Auction Transactions
     public async Task<List<AuctionTransactionDto>> GetAuctionTransactionsAsync(int? auctionId = null)

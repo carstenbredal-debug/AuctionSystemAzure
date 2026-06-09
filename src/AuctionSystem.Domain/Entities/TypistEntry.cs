@@ -4,6 +4,7 @@ public class TypistEntry
 {
     public int Id { get; set; }
     public int LotNumber { get; set; }
+    public int AuctionId { get; set; }
     public int BrokerId { get; set; }
     public Broker Broker { get; set; } = null!;
     public decimal PriceEur { get; set; }

@@ -195,6 +195,11 @@ using (var scope = host.Services.CreateScope())
                 CREATE INDEX IX_TypistEntries_TypistUserId ON auction.TypistEntries(TypistUserId);
             END
         ");
+        // TypistEntries: add AuctionId column
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.TypistEntries') AND name = 'AuctionId')
+                ALTER TABLE auction.TypistEntries ADD AuctionId INT NOT NULL DEFAULT 0;
+        ");
         // AuctionTransactions table
         db.Database.ExecuteSqlRaw(@"
             IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'AuctionTransactions')

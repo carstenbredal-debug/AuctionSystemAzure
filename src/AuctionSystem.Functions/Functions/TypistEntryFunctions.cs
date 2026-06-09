@@ -67,6 +67,7 @@ public class TypistEntryFunctions
         var entry = new TypistEntry
         {
             LotNumber = body.LotNumber,
+            AuctionId = body.AuctionId,
             BrokerId = body.BrokerId,
             PriceEur = body.PriceEur,
             TypistUserId = body.TypistUserId,
@@ -422,32 +423,31 @@ public class TypistEntryFunctions
     public async Task<HttpResponseData> GetNextUnsoldLot(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "typist-entries/next-unsold-lot")] HttpRequestData req)
     {
-        // If typistUserId is provided, find next lot THIS typist hasn't entered yet
         var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
         var typistUserIdStr = query["typistUserId"];
+        var auctionIdStr = query["auctionId"];
+        int.TryParse(auctionIdStr, out var auctionId);
 
         // Lots already matched (sold) — skip these for everyone
-        var matchedLotNumbers = await _db.TypistEntries
-            .Where(e => e.IsMatched)
-            .Select(e => e.LotNumber)
-            .Distinct()
-            .ToListAsync();
+        var matchedQuery = _db.TypistEntries.Where(e => e.IsMatched);
+        if (auctionId > 0) matchedQuery = matchedQuery.Where(e => e.AuctionId == auctionId);
+        var matchedLotNumbers = await matchedQuery.Select(e => e.LotNumber).Distinct().ToListAsync();
 
         // Lots this typist already entered (and entry is still active — not resolved)
         var myEnteredLotNumbers = new List<int>();
         if (int.TryParse(typistUserIdStr, out var typistUserId))
         {
-            myEnteredLotNumbers = await _db.TypistEntries
-                .Where(e => e.TypistUserId == typistUserId && !e.IsResolved)
-                .Select(e => e.LotNumber)
-                .Distinct()
-                .ToListAsync();
+            var myQuery = _db.TypistEntries.Where(e => e.TypistUserId == typistUserId && !e.IsResolved);
+            if (auctionId > 0) myQuery = myQuery.Where(e => e.AuctionId == auctionId);
+            myEnteredLotNumbers = await myQuery.Select(e => e.LotNumber).Distinct().ToListAsync();
         }
 
         var skipLots = matchedLotNumbers.Union(myEnteredLotNumbers).ToList();
 
-        var nextLot = await _db.Lots
-            .Where(l => l.Status != LotStatus.Sold && !skipLots.Contains(l.LotNumber))
+        var lotsQuery = _db.Lots.Where(l => l.Status != LotStatus.Sold && !skipLots.Contains(l.LotNumber));
+        if (auctionId > 0) lotsQuery = lotsQuery.Where(l => l.AuctionId == auctionId);
+
+        var nextLot = await lotsQuery
             .OrderBy(l => l.LotNumber)
             .Select(l => new { l.LotNumber, l.Description, l.Category, l.Quantity, l.Unit })
             .FirstOrDefaultAsync();
@@ -462,11 +462,18 @@ public class TypistEntryFunctions
     public async Task<HttpResponseData> GetRecentMatched(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "typist-entries/recent")] HttpRequestData req)
     {
-        // Get recent matched/disagreement results for the "Recent Results" panel
-        var recentLots = await _db.TypistEntries
+        var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+        int.TryParse(query["auctionId"], out var auctionId);
+
+        var entriesQuery = _db.TypistEntries
             .Include(e => e.Broker)
             .Include(e => e.TypistUser)
-            .Where(e => e.TypistSlot == 1) // just show one entry per lot
+            .Where(e => e.TypistSlot == 1);
+
+        if (auctionId > 0)
+            entriesQuery = entriesQuery.Where(e => e.AuctionId == auctionId);
+
+        var recentLots = await entriesQuery
             .OrderByDescending(e => e.EnteredAt)
             .Take(50)
             .Select(e => new
@@ -501,4 +508,4 @@ public class TypistEntryFunctions
     }
 }
 
-public record SubmitTypistEntryRequest(int LotNumber, int BrokerId, decimal PriceEur, int TypistUserId);
+public record SubmitTypistEntryRequest(int LotNumber, int BrokerId, decimal PriceEur, int TypistUserId, int AuctionId = 0);

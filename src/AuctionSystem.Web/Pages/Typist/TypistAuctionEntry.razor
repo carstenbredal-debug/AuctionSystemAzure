@@ -9,6 +9,23 @@
 <h1>Auction Entry</h1>
 <p class="text-muted">Enter broker and price for each lot. Both typists must agree before a lot is recorded.</p>
 
+<div class="mb-3">
+    <label class="form-label fw-bold">Auction <span class="text-danger">*</span></label>
+    <select class="form-select" style="max-width: 400px;" @bind="_selectedAuctionId" @bind:after="OnAuctionChanged">
+        <option value="0">— Select Auction —</option>
+        @foreach (var a in _auctions)
+        {
+            <option value="@a.Id">@a.AuctionNumber — @a.Title</option>
+        }
+    </select>
+</div>
+
+@if (_selectedAuctionId == 0)
+{
+    <div class="alert alert-info">Please select an auction to begin entering data.</div>
+}
+else
+{
 <div class="row">
     <div class="col-md-5">
         <div class="section-container mb-4">
@@ -135,8 +152,11 @@
         </div>
     </div>
 </div>
+}
 
 @code {
+    private List<AuctionDto> _auctions = new();
+    private int _selectedAuctionId;
     private List<BrokerDto> _brokers = new();
     private List<TypistEntryDto> _recentEntries = new();
     private NextUnsoldLotDto? _nextLot;
@@ -155,19 +175,33 @@
         if (oid != null)
             _currentUser = await Api.GetCurrentUserAsync(oid);
 
+        _auctions = (await Api.GetAuctionsAsync()).Where(a => a.Status == AuctionStatus.Active).ToList();
         _brokers = await Api.GetBrokersAsync();
-        _recentEntries = await Api.GetRecentTypistEntriesAsync();
-        _nextLot = await Api.GetNextUnsoldLotForTypistAsync(_currentUser?.Id);
+    }
 
-        // Poll every 3 seconds to auto-update the recent results panel
-        _pollTimer = new System.Threading.Timer(async _ => await PollForUpdates(), null, 3000, 3000);
+    private async Task OnAuctionChanged()
+    {
+        _pollTimer?.Dispose();
+        _pollTimer = null;
+        _recentEntries.Clear();
+        _nextLot = null;
+        _successMessage = null;
+        _errorMessage = null;
+
+        if (_selectedAuctionId > 0)
+        {
+            _recentEntries = await Api.GetRecentTypistEntriesAsync(_selectedAuctionId);
+            _nextLot = await Api.GetNextUnsoldLotForTypistAsync(_currentUser?.Id, _selectedAuctionId);
+            _pollTimer = new System.Threading.Timer(async _ => await PollForUpdates(), null, 3000, 3000);
+        }
     }
 
     private async Task PollForUpdates()
     {
+        if (_selectedAuctionId <= 0) return;
         try
         {
-            var newRecent = await Api.GetRecentTypistEntriesAsync();
+            var newRecent = await Api.GetRecentTypistEntriesAsync(_selectedAuctionId);
             var changed = false;
 
             if (newRecent.Count != _recentEntries.Count)
@@ -187,10 +221,7 @@
                 await InvokeAsync(StateHasChanged);
             }
         }
-        catch
-        {
-            // Silently ignore polling errors
-        }
+        catch { }
     }
 
     private async Task SubmitEntry()
@@ -198,6 +229,11 @@
         _successMessage = null;
         _errorMessage = null;
 
+        if (_selectedAuctionId <= 0)
+        {
+            _errorMessage = "Please select an auction.";
+            return;
+        }
         if (_nextLot == null)
         {
             _errorMessage = "No unsold lots available.";
@@ -223,16 +259,15 @@
         try
         {
             var lotNum = _nextLot.LotNumber;
-            var result = await Api.SubmitTypistEntryAsync(lotNum, _selectedBrokerId, _priceEur, _currentUser.Id);
+            var result = await Api.SubmitTypistEntryAsync(lotNum, _selectedBrokerId, _priceEur, _currentUser.Id, _selectedAuctionId);
             if (result != null)
             {
                 _successMessage = $"Entry recorded for Lot {lotNum}.";
                 _priceEur = 0;
                 _selectedBrokerId = 0;
 
-                // Always advance to the next lot this typist hasn't entered
-                _nextLot = await Api.GetNextUnsoldLotForTypistAsync(_currentUser.Id);
-                _recentEntries = await Api.GetRecentTypistEntriesAsync();
+                _nextLot = await Api.GetNextUnsoldLotForTypistAsync(_currentUser.Id, _selectedAuctionId);
+                _recentEntries = await Api.GetRecentTypistEntriesAsync(_selectedAuctionId);
             }
             else
             {
