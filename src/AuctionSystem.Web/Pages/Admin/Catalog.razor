@@ -220,7 +220,7 @@
     {
         try
         {
-            Auctions = await Api.GetAuctionsAsync();
+            Auctions = (await Api.GetAuctionsAsync()).Where(a => a.Status != AuctionStatus.Draft).ToList();
         }
         catch { }
     }
