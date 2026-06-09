@@ -566,7 +566,38 @@ else
         _updatingId = null;
     }
 
+    private int _fullPayInvoiceId;
+
     private async Task SubmitFullyPaid(int invoiceId)
+    {
+        _updatingId = invoiceId;
+        _bcError = null;
+        _bcSuccess = null;
+        _fullPayInvoiceId = invoiceId;
+        StateHasChanged();
+
+        // Check BC balance first
+        var balanceCheck = await Api.CheckBcPaymentBalanceAsync(invoiceId);
+        if (balanceCheck != null && !balanceCheck.Available)
+        {
+            _bcAvailableAmount = balanceCheck.AvailableAmount;
+            _bcInvoiceAmount = balanceCheck.InvoiceAmount;
+            _balanceContext = "fullypaid";
+            _showInsufficientBalancePopup = true;
+            _updatingId = null;
+            return;
+        }
+
+        await ExecuteFullPayment(invoiceId);
+    }
+
+    private async Task ConfirmFullPayment()
+    {
+        _showInsufficientBalancePopup = false;
+        await ExecuteFullPayment(_fullPayInvoiceId);
+    }
+
+    private async Task ExecuteFullPayment(int invoiceId)
     {
         _updatingId = invoiceId;
         _bcError = null;
@@ -629,7 +660,10 @@ else
     private async Task ConfirmApplyAvailable()
     {
         _showInsufficientBalancePopup = false;
-        await ConfirmDownpayment();
+        if (_balanceContext == "fullypaid")
+            await ExecuteFullPayment(_fullPayInvoiceId);
+        else
+            await ConfirmDownpayment();
     }
 
     private void CancelInsufficientBalance()
