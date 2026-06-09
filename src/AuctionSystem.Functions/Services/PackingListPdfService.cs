@@ -92,7 +92,7 @@ public static class PackingListPdfService
                     left.Item().Height(6);
                     left.Item().Row(infoRow =>
                     {
-                        infoRow.RelativeItem().Text("LANGAGERVEJ 60").FontSize(6.5f);
+                        infoRow.RelativeItem().Text("UL. SKŁADOWA 10").FontSize(6.5f);
                         infoRow.RelativeItem().Text("TEL +45 4326 1000").FontSize(6.5f);
                         infoRow.RelativeItem().Text("KOPENHAGENFUR.COM").FontSize(6.5f);
                     });
