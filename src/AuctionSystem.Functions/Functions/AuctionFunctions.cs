@@ -15,6 +15,7 @@ public class AuctionFunctions
 {
     private readonly AuctionService _service;
     private readonly AuctionDbContext _db;
+    private readonly CatalogDbContext _catalogDb;
     private readonly ILogger<AuctionFunctions> _logger;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -23,10 +24,11 @@ public class AuctionFunctions
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public AuctionFunctions(AuctionService service, AuctionDbContext db, ILogger<AuctionFunctions> logger)
+    public AuctionFunctions(AuctionService service, AuctionDbContext db, CatalogDbContext catalogDb, ILogger<AuctionFunctions> logger)
     {
         _service = service;
         _db = db;
+        _catalogDb = catalogDb;
         _logger = logger;
     }
 
@@ -140,6 +142,115 @@ public class AuctionFunctions
         return await CreateJsonResponse(req, stats);
     }
 
+    [Function("ImportLotsToAuction")]
+    public async Task<HttpResponseData> ImportLots(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auctions/{auctionId:int}/import-lots")] HttpRequestData req, int auctionId)
+    {
+        var auction = await _db.Auctions.FindAsync(auctionId);
+        if (auction == null)
+            return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        var body = await req.ReadFromJsonAsync<ImportLotsRequest>();
+        if (body == null || body.LotNumbers == null || body.LotNumbers.Count == 0)
+        {
+            var resp400 = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+            await resp400.WriteStringAsync("{\"error\":\"lotNumbers required\"}");
+            return resp400;
+        }
+
+        var auctionNum = auction.AuctionNumber;
+        var lotsCsv = string.Join(",", body.LotNumbers);
+
+        try
+        {
+            var conn = _catalogDb.Database.GetConnectionString();
+            using var sqlConn = new Microsoft.Data.SqlClient.SqlConnection(conn);
+            await sqlConn.OpenAsync();
+
+            // 1. Create auction.["261.Lots"] — full copy of dbo.CatalogLots for selected lots
+            var lotsTable = $"{auctionNum}.Lots";
+            await ExecuteSql(sqlConn, $@"
+                IF OBJECT_ID('auction.[{lotsTable}]', 'U') IS NOT NULL DROP TABLE auction.[{lotsTable}];
+                SELECT * INTO auction.[{lotsTable}] FROM dbo.CatalogLots WHERE LotNumber IN ({lotsCsv});
+            ");
+
+            // 2. Get all box numbers from the imported lots
+            var boxNumbersSql = $@"
+                SELECT DISTINCT value AS BoxNumber
+                FROM auction.[{lotsTable}]
+                CROSS APPLY STRING_SPLIT(IncludedBoxNumbers, ',')
+                WHERE ISNUMERIC(LTRIM(RTRIM(value))) = 1 AND CAST(LTRIM(RTRIM(value)) AS INT) > 0
+            ";
+
+            // 3. Create auction.["261.Skins"] — full copy of dbo.SkinTable for boxes in those lots
+            var skinsTable = $"{auctionNum}.Skins";
+            await ExecuteSql(sqlConn, $@"
+                IF OBJECT_ID('auction.[{skinsTable}]', 'U') IS NOT NULL DROP TABLE auction.[{skinsTable}];
+                SELECT s.* INTO auction.[{skinsTable}]
+                FROM dbo.SkinTable s
+                WHERE s.BoxNumber IN (
+                    SELECT CAST(LTRIM(RTRIM(value)) AS INT)
+                    FROM auction.[{lotsTable}]
+                    CROSS APPLY STRING_SPLIT(IncludedBoxNumbers, ',')
+                    WHERE ISNUMERIC(LTRIM(RTRIM(value))) = 1 AND CAST(LTRIM(RTRIM(value)) AS INT) > 0
+                );
+            ");
+
+            // 4. Create auction.["261.Boxes"] — aggregated box view + location from boxstatingfromkphg
+            var boxesTable = $"{auctionNum}.Boxes";
+            await ExecuteSql(sqlConn, $@"
+                IF OBJECT_ID('auction.[{boxesTable}]', 'U') IS NOT NULL DROP TABLE auction.[{boxesTable}];
+                SELECT
+                    s.BoxNumber, s.BoxType, s.BoxStatus, s.SalesType, s.[Group], s.Gender,
+                    s.Size, s.HairLength, s.Color, s.Quality, s.Clarity, s.Damages,
+                    COUNT(*) AS Skins,
+                    ISNULL(b.BoxLocation, '') AS BoxLocation
+                INTO auction.[{boxesTable}]
+                FROM auction.[{skinsTable}] s
+                LEFT JOIN dbo.boxstatingfromkphg b ON b.BoxNumber = s.BoxNumber
+                GROUP BY s.BoxNumber, s.BoxType, s.BoxStatus, s.SalesType, s.[Group], s.Gender,
+                    s.Size, s.HairLength, s.Color, s.Quality, s.Clarity, s.Damages,
+                    b.BoxLocation;
+            ");
+
+            // Get counts
+            var lotCount = await GetScalar(sqlConn, $"SELECT COUNT(*) FROM auction.[{lotsTable}]");
+            var boxCount = await GetScalar(sqlConn, $"SELECT COUNT(*) FROM auction.[{boxesTable}]");
+            var skinCount = await GetScalar(sqlConn, $"SELECT COUNT(*) FROM auction.[{skinsTable}]");
+
+            _logger.LogInformation("Imported lots for auction {AuctionNum}: {Lots} lots, {Boxes} boxes, {Skins} skins",
+                auctionNum, lotCount, boxCount, skinCount);
+
+            return await CreateJsonResponse(req, new
+            {
+                success = true,
+                auctionNumber = auctionNum,
+                tables = new { lots = lotsTable, boxes = boxesTable, skins = skinsTable },
+                counts = new { lots = lotCount, boxes = boxCount, skins = skinCount }
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to import lots for auction {AuctionId}", auctionId);
+            return await CreateJsonResponse(req, new { error = ex.Message }, System.Net.HttpStatusCode.InternalServerError);
+        }
+    }
+
+    private static async Task ExecuteSql(Microsoft.Data.SqlClient.SqlConnection conn, string sql)
+    {
+        using var cmd = new Microsoft.Data.SqlClient.SqlCommand(sql, conn);
+        cmd.CommandTimeout = 300;
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    private static async Task<int> GetScalar(Microsoft.Data.SqlClient.SqlConnection conn, string sql)
+    {
+        using var cmd = new Microsoft.Data.SqlClient.SqlCommand(sql, conn);
+        cmd.CommandTimeout = 60;
+        var result = await cmd.ExecuteScalarAsync();
+        return result != null ? Convert.ToInt32(result) : 0;
+    }
+
     [Function("ResetAllData")]
     public async Task<HttpResponseData> ResetAllData(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "system/reset-all")] HttpRequestData req)
@@ -222,3 +333,4 @@ public class AuctionFunctions
 }
 
 public record HammerRequest(decimal HammerPrice, int WinningBrokerId);
+public record ImportLotsRequest(List<int> LotNumbers);

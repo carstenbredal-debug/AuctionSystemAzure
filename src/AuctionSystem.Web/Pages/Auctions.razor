@@ -496,8 +496,19 @@ else
             {
                 lots = await Api.GetLotsByAuctionAsync(Id.Value);
                 importedLotNumbers = lots.Select(l => l.LotNumber).ToHashSet();
-                importMessage = $"Successfully imported {selectedCatalogLotIds.Count} catalog lots into this auction.";
-                importIsError = false;
+
+                // Create auction-specific snapshot tables (e.g. auction.[261.Lots], [261.Boxes], [261.Skins])
+                var lotNumbers = catalogLots
+                    .Where(c => selectedCatalogLotIds.Contains(c.CatalogLotID))
+                    .Select(c => c.LotNumber)
+                    .ToList();
+                var snapshotResp = await Api.ImportLotsSnapshotAsync(Id!.Value, lotNumbers);
+                var snapshotOk = snapshotResp.IsSuccessStatusCode;
+
+                importMessage = snapshotOk
+                    ? $"Imported {selectedCatalogLotIds.Count} lots + snapshot tables created."
+                    : $"Imported {selectedCatalogLotIds.Count} lots but snapshot failed. Check logs.";
+                importIsError = !snapshotOk;
                 selectedCatalogLotIds.Clear();
             }
             else
