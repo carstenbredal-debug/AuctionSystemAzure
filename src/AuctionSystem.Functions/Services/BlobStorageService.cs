@@ -118,10 +118,8 @@ public class BlobStorageService
         var blob = _container.GetBlobClient(fileName);
         _logger.LogInformation("Uploading PDF {FileName} ({Bytes} bytes) to blob storage", fileName, pdfData.Length);
         using var stream = new MemoryStream(pdfData);
-        await blob.UploadAsync(stream, new BlobUploadOptions
-        {
-            HttpHeaders = new BlobHttpHeaders { ContentType = "application/pdf" }
-        });
+        await blob.UploadAsync(stream, overwrite: true);
+        await blob.SetHttpHeadersAsync(new BlobHttpHeaders { ContentType = "application/pdf" });
 
         // Generate a SAS URL valid for 10 years (container may be private)
         string uri;

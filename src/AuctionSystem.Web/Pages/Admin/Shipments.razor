@@ -80,6 +80,9 @@ else
                                     @if (!string.IsNullOrEmpty(s.PackingListPdfUrl))
                                     {
                                         <a href="@s.PackingListPdfUrl" class="btn btn-sm btn-outline-primary me-1" target="_blank">PDF</a>
+                                        <button class="btn btn-sm btn-outline-secondary me-1" @onclick="() => GeneratePackingListPdf(s)" disabled="@_generatingPdf">
+                                            @(_generatingPdfId == s.Id ? "Regenerating..." : "Regenerate")
+                                        </button>
                                     }
                                     else
                                     {
