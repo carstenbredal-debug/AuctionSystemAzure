@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace AuctionSystem.Domain.Entities;
 
-[Table("skintable", Schema = "auction")]
+[Table("SkinTable", Schema = "dbo")]
 public class Skin
 {
     [Key]
