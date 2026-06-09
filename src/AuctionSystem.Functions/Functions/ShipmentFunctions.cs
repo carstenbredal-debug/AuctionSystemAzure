@@ -1077,6 +1077,12 @@ public class ShipmentFunctions
                 .ToListAsync();
             if (pdfPackedBoxes.Count > 0)
             {
+                // Load box type dimensions for tare weight lookup
+                var pdfBoxDimTypes = pdfPackedBoxes.Select(pb => pb.BoxType).Distinct().ToList();
+                var pdfBoxDimLookup = await _db.Set<BoxTypeDimension>()
+                    .Where(d => pdfBoxDimTypes.Contains(d.BoxType))
+                    .ToDictionaryAsync(d => d.BoxType, d => d);
+
                 var pdfPackedNums = pdfPackedBoxes
                     .SelectMany(pb => pb.ShowLots.Select(sl => sl.BoxNumber))
                     .ToHashSet();
@@ -1121,11 +1127,14 @@ public class ShipmentFunctions
                         });
                     }
 
-                    // Packed box summary line with totals
+                    // Packed box summary line — tare from BoxTypeDimension.WeightKg
+                    var pbDim = pdfBoxDimLookup.GetValueOrDefault(pb.BoxType);
+                    var tare = pbDim?.WeightKg ?? 0m;
                     var vol = pb.LengthM * pb.WidthM * pb.HeightM;
                     var pbSkins = pb.ShowLots.Sum(s => s.Skins);
                     var gross = pb.GrossWeight > 0 ? pb.GrossWeight : pb.Weight;
-                    var net = pb.NetWeight > 0 ? pb.NetWeight : gross - pb.TareWeight;
+                    var net = gross - tare;
+                    if (net < 0) net = gross;
                     remaining.Add(new PackingListLine
                     {
                         Carton = pb.BoxNumber,

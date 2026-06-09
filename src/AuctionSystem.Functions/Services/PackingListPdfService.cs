@@ -172,6 +172,14 @@ public static class PackingListPdfService
             {
                 col.Item().Element(c => ComposeTable(c, showLotLines));
 
+                // Showlot subtotal
+                var slBoxes = showLotLines.Count(l => l.IsPackedBoxSummary);
+                var slSkins = showLotLines.Where(l => l.IsPackedBoxSummary).Sum(l => l.Skins);
+                var slVol = showLotLines.Where(l => l.IsPackedBoxSummary).Sum(l => l.VolumeM3);
+                var slNet = showLotLines.Where(l => l.IsPackedBoxSummary).Sum(l => l.NetWeight);
+                var slGross = showLotLines.Where(l => l.IsPackedBoxSummary).Sum(l => l.GrossWeight);
+                col.Item().Element(c => ComposeSectionTotal(c, "Showlot total", slBoxes, slSkins, slVol, slNet, slGross));
+
                 // Page break before storage boxes (if any)
                 if (storageLines.Count > 0)
                     col.Item().PageBreak();
@@ -181,7 +189,18 @@ public static class PackingListPdfService
             if (storageLines.Count > 0)
             {
                 col.Item().Element(c => ComposeTable(c, storageLines));
+
+                // Storage subtotal
+                var stBoxes = storageLines.Count;
+                var stSkins = storageLines.Sum(l => l.Skins);
+                var stVol = storageLines.Sum(l => l.VolumeM3);
+                var stNet = storageLines.Sum(l => l.NetWeight);
+                var stGross = storageLines.Sum(l => l.GrossWeight);
+                col.Item().Element(c => ComposeSectionTotal(c, "Storage total", stBoxes, stSkins, stVol, stNet, stGross));
             }
+
+            // Grand total at the end
+            col.Item().Element(c => ComposeGrandTotal(c, data));
         });
     }
 
@@ -250,28 +269,49 @@ public static class PackingListPdfService
         });
     }
 
-    private static void ComposeFooter(IContainer container, PackingListData data)
+    private static void ComposeSectionTotal(IContainer container, string label, int boxes, int skins, decimal vol, decimal net, decimal gross)
+    {
+        container.Column(col =>
+        {
+            col.Item().Height(5);
+            col.Item().LineHorizontal(0.5f);
+            col.Item().Height(3);
+            col.Item().Row(row =>
+            {
+                row.RelativeItem(5).Text(label).Bold().FontSize(8);
+                row.RelativeItem(1.5f).AlignRight().Text(boxes.ToString("N0")).Bold().FontSize(8);
+                row.RelativeItem(1.2f).AlignRight().Text(skins.ToString("N0")).Bold().FontSize(8);
+                row.RelativeItem(1).AlignRight().Text(vol.ToString("N4")).Bold().FontSize(8);
+                row.RelativeItem(1.2f).AlignRight().Text(net.ToString("N2")).Bold().FontSize(8);
+                row.RelativeItem(1.2f).AlignRight().Text(gross.ToString("N2")).Bold().FontSize(8);
+            });
+        });
+    }
+
+    private static void ComposeGrandTotal(IContainer container, PackingListData data)
     {
         container.Column(col =>
         {
             col.Item().Height(10);
-            col.Item().LineHorizontal(0.5f);
+            col.Item().LineHorizontal(1);
             col.Item().Height(5);
-
-            // Grand total row
             col.Item().Row(row =>
             {
                 row.RelativeItem(5).Text("Grand total").Bold().FontSize(9);
-                row.RelativeItem(1.5f).AlignRight().Text(data.TotalCartons.ToString("N0")).Bold().FontSize(8);
-                row.RelativeItem(1.2f).AlignRight().Text(data.TotalSkins.ToString("N0")).Bold().FontSize(8);
-                row.RelativeItem(1).AlignRight().Text(data.TotalVolume.ToString("N4")).Bold().FontSize(8);
-                row.RelativeItem(1.2f).AlignRight().Text(data.TotalNetWeight.ToString("N2")).Bold().FontSize(8);
-                row.RelativeItem(1.2f).AlignRight().Text(data.TotalGrossWeight.ToString("N2")).Bold().FontSize(8);
+                row.RelativeItem(1.5f).AlignRight().Text(data.TotalCartons.ToString("N0")).Bold().FontSize(9);
+                row.RelativeItem(1.2f).AlignRight().Text(data.TotalSkins.ToString("N0")).Bold().FontSize(9);
+                row.RelativeItem(1).AlignRight().Text(data.TotalVolume.ToString("N4")).Bold().FontSize(9);
+                row.RelativeItem(1.2f).AlignRight().Text(data.TotalNetWeight.ToString("N2")).Bold().FontSize(9);
+                row.RelativeItem(1.2f).AlignRight().Text(data.TotalGrossWeight.ToString("N2")).Bold().FontSize(9);
             });
+        });
+    }
 
-            col.Item().Height(10);
-
-            // Page number
+    private static void ComposeFooter(IContainer container, PackingListData data)
+    {
+        container.Column(col =>
+        {
+            // Page number only
             col.Item().AlignCenter().Text(text =>
             {
                 text.CurrentPageNumber();
