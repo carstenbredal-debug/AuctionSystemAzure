@@ -508,37 +508,52 @@ public class TypistEntryFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "typist-entries/reset-lot/{lotNumber:int}")] HttpRequestData req,
         int lotNumber)
     {
-        var entries = await _db.TypistEntries
-            .Where(e => e.LotNumber == lotNumber)
-            .ToListAsync();
-
-        if (entries.Count == 0)
-            return await CreateErrorResponse(req, $"No entries found for lot {lotNumber}");
-
-        _db.TypistEntries.RemoveRange(entries);
-
-        // Also reset the lot status back to unsold if it was marked sold by these entries
-        var lot = await _db.Lots.FirstOrDefaultAsync(l => l.LotNumber == lotNumber);
-        if (lot != null && lot.Status == LotStatus.Sold)
+        try
         {
-            lot.Status = LotStatus.Active;
-            lot.HammerPrice = null;
-        }
+            var entries = await _db.TypistEntries
+                .Where(e => e.LotNumber == lotNumber)
+                .ToListAsync();
 
-        // Remove auction result if created
-        var resultIds = entries.Where(e => e.AuctionResultId.HasValue).Select(e => e.AuctionResultId!.Value).Distinct().ToList();
-        if (resultIds.Count > 0)
+            if (entries.Count == 0)
+                return await CreateErrorResponse(req, $"No entries found for lot {lotNumber}");
+
+            // Remove auction result and transactions first (FK constraints)
+            var resultIds = entries.Where(e => e.AuctionResultId.HasValue).Select(e => e.AuctionResultId!.Value).Distinct().ToList();
+            if (resultIds.Count > 0)
+            {
+                var transactions = await _db.AuctionTransactions.Where(t => resultIds.Contains(t.AuctionResultId ?? 0)).ToListAsync();
+                _db.AuctionTransactions.RemoveRange(transactions);
+
+                // Clear FK on entries before deleting results
+                foreach (var e in entries)
+                    e.AuctionResultId = null;
+                await _db.SaveChangesAsync();
+
+                var results = await _db.AuctionResults.Where(r => resultIds.Contains(r.Id)).ToListAsync();
+                _db.AuctionResults.RemoveRange(results);
+                await _db.SaveChangesAsync();
+            }
+
+            _db.TypistEntries.RemoveRange(entries);
+
+            // Also reset the lot status back to unsold
+            var lot = await _db.Lots.FirstOrDefaultAsync(l => l.LotNumber == lotNumber);
+            if (lot != null && lot.Status == LotStatus.Sold)
+            {
+                lot.Status = LotStatus.Active;
+                lot.HammerPrice = null;
+            }
+
+            await _db.SaveChangesAsync();
+            _logger.LogInformation("Reset lot {LotNumber}: removed {Count} entries", lotNumber, entries.Count);
+
+            return await CreateJsonResponse(req, new { success = true, lotNumber, entriesRemoved = entries.Count });
+        }
+        catch (Exception ex)
         {
-            var results = await _db.AuctionResults.Where(r => resultIds.Contains(r.Id)).ToListAsync();
-            var transactions = await _db.AuctionTransactions.Where(t => resultIds.Contains(t.AuctionResultId ?? 0)).ToListAsync();
-            _db.AuctionTransactions.RemoveRange(transactions);
-            _db.AuctionResults.RemoveRange(results);
+            _logger.LogError(ex, "Failed to reset lot {LotNumber}", lotNumber);
+            return await CreateErrorResponse(req, $"Failed to reset lot: {ex.Message}");
         }
-
-        await _db.SaveChangesAsync();
-        _logger.LogInformation("Reset lot {LotNumber}: removed {Count} entries", lotNumber, entries.Count);
-
-        return await CreateJsonResponse(req, new { success = true, lotNumber, entriesRemoved = entries.Count });
     }
 
     [Function("GetActiveTypists")]
