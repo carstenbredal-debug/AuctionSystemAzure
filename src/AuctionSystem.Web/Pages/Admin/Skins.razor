@@ -19,6 +19,12 @@ else
                 <div class="card-value">@_totalSkins.ToString("N0")</div>
             </div>
         </div>
+        <div class="col-md-4">
+            <div class="summary-card">
+                <div class="card-title">Total Value</div>
+                <div class="card-value">€@_totalValue.ToString("N2")</div>
+            </div>
+        </div>
     </div>
 
     <!-- Search + Page Size -->
@@ -129,6 +135,7 @@ else
     private int _pageSize = 100;
     private int _totalPages;
     private int _totalSkins;
+    private decimal _totalValue;
     private string _searchText = "";
     private string _activeSearch = "";
     private List<SkinItem> _skins = new();
@@ -154,6 +161,7 @@ else
                 var json = await response.Content.ReadAsStringAsync();
                 var doc = JsonDocument.Parse(json);
                 _totalSkins = doc.RootElement.GetProperty("totalSkins").GetInt32();
+                _totalValue = doc.RootElement.TryGetProperty("totalValue", out var tvProp) ? tvProp.GetDecimal() : 0m;
                 _page = doc.RootElement.GetProperty("page").GetInt32();
                 _totalPages = doc.RootElement.GetProperty("totalPages").GetInt32();
 

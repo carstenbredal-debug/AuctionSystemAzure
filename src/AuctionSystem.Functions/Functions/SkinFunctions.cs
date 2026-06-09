@@ -94,9 +94,23 @@ public class SkinFunctions
             }
         }
 
+        // Total value from auction results (sum of TotalSkins * PriceEur per sold lot)
+        var soldResultsQuery = _auctionDb.AuctionResults
+            .Where(r => r.SoldToBuyerId != null);
+        if (auctionId.HasValue)
+        {
+            var auctionLotNumbers = await _auctionDb.Lots
+                .Where(l => l.AuctionId == auctionId.Value)
+                .Select(l => l.LotNumber)
+                .ToListAsync();
+            soldResultsQuery = soldResultsQuery.Where(r => auctionLotNumbers.Contains(r.LotNumber));
+        }
+        var totalValue = await soldResultsQuery.SumAsync(r => r.TotalSkins * r.PriceEur);
+
         var result = new
         {
             totalSkins = totalCount,
+            totalValue,
             page,
             pageSize,
             totalPages = (int)Math.Ceiling((double)totalCount / pageSize),
