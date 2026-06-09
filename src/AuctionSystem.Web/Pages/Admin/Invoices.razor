@@ -578,7 +578,7 @@ else
 
         // Check BC balance first
         var balanceCheck = await Api.CheckBcPaymentBalanceAsync(invoiceId);
-        if (balanceCheck != null && !balanceCheck.Available)
+        if (balanceCheck != null && balanceCheck.Available && !balanceCheck.Sufficient)
         {
             _bcAvailableAmount = balanceCheck.AvailableAmount;
             _bcInvoiceAmount = balanceCheck.InvoiceAmount;
