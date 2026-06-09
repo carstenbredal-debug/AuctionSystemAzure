@@ -460,9 +460,7 @@ public class ShippingBoxDto
 public class ShippingAddressListDto
 {
     public int Id { get; set; }
-    public int BuyerId { get; set; }
-    public string BuyerName { get; set; } = "";
-    public string BuyerNumber { get; set; } = "";
+    public string Name { get; set; } = "";
     public string ContactName { get; set; } = "";
     public string AddressLine1 { get; set; } = "";
     public string AddressLine2 { get; set; } = "";

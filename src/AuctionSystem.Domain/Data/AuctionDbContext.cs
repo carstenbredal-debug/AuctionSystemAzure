@@ -271,7 +271,7 @@ public class AuctionDbContext : DbContext
         modelBuilder.Entity<ShippingAddress>(e =>
         {
             e.HasKey(s => s.Id);
-            e.HasOne(s => s.Buyer).WithMany().HasForeignKey(s => s.BuyerId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(s => s.Name).HasMaxLength(200);
             e.Property(s => s.ContactName).HasMaxLength(200);
             e.Property(s => s.AddressLine1).HasMaxLength(200);
             e.Property(s => s.AddressLine2).HasMaxLength(200);

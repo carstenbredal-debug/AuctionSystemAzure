@@ -67,7 +67,7 @@ public class ShipmentFunctions
                 BuyerNumber = s.Buyer != null ? s.Buyer.BuyerNumber : "",
                 s.ShippingAddressId,
                 ShippingAddressSummary = s.ShippingAddress != null
-                    ? s.ShippingAddress.AddressLine1 + ", " + s.ShippingAddress.City + " " + s.ShippingAddress.Country
+                    ? s.ShippingAddress.Name + " — " + s.ShippingAddress.AddressLine1 + ", " + s.ShippingAddress.City + " " + s.ShippingAddress.Country
                     : "",
                 s.TrackingNumber,
                 s.Status,

@@ -3,8 +3,7 @@ namespace AuctionSystem.Domain.Entities;
 public class ShippingAddress
 {
     public int Id { get; set; }
-    public int BuyerId { get; set; }
-    public Buyer? Buyer { get; set; }
+    public string Name { get; set; } = string.Empty;
     public string ContactName { get; set; } = string.Empty;
     public string AddressLine1 { get; set; } = string.Empty;
     public string AddressLine2 { get; set; } = string.Empty;

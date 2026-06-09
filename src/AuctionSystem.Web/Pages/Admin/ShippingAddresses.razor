@@ -15,15 +15,6 @@
 }
 
 <div class="row mb-3">
-    <div class="col-md-4">
-        <select class="form-select" @bind="_buyerFilter">
-            <option value="0">All Buyers</option>
-            @foreach (var b in _buyers)
-            {
-                <option value="@b.Id">@b.BuyerNumber — @b.Name</option>
-            }
-        </select>
-    </div>
     <div class="col-md-2">
         <button class="btn btn-primary" @onclick="ShowAddModal">+ Add Address</button>
     </div>
@@ -34,7 +25,7 @@
         <table class="table table-striped table-hover mb-0">
             <thead class="table-dark">
                 <tr>
-                    <th>Buyer</th>
+                    <th>Name</th>
                     <th>Contact</th>
                     <th>Address</th>
                     <th>City</th>
@@ -48,10 +39,10 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach (var addr in GetFiltered())
+                @foreach (var addr in _addresses)
                 {
                     <tr>
-                        <td>@addr.BuyerNumber — @addr.BuyerName</td>
+                        <td>@addr.Name</td>
                         <td>@addr.ContactName</td>
                         <td>@addr.AddressLine1 @(string.IsNullOrEmpty(addr.AddressLine2) ? "" : $", {addr.AddressLine2}")</td>
                         <td>@addr.City</td>
@@ -67,7 +58,7 @@
                         </td>
                     </tr>
                 }
-                @if (!GetFiltered().Any())
+                @if (!_addresses.Any())
                 {
                     <tr><td colspan="11" class="text-center text-muted">No shipping addresses found.</td></tr>
                 }
@@ -86,19 +77,10 @@
                     <button type="button" class="btn-close" @onclick="CloseModal"></button>
                 </div>
                 <div class="modal-body">
-                    @if (!_editId.HasValue)
-                    {
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">Buyer</label>
-                            <select class="form-select" @bind="_formBuyerId">
-                                <option value="0">Select buyer...</option>
-                                @foreach (var b in _buyers)
-                                {
-                                    <option value="@b.Id">@b.BuyerNumber — @b.Name</option>
-                                }
-                            </select>
-                        </div>
-                    }
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Name</label>
+                        <input class="form-control" @bind="_formName" placeholder="e.g. Warehouse Copenhagen" />
+                    </div>
                     <div class="row mb-3">
                         <div class="col-md-6">
                             <label class="form-label">Contact Name</label>
@@ -159,8 +141,6 @@
 
 @code {
     private List<ShippingAddressListDto> _addresses = new();
-    private List<BuyerDto> _buyers = new();
-    private int _buyerFilter;
     private string? _error;
     private string? _success;
 
@@ -168,7 +148,7 @@
     private bool _showModal;
     private bool _saving;
     private int? _editId;
-    private int _formBuyerId;
+    private string _formName = "";
     private string _formContactName = "";
     private string _formAddressLine1 = "";
     private string _formAddressLine2 = "";
@@ -182,21 +162,13 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var buyerTask = Api.GetAllBuyersAsync();
-        var addrTask = Api.GetShippingAddressesAsync();
-        _buyers = await buyerTask;
-        _addresses = await addrTask;
+        _addresses = await Api.GetShippingAddressesAsync();
     }
-
-    private List<ShippingAddressListDto> GetFiltered()
-        => _buyerFilter == 0
-            ? _addresses
-            : _addresses.Where(a => a.BuyerId == _buyerFilter).ToList();
 
     private void ShowAddModal()
     {
         _editId = null;
-        _formBuyerId = _buyerFilter;
+        _formName = "";
         _formContactName = "";
         _formAddressLine1 = "";
         _formAddressLine2 = "";
@@ -213,7 +185,7 @@
     private void ShowEditModal(ShippingAddressListDto addr)
     {
         _editId = addr.Id;
-        _formBuyerId = addr.BuyerId;
+        _formName = addr.Name;
         _formContactName = addr.ContactName;
         _formAddressLine1 = addr.AddressLine1;
         _formAddressLine2 = addr.AddressLine2;
@@ -235,9 +207,16 @@
         _error = null;
         _success = null;
 
+        if (string.IsNullOrWhiteSpace(_formName))
+        {
+            _error = "Name is required";
+            _saving = false;
+            return;
+        }
+
         var data = new
         {
-            buyerId = _formBuyerId,
+            name = _formName,
             contactName = _formContactName,
             addressLine1 = _formAddressLine1,
             addressLine2 = _formAddressLine2,
@@ -258,7 +237,6 @@
         }
         else
         {
-            if (_formBuyerId == 0) { _error = "Please select a buyer"; _saving = false; return; }
             var (ok, err) = await Api.CreateShippingAddressAsync(data);
             if (!ok) { _error = err ?? "Failed to create"; _saving = false; return; }
             _success = "Address created";

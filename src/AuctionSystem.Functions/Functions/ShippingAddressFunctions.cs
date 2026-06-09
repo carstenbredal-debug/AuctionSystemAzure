@@ -28,16 +28,12 @@ public class ShippingAddressFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "shipping-addresses")] HttpRequestData req)
     {
         var addresses = await _db.ShippingAddresses
-            .Include(a => a.Buyer)
             .Where(a => a.IsActive)
-            .OrderBy(a => a.Buyer!.Name)
-            .ThenByDescending(a => a.IsDefault)
+            .OrderBy(a => a.Name)
             .Select(a => new
             {
                 a.Id,
-                a.BuyerId,
-                BuyerName = a.Buyer!.Name,
-                BuyerNumber = a.Buyer.BuyerNumber,
+                a.Name,
                 a.ContactName,
                 a.AddressLine1,
                 a.AddressLine2,
@@ -62,24 +58,20 @@ public class ShippingAddressFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "shipping-addresses")] HttpRequestData req)
     {
         var body = await req.ReadFromJsonAsync<ShippingAddressDto>();
-        if (body == null || body.BuyerId == 0)
+        if (body == null || string.IsNullOrWhiteSpace(body.Name))
             return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
-
-        var buyer = await _db.Buyers.FindAsync(body.BuyerId);
-        if (buyer == null)
-            return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
 
         if (body.IsDefault)
         {
             var existing = await _db.ShippingAddresses
-                .Where(a => a.BuyerId == body.BuyerId && a.IsDefault)
+                .Where(a => a.IsDefault)
                 .ToListAsync();
             foreach (var a in existing) a.IsDefault = false;
         }
 
         var address = new ShippingAddress
         {
-            BuyerId = body.BuyerId,
+            Name = body.Name ?? "",
             ContactName = body.ContactName ?? "",
             AddressLine1 = body.AddressLine1 ?? "",
             AddressLine2 = body.AddressLine2 ?? "",
@@ -117,11 +109,12 @@ public class ShippingAddressFunctions
         if (body.IsDefault && !address.IsDefault)
         {
             var existing = await _db.ShippingAddresses
-                .Where(a => a.BuyerId == address.BuyerId && a.IsDefault && a.Id != id)
+                .Where(a => a.IsDefault && a.Id != id)
                 .ToListAsync();
             foreach (var a in existing) a.IsDefault = false;
         }
 
+        address.Name = body.Name ?? "";
         address.ContactName = body.ContactName ?? "";
         address.AddressLine1 = body.AddressLine1 ?? "";
         address.AddressLine2 = body.AddressLine2 ?? "";
@@ -162,7 +155,7 @@ public class ShippingAddressFunctions
 
 public class ShippingAddressDto
 {
-    public int BuyerId { get; set; }
+    public string? Name { get; set; }
     public string? ContactName { get; set; }
     public string? AddressLine1 { get; set; }
     public string? AddressLine2 { get; set; }

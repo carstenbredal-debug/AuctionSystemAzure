@@ -219,9 +219,9 @@ else
                                     <label class="form-label">Shipping Address</label>
                                     <select class="form-select" @bind="_createAddressId">
                                         <option value="0">— None —</option>
-                                        @foreach (var a in _buyerAddresses)
+                                        @foreach (var a in _allAddresses)
                                         {
-                                            <option value="@a.Id">@a.AddressLine1, @a.City @a.Country @(a.IsDefault ? "(Default)" : "")</option>
+                                            <option value="@a.Id">@a.Name — @a.AddressLine1, @a.City @a.Country @(a.IsDefault ? "(Default)" : "")</option>
                                         }
                                     </select>
                                 </div>
@@ -310,7 +310,7 @@ else
     private string _createTrackingNumber = "";
     private string _createNotes = "";
     private List<ReleasedLotDto> _buyerReleasedLots = new();
-    private List<ShippingAddressListDto> _buyerAddresses = new();
+    private List<ShippingAddressListDto> _allAddresses = new();
     private HashSet<int> _selectedLotNumbers = new();
 
     private List<(int BuyerId, string BuyerNumber, string BuyerName)> _availableBuyers = new();
@@ -399,13 +399,16 @@ else
         _createNotes = "";
         _selectedLotNumbers.Clear();
         _buyerReleasedLots.Clear();
-        _buyerAddresses.Clear();
+        _allAddresses.Clear();
         _error = null;
 
         try
         {
             _shippers = await Api.GetShippersAsync();
             _releasedLots = await Api.GetReleasedLotsForShipmentAsync();
+            _allAddresses = await Api.GetShippingAddressesAsync();
+            var defaultAddr = _allAddresses.FirstOrDefault(a => a.IsDefault);
+            _createAddressId = defaultAddr?.Id ?? 0;
             _availableBuyers = _releasedLots
                 .Select(l => (l.BuyerId, l.BuyerNumber, l.BuyerName))
                 .Distinct()
@@ -426,21 +429,11 @@ else
             _createBuyerId = buyerId;
             _buyerReleasedLots = _releasedLots.Where(l => l.BuyerId == buyerId).ToList();
             _selectedLotNumbers.Clear();
-
-            try
-            {
-                var allAddresses = await Api.GetShippingAddressesAsync();
-                _buyerAddresses = allAddresses.Where(a => a.BuyerId == buyerId).ToList();
-                var defaultAddr = _buyerAddresses.FirstOrDefault(a => a.IsDefault);
-                _createAddressId = defaultAddr?.Id ?? 0;
-            }
-            catch { _buyerAddresses.Clear(); }
         }
         else
         {
             _createBuyerId = 0;
             _buyerReleasedLots.Clear();
-            _buyerAddresses.Clear();
             _selectedLotNumbers.Clear();
         }
     }

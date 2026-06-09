@@ -519,6 +519,27 @@ using (var scope = host.Services.CreateScope())
             WHERE ar.AuctionId = 0
             AND EXISTS (SELECT 1 FROM auction.Lots l WHERE l.LotNumber = ar.LotNumber AND l.AuctionId > 0);
         ");
+        // Migrate ShippingAddresses: add Name column, make BuyerId nullable (disconnect from buyer)
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.ShippingAddresses') AND name = 'Name')
+                ALTER TABLE auction.ShippingAddresses ADD Name NVARCHAR(200) NOT NULL DEFAULT '';
+            -- Make BuyerId nullable
+            IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.ShippingAddresses') AND name = 'BuyerId' AND is_nullable = 0)
+            BEGIN
+                -- Drop FK constraint if exists
+                DECLARE @fkName NVARCHAR(200);
+                SELECT @fkName = fk.name FROM sys.foreign_keys fk
+                    JOIN sys.tables t ON fk.parent_object_id = t.object_id
+                    WHERE t.name = 'ShippingAddresses' AND t.schema_id = SCHEMA_ID('auction');
+                IF @fkName IS NOT NULL
+                    EXEC('ALTER TABLE auction.ShippingAddresses DROP CONSTRAINT ' + @fkName);
+                -- Drop index if exists
+                IF EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('auction.ShippingAddresses') AND name = 'IX_ShippingAddresses_BuyerId')
+                    DROP INDEX IX_ShippingAddresses_BuyerId ON auction.ShippingAddresses;
+                -- Make column nullable
+                ALTER TABLE auction.ShippingAddresses ALTER COLUMN BuyerId INT NULL;
+            END
+        ");
         db.Database.Migrate();
         // Ensure CatalogDbContext tables exist (CatalogLots, GeneratedLots, etc.)
         var catalogDb = scope.ServiceProvider.GetRequiredService<CatalogDbContext>();
