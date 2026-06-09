@@ -93,20 +93,17 @@ public static class PackingListPdfService
                     left.Item().Row(infoRow =>
                     {
                         infoRow.RelativeItem().Text("UL. SKŁADOWA 10").FontSize(6.5f);
-                        infoRow.RelativeItem().Text("TEL +45 4326 1000").FontSize(6.5f);
                         infoRow.RelativeItem().Text("KOPENHAGENFUR.COM").FontSize(6.5f);
                     });
                     left.Item().Row(infoRow =>
                     {
                         infoRow.RelativeItem().Text("62-023 ŻERNIKI").FontSize(6.5f);
-                        infoRow.RelativeItem().Text("FAX +45 4326 1126").FontSize(6.5f);
                         infoRow.RelativeItem().Text("VAT NO. DK15275413").FontSize(6.5f);
                     });
                     left.Item().Height(3);
                     left.Item().Row(infoRow =>
                     {
                         infoRow.RelativeItem().Text("POLAND").FontSize(6.5f);
-                        infoRow.RelativeItem().Text("TEL +45 4326 1000").FontSize(6.5f);
                         infoRow.RelativeItem().Text("shipping@kopenhagenfur.com").FontSize(6.5f);
                     });
                 });
