@@ -503,7 +503,7 @@ public class ShipmentFunctions
         if (shipment == null)
             return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
 
-        var validStatuses = new[] { "Pending", "ShowLot Packing", "Shipped", "Delivered", "Cancelled" };
+        var validStatuses = new[] { "Pending", "Packing", "ShowLot Packing", "Shipped", "Delivered", "Cancelled" };
         if (!validStatuses.Contains(body.Status))
         {
             var bad = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
@@ -581,11 +581,11 @@ public class ShipmentFunctions
         if (shipment == null)
             return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
 
-        if (shipment.Status != "Pending" && shipment.Status != "ShowLot Packing")
+        if (shipment.Status != "Pending" && shipment.Status != "ShowLot Packing" && shipment.Status != "Packing")
         {
             var bad = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
             bad.Headers.Add("Content-Type", "application/json");
-            await bad.WriteStringAsync(JsonSerializer.Serialize(new { error = "Can only delete pending or ShowLot Packing shipments" }, JsonOptions));
+            await bad.WriteStringAsync(JsonSerializer.Serialize(new { error = "Can only delete Pending, Packing, or ShowLot Packing shipments" }, JsonOptions));
             return bad;
         }
 
