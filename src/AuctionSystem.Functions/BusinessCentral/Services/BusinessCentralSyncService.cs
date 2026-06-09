@@ -597,6 +597,14 @@ public class BusinessCentralSyncService
 
     /// <summary>
     /// Full sync: push brokers, buyers, farmers, invoices, credit notes.
+    public async Task<Guid> GetCompanyIdAsync() => await _bcClient.ResolveCompanyIdAsync();
+
+    public async Task RefreshPdfAsync(Guid companyId, Invoice invoice)
+    {
+        if (invoice.BcInvoiceId == null) return;
+        await TryFetchAndStorePdfAsync(companyId, invoice.BcInvoiceId.Value, invoice);
+    }
+
     /// </summary>
     public async Task<List<SyncResult>> RunFullSyncAsync()
     {

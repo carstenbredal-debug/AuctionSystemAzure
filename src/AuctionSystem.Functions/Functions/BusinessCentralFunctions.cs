@@ -228,6 +228,26 @@ public class BusinessCentralFunctions
         return await JsonResponse(req, result);
     }
 
+    [Function("BcRefreshInvoicePdf")]
+    public async Task<HttpResponseData> RefreshInvoicePdf(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "bc/invoices/{invoiceId:int}/refresh-pdf")] HttpRequestData req, int invoiceId)
+    {
+        if (!EnsureConfigured(out var error))
+            return await JsonResponse(req, error!, HttpStatusCode.BadRequest);
+
+        var invoice = await _db.Invoices.FindAsync(invoiceId);
+        if (invoice == null)
+            return await JsonResponse(req, new { error = "Invoice not found" }, HttpStatusCode.NotFound);
+        if (invoice.BcInvoiceId == null)
+            return await JsonResponse(req, new { error = "Invoice has no BC ID — not yet pushed to BC" }, HttpStatusCode.BadRequest);
+
+        var companyId = await _syncService!.GetCompanyIdAsync();
+        await _syncService.RefreshPdfAsync(companyId, invoice);
+        await _db.SaveChangesAsync();
+
+        return await JsonResponse(req, new { invoiceId = invoice.Id, pdfUrl = invoice.PdfUrl });
+    }
+
     [Function("BcSyncCreditNotes")]
     public async Task<HttpResponseData> SyncCreditNotes(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "bc/sync/credit-notes")] HttpRequestData req)
