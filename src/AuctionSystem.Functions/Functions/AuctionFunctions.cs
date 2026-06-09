@@ -264,14 +264,23 @@ public class AuctionFunctions
             if (auction.Status != AuctionStatus.Draft)
                 return await CreateJsonResponse(req, new { error = "Can only delete auctions in Draft status" }, System.Net.HttpStatusCode.BadRequest);
 
-            var lotNumbers = auction.Lots.Select(l => l.LotNumber).ToList();
-            var soldLots = lotNumbers.Count > 0 && await _db.AuctionResults.AnyAsync(r => lotNumbers.Contains(r.LotNumber));
-            if (soldLots)
-                return await CreateJsonResponse(req, new { error = "Cannot delete auction with sold lots" }, System.Net.HttpStatusCode.BadRequest);
-
             var auctionNum = auction.AuctionNumber;
 
-            // Delete related data using AuctionId-based subqueries (avoids huge IN clauses)
+            // Drop snapshot namespace tables first
+            if (!string.IsNullOrEmpty(auctionNum))
+            {
+                try
+                {
+                    var conn = _catalogDb.Database.GetConnectionString();
+                    using var sqlConn = new Microsoft.Data.SqlClient.SqlConnection(conn);
+                    await sqlConn.OpenAsync();
+                    foreach (var suffix in new[] { "Lots", "Boxes", "Skins", "Transactions" })
+                        await ExecuteSql(sqlConn, $"IF OBJECT_ID('auction.[{auctionNum}.{suffix}]', 'U') IS NOT NULL DROP TABLE auction.[{auctionNum}.{suffix}]");
+                }
+                catch (Exception ex) { _logger.LogWarning(ex, "Failed to drop snapshot tables for auction {Num}", auctionNum); }
+            }
+
+            // Delete related data using AuctionId subquery
             await _db.Database.ExecuteSqlRawAsync(
                 "DELETE FROM auction.PackedBoxes WHERE PackingOrderLineId IN (SELECT Id FROM auction.PackingOrderLines WHERE PackingOrderId IN (SELECT Id FROM auction.PackingOrders WHERE ShipmentId IN (SELECT Id FROM auction.Shipments WHERE Id IN (SELECT ShipmentId FROM auction.ShipmentLines WHERE LotId IN (SELECT Id FROM auction.Lots WHERE AuctionId = {0})))))", auctionId);
             await _db.Database.ExecuteSqlRawAsync(
@@ -298,20 +307,6 @@ public class AuctionFunctions
             _db.Lots.RemoveRange(auction.Lots);
             _db.Auctions.Remove(auction);
             await _db.SaveChangesAsync();
-
-            // Drop snapshot tables
-            if (!string.IsNullOrEmpty(auctionNum))
-            {
-                try
-                {
-                    var conn = _catalogDb.Database.GetConnectionString();
-                    using var sqlConn = new Microsoft.Data.SqlClient.SqlConnection(conn);
-                    await sqlConn.OpenAsync();
-                    foreach (var suffix in new[] { "Lots", "Boxes", "Skins" })
-                        await ExecuteSql(sqlConn, $"IF OBJECT_ID('auction.[{auctionNum}.{suffix}]', 'U') IS NOT NULL DROP TABLE auction.[{auctionNum}.{suffix}]");
-                }
-                catch (Exception ex) { _logger.LogWarning(ex, "Failed to drop snapshot tables for auction {Num}", auctionNum); }
-            }
 
             return await CreateJsonResponse(req, new { success = true, auctionNumber = auctionNum });
         }
