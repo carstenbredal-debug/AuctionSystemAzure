@@ -573,7 +573,11 @@ else
         if (resp.IsSuccessStatusCode)
         {
             var inv = _invoices.FirstOrDefault(i => i.Id == invoiceId);
-            if (inv != null) inv.Status = StatusPaid;
+            if (inv != null)
+            {
+                inv.Status = StatusPaid;
+                inv.RemainingBalance = 0;
+            }
             try
             {
                 var json = await resp.Content.ReadFromJsonAsync<BcStatusResponse>();
