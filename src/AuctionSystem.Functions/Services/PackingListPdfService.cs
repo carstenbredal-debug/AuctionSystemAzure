@@ -243,37 +243,37 @@ public static class PackingListPdfService
             {
                 if (line.IsShowLot)
                 {
-                    table.Cell().Padding(2).Text(line.Text).FontSize(7.5f);
-                    table.Cell().Padding(2).AlignRight().Text(line.LotNo).FontSize(7.5f);
-                    table.Cell().Padding(2).AlignRight().Text(line.Carton).FontSize(7.5f);
-                    table.Cell().Padding(2).AlignRight().Text(line.Skins.ToString("N0")).FontSize(7.5f);
-                    if (isInvoice) table.Cell().Padding(2).AlignRight().Text(line.HammerPrice > 0 ? (line.HammerPrice * line.Skins).ToString("N2") : "").FontSize(7.5f);
-                    table.Cell().Padding(2).Text("").FontSize(7.5f);
-                    table.Cell().Padding(2).Text("").FontSize(7.5f);
-                    table.Cell().Padding(2).Text("").FontSize(7.5f);
+                    table.Cell().PaddingVertical(2).PaddingLeft(2).Text(line.Text).FontSize(7.5f);
+                    table.Cell().PaddingVertical(2).AlignRight().Text(line.LotNo).FontSize(7.5f);
+                    table.Cell().PaddingVertical(2).AlignRight().Text(line.Carton).FontSize(7.5f);
+                    table.Cell().PaddingVertical(2).AlignRight().Text(line.Skins.ToString("N0")).FontSize(7.5f);
+                    if (isInvoice) table.Cell().PaddingVertical(2).AlignRight().Text(line.HammerPrice > 0 ? (line.HammerPrice * line.Skins).ToString("N2") : "").FontSize(7.5f);
+                    table.Cell().PaddingVertical(2).Text("").FontSize(7.5f);
+                    table.Cell().PaddingVertical(2).Text("").FontSize(7.5f);
+                    table.Cell().PaddingVertical(2).Text("").FontSize(7.5f);
                 }
                 else if (line.IsPackedBoxSummary)
                 {
-                    table.Cell().Padding(2).Text("").FontSize(7.5f);
-                    table.Cell().Padding(2).Text("").FontSize(7.5f);
-                    table.Cell().Padding(2).AlignRight().Text(line.Carton).Bold().FontSize(7.5f);
-                    table.Cell().Padding(2).AlignRight().Text(line.Skins.ToString("N0")).Bold().FontSize(7.5f);
-                    if (isInvoice) table.Cell().Padding(2).Text("").FontSize(7.5f);
-                    table.Cell().Padding(2).AlignRight().Text(line.VolumeM3 > 0 ? line.VolumeM3.ToString("N4") : "").Bold().FontSize(7.5f);
-                    table.Cell().Padding(2).AlignRight().Text(line.NetWeight > 0 ? line.NetWeight.ToString("N2") : "").Bold().FontSize(7.5f);
-                    table.Cell().Padding(2).AlignRight().Text(line.GrossWeight > 0 ? line.GrossWeight.ToString("N2") : "").Bold().FontSize(7.5f);
+                    table.Cell().PaddingVertical(2).Text("").FontSize(7.5f);
+                    table.Cell().PaddingVertical(2).Text("").FontSize(7.5f);
+                    table.Cell().PaddingVertical(2).AlignRight().Text(line.Carton).Bold().FontSize(7.5f);
+                    table.Cell().PaddingVertical(2).AlignRight().Text(line.Skins.ToString("N0")).Bold().FontSize(7.5f);
+                    if (isInvoice) table.Cell().PaddingVertical(2).Text("").FontSize(7.5f);
+                    table.Cell().PaddingVertical(2).AlignRight().Text(line.VolumeM3 > 0 ? line.VolumeM3.ToString("N4") : "").Bold().FontSize(7.5f);
+                    table.Cell().PaddingVertical(2).AlignRight().Text(line.NetWeight > 0 ? line.NetWeight.ToString("N2") : "").Bold().FontSize(7.5f);
+                    table.Cell().PaddingVertical(2).AlignRight().Text(line.GrossWeight > 0 ? line.GrossWeight.ToString("N2") : "").Bold().FontSize(7.5f);
                 }
                 else
                 {
                     var price = line.HammerPrice * line.Skins;
-                    table.Cell().Padding(2).Text(line.Text).FontSize(7.5f);
-                    table.Cell().Padding(2).AlignRight().Text(line.LotNo).FontSize(7.5f);
-                    table.Cell().Padding(2).AlignRight().Text(line.Carton).FontSize(7.5f);
-                    table.Cell().Padding(2).AlignRight().Text(line.Skins.ToString("N0")).FontSize(7.5f);
-                    if (isInvoice) table.Cell().Padding(2).AlignRight().Text(price > 0 ? price.ToString("N2") : "").FontSize(7.5f);
-                    table.Cell().Padding(2).AlignRight().Text(line.VolumeM3 > 0 ? line.VolumeM3.ToString("N4") : "").FontSize(7.5f);
-                    table.Cell().Padding(2).AlignRight().Text(line.NetWeight > 0 ? line.NetWeight.ToString("N2") : "").FontSize(7.5f);
-                    table.Cell().Padding(2).AlignRight().Text(line.GrossWeight > 0 ? line.GrossWeight.ToString("N2") : "").FontSize(7.5f);
+                    table.Cell().PaddingVertical(2).PaddingLeft(2).Text(line.Text).FontSize(7.5f);
+                    table.Cell().PaddingVertical(2).AlignRight().Text(line.LotNo).FontSize(7.5f);
+                    table.Cell().PaddingVertical(2).AlignRight().Text(line.Carton).FontSize(7.5f);
+                    table.Cell().PaddingVertical(2).AlignRight().Text(line.Skins.ToString("N0")).FontSize(7.5f);
+                    if (isInvoice) table.Cell().PaddingVertical(2).AlignRight().Text(price > 0 ? price.ToString("N2") : "").FontSize(7.5f);
+                    table.Cell().PaddingVertical(2).AlignRight().Text(line.VolumeM3 > 0 ? line.VolumeM3.ToString("N4") : "").FontSize(7.5f);
+                    table.Cell().PaddingVertical(2).AlignRight().Text(line.NetWeight > 0 ? line.NetWeight.ToString("N2") : "").FontSize(7.5f);
+                    table.Cell().PaddingVertical(2).AlignRight().Text(line.GrossWeight > 0 ? line.GrossWeight.ToString("N2") : "").FontSize(7.5f);
                 }
             }
         });
