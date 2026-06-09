@@ -4,6 +4,7 @@
 @inject AuctionApiClient Api
 @inject NavigationManager Nav
 @inject HttpClient Http
+@inject IJSRuntime JS
 
 <PageTitle>Auctions - Auction System</PageTitle>
 
@@ -32,12 +33,19 @@
             <p class="mb-0"><strong>Number:</strong> @selectedAuction.AuctionNumber | <strong>Date:</strong> @selectedAuction.ScheduledDate.ToString("yyyy-MM-dd")</p>
             <div class="d-flex align-items-center gap-2">
                 <strong>Status:</strong>
-                <select class="form-select form-select-sm" style="width: auto;" value="@selectedAuction.Status" @onchange="OnStatusChanged">
-                    @foreach (var status in Enum.GetValues<AuctionStatus>())
-                    {
-                        <option value="@status">@status</option>
-                    }
-                </select>
+                <span class="badge bg-@GetAuctionStatusColor(selectedAuction.Status) me-2">@selectedAuction.Status</span>
+                @if (selectedAuction.Status == AuctionStatus.Draft)
+                {
+                    <button class="btn btn-warning btn-sm" @onclick="ConfirmActivate" disabled="@changingStatus">
+                        @(changingStatus ? "Updating..." : "Set Active")
+                    </button>
+                }
+                else if (selectedAuction.Status == AuctionStatus.Active)
+                {
+                    <button class="btn btn-secondary btn-sm" @onclick="ConfirmClose" disabled="@changingStatus">
+                        @(changingStatus ? "Updating..." : "Close Auction")
+                    </button>
+                }
             </div>
             @if (selectedAuction.Status == AuctionStatus.Draft)
             {
@@ -840,14 +848,35 @@ else
         deletingAuction = false;
     }
 
-    private async Task OnStatusChanged(ChangeEventArgs e)
+    private bool changingStatus;
+
+    private async Task ConfirmActivate()
     {
-        if (Enum.TryParse<AuctionStatus>(e.Value?.ToString(), out var status))
-        {
-            await Api.UpdateAuctionStatusAsync(Id!.Value, status);
-            selectedAuction = await Api.GetAuctionAsync(Id.Value);
-        }
+        var confirmed = await JS.InvokeAsync<bool>("confirm", "Are you sure you want to set this auction to Active? This cannot be undone — you will not be able to go back to Draft.");
+        if (!confirmed) return;
+        changingStatus = true;
+        await Api.UpdateAuctionStatusAsync(Id!.Value, AuctionStatus.Active);
+        selectedAuction = await Api.GetAuctionAsync(Id.Value);
+        changingStatus = false;
     }
+
+    private async Task ConfirmClose()
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", "Are you sure you want to close this auction? This cannot be undone.");
+        if (!confirmed) return;
+        changingStatus = true;
+        await Api.UpdateAuctionStatusAsync(Id!.Value, AuctionStatus.Closed);
+        selectedAuction = await Api.GetAuctionAsync(Id.Value);
+        changingStatus = false;
+    }
+
+    private string GetAuctionStatusColor(AuctionStatus s) => s switch
+    {
+        AuctionStatus.Draft => "secondary",
+        AuctionStatus.Active => "success",
+        AuctionStatus.Closed => "dark",
+        _ => "secondary"
+    };
 
     private async Task AppendCatalog()
     {

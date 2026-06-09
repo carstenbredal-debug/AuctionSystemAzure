@@ -63,8 +63,17 @@ public class AuctionFunctions
     public async Task<HttpResponseData> UpdateStatus(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "auctions/{id:int}/status")] HttpRequestData req, int id)
     {
-        var status = await req.ReadFromJsonAsync<AuctionStatus>();
-        var auction = await _service.UpdateStatusAsync(id, status);
+        var newStatus = await req.ReadFromJsonAsync<AuctionStatus>();
+        var existing = await _db.Auctions.FindAsync(id);
+        if (existing == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        // Enforce one-way transitions: Draft → Active → Closed
+        if (existing.Status == AuctionStatus.Active && newStatus == AuctionStatus.Draft)
+            return await CreateJsonResponse(req, new { error = "Cannot go back from Active to Draft" }, System.Net.HttpStatusCode.BadRequest);
+        if (existing.Status == AuctionStatus.Closed)
+            return await CreateJsonResponse(req, new { error = "Cannot change status of a closed auction" }, System.Net.HttpStatusCode.BadRequest);
+
+        var auction = await _service.UpdateStatusAsync(id, newStatus);
         if (auction == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
         return await CreateJsonResponse(req, auction);
     }
