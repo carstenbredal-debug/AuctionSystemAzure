@@ -485,6 +485,15 @@ using (var scope = host.Services.CreateScope())
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.AuctionResults') AND name = 'AuctionId')
                 ALTER TABLE auction.AuctionResults ADD AuctionId INT NOT NULL DEFAULT 0;
         ");
+        // Backfill AuctionId on existing results where it's 0
+        db.Database.ExecuteSqlRaw(@"
+            UPDATE ar SET ar.AuctionId = (
+                SELECT TOP 1 l.AuctionId FROM auction.Lots l WHERE l.LotNumber = ar.LotNumber AND l.AuctionId > 0
+            )
+            FROM auction.AuctionResults ar
+            WHERE ar.AuctionId = 0
+            AND EXISTS (SELECT 1 FROM auction.Lots l WHERE l.LotNumber = ar.LotNumber AND l.AuctionId > 0);
+        ");
         db.Database.Migrate();
         // Ensure CatalogDbContext tables exist (CatalogLots, GeneratedLots, etc.)
         var catalogDb = scope.ServiceProvider.GetRequiredService<CatalogDbContext>();

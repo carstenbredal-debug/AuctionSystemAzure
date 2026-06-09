@@ -1,0 +1,4404 @@
+[
+  {
+    "name": "GetAuctions",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.AuctionFunctions.GetAll",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "auctions",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetAuction",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.AuctionFunctions.Get",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "auctions/{id:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "CreateAuction",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.AuctionFunctions.Create",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "auctions",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "UpdateAuctionStatus",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.AuctionFunctions.UpdateStatus",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "put"
+        ],
+        "route": "auctions/{id:int}/status",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetLotsByAuction",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.AuctionFunctions.GetLots",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "auctions/{auctionId:int}/lots",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "AddLot",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.AuctionFunctions.AddLot",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "auctions/{auctionId:int}/lots",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetLot",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.AuctionFunctions.GetLot",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "lots/{id:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "RecordHammerPrice",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.AuctionFunctions.RecordHammer",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "lots/{lotId:int}/hammer",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "SeedDatabase",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.AuctionFunctions.Seed",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "seed",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetDashboardStats",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.AuctionFunctions.GetStats",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "dashboard",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "ResetAllData",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.AuctionFunctions.ResetAllData",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "system/reset-all",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "SubmitAuctionResult",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.AuctionResultFunctions.Submit",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "auction-results",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetAuctionResults",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.AuctionResultFunctions.GetAll",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "auction-results",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetAuctionResultsByBroker",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.AuctionResultFunctions.GetByBroker",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "auction-results/broker/{brokerId:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetNextUnsoldLot",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.AuctionResultFunctions.GetNextUnsoldLot",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "auction-results/next-unsold-lot",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "SellLotsToBuyer",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.AuctionResultFunctions.SellToBuyer",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "auction-results/sell-to-buyer",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetAuctionResultsByBuyer",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.AuctionResultFunctions.GetByBuyer",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "auction-results/buyer/{buyerId:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "RequestTakeback",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.AuctionResultFunctions.RequestTakeback",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "takeback-requests",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetLotSalesHistory",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.AuctionResultFunctions.GetLotSalesHistory",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "auction-results/lot-history/{lotNumber:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "RequestTakebackByBuyer",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.AuctionResultFunctions.RequestTakebackByBuyer",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "takeback-requests/buyer-initiated",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "ReassignUnsoldLots",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.AuctionResultFunctions.ReassignUnsoldLots",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "auction-results/reassign-unsold",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetTakebackRequestsByBuyer",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.AuctionResultFunctions.GetTakebacksByBuyer",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "takeback-requests/buyer/{buyerId:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetTakebackRequestsByBroker",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.AuctionResultFunctions.GetTakebacksByBroker",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "takeback-requests/broker/{brokerId:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "RespondTakebackRequest",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.AuctionResultFunctions.RespondTakeback",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "put"
+        ],
+        "route": "takeback-requests/{id:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "DiagBlobStorage",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.AuctionResultFunctions.DiagBlobStorage",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "diag/blob",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "BackfillCatalogData",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.AuctionResultFunctions.BackfillCatalogData",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "auction-results/backfill-catalog",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetAuctionTransactions",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.AuctionTransactionFunctions.GetAll",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "auction-transactions",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetAuctionTransactionSummary",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.AuctionTransactionFunctions.GetSummary",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "auction-transactions/summary",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "PlaceBid",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BidFunctions.PlaceBid",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "bids",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetBidsByBroker",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BidFunctions.GetByBroker",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "bids/broker/{brokerId:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "AllocateLot",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BidFunctions.Allocate",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "bids/allocate",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetAllocationsByBroker",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BidFunctions.GetAllocationsByBroker",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "bids/allocations/broker/{brokerId:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetAllocationsByBuyer",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BidFunctions.GetAllocationsByBuyer",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "bids/allocations/buyer/{buyerId:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetBrokers",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BrokerFunctions.GetAll",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "brokers",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetBroker",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BrokerFunctions.Get",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "brokers/{id:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "CreateBroker",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BrokerFunctions.Create",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "brokers",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "UpdateBroker",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BrokerFunctions.Update",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "put"
+        ],
+        "route": "brokers/{id:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "DeleteBroker",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BrokerFunctions.Delete",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "delete"
+        ],
+        "route": "brokers/{id:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetBuyersByBroker",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BrokerFunctions.GetBuyers",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "brokers/{brokerId:int}/buyers",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "AddBuyerToBroker",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BrokerFunctions.AddBuyer",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "brokers/{brokerId:int}/buyers/add",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetAllBuyers",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BrokerFunctions.GetAllBuyers",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "buyers",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetBuyerById",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BrokerFunctions.GetBuyerById",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "buyers/{id:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "UpdateBuyer",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BrokerFunctions.UpdateBuyer",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "put"
+        ],
+        "route": "buyers/{id:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "DeleteBuyer",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BrokerFunctions.DeleteBuyer",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "delete"
+        ],
+        "route": "buyers/{id:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "BcGetStatus",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BusinessCentralFunctions.GetStatus",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "bc/status",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "BcGetCompanies",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BusinessCentralFunctions.GetCompanies",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "bc/companies",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "BcGetCustomers",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BusinessCentralFunctions.GetCustomers",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "bc/customers",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "BcGetItems",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BusinessCentralFunctions.GetItems",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "bc/items",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "BcGetCountriesRegions",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BusinessCentralFunctions.GetCountriesRegions",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "bc/countries",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "BcGetPaymentTerms",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BusinessCentralFunctions.GetPaymentTerms",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "bc/payment-terms",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "BcGetCurrencies",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BusinessCentralFunctions.GetCurrencies",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "bc/currencies",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "BcGetGenBusPostingGroups",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BusinessCentralFunctions.GetGenBusPostingGroups",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "bc/gen-bus-posting-groups",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "BcGetVatBusPostingGroups",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BusinessCentralFunctions.GetVatBusPostingGroups",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "bc/vat-bus-posting-groups",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "BcGetCustomerPostingGroups",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BusinessCentralFunctions.GetCustomerPostingGroups",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "bc/customer-posting-groups",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "BcGetVendorPostingGroups",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BusinessCentralFunctions.GetVendorPostingGroups",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "bc/vendor-posting-groups",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "BcGetVendors",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BusinessCentralFunctions.GetVendors",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "bc/vendors",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "BcSyncBrokers",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BusinessCentralFunctions.SyncBrokers",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "bc/sync/brokers",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "BcSyncFarmers",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BusinessCentralFunctions.SyncFarmers",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "bc/sync/farmers",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "BcSyncBuyers",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BusinessCentralFunctions.SyncBuyers",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "bc/sync/buyers",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "BcSyncInvoices",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BusinessCentralFunctions.SyncInvoices",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "bc/sync/invoices",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "BcSyncCreditNotes",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BusinessCentralFunctions.SyncCreditNotes",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "bc/sync/credit-notes",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "BcSyncAll",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BusinessCentralFunctions.SyncAll",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "bc/sync/all",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "BcResetInvoices",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BusinessCentralFunctions.ResetInvoices",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "bc/reset-invoices",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "BcClearInvoiceRefs",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BusinessCentralFunctions.ClearInvoiceRefs",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "bc/clear-invoice-refs",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "BcConsistencyCheck",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BusinessCentralFunctions.ConsistencyCheck",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "bc/consistency-check",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "BcPaymentConsistencyCheck",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BusinessCentralFunctions.PaymentConsistencyCheck",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "bc/payment-consistency-check",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "DiagConnections",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BusinessCentralFunctions.GetConnections",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "diag/connections",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "BcCheckPayments",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BusinessCentralFunctions.CheckPayments",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "bc/payments",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "BcBuyerBalances",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BusinessCentralFunctions.GetBuyerBalances",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "bc/buyer-balances",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "BcCustomerEntries",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BusinessCentralFunctions.GetCustomerEntries",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "bc/customer-entries/{customerNo}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "BcCustomerStatement",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.BusinessCentralFunctions.GetCustomerStatement",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "bc/statement/{customerNo}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetCatalogFilters",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.CatalogApiFunctions.GetFilters",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "catalog/filters",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetCatalogLots",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.CatalogApiFunctions.GetCatalogLots",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "catalog/lots",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetCatalogLotCount",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.CatalogApiFunctions.GenerateCount",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "catalog/count",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "AppendCatalog",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.CatalogCopyFunctions.AppendCatalog",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "catalog-copy/append",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "RecreateCatalog",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.CatalogCopyFunctions.RecreateCatalog",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "catalog-copy/recreate",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetCatalogLots",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.CatalogLotFunctions.GetAll",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "catalog-lots",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetCatalogLot",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.CatalogLotFunctions.Get",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "catalog-lots/{id:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetDbSchema",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.CatalogLotFunctions.GetDbSchema",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "diag/schema/{tableName}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "ImportCatalogLotsToAuction",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.CatalogLotFunctions.ImportToAuction",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "auctions/{auctionId:int}/import-catalog-lots",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GenerateCatalogPdf",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.CatalogPdfFunctions.GeneratePdf",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "catalog/pdf",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetCustomerRequestsByBroker",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.CustomerRequestFunctions.GetByBroker",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "brokers/{brokerId:int}/customer-requests",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetCustomerRequestsByBuyer",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.CustomerRequestFunctions.GetByBuyer",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "buyers/{buyerId:int}/customer-requests",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "CreateCustomerRequest",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.CustomerRequestFunctions.Create",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "brokers/{brokerId:int}/customer-requests",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "RespondToCustomerRequest",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.CustomerRequestFunctions.Respond",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "put"
+        ],
+        "route": "customer-requests/{id:int}/respond",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "CreateCustomerRequestByBuyer",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.CustomerRequestFunctions.CreateByBuyer",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "buyers/{buyerId:int}/customer-requests",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "AdminCreateCustomerLink",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.CustomerRequestFunctions.AdminLink",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "management/customer-links",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetAllCustomerRequests",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.CustomerRequestFunctions.GetAll",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "management/customer-links",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "DeleteCustomerRequest",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.CustomerRequestFunctions.Delete",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "delete"
+        ],
+        "route": "customer-requests/{id:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "UnlinkBrokerBuyer",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.CustomerRequestFunctions.Unlink",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "delete"
+        ],
+        "route": "brokers/{brokerId:int}/buyers/{buyerId:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetFarmers",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.FarmerFunctions.GetAll",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "farmers",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetFarmer",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.FarmerFunctions.Get",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "farmers/{id:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "CreateFarmer",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.FarmerFunctions.Create",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "farmers",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "UpdateFarmer",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.FarmerFunctions.Update",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "put"
+        ],
+        "route": "farmers/{id:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "DeleteFarmer",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.FarmerFunctions.Delete",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "delete"
+        ],
+        "route": "farmers/{id:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetLotsByFarmer",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.FarmerFunctions.GetLots",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "farmers/{farmerId:int}/lots",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GenerateLots",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.LotGenerationFunctions.GenerateLots",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get",
+          "post"
+        ],
+        "route": "lots/generate",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetParameters",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.ParameterFunctions.GetAll",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "parameters",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "UpdateParameter",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.ParameterFunctions.Update",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "put"
+        ],
+        "route": "parameters/{id:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "CreateParameter",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.ParameterFunctions.Create",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "parameters",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "DeleteParameter",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.ParameterFunctions.Delete",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "delete"
+        ],
+        "route": "parameters/{id:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetLotGroupOrders",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SalesOrderSetupFunctions.GetLotGroupOrders",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "sales-order-setup/lot-group-orders",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "CreateLotGroupOrder",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SalesOrderSetupFunctions.CreateLotGroupOrder",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "sales-order-setup/lot-group-orders",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "UpdateLotGroupOrder",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SalesOrderSetupFunctions.UpdateLotGroupOrder",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "put"
+        ],
+        "route": "sales-order-setup/lot-group-orders/update",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "ReorderLotGroupOrders",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SalesOrderSetupFunctions.ReorderLotGroupOrders",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "put"
+        ],
+        "route": "sales-order-setup/lot-group-orders/reorder",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "DeleteLotGroupOrder",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SalesOrderSetupFunctions.DeleteLotGroupOrder",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "delete"
+        ],
+        "route": "sales-order-setup/lot-group-orders/remove",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetLotSizeRules",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SalesOrderSetupFunctions.GetLotSizeRules",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "sales-order-setup/lot-size-rules",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "CreateLotSizeRule",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SalesOrderSetupFunctions.CreateLotSizeRule",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "sales-order-setup/lot-size-rules",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "UpdateLotSizeRule",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SalesOrderSetupFunctions.UpdateLotSizeRule",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "put"
+        ],
+        "route": "sales-order-setup/lot-size-rules/update",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "DeleteLotSizeRule",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SalesOrderSetupFunctions.DeleteLotSizeRule",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "delete"
+        ],
+        "route": "sales-order-setup/lot-size-rules/remove",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetLotSortOrders",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SalesOrderSetupFunctions.GetLotSortOrders",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "sales-order-setup/lot-sort-orders",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "CreateLotSortOrder",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SalesOrderSetupFunctions.CreateLotSortOrder",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "sales-order-setup/lot-sort-orders",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "UpdateLotSortOrder",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SalesOrderSetupFunctions.UpdateLotSortOrder",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "put"
+        ],
+        "route": "sales-order-setup/lot-sort-orders/update",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "ReorderLotSortOrders",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SalesOrderSetupFunctions.ReorderLotSortOrders",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "put"
+        ],
+        "route": "sales-order-setup/lot-sort-orders/reorder",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "DeleteLotSortOrder",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SalesOrderSetupFunctions.DeleteLotSortOrder",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "delete"
+        ],
+        "route": "sales-order-setup/lot-sort-orders/remove",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetCatalogNumberRules",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SalesOrderSetupFunctions.GetCatalogNumberRules",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "sales-order-setup/catalog-number-rules",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "CreateCatalogNumberRule",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SalesOrderSetupFunctions.CreateCatalogNumberRule",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "sales-order-setup/catalog-number-rules",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "UpdateCatalogNumberRule",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SalesOrderSetupFunctions.UpdateCatalogNumberRule",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "put"
+        ],
+        "route": "sales-order-setup/catalog-number-rules/update",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "DeleteCatalogNumberRule",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SalesOrderSetupFunctions.DeleteCatalogNumberRule",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "delete"
+        ],
+        "route": "sales-order-setup/catalog-number-rules/remove",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetInvoicesByBroker",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SettlementFunctions.GetInvoicesByBroker",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "settlements/invoices/broker/{brokerId:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "MarkInvoicePaid",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SettlementFunctions.MarkPaid",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "put"
+        ],
+        "route": "settlements/invoices/{invoiceId:int}/paid",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "UpdateInvoiceStatus",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SettlementFunctions.UpdateInvoiceStatus",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "put"
+        ],
+        "route": "settlements/invoices/{invoiceId:int}/status",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "CheckBcPaymentBalance",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SettlementFunctions.CheckBcPaymentBalance",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "settlements/invoices/{invoiceId:int}/bc-balance",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "CheckBcInvoiceRemaining",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SettlementFunctions.CheckBcInvoiceRemaining",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "settlements/invoices/{invoiceId:int}/check-bc-remaining",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "ProcessDownpayment",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SettlementFunctions.ProcessDownpayment",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "settlements/invoices/{invoiceId:int}/downpayment",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "ApplyCreditNotesToBc",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SettlementFunctions.ApplyCreditNotesToBc",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "settlements/apply-credit-notes",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "RecalculateCreditStatuses",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SettlementFunctions.RecalculateCreditStatuses",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "settlements/recalculate-credit-statuses",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetShippingBoxes",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SettlementFunctions.GetShippingBoxes",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "shipping/boxes",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "CreateSettlement",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SettlementFunctions.CreateSettlement",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "settlements/create",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetSettlementsByFarmer",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SettlementFunctions.GetByFarmer",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "settlements/farmer/{farmerId:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "DownloadInvoicePdf",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SettlementFunctions.DownloadInvoicePdf",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "settlements/invoices/{invoiceId:int}/pdf",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetInvoicesByBuyer",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SettlementFunctions.GetInvoicesByBuyer",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "settlements/invoices/buyer/{buyerId:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetAllInvoices",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SettlementFunctions.GetAllInvoices",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "settlements/invoices",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetInvoicePaymentHistory",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SettlementFunctions.GetInvoicePaymentHistory",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "settlements/invoices/{invoiceId:int}/payment-history",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetInvoicesByBrokerAndBuyer",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SettlementFunctions.GetInvoicesByBrokerAndBuyer",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "settlements/invoices/broker/{brokerId:int}/buyer/{buyerId:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetUnpushedInvoices",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SettlementFunctions.GetUnpushedInvoices",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "settlements/invoices/unpushed",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetUnpushedCreditNotes",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SettlementFunctions.GetUnpushedCreditNotes",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "settlements/credit-notes/unpushed",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetInvoiceLinksForResults",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SettlementFunctions.GetInvoiceLinksForResults",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "settlements/invoice-links/broker/{brokerId:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetAllSettlements",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SettlementFunctions.GetAllSettlements",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "settlements",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "MarkSettlementComplete",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SettlementFunctions.MarkComplete",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "put"
+        ],
+        "route": "settlements/{settlementId:int}/complete",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "DiagnosePaymentApplication",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SettlementFunctions.DiagnosePaymentApplication",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "settlements/diagnose-payment/{customerNo}/{invoiceDocNo}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "TestPaymentApplication",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SettlementFunctions.TestPaymentApplication",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "settlements/diagnose-payment/{customerNo}/{invoiceDocNo}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetShippingAddresses",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.ShippingAddressFunctions.GetAll",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "shipping-addresses",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "CreateShippingAddress",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.ShippingAddressFunctions.Create",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "shipping-addresses",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "UpdateShippingAddress",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.ShippingAddressFunctions.Update",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "put"
+        ],
+        "route": "shipping-addresses/{id:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "DeleteShippingAddress",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.ShippingAddressFunctions.Delete",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "delete"
+        ],
+        "route": "shipping-addresses/{id:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetBoxTypeDimensions",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.ShippingParameterFunctions.GetAll",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "shipping-parameters/box-types",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "SaveBoxTypeDimension",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.ShippingParameterFunctions.Save",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "shipping-parameters/box-types",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "SaveAllBoxTypeDimensions",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.ShippingParameterFunctions.SaveAll",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "shipping-parameters/box-types/bulk",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetSkins",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SkinFunctions.GetSkins",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "skins",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "CheckSkinsPriceIntegrity",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.SkinFunctions.CheckSkinsPriceIntegrity",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "diag/skins-price-check",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "SubmitTypistEntry",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.TypistEntryFunctions.Submit",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "typist-entries",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "SubmitDisagreementReentry",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.TypistEntryFunctions.SubmitReentry",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "typist-entries/reentry",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetTypistEntries",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.TypistEntryFunctions.GetEntries",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "typist-entries",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetDisagreements",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.TypistEntryFunctions.GetDisagreements",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "typist-entries/disagreements",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetTypistStatus",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.TypistEntryFunctions.GetStatus",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "typist-entries/status/{lotNumber:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetNextUnsoldLotForTypist",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.TypistEntryFunctions.GetNextUnsoldLot",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "typist-entries/next-unsold-lot",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetRecentMatchedEntries",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.TypistEntryFunctions.GetRecentMatched",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "typist-entries/recent",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetCurrentUser",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.UserFunctions.GetCurrentUser",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "users/me/{objectId}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetAllUsers",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.UserFunctions.GetAll",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "users",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "CreateUser",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.UserFunctions.Create",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "users",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "UpdateUser",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.UserFunctions.Update",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "put"
+        ],
+        "route": "users/{id:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "DeleteUser",
+    "scriptFile": "AuctionSystem.Functions.dll",
+    "entryPoint": "AuctionSystem.Functions.Functions.UserFunctions.Delete",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "delete"
+        ],
+        "route": "users/{id:int}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  }
+]
