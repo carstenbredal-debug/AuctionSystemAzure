@@ -57,6 +57,11 @@
                 </button>
             </li>
             <li class="nav-item">
+                <button class="nav-link @(activeTab == "transactions" ? "active" : "")" @onclick="OpenTransactionsTab">
+                    Transactions <span class="badge bg-secondary">@transactions.Count</span>
+                </button>
+            </li>
+            <li class="nav-item">
                 <button class="nav-link @(activeTab == "import" ? "active" : "")" @onclick="OpenImportTab">
                     Import Catalog Lots
                 </button>
@@ -87,6 +92,74 @@
                     }
                 </tbody>
             </table>
+        }
+        else if (activeTab == "transactions")
+        {
+            @if (transactionsLoading)
+            {
+                <div class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+            }
+            else
+            {
+                @if (transactionSummary.Any())
+                {
+                    <div class="row mb-4">
+                        @foreach (var s in transactionSummary)
+                        {
+                            <div class="col-md-4">
+                                <div class="card text-center">
+                                    <div class="section-body p-3">
+                                        <h5 class="card-title text-muted">@FormatTransactionType(s.TransactionType)</h5>
+                                        <h2>€@s.TotalAmount.ToString("N2")</h2>
+                                        <small class="text-muted">@s.Count transactions</small>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+
+                @if (!transactions.Any())
+                {
+                    <div class="alert alert-info">No transactions for this auction.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-striped table-sm">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Lot</th><th>Type</th><th>Broker</th><th>Description</th>
+                                    <th class="text-end">Qty</th><th class="text-end">Unit Price</th>
+                                    <th class="text-end">Amount</th><th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var t in transactions)
+                                {
+                                    <tr class="@GetTransactionRowClass(t.TransactionType)">
+                                        <td><strong>@t.LotNumber</strong></td>
+                                        <td><span class="badge @GetTransactionBadgeClass(t.TransactionType)">@FormatTransactionType(t.TransactionType)</span></td>
+                                        <td>@t.BrokerNumber — @t.BrokerName</td>
+                                        <td><small>@t.Description</small></td>
+                                        <td class="text-end">@t.Quantity</td>
+                                        <td class="text-end">€@t.UnitPrice.ToString("N4")</td>
+                                        <td class="text-end"><strong>€@t.Amount.ToString("N2")</strong></td>
+                                        <td><small>@t.CreatedAt.ToString("yyyy-MM-dd HH:mm")</small></td>
+                                    </tr>
+                                }
+                            </tbody>
+                            <tfoot>
+                                <tr class="table-dark">
+                                    <td colspan="6"><strong>Total</strong></td>
+                                    <td class="text-end"><strong>€@transactions.Sum(t => t.Amount).ToString("N2")</strong></td>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                }
+            }
         }
         else if (activeTab == "import")
         {
@@ -332,6 +405,11 @@ else
     private bool deletingAuction;
     private string? deleteError;
 
+    // Transactions tab state
+    private List<AuctionTransactionDto> transactions = new();
+    private List<AuctionTransactionSummaryDto> transactionSummary = new();
+    private bool transactionsLoading;
+
     // Import tab state
     private List<CatalogLotDto> catalogLots = new();
     private List<CatalogLotDto> filteredCatalogLots = new();
@@ -447,6 +525,37 @@ else
             creatingAuction = false;
         }
     }
+
+    private async Task OpenTransactionsTab()
+    {
+        activeTab = "transactions";
+        transactionsLoading = true;
+        transactions = await Api.GetAuctionTransactionsAsync(Id!.Value);
+        transactionSummary = await Api.GetAuctionTransactionSummaryAsync(Id!.Value);
+        transactionsLoading = false;
+    }
+
+    private static string FormatTransactionType(string type) => type switch
+    {
+        "LotSale" => "Lot Sale",
+        "AuctionFee" => "Auction Fee",
+        "Commission" => "Commission",
+        _ => type
+    };
+
+    private static string GetTransactionBadgeClass(string type) => type switch
+    {
+        "LotSale" => "bg-primary",
+        "AuctionFee" => "bg-warning text-dark",
+        "Commission" => "bg-info text-dark",
+        _ => "bg-secondary"
+    };
+
+    private static string GetTransactionRowClass(string type) => type switch
+    {
+        "AuctionFee" or "Commission" => "table-light",
+        _ => ""
+    };
 
     private async Task OpenImportTab()
     {
