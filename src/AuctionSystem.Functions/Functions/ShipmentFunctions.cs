@@ -571,6 +571,24 @@ public class ShipmentFunctions
         return response;
     }
 
+    [Function("ClearPackingListPdf")]
+    public async Task<HttpResponseData> ClearPackingListPdf(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "shipments/{id:int}/packing-list-pdf")] HttpRequestData req,
+        int id)
+    {
+        var shipment = await _db.Shipments.FindAsync(id);
+        if (shipment == null)
+            return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        shipment.PackingListPdfUrl = null;
+        await _db.SaveChangesAsync();
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true }, JsonOptions));
+        return response;
+    }
+
     [Function("DeleteShipment")]
     public async Task<HttpResponseData> Delete(
         [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "shipments/{id:int}")] HttpRequestData req,
