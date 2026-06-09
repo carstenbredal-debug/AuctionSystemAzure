@@ -52,6 +52,7 @@ public class PackingOrderLine
     public int Skins { get; set; }
     public string BoxType { get; set; } = "";
     public string Location { get; set; } = "";
+    public decimal WeightKg { get; set; }
     public int? PackedBoxId { get; set; }
     public PackedBox? PackedBox { get; set; }
 }
@@ -61,12 +62,16 @@ public class PackedBox
     public int Id { get; set; }
     public int PackingOrderId { get; set; }
     public PackingOrder? PackingOrder { get; set; }
-    public string BoxType { get; set; } = "";
+    public string BoxNumber { get; set; } = "";
+    public string BoxType { get; set; } = ""; // Big, Small
+    public decimal GrossWeight { get; set; }
+    public decimal NetWeight { get; set; }
+    public decimal TareWeight { get; set; }
     public decimal Weight { get; set; }
     public decimal HeightM { get; set; }
     public decimal WidthM { get; set; }
     public decimal LengthM { get; set; }
-    public string Status { get; set; } = "Packed"; // Packed, Approved
+    public string Status { get; set; } = "Open"; // Open, Closed
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public ICollection<PackingOrderLine> ShowLots { get; set; } = new List<PackingOrderLine>();
 }

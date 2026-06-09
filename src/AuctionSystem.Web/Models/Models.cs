@@ -1033,12 +1033,33 @@ public class PackingOrderXmlDto
     public string PackingOrderNumber { get; set; } = "";
     public string ShipmentNumber { get; set; } = "";
     public string Status { get; set; } = "";
+    public string Type { get; set; } = "";
     public string CreatedAt { get; set; } = "";
     public string BuyerName { get; set; } = "";
     public string BuyerNumber { get; set; } = "";
     public string ShipperName { get; set; } = "";
     public int ShowLotCount { get; set; }
     public List<PackingOrderLineDto> Lines { get; set; } = new();
+}
+
+public class ShowLotWeightDto
+{
+    public int BoxNumber { get; set; }
+    public decimal Weight { get; set; }
+}
+
+public class PackShowLotsResponseDto
+{
+    public bool Success { get; set; }
+    public int PackedBoxId { get; set; }
+    public string BoxNumber { get; set; } = "";
+    public string BoxType { get; set; } = "";
+    public decimal GrossWeight { get; set; }
+    public decimal NetWeight { get; set; }
+    public decimal TareWeight { get; set; }
+    public int ShowLotCount { get; set; }
+    public int TotalSkins { get; set; }
+    public bool AllPacked { get; set; }
 }
 
 public class PackedBoxDto

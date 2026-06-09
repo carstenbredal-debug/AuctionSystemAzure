@@ -459,6 +459,31 @@ using (var scope = host.Services.CreateScope())
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.PackingOrderLines') AND name = 'Location')
                 ALTER TABLE auction.PackingOrderLines ADD Location NVARCHAR(100) NOT NULL DEFAULT '';
         ");
+        // Add new columns to PackedBoxes if missing
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.PackedBoxes') AND name = 'BoxNumber')
+                ALTER TABLE auction.PackedBoxes ADD BoxNumber NVARCHAR(50) NOT NULL DEFAULT '';
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.PackedBoxes') AND name = 'GrossWeight')
+                ALTER TABLE auction.PackedBoxes ADD GrossWeight DECIMAL(18,4) NOT NULL DEFAULT 0;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.PackedBoxes') AND name = 'NetWeight')
+                ALTER TABLE auction.PackedBoxes ADD NetWeight DECIMAL(18,4) NOT NULL DEFAULT 0;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.PackedBoxes') AND name = 'TareWeight')
+                ALTER TABLE auction.PackedBoxes ADD TareWeight DECIMAL(18,4) NOT NULL DEFAULT 0;
+        ");
+        // Add WeightKg column to PackingOrderLines if missing
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.PackingOrderLines') AND name = 'WeightKg')
+                ALTER TABLE auction.PackingOrderLines ADD WeightKg DECIMAL(18,4) NOT NULL DEFAULT 0;
+        ");
+        // Add default box tare weights to SystemParameters if missing
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM auction.SystemParameters WHERE [Key] = 'BoxTareWeight_Big')
+                INSERT INTO auction.SystemParameters ([Key], Value, Description, DataType, UpdatedAt)
+                VALUES ('BoxTareWeight_Big', '2.5', 'Tare weight (kg) for Big box type', 'decimal', GETUTCDATE());
+            IF NOT EXISTS (SELECT 1 FROM auction.SystemParameters WHERE [Key] = 'BoxTareWeight_Small')
+                INSERT INTO auction.SystemParameters ([Key], Value, Description, DataType, UpdatedAt)
+                VALUES ('BoxTareWeight_Small', '1.5', 'Tare weight (kg) for Small box type', 'decimal', GETUTCDATE());
+        ");
         // Drop auction.Boxes table if it exists (replaced by view)
         db.Database.ExecuteSqlRaw(@"
             IF EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'Boxes')

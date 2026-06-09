@@ -428,9 +428,15 @@ else
         _packError = null;
         try
         {
-            // Pack the showlots into a box
-            var packed = await Api.PackShowLotsAsync(_packingOrder.Id, _selectedBoxType, _enteredWeight, _selectedLineIds.ToList());
-            if (!packed) { _packError = "Failed to pack showlots."; _packing = false; return; }
+            // Pack the showlots into a box (use packing order number + line IDs as box numbers)
+            var result = await Api.PackShowLotsAsync(
+                _packingOrder.PackingOrderNumber,
+                _selectedBoxType,
+                "",
+                _enteredWeight,
+                _selectedLineIds.ToList(),
+                new List<ShowLotWeightDto>());
+            if (result == null) { _packError = "Failed to pack showlots."; _packing = false; return; }
 
             // Get the latest packed boxes to find the new one and auto-approve
             var boxes = await Api.GetPackedBoxesAsync(_packingOrder.Id);

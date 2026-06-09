@@ -32,6 +32,7 @@
                             <th>Packing Order #</th>
                             <th>Shipment #</th>
                             <th>Buyer</th>
+                            <th>Type</th>
                             <th>Boxes</th>
                             <th>Status</th>
                             <th></th>
@@ -44,6 +45,7 @@
                                 <td><strong>@order.PackingOrderNumber</strong></td>
                                 <td>@order.ShipmentNumber</td>
                                 <td>@order.BuyerName (@order.BuyerNumber)</td>
+                                <td><span class="badge @(order.Type == "ShowLot" ? "bg-info" : "bg-secondary")">@order.Type</span></td>
                                 <td>@order.Lines.Count</td>
                                 <td><span class="badge bg-warning text-dark">Awaiting Pick</span></td>
                                 <td>
@@ -72,6 +74,7 @@
                             <th>Packing Order #</th>
                             <th>Shipment #</th>
                             <th>Buyer</th>
+                            <th>Type</th>
                             <th>Status</th>
                         </tr>
                     </thead>
@@ -82,6 +85,7 @@
                                 <td><strong>@order.PackingOrderNumber</strong></td>
                                 <td>@order.ShipmentNumber</td>
                                 <td>@order.BuyerName (@order.BuyerNumber)</td>
+                                <td><span class="badge @(order.Type == "ShowLot" ? "bg-info" : "bg-secondary")">@order.Type</span></td>
                                 <td><span class="badge bg-success">Picked</span></td>
                             </tr>
                         }
@@ -91,8 +95,196 @@
         </div>
     }
 }
+else if (_selectedOrder.Type == "ShowLot")
+{
+    @* === SHOWLOT PACKING WORKFLOW === *@
+    <div class="mb-3">
+        <button class="btn btn-outline-secondary" @onclick="BackToList">← Back to list</button>
+    </div>
+
+    <div class="section-container">
+        <div class="section-header">
+            <h6 class="mb-0">ShowLot Packing: @_selectedOrder.PackingOrderNumber — @_selectedOrder.ShipmentNumber</h6>
+        </div>
+        <div class="section-body">
+            <div class="row mb-3">
+                <div class="col-md-4"><strong>Buyer:</strong> @_selectedOrder.BuyerName (@_selectedOrder.BuyerNumber)</div>
+                <div class="col-md-4"><strong>ShowLots:</strong> @_selectedOrder.Lines.Count</div>
+                <div class="col-md-4"><strong>Total Skins:</strong> @_selectedOrder.Lines.Sum(l => l.Skins)</div>
+            </div>
+
+            @* Current packed boxes *@
+            @if (_packedBoxes.Count > 0)
+            {
+                <h6 class="mb-2">Packed Boxes</h6>
+                <table class="table table-bordered mb-3">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Box #</th>
+                            <th>Type</th>
+                            <th>ShowLots</th>
+                            <th>Gross (kg)</th>
+                            <th>Tare (kg)</th>
+                            <th>Net (kg)</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var box in _packedBoxes)
+                        {
+                            <tr>
+                                <td><strong>@box.BoxNumber</strong></td>
+                                <td>@box.BoxType</td>
+                                <td>@box.ShowLotCount showlots (@box.TotalSkins skins)</td>
+                                <td>@box.GrossWeight.ToString("F2")</td>
+                                <td>@box.TareWeight.ToString("F2")</td>
+                                <td>@box.NetWeight.ToString("F2")</td>
+                                <td><span class="badge bg-success">Closed</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+
+            @* Unpacked showlots *@
+            @{ var unpackedLines = _selectedOrder.Lines.Where(l => !_packedLineIds.Contains(l.BoxNumber)).ToList(); }
+            @if (unpackedLines.Count > 0)
+            {
+                <h6 class="mb-2">Showlots to Pack (@unpackedLines.Count remaining)</h6>
+
+                @* Create new packed box form *@
+                @if (!_boxOpen)
+                {
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <h6 class="card-title">Create New Packed Box</h6>
+                            <div class="row g-2 align-items-end">
+                                <div class="col-md-3">
+                                    <label class="form-label">Box Type</label>
+                                    <select class="form-select" @bind="_newBoxType">
+                                        <option value="Big">Big</option>
+                                        <option value="Small">Small</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Box Number</label>
+                                    <input type="text" class="form-control" @bind="_newBoxNumber" placeholder="e.g. 1" />
+                                </div>
+                                <div class="col-md-3">
+                                    <button class="btn btn-primary" @onclick="OpenBox" disabled="@(string.IsNullOrWhiteSpace(_newBoxNumber))">
+                                        Open Box
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    @* Box is open — select showlots and weigh *@
+                    <div class="card border-primary mb-3">
+                        <div class="card-header bg-primary text-white d-flex justify-content-between">
+                            <span>Box: <strong>@_newBoxNumber</strong> (@_newBoxType)</span>
+                            <span>@_currentBoxShowLots.Count showlots in box</span>
+                        </div>
+                        <div class="card-body">
+                            <table class="table table-bordered table-hover mb-3">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th style="width:40px"></th>
+                                        <th>ShowLot Box #</th>
+                                        <th>Lot #</th>
+                                        <th>Skins</th>
+                                        <th>Weight (kg)</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var line in unpackedLines)
+                                    {
+                                        var inBox = _currentBoxShowLots.Any(s => s.BoxNumber == line.BoxNumber);
+                                        <tr class="@(inBox ? "table-success" : "")">
+                                            <td>
+                                                @if (!inBox)
+                                                {
+                                                    <button class="btn btn-sm btn-outline-success" @onclick="() => AddShowLotToBox(line)">+</button>
+                                                }
+                                                else
+                                                {
+                                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveShowLotFromBox(line.BoxNumber)">×</button>
+                                                }
+                                            </td>
+                                            <td><strong>@line.BoxNumber</strong></td>
+                                            <td>@line.LotNumber</td>
+                                            <td>@line.Skins</td>
+                                            <td>
+                                                @if (inBox)
+                                                {
+                                                    var entry = _currentBoxShowLots.First(s => s.BoxNumber == line.BoxNumber);
+                                                    <input type="number" class="form-control form-control-sm" step="0.01" style="width:100px"
+                                                           value="@entry.Weight" @onchange="(e) => UpdateShowLotWeight(line.BoxNumber, e)" />
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (inBox)
+                                                {
+                                                    <span class="badge bg-success">In Box</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-secondary">Available</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+
+                            <div class="row g-2 align-items-end mb-3">
+                                <div class="col-md-4">
+                                    <label class="form-label">Box Gross Weight (kg)</label>
+                                    <input type="number" class="form-control" step="0.01" @bind="_boxGrossWeight" placeholder="Weigh the packed box" />
+                                </div>
+                            </div>
+
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-success" @onclick="CloseBox"
+                                        disabled="@(_currentBoxShowLots.Count == 0 || _closingBox)">
+                                    @(_closingBox ? "Closing..." : $"Close Box ({_currentBoxShowLots.Count} showlots)")
+                                </button>
+                                <button class="btn btn-outline-secondary" @onclick="CancelBox">Cancel Box</button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="alert alert-success">
+                    <strong>All showlots packed!</strong> @_packedBoxes.Count box(es) created.
+                </div>
+            }
+
+            @* Complete button *@
+            @if (unpackedLines.Count == 0 && _packedBoxes.Count > 0)
+            {
+                <button class="btn btn-lg btn-primary" @onclick="CompleteShowLotPacking" disabled="@_completing">
+                    @(_completing ? "Completing..." : "Send Response & Complete Packing")
+                </button>
+            }
+
+            @if (_confirmSuccess)
+            {
+                <div class="alert alert-success mt-3">
+                    ShowLot packing completed! Response XML sent. Packing order marked as Picked.
+                </div>
+            }
+        </div>
+    </div>
+}
 else
 {
+    @* === NORMAL PACKING (NON-SHOWLOT) WORKFLOW === *@
     <div class="mb-3">
         <button class="btn btn-outline-secondary" @onclick="BackToList">← Back to list</button>
     </div>
@@ -177,6 +369,17 @@ else
     private bool _confirmSuccess;
     private string? _error;
 
+    // ShowLot packing state
+    private bool _boxOpen;
+    private string _newBoxType = "Big";
+    private string _newBoxNumber = "";
+    private decimal _boxGrossWeight;
+    private List<ShowLotEntry> _currentBoxShowLots = new();
+    private List<PackedBoxInfo> _packedBoxes = new();
+    private HashSet<int> _packedLineIds = new();
+    private bool _closingBox;
+    private bool _completing;
+
     private bool AllSelected => _selectedOrder != null && _pickedBoxNumbers.Count == _selectedOrder.Lines.Count;
 
     protected override async Task OnInitializedAsync()
@@ -204,8 +407,18 @@ else
     private void SelectOrder(PackingOrderXmlDto order)
     {
         _selectedOrder = order;
-        _pickedBoxNumbers = new HashSet<int>(order.Lines.Select(l => l.BoxNumber));
         _confirmSuccess = false;
+        if (order.Type == "ShowLot")
+        {
+            _packedBoxes.Clear();
+            _packedLineIds.Clear();
+            _boxOpen = false;
+            _currentBoxShowLots.Clear();
+        }
+        else
+        {
+            _pickedBoxNumbers = new HashSet<int>(order.Lines.Select(l => l.BoxNumber));
+        }
     }
 
     private void BackToList()
@@ -213,9 +426,14 @@ else
         _selectedOrder = null;
         _pickedBoxNumbers.Clear();
         _confirmSuccess = false;
+        _boxOpen = false;
+        _currentBoxShowLots.Clear();
+        _packedBoxes.Clear();
+        _packedLineIds.Clear();
         _ = LoadXmls();
     }
 
+    // === Normal packing methods ===
     private bool IsSelected(int boxNumber) => _pickedBoxNumbers.Contains(boxNumber);
 
     private void ToggleBox(int boxNumber)
@@ -261,5 +479,152 @@ else
             _error = ex.Message;
         }
         _confirming = false;
+    }
+
+    // === ShowLot packing methods ===
+    private void OpenBox()
+    {
+        _boxOpen = true;
+        _currentBoxShowLots.Clear();
+        _boxGrossWeight = 0;
+    }
+
+    private void CancelBox()
+    {
+        _boxOpen = false;
+        _currentBoxShowLots.Clear();
+        _newBoxNumber = "";
+        _boxGrossWeight = 0;
+    }
+
+    private void AddShowLotToBox(PackingOrderLineDto line)
+    {
+        if (!_currentBoxShowLots.Any(s => s.BoxNumber == line.BoxNumber))
+        {
+            _currentBoxShowLots.Add(new ShowLotEntry { BoxNumber = line.BoxNumber, LotNumber = line.LotNumber, Skins = line.Skins, Weight = 0 });
+        }
+    }
+
+    private void RemoveShowLotFromBox(int boxNumber)
+    {
+        _currentBoxShowLots.RemoveAll(s => s.BoxNumber == boxNumber);
+    }
+
+    private void UpdateShowLotWeight(int boxNumber, ChangeEventArgs e)
+    {
+        var entry = _currentBoxShowLots.FirstOrDefault(s => s.BoxNumber == boxNumber);
+        if (entry != null && decimal.TryParse(e.Value?.ToString(), out var w))
+            entry.Weight = w;
+    }
+
+    private async Task CloseBox()
+    {
+        if (_selectedOrder == null || _currentBoxShowLots.Count == 0) return;
+        _closingBox = true;
+        _error = null;
+        try
+        {
+            // Find line IDs from original order by matching box numbers
+            var lineIds = new List<int>();
+            var weights = new List<object>();
+            foreach (var sl in _currentBoxShowLots)
+            {
+                // We need the packing order DB ID — use the PackingOrderId from the order
+                // The API expects PackingOrderLine IDs, but we have box numbers from XML
+                // We'll pass box numbers and let the API resolve them
+                lineIds.Add(sl.BoxNumber);
+                weights.Add(new { lineId = sl.BoxNumber, weight = sl.Weight });
+            }
+
+            var success = await Api.PackShowLotsAsync(
+                _selectedOrder.PackingOrderNumber,
+                _newBoxType,
+                _newBoxNumber,
+                _boxGrossWeight,
+                _currentBoxShowLots.Select(s => s.BoxNumber).ToList(),
+                _currentBoxShowLots.Select(s => new ShowLotWeightDto { BoxNumber = s.BoxNumber, Weight = s.Weight }).ToList()
+            );
+
+            if (success != null)
+            {
+                _packedBoxes.Add(new PackedBoxInfo
+                {
+                    BoxNumber = _newBoxNumber,
+                    BoxType = _newBoxType,
+                    GrossWeight = success.GrossWeight,
+                    NetWeight = success.NetWeight,
+                    TareWeight = success.TareWeight,
+                    ShowLotCount = _currentBoxShowLots.Count,
+                    TotalSkins = _currentBoxShowLots.Sum(s => s.Skins)
+                });
+
+                foreach (var sl in _currentBoxShowLots)
+                    _packedLineIds.Add(sl.BoxNumber);
+
+                _boxOpen = false;
+                _currentBoxShowLots.Clear();
+                _newBoxNumber = "";
+                _boxGrossWeight = 0;
+            }
+            else
+            {
+                _error = "Failed to close box. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        _closingBox = false;
+    }
+
+    private async Task CompleteShowLotPacking()
+    {
+        if (_selectedOrder == null) return;
+        _completing = true;
+        _error = null;
+        try
+        {
+            var success = await Api.CompleteShowLotPackingAsync(_selectedOrder.PackingOrderNumber);
+            if (success)
+            {
+                _confirmSuccess = true;
+                await Task.Delay(2000);
+                _selectedOrder = null;
+                _packedBoxes.Clear();
+                _packedLineIds.Clear();
+                _confirmSuccess = false;
+                await LoadXmls();
+            }
+            else
+            {
+                _error = "Failed to complete showlot packing. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        _completing = false;
+    }
+
+    // Helper classes
+    private class ShowLotEntry
+    {
+        public int BoxNumber { get; set; }
+        public int LotNumber { get; set; }
+        public int Skins { get; set; }
+        public decimal Weight { get; set; }
+    }
+
+    private class PackedBoxInfo
+    {
+        public string BoxNumber { get; set; } = "";
+        public string BoxType { get; set; } = "";
+        public decimal GrossWeight { get; set; }
+        public decimal NetWeight { get; set; }
+        public decimal TareWeight { get; set; }
+        public int ShowLotCount { get; set; }
+        public int TotalSkins { get; set; }
     }
 }

@@ -948,9 +948,26 @@ public class AuctionApiClient
         return resp.IsSuccessStatusCode;
     }
 
-    public async Task<bool> PackShowLotsAsync(int packingOrderId, string boxType, decimal weight, List<int> showLotLineIds)
+    public async Task<PackShowLotsResponseDto?> PackShowLotsAsync(
+        string packingOrderNumber, string boxType, string boxNumber, decimal grossWeight,
+        List<int> showLotBoxNumbers, List<ShowLotWeightDto> showLotWeights)
     {
-        var resp = await _http.PostAsJsonAsync($"api/shipments/packing-orders/{packingOrderId}/pack", new { boxType, weight, showLotLineIds });
+        var resp = await _http.PostAsJsonAsync("api/shipments/packing-orders/pack-showlots", new
+        {
+            packingOrderNumber,
+            boxType,
+            boxNumber,
+            grossWeight,
+            showLotLineIds = showLotBoxNumbers,
+            showLotWeights = showLotWeights.Select(w => new { lineId = w.BoxNumber, weight = w.Weight })
+        });
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<PackShowLotsResponseDto>();
+    }
+
+    public async Task<bool> CompleteShowLotPackingAsync(string packingOrderNumber)
+    {
+        var resp = await _http.PostAsJsonAsync("api/shipments/packing-orders/complete-showlot", new { packingOrderNumber });
         return resp.IsSuccessStatusCode;
     }
 

@@ -1018,6 +1018,7 @@ public class ShipmentFunctions
                     PackingOrderNumber = root.Element("PackingOrderNumber")?.Value ?? "",
                     ShipmentNumber = root.Element("ShipmentNumber")?.Value ?? "",
                     Status = root.Element("Status")?.Value ?? "",
+                    Type = root.Element("Type")?.Value ?? "Packing",
                     CreatedAt = root.Element("CreatedAt")?.Value ?? "",
                     BuyerName = root.Element("Buyer")?.Element("Name")?.Value ?? "",
                     BuyerNumber = root.Element("Buyer")?.Element("BuyerNumber")?.Value ?? "",
@@ -1036,6 +1037,7 @@ public class ShipmentFunctions
                     PackingOrderNumber = "",
                     ShipmentNumber = "",
                     Status = "Error",
+                    Type = "Unknown",
                     CreatedAt = "",
                     BuyerName = "",
                     BuyerNumber = "",
@@ -1142,8 +1144,7 @@ public class ShipmentFunctions
 
     [Function("PackShowLots")]
     public async Task<HttpResponseData> PackShowLots(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "shipments/packing-orders/{packingOrderId:int}/pack")] HttpRequestData req,
-        int packingOrderId)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "shipments/packing-orders/pack-showlots")] HttpRequestData req)
     {
         var body = await req.ReadFromJsonAsync<PackShowLotsDto>();
         if (body == null || string.IsNullOrEmpty(body.BoxType) || body.ShowLotLineIds == null || body.ShowLotLineIds.Count == 0)
@@ -1153,9 +1154,17 @@ public class ShipmentFunctions
             .Include(o => o.Lines)
             .Include(o => o.Shipment).ThenInclude(s => s!.Buyer)
             .Include(o => o.Shipment).ThenInclude(s => s!.Shipper)
-            .FirstOrDefaultAsync(o => o.Id == packingOrderId);
+            .FirstOrDefaultAsync(o => o.PackingOrderNumber == body.PackingOrderNumber);
         if (order == null)
             return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        // Get tare weight from system parameters
+        var tareKey = $"BoxTareWeight_{body.BoxType}";
+        var tareParam = await _db.Set<SystemParameter>().FirstOrDefaultAsync(p => p.Key == tareKey);
+        var tareWeight = tareParam != null && decimal.TryParse(tareParam.Value, out var tw) ? tw : 0m;
+
+        var grossWeight = body.GrossWeight > 0 ? body.GrossWeight : body.Weight;
+        var netWeight = grossWeight - tareWeight;
 
         // Get box type dimensions
         var dimensions = await _db.Set<BoxTypeDimension>()
@@ -1163,24 +1172,35 @@ public class ShipmentFunctions
 
         var packedBox = new PackedBox
         {
-            PackingOrderId = packingOrderId,
+            PackingOrderId = order.Id,
+            BoxNumber = body.BoxNumber,
             BoxType = body.BoxType,
-            Weight = body.Weight,
+            GrossWeight = grossWeight,
+            NetWeight = netWeight > 0 ? netWeight : grossWeight,
+            TareWeight = tareWeight,
+            Weight = grossWeight,
             HeightM = dimensions?.HeightM ?? 0,
             WidthM = dimensions?.WidthM ?? 0,
             LengthM = dimensions?.LengthM ?? 0,
-            Status = "Packed"
+            Status = "Closed"
         };
         _db.PackedBoxes.Add(packedBox);
         await _db.SaveChangesAsync();
 
-        // Assign selected showlot lines to this packed box
-        var lines = order.Lines.Where(l => body.ShowLotLineIds.Contains(l.Id)).ToList();
+        // Assign selected showlot lines to this packed box + update individual weights
+        // ShowLotLineIds contains BoxNumbers from the XML, match against order lines
+        var lines = order.Lines.Where(l => body.ShowLotLineIds.Contains(l.BoxNumber)).ToList();
         foreach (var line in lines)
         {
             line.PackedBoxId = packedBox.Id;
+            var weightEntry = body.ShowLotWeights.FirstOrDefault(w => w.LineId == line.BoxNumber);
+            if (weightEntry != null)
+                line.WeightKg = weightEntry.Weight;
         }
         await _db.SaveChangesAsync();
+
+        // Check if all showlots in this packing order are now packed
+        var allPacked = order.Lines.All(l => l.PackedBoxId != null);
 
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
@@ -1188,10 +1208,14 @@ public class ShipmentFunctions
         {
             success = true,
             packedBoxId = packedBox.Id,
+            boxNumber = packedBox.BoxNumber,
             boxType = packedBox.BoxType,
-            weight = packedBox.Weight,
+            grossWeight = packedBox.GrossWeight,
+            netWeight = packedBox.NetWeight,
+            tareWeight = packedBox.TareWeight,
             showLotCount = lines.Count,
-            totalSkins = lines.Sum(l => l.Skins)
+            totalSkins = lines.Sum(l => l.Skins),
+            allPacked
         }, JsonOptions));
         return response;
     }
@@ -1285,6 +1309,119 @@ public class ShipmentFunctions
         response.Headers.Add("Content-Type", "application/json");
         await response.WriteStringAsync(JsonSerializer.Serialize(results, JsonOptions));
         return response;
+    }
+
+    [Function("CompleteShowLotPacking")]
+    public async Task<HttpResponseData> CompleteShowLotPacking(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "shipments/packing-orders/complete-showlot")] HttpRequestData req)
+    {
+        var body = await req.ReadFromJsonAsync<CompleteShowLotDto>();
+        if (body == null || string.IsNullOrEmpty(body.PackingOrderNumber))
+            return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+
+        var order = await _db.PackingOrders
+            .Include(o => o.Lines)
+            .Include(o => o.Shipment)
+            .FirstOrDefaultAsync(o => o.PackingOrderNumber == body.PackingOrderNumber);
+        if (order == null)
+            return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        // Verify all showlots are packed
+        var unpackedCount = order.Lines.Count(l => l.PackedBoxId == null);
+        if (unpackedCount > 0)
+        {
+            var badResp = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+            badResp.Headers.Add("Content-Type", "application/json");
+            await badResp.WriteStringAsync(JsonSerializer.Serialize(new { error = $"{unpackedCount} showlot(s) not yet packed" }, JsonOptions));
+            return badResp;
+        }
+
+        // Get all packed boxes for this order
+        var packedBoxes = await _db.PackedBoxes
+            .Where(b => b.PackingOrderId == order.Id)
+            .Include(b => b.ShowLots)
+            .ToListAsync();
+
+        // Update statuses
+        order.Status = "Picked";
+        if (order.Shipment != null)
+        {
+            // Check if all packing orders for this shipment are picked
+            var allOrders = await _db.PackingOrders
+                .Where(po => po.ShipmentId == order.ShipmentId)
+                .ToListAsync();
+            var allPicked = allOrders.All(po => po.Id == order.Id || po.Status == "Picked");
+            if (allPicked)
+                order.Shipment.Status = "Packed";
+        }
+        await _db.SaveChangesAsync();
+
+        // Generate response XML to blob
+        if (_blobStorage != null)
+        {
+            try
+            {
+                var xml = GenerateShowLotPackingResponseXml(order, packedBoxes);
+                await _blobStorage.UploadPackingXmlAsync($"processed/{order.PackingOrderNumber}.xml", xml);
+
+                // Remove from new/
+                var container = await _blobStorage.GetPackingContainerAsync();
+                var sourceBlob = container.GetBlobClient($"new/{order.PackingOrderNumber}.xml");
+                await sourceBlob.DeleteIfExistsAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to upload showlot packing response for {Number}", order.PackingOrderNumber);
+            }
+        }
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(new
+        {
+            success = true,
+            packingOrderNumber = order.PackingOrderNumber,
+            packedBoxCount = packedBoxes.Count,
+            totalShowLots = packedBoxes.Sum(b => b.ShowLots.Count)
+        }, JsonOptions));
+        return response;
+    }
+
+    private static string GenerateShowLotPackingResponseXml(PackingOrder order, List<PackedBox> packedBoxes)
+    {
+        var doc = new XDocument(
+            new XDeclaration("1.0", "utf-8", "yes"),
+            new XElement("ShowLotPackingResponse",
+                new XElement("PackingOrderNumber", order.PackingOrderNumber),
+                new XElement("ShipmentNumber", order.Shipment?.ShipmentNumber ?? ""),
+                new XElement("CompletedAt", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")),
+                new XElement("Status", "Packed"),
+                new XElement("PackedBoxes",
+                    new XAttribute("Count", packedBoxes.Count),
+                    packedBoxes.Select(b =>
+                        new XElement("PackedBox",
+                            new XElement("BoxNumber", b.BoxNumber),
+                            new XElement("BoxType", b.BoxType),
+                            new XElement("GrossWeight", b.GrossWeight),
+                            new XElement("NetWeight", b.NetWeight),
+                            new XElement("TareWeight", b.TareWeight),
+                            new XElement("ShowLots",
+                                new XAttribute("Count", b.ShowLots.Count),
+                                b.ShowLots.Select(l =>
+                                    new XElement("ShowLot",
+                                        new XElement("BoxNumber", l.BoxNumber),
+                                        new XElement("LotNumber", l.LotNumber),
+                                        new XElement("Skins", l.Skins),
+                                        new XElement("WeightKg", l.WeightKg)
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+        );
+        return doc.ToString();
     }
 
     private static string GeneratePackedBoxResponseXml(PackedBox packedBox)
@@ -1381,13 +1518,28 @@ public class UpdatePackingOrderStatusDto
 
 public class PackShowLotsDto
 {
+    public string PackingOrderNumber { get; set; } = "";
     public string BoxType { get; set; } = "";
+    public string BoxNumber { get; set; } = "";
+    public decimal GrossWeight { get; set; }
     public decimal Weight { get; set; }
-    public List<int> ShowLotLineIds { get; set; } = new();
+    public List<int> ShowLotLineIds { get; set; } = new(); // These are showlot BoxNumbers from XML
+    public List<ShowLotWeightEntry> ShowLotWeights { get; set; } = new();
+}
+
+public class ShowLotWeightEntry
+{
+    public int LineId { get; set; }
+    public decimal Weight { get; set; }
 }
 
 public class ConfirmPickingDto
 {
     public string PackingOrderNumber { get; set; } = "";
     public List<int> PickedBoxNumbers { get; set; } = new();
+}
+
+public class CompleteShowLotDto
+{
+    public string PackingOrderNumber { get; set; } = "";
 }
