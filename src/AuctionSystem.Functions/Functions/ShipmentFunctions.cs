@@ -677,32 +677,40 @@ public class ShipmentFunctions
                 boxInfo[b.BoxNumber] = (b.Skins, b.BoxType);
         }
 
-        // Get box staging (actual weight + location) from snapshot or live
+        // Get box staging (actual weight + location) from external staging table
         var boxStaging = new Dictionary<int, (decimal? Weight, string? Location)>();
         if (allBoxNumbers.Count > 0)
         {
             try
             {
-                if (plUseSnapshot)
-                {
-                    var snapBoxes = await _catalogDb.Database
-                        .SqlQueryRaw<BoxStagingResult>($"SELECT BoxNumber, CAST(0 AS DECIMAL(18,2)) AS BoxWeight, BoxLocation FROM {plSnapshotBoxes} WHERE BoxNumber IN (" +
-                            string.Join(",", allBoxNumbers) + ")")
-                        .ToListAsync();
-                    foreach (var s in snapBoxes)
-                        boxStaging[s.BoxNumber] = (0, s.BoxLocation);
-                }
-                else
-                {
-                    var staging = await _catalogDb.Database
-                        .SqlQueryRaw<BoxStagingResult>("SELECT CAST(BoxNumber AS INT) AS BoxNumber, Weight AS BoxWeight, BoxLocation FROM dbo.boxstatingfromkphg WHERE BoxNumber IN (" +
-                            string.Join(",", allBoxNumbers) + ")")
-                        .ToListAsync();
-                    foreach (var s in staging)
-                        boxStaging[s.BoxNumber] = (s.BoxWeight, s.BoxLocation);
-                }
+                var staging = await _catalogDb.Database
+                    .SqlQueryRaw<BoxStagingResult>("SELECT CAST(BoxNumber AS INT) AS BoxNumber, Weight AS BoxWeight, BoxLocation FROM dbo.boxstatingfromkphg WHERE BoxNumber IN (" +
+                        string.Join(",", allBoxNumbers) + ")")
+                    .ToListAsync();
+                foreach (var s in staging)
+                    boxStaging[s.BoxNumber] = (s.BoxWeight, s.BoxLocation);
             }
             catch { /* table may not exist */ }
+
+            // If snapshot, also get location from snapshot boxes for any boxes not in staging
+            if (plUseSnapshot && plSnapshotBoxes != null)
+            {
+                try
+                {
+                    var missingBoxes = allBoxNumbers.Where(b => !boxStaging.ContainsKey(b)).ToList();
+                    if (missingBoxes.Count > 0)
+                    {
+                        var snapBoxes = await _catalogDb.Database
+                            .SqlQueryRaw<BoxStagingResult>($"SELECT BoxNumber, CAST(0 AS DECIMAL(18,2)) AS BoxWeight, BoxLocation FROM {plSnapshotBoxes} WHERE BoxNumber IN (" +
+                                string.Join(",", missingBoxes) + ")")
+                            .ToListAsync();
+                        foreach (var s in snapBoxes)
+                            if (!boxStaging.ContainsKey(s.BoxNumber))
+                                boxStaging[s.BoxNumber] = (null, s.BoxLocation);
+                    }
+                }
+                catch { }
+            }
         }
 
         // Get box type dimensions
