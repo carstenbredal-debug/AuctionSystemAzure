@@ -180,7 +180,7 @@ else
                             </td>
                             <td>
                                 @{
-                                    var isFullyPaid = inv.Status == "Paid" || inv.Status == "Closed" || (inv.RemainingBalance.HasValue && inv.RemainingBalance.Value == 0);
+                                    var isFullyPaid = inv.Status == "Paid" || inv.Status == "Closed" || inv.Status == "Packing" || (inv.RemainingBalance.HasValue && inv.RemainingBalance.Value == 0);
                                     var invId = inv.Id;
                                 }
                                 @if (_updatingId == invId)
@@ -193,9 +193,13 @@ else
                                     <button class="btn btn-sm btn-outline-info me-1" @onclick="() => OpenDownpaymentPopup(invId)" disabled="@_updatingId.HasValue">Partial Payment</button>
                                     <button class="btn btn-sm btn-outline-success" @onclick="() => SubmitFullyPaid(invId)" disabled="@_updatingId.HasValue">Full Payment</button>
                                 }
-                                else if (isFullyPaid && inv.Status != "Closed")
+                                else if (isFullyPaid && inv.Status != "Closed" && inv.Status != "Packing")
                                 {
                                     <button class="btn btn-sm btn-success" @onclick="() => SendToShipping(invId)" disabled="@_updatingId.HasValue">To Shipping</button>
+                                }
+                                else if (inv.Status == "Packing")
+                                {
+                                    <span class="badge bg-info">Packing</span>
                                 }
                                 else if (inv.Status == "Closed")
                                 {
@@ -604,16 +608,16 @@ else
         _bcSuccess = null;
         StateHasChanged();
 
-        var resp = await Api.UpdateInvoiceStatusAsync(invoiceId, "Closed", true);
+        var resp = await Api.UpdateInvoiceStatusAsync(invoiceId, "Packing", true);
         if (resp.IsSuccessStatusCode)
         {
             var inv = _invoices.FirstOrDefault(i => i.Id == invoiceId);
             if (inv != null)
             {
-                inv.Status = "Closed";
+                inv.Status = "Packing";
                 inv.ShippingStatus = "Released";
             }
-            _bcSuccess = "Invoice closed and sent to shipping.";
+            _bcSuccess = "Invoice sent to packing.";
         }
         else
         {

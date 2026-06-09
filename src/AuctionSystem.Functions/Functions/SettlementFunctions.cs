@@ -75,7 +75,8 @@ public class SettlementFunctions
         if (body.ReleaseForShipping)
         {
             invoice.ShippingStatus = "Released";
-            invoice.Status = InvoiceStatus.ReleasedToShip;
+            if (status != InvoiceStatus.Packing)
+                invoice.Status = InvoiceStatus.ReleasedToShip;
         }
         if (status == InvoiceStatus.Issued)
         {

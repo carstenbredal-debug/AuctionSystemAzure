@@ -105,7 +105,7 @@ public class ShipmentFunctions
             .Include(i => i.Buyer)
             .Include(i => i.Broker)
             .Include(i => i.Lines)
-            .Where(i => (i.ShippingStatus == "Released" || i.Status == InvoiceStatus.ReleasedToShip) && !i.IsCreditNote);
+            .Where(i => (i.ShippingStatus == "Released" || i.Status == InvoiceStatus.ReleasedToShip || i.Status == InvoiceStatus.Packing) && !i.IsCreditNote);
 
         if (int.TryParse(buyerFilter, out var bId))
             invoiceQuery = invoiceQuery.Where(i => i.BuyerId == bId);

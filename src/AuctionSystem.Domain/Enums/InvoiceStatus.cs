@@ -13,5 +13,6 @@ public enum InvoiceStatus
     FullyCredited,
     Alloted,
     ReleasedToShip,
+    Packing,
     Closed
 }
