@@ -98,7 +98,7 @@ public static class PackingListPdfService
                     });
                     left.Item().Row(infoRow =>
                     {
-                        infoRow.RelativeItem().Text("DK-2600 GLOSTRUP").FontSize(6.5f);
+                        infoRow.RelativeItem().Text("62-023 ŻERNIKI").FontSize(6.5f);
                         infoRow.RelativeItem().Text("FAX +45 4326 1126").FontSize(6.5f);
                         infoRow.RelativeItem().Text("VAT NO. DK15275413").FontSize(6.5f);
                     });
