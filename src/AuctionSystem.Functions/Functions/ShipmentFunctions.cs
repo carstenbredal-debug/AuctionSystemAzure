@@ -156,6 +156,8 @@ public class ShipmentFunctions
     public async Task<HttpResponseData> Create(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "shipments")] HttpRequestData req)
     {
+        try
+        {
         var body = await req.ReadFromJsonAsync<CreateShipmentDto>();
         if (body == null || body.ShipperId <= 0 || body.BuyerId <= 0)
         {
@@ -188,7 +190,7 @@ public class ShipmentFunctions
         // Find invoice IDs for each lot
         var lotInvoiceMap = await _db.Invoices
             .Include(i => i.Lines)
-            .Where(i => !i.IsCreditNote && (i.ShippingStatus == "Released" || i.Status == InvoiceStatus.ReleasedToShip))
+            .Where(i => !i.IsCreditNote && (i.ShippingStatus == "Released" || i.Status == InvoiceStatus.ReleasedToShip || i.Status == InvoiceStatus.Packing))
             .SelectMany(i => i.Lines.Select(l => new { l.LotNumber, InvoiceId = i.Id }))
             .Where(x => body.LotNumbers.Contains(x.LotNumber))
             .ToDictionaryAsync(x => x.LotNumber, x => x.InvoiceId);
@@ -201,7 +203,7 @@ public class ShipmentFunctions
             ShippingAddressId = body.ShippingAddressId,
             TrackingNumber = body.TrackingNumber ?? "",
             Notes = body.Notes ?? "",
-            Status = "Pending"
+            Status = "Packing"
         };
 
         foreach (var lotNumber in body.LotNumbers)
@@ -236,22 +238,20 @@ public class ShipmentFunctions
         }
 
         // Get catalog lots from snapshot or live table
-        List<dynamic> catalogLots;
+        List<CatalogLotResult> catalogLots;
         if (useSnapshot)
         {
-            var snapshotLots = await _catalogDb.Database
+            catalogLots = await _catalogDb.Database
                 .SqlQueryRaw<CatalogLotResult>($"SELECT LotNumber, IncludedBoxNumbers FROM {snapshotLotsTable} WHERE LotNumber IN (" +
                     string.Join(",", body.LotNumbers) + ")")
                 .ToListAsync();
-            catalogLots = snapshotLots.Select(cl => (dynamic)new { cl.LotNumber, cl.IncludedBoxNumbers }).ToList();
         }
         else
         {
-            var liveLots = await _catalogDb.CatalogLots
+            catalogLots = await _catalogDb.CatalogLots
                 .Where(cl => body.LotNumbers.Contains(cl.LotNumber))
-                .Select(cl => new { cl.LotNumber, cl.IncludedBoxNumbers })
+                .Select(cl => new CatalogLotResult { LotNumber = cl.LotNumber, IncludedBoxNumbers = cl.IncludedBoxNumbers ?? "" })
                 .ToListAsync();
-            catalogLots = liveLots.Select(cl => (dynamic)new { cl.LotNumber, cl.IncludedBoxNumbers }).ToList();
         }
 
         var allBoxNumbers = new List<int>();
@@ -299,7 +299,7 @@ public class ShipmentFunctions
             foreach (var boxStr in incBoxNums.Split(',', StringSplitOptions.RemoveEmptyEntries))
             {
                 if (int.TryParse(boxStr.Trim(), out var bn) && bn > 0)
-                    boxToLotMap[bn] = (int)cl.LotNumber;
+                    boxToLotMap[bn] = cl.LotNumber;
             }
         }
 
@@ -443,6 +443,15 @@ public class ShipmentFunctions
         response.Headers.Add("Content-Type", "application/json");
         await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true, id = shipment.Id, shipmentNumber = shipment.ShipmentNumber }, JsonOptions));
         return response;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "CreateShipment failed");
+            var err = req.CreateResponse(System.Net.HttpStatusCode.InternalServerError);
+            err.Headers.Add("Content-Type", "application/json");
+            await err.WriteStringAsync(JsonSerializer.Serialize(new { error = ex.Message, stack = ex.StackTrace?.Substring(0, Math.Min(ex.StackTrace.Length, 500)) }, JsonOptions));
+            return err;
+        }
     }
 
     private static string GeneratePackingOrderXml(PackingOrder packingOrder, Shipment shipment)
@@ -1249,7 +1258,7 @@ public class ShipmentFunctions
     private class CatalogLotResult
     {
         public int LotNumber { get; set; }
-        public string IncludedBoxNumbers { get; set; } = "";
+        public string? IncludedBoxNumbers { get; set; }
     }
 }
 
