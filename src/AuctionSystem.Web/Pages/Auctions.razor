@@ -3,6 +3,7 @@
 @attribute [Authorize(Roles = "Admin")]
 @inject AuctionApiClient Api
 @inject NavigationManager Nav
+@inject HttpClient Http
 
 <PageTitle>Auctions - Auction System</PageTitle>
 
@@ -59,6 +60,11 @@
             <li class="nav-item">
                 <button class="nav-link @(activeTab == "transactions" ? "active" : "")" @onclick="OpenTransactionsTab">
                     Transactions <span class="badge bg-secondary">@transactions.Count</span>
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link @(activeTab == "skins" ? "active" : "")" @onclick="OpenSkinsTab">
+                    Skins
                 </button>
             </li>
             <li class="nav-item">
@@ -158,6 +164,90 @@
                             </tfoot>
                         </table>
                     </div>
+                }
+            }
+        }
+        else if (activeTab == "skins")
+        {
+            @if (skinsLoading)
+            {
+                <div class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+            }
+            else
+            {
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <div class="summary-card">
+                            <div class="card-title">Total Sold Skins</div>
+                            <div class="card-value">@skinsTotalCount.ToString("N0")</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <input class="form-control" placeholder="Search by farmer, barcode, or box..."
+                               @bind="skinsSearch" @bind:event="oninput" @onkeydown="HandleSkinsSearchKey" />
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-primary" @onclick="SearchSkins">Search</button>
+                        @if (!string.IsNullOrEmpty(skinsActiveSearch))
+                        {
+                            <button class="btn btn-outline-secondary ms-1" @onclick="ClearSkinsSearch">Clear</button>
+                        }
+                    </div>
+                </div>
+
+                @if (!skinsList.Any())
+                {
+                    <div class="alert alert-info">No sold skins for this auction.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-striped table-sm">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Lot</th><th>Box</th><th>Barcode</th><th>Farmer</th>
+                                    <th>Sales Type</th><th>Gender</th><th>Group</th><th>Size</th>
+                                    <th>Color</th><th>Quality</th><th>Broker</th><th>Buyer</th>
+                                    <th>Price (EUR)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var skin in skinsList)
+                                {
+                                    <tr>
+                                        <td>@skin.LotNumber</td><td>@skin.BoxNumber</td><td>@skin.Barcode</td>
+                                        <td>@skin.Farmer</td><td>@skin.SalesType</td><td>@skin.Gender</td>
+                                        <td>@skin.Group</td><td>@skin.Size</td><td>@skin.Color</td>
+                                        <td>@skin.Quality</td><td>@skin.BrokerName</td><td>@skin.BuyerName</td>
+                                        <td>@skin.PriceEur?.ToString("N2")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <nav>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <small class="text-muted">Showing @(((skinsPage - 1) * skinsPageSize) + 1)–@(Math.Min(skinsPage * skinsPageSize, skinsTotalCount)) of @skinsTotalCount.ToString("N0")</small>
+                            <ul class="pagination mb-0">
+                                <li class="page-item @(skinsPage <= 1 ? "disabled" : "")">
+                                    <a class="page-link" href="javascript:void(0)" @onclick="() => GoToSkinsPage(1)">First</a>
+                                </li>
+                                <li class="page-item @(skinsPage <= 1 ? "disabled" : "")">
+                                    <a class="page-link" href="javascript:void(0)" @onclick="() => GoToSkinsPage(skinsPage - 1)">Prev</a>
+                                </li>
+                                <li class="page-item @(skinsPage >= skinsTotalPages ? "disabled" : "")">
+                                    <a class="page-link" href="javascript:void(0)" @onclick="() => GoToSkinsPage(skinsPage + 1)">Next</a>
+                                </li>
+                                <li class="page-item @(skinsPage >= skinsTotalPages ? "disabled" : "")">
+                                    <a class="page-link" href="javascript:void(0)" @onclick="() => GoToSkinsPage(skinsTotalPages)">Last</a>
+                                </li>
+                            </ul>
+                        </div>
+                    </nav>
                 }
             }
         }
@@ -410,6 +500,16 @@ else
     private List<AuctionTransactionSummaryDto> transactionSummary = new();
     private bool transactionsLoading;
 
+    // Skins tab state
+    private List<SkinItem> skinsList = new();
+    private bool skinsLoading;
+    private int skinsPage = 1;
+    private int skinsPageSize = 100;
+    private int skinsTotalPages;
+    private int skinsTotalCount;
+    private string skinsSearch = "";
+    private string skinsActiveSearch = "";
+
     // Import tab state
     private List<CatalogLotDto> catalogLots = new();
     private List<CatalogLotDto> filteredCatalogLots = new();
@@ -556,6 +656,84 @@ else
         "AuctionFee" or "Commission" => "table-light",
         _ => ""
     };
+
+    private async Task OpenSkinsTab()
+    {
+        activeTab = "skins";
+        skinsPage = 1;
+        await LoadSkins();
+    }
+
+    private async Task LoadSkins()
+    {
+        skinsLoading = true;
+        try
+        {
+            var url = $"api/skins?page={skinsPage}&pageSize={skinsPageSize}&auctionId={Id!.Value}";
+            if (!string.IsNullOrEmpty(skinsActiveSearch))
+                url += $"&search={Uri.EscapeDataString(skinsActiveSearch)}";
+
+            var response = await Http.GetAsync(url);
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync();
+                var doc = System.Text.Json.JsonDocument.Parse(json);
+                skinsTotalCount = doc.RootElement.GetProperty("totalSkins").GetInt32();
+                skinsPage = doc.RootElement.GetProperty("page").GetInt32();
+                skinsTotalPages = doc.RootElement.GetProperty("totalPages").GetInt32();
+                var skinsArray = doc.RootElement.GetProperty("skins");
+                skinsList = System.Text.Json.JsonSerializer.Deserialize<List<SkinItem>>(skinsArray.GetRawText(),
+                    new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+            }
+        }
+        catch { }
+        skinsLoading = false;
+    }
+
+    private async Task GoToSkinsPage(int page)
+    {
+        if (page < 1 || page > skinsTotalPages) return;
+        skinsPage = page;
+        await LoadSkins();
+    }
+
+    private async Task SearchSkins()
+    {
+        skinsActiveSearch = skinsSearch;
+        skinsPage = 1;
+        await LoadSkins();
+    }
+
+    private async Task ClearSkinsSearch()
+    {
+        skinsSearch = "";
+        skinsActiveSearch = "";
+        skinsPage = 1;
+        await LoadSkins();
+    }
+
+    private async Task HandleSkinsSearchKey(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await SearchSkins();
+    }
+
+    private class SkinItem
+    {
+        public Guid UniqueID { get; set; }
+        public int BoxNumber { get; set; }
+        public long Barcode { get; set; }
+        public string? Farmer { get; set; }
+        public string? SalesType { get; set; }
+        public string? Gender { get; set; }
+        public string? Group { get; set; }
+        public string? Size { get; set; }
+        public string? Color { get; set; }
+        public string? Quality { get; set; }
+        public string? BrokerName { get; set; }
+        public string? BuyerName { get; set; }
+        public decimal? PriceEur { get; set; }
+        public int? LotNumber { get; set; }
+    }
 
     private async Task OpenImportTab()
     {

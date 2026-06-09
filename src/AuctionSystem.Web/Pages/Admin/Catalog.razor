@@ -1,13 +1,33 @@
 @page "/admin/catalog"
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = "Admin")]
+@using AuctionSystem.Web.Models
+@using AuctionSystem.Web.Services
 @inject HttpClient Http
 @inject IJSRuntime JS
 @inject IConfiguration Config
+@inject AuctionApiClient Api
 
 <h3>Generate Catalogue</h3>
 
 <div class="catalogue-page">
+    <div class="mb-3">
+        <label class="form-label fw-bold">Auction Number <span class="text-danger">*</span></label>
+        <select class="form-select" style="max-width: 400px;" @bind="SelectedAuctionId" @bind:after="OnAuctionChanged">
+            <option value="0">— Select Auction —</option>
+            @foreach (var a in Auctions)
+            {
+                <option value="@a.Id">@a.AuctionNumber — @a.Title</option>
+            }
+        </select>
+    </div>
+
+    @if (SelectedAuctionId == 0)
+    {
+        <div class="alert alert-info">Please select an auction to generate or view the catalogue.</div>
+    }
+    else
+    {
     <div class="filter-section">
         <div class="filter-grid">
             <div class="filter-item">
@@ -93,6 +113,7 @@
     {
         <div class="alert @(IsError ? "alert-danger" : "alert-success") mt-2">@ResultMessage</div>
     }
+    }@* end SelectedAuctionId != 0 *@
 
     @if (CatalogLots.Any())
     {
@@ -164,6 +185,9 @@
 </div>
 
 @code {
+    private int SelectedAuctionId;
+    private List<AuctionDto> Auctions = new();
+
     private string SelectedSalesType = "";
     private string SelectedGender = "";
     private string SelectedGroup = "";
@@ -196,6 +220,7 @@
     {
         try
         {
+            Auctions = await Api.GetAuctionsAsync();
             var filters = await Http.GetFromJsonAsync<FilterOptions>("api/catalog/filters");
             if (filters != null)
             {
@@ -306,9 +331,21 @@
         }
     }
 
+    private async Task OnAuctionChanged()
+    {
+        CatalogLots.Clear();
+        ResultMessage = "";
+        IsError = false;
+    }
+
     private string BuildQueryString()
     {
         var parts = new List<string>();
+        if (SelectedAuctionId > 0)
+        {
+            var auction = Auctions.FirstOrDefault(a => a.Id == SelectedAuctionId);
+            if (auction != null) parts.Add($"auctionNumber={Uri.EscapeDataString(auction.AuctionNumber)}");
+        }
         if (!string.IsNullOrEmpty(SelectedSalesType)) parts.Add($"type={Uri.EscapeDataString(SelectedSalesType)}");
         if (!string.IsNullOrEmpty(SelectedGender)) parts.Add($"gender={Uri.EscapeDataString(SelectedGender)}");
         if (!string.IsNullOrEmpty(SelectedGroup)) parts.Add($"group={Uri.EscapeDataString(SelectedGroup)}");

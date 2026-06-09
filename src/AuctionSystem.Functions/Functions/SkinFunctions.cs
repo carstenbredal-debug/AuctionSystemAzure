@@ -32,9 +32,11 @@ public class SkinFunctions
         var page = int.TryParse(query["page"], out var p) ? Math.Max(1, p) : 1;
         var pageSize = int.TryParse(query["pageSize"], out var ps) ? Math.Clamp(ps, 10, 500) : 100;
         var search = query["search"]?.Trim();
+        var auctionIdStr = query["auctionId"];
+        int? auctionId = int.TryParse(auctionIdStr, out var aid) ? aid : null;
 
         // Build sold box → sale info lookup
-        var saleInfoByBox = await GetSoldBoxSaleInfoAsync();
+        var saleInfoByBox = await GetSoldBoxSaleInfoAsync(auctionId);
         var soldBoxNumbers = saleInfoByBox.Keys.ToHashSet();
 
         // Query only sold skins
@@ -202,11 +204,22 @@ public class SkinFunctions
         return response;
     }
 
-    private async Task<Dictionary<int, BoxSaleInfo>> GetSoldBoxSaleInfoAsync()
+    private async Task<Dictionary<int, BoxSaleInfo>> GetSoldBoxSaleInfoAsync(int? auctionId = null)
     {
         // Get sold auction results with broker and buyer info
-        var soldResults = await _auctionDb.AuctionResults
-            .Where(r => r.SoldToBuyerId != null)
+        var resultsQuery = _auctionDb.AuctionResults
+            .Where(r => r.SoldToBuyerId != null);
+
+        if (auctionId.HasValue)
+        {
+            var auctionLotNumbers = await _auctionDb.Lots
+                .Where(l => l.AuctionId == auctionId.Value)
+                .Select(l => l.LotNumber)
+                .ToListAsync();
+            resultsQuery = resultsQuery.Where(r => auctionLotNumbers.Contains(r.LotNumber));
+        }
+
+        var soldResults = await resultsQuery
             .Include(r => r.Broker)
             .Include(r => r.SoldToBuyer)
             .Select(r => new
