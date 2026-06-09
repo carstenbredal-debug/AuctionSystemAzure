@@ -45,6 +45,8 @@ public class PackingListData
 
 public static class PackingListPdfService
 {
+    private static readonly string LogoPath = Path.Combine(AppContext.BaseDirectory, "Assets", "kopenhagenfur-logo.png");
+
     public static byte[] GeneratePdf(PackingListData data)
     {
         QuestPDF.Settings.License = LicenseType.Community;
@@ -80,7 +82,8 @@ public static class PackingListPdfService
             {
                 row.RelativeItem(7).Column(left =>
                 {
-                    left.Item().Text("KOPENHAGEN FUR a.m.b.a.").Bold().FontSize(9);
+                    left.Item().Text("KOPENHAGEN FUR").Bold().FontSize(9);
+                    left.Item().Height(6);
                     left.Item().Row(infoRow =>
                     {
                         infoRow.RelativeItem().Text("LANGAGERVEJ 60").FontSize(6.5f);
@@ -101,7 +104,9 @@ public static class PackingListPdfService
                         infoRow.RelativeItem().Text("shipping@kopenhagenfur.com").FontSize(6.5f);
                     });
                 });
-                row.RelativeItem(3).AlignRight().Text("KOPENHAGEN\nFUR").Bold().FontSize(18);
+                row.RelativeItem(3).AlignRight().AlignTop()
+                    .Height(45)
+                    .Image(LogoPath, ImageScaling.FitArea);
             });
 
             col.Item().Height(5);
