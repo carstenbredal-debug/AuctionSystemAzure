@@ -27,6 +27,16 @@ else
                 }
             </select>
         </div>
+        <div class="col-md-4">
+            <label class="form-label fw-bold">Filter by Invoice</label>
+            <select class="form-select" @bind="_selectedInvoice">
+                <option value="">All Invoices</option>
+                @foreach (var inv in _invoiceNumbers)
+                {
+                    <option value="@inv">@inv</option>
+                }
+            </select>
+        </div>
     </div>
 
     <div class="row mb-4">
@@ -115,17 +125,25 @@ else
     private List<ShippingBoxDto> _boxes = new();
     private bool _loading = true;
     private string _selectedBuyer = "";
+    private string _selectedInvoice = "";
     private List<string> _buyerNames = new();
+    private List<string> _invoiceNumbers = new();
 
-    private List<ShippingBoxDto> GetFilteredBoxes() =>
-        string.IsNullOrEmpty(_selectedBuyer)
-            ? _boxes
-            : _boxes.Where(b => b.BuyerName == _selectedBuyer).ToList();
+    private List<ShippingBoxDto> GetFilteredBoxes()
+    {
+        var filtered = _boxes.AsEnumerable();
+        if (!string.IsNullOrEmpty(_selectedBuyer))
+            filtered = filtered.Where(b => b.BuyerName == _selectedBuyer);
+        if (!string.IsNullOrEmpty(_selectedInvoice))
+            filtered = filtered.Where(b => b.InvoiceNumber == _selectedInvoice);
+        return filtered.ToList();
+    }
 
     protected override async Task OnInitializedAsync()
     {
         _boxes = await Api.GetShippingBoxesAsync();
         _buyerNames = _boxes.Select(b => b.BuyerName ?? "—").Distinct().OrderBy(n => n).ToList();
+        _invoiceNumbers = _boxes.Select(b => b.InvoiceNumber ?? "—").Distinct().OrderBy(n => n).ToList();
         _loading = false;
     }
 }
