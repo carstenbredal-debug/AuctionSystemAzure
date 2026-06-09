@@ -95,12 +95,13 @@ public static class PackingListPdfService
                         infoRow.RelativeItem().Text("UL. SKŁADOWA 10").FontSize(6.5f);
                         infoRow.RelativeItem().Text("KOPENHAGENFUR.COM").FontSize(6.5f);
                     });
+                    left.Item().Height(2);
                     left.Item().Row(infoRow =>
                     {
                         infoRow.RelativeItem().Text("62-023 ŻERNIKI").FontSize(6.5f);
-                        infoRow.RelativeItem().Text("VAT NO. DK15275413").FontSize(6.5f);
+                        infoRow.RelativeItem().Text("NIP: 5253073718").FontSize(6.5f);
                     });
-                    left.Item().Height(3);
+                    left.Item().Height(2);
                     left.Item().Row(infoRow =>
                     {
                         infoRow.RelativeItem().Text("POLAND").FontSize(6.5f);
