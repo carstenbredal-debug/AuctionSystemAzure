@@ -10,6 +10,7 @@ public class PackingListLine
     public string LotNo { get; set; } = "";
     public string Carton { get; set; } = "";
     public int Skins { get; set; }
+    public decimal HammerPrice { get; set; }
     public decimal VolumeM3 { get; set; }
     public decimal NetWeight { get; set; }
     public decimal GrossWeight { get; set; }
@@ -40,9 +41,12 @@ public class PackingListData
     // Grand totals
     public int TotalCartons { get; set; }
     public int TotalSkins { get; set; }
+    public decimal TotalPrice { get; set; }
     public decimal TotalVolume { get; set; }
     public decimal TotalNetWeight { get; set; }
     public decimal TotalGrossWeight { get; set; }
+
+    public bool IsShippingInvoice { get; set; }
 }
 
 public static class PackingListPdfService
@@ -135,7 +139,7 @@ public static class PackingListPdfService
 
                 row.RelativeItem(5).Column(right =>
                 {
-                    right.Item().Text("Packing list").Bold().FontSize(16);
+                    right.Item().Text(data.IsShippingInvoice ? "Shipping invoice" : "Packing list").Bold().FontSize(16);
                     right.Item().Height(10);
                     AddHeaderField(right, "Forwarding Agent", data.ForwardingAgent);
                     AddHeaderField(right, "Invoice account", data.InvoiceAccount);
@@ -162,6 +166,7 @@ public static class PackingListPdfService
 
     private static void ComposeContent(IContainer container, PackingListData data)
     {
+        var inv = data.IsShippingInvoice;
         var showLotLines = data.Lines.Where(l => l.IsShowLot || l.IsPackedBoxSummary).ToList();
         var storageLines = data.Lines.Where(l => !l.IsShowLot && !l.IsPackedBoxSummary).ToList();
 
@@ -170,15 +175,16 @@ public static class PackingListPdfService
             // ShowLot section first (if any)
             if (showLotLines.Count > 0)
             {
-                col.Item().Element(c => ComposeTable(c, showLotLines));
+                col.Item().Element(c => ComposeTable(c, showLotLines, inv));
 
                 // Showlot subtotal
                 var slBoxes = showLotLines.Count(l => l.IsPackedBoxSummary);
                 var slSkins = showLotLines.Where(l => l.IsPackedBoxSummary).Sum(l => l.Skins);
+                var slPrice = showLotLines.Where(l => l.IsShowLot).Sum(l => l.HammerPrice * l.Skins);
                 var slVol = showLotLines.Where(l => l.IsPackedBoxSummary).Sum(l => l.VolumeM3);
                 var slNet = showLotLines.Where(l => l.IsPackedBoxSummary).Sum(l => l.NetWeight);
                 var slGross = showLotLines.Where(l => l.IsPackedBoxSummary).Sum(l => l.GrossWeight);
-                col.Item().Element(c => ComposeSectionTotal(c, "Showlot total", slBoxes, slSkins, slVol, slNet, slGross));
+                col.Item().Element(c => ComposeSectionTotal(c, "Showlot total", slBoxes, slSkins, slPrice, slVol, slNet, slGross, inv));
 
                 // Page break before storage boxes (if any)
                 if (storageLines.Count > 0)
@@ -188,15 +194,16 @@ public static class PackingListPdfService
             // Storage boxes section
             if (storageLines.Count > 0)
             {
-                col.Item().Element(c => ComposeTable(c, storageLines));
+                col.Item().Element(c => ComposeTable(c, storageLines, inv));
 
                 // Storage subtotal
                 var stBoxes = storageLines.Count;
                 var stSkins = storageLines.Sum(l => l.Skins);
+                var stPrice = storageLines.Sum(l => l.HammerPrice * l.Skins);
                 var stVol = storageLines.Sum(l => l.VolumeM3);
                 var stNet = storageLines.Sum(l => l.NetWeight);
                 var stGross = storageLines.Sum(l => l.GrossWeight);
-                col.Item().Element(c => ComposeSectionTotal(c, "Storage total", stBoxes, stSkins, stVol, stNet, stGross));
+                col.Item().Element(c => ComposeSectionTotal(c, "Storage total", stBoxes, stSkins, stPrice, stVol, stNet, stGross, inv));
             }
 
             // Grand total at the end
@@ -204,7 +211,7 @@ public static class PackingListPdfService
         });
     }
 
-    private static void ComposeTable(IContainer container, List<PackingListLine> lines)
+    private static void ComposeTable(IContainer container, List<PackingListLine> lines, bool isInvoice)
     {
         container.Table(table =>
         {
@@ -214,6 +221,7 @@ public static class PackingListPdfService
                 c.RelativeColumn(1.5f); // Lot no.
                 c.RelativeColumn(1.5f); // Cartons (box number)
                 c.RelativeColumn(1.2f); // No. of skins
+                if (isInvoice) c.RelativeColumn(1.5f); // Price
                 c.RelativeColumn(1);   // Volume
                 c.RelativeColumn(1.2f); // Net Weight
                 c.RelativeColumn(1.2f); // Gross Weight
@@ -225,6 +233,7 @@ public static class PackingListPdfService
                 header.Cell().BorderBottom(1).PaddingBottom(3).AlignRight().Text("Lot no.").Bold().FontSize(7.5f);
                 header.Cell().BorderBottom(1).PaddingBottom(3).AlignRight().Text("Cartons").Bold().FontSize(7.5f);
                 header.Cell().BorderBottom(1).PaddingBottom(3).AlignRight().Text("No. of skins").Bold().FontSize(7.5f);
+                if (isInvoice) header.Cell().BorderBottom(1).PaddingBottom(3).AlignRight().Text("Price").Bold().FontSize(7.5f);
                 header.Cell().BorderBottom(1).PaddingBottom(3).AlignRight().Text("Volume").Bold().FontSize(7.5f);
                 header.Cell().BorderBottom(1).PaddingBottom(3).AlignRight().Text("Net Weight").Bold().FontSize(7.5f);
                 header.Cell().BorderBottom(1).PaddingBottom(3).AlignRight().Text("Gross weight").Bold().FontSize(7.5f);
@@ -234,33 +243,34 @@ public static class PackingListPdfService
             {
                 if (line.IsShowLot)
                 {
-                    // ShowLot line: description, lot no, box number, skins only (no weight/volume)
                     table.Cell().Padding(2).Text(line.Text).FontSize(7.5f);
                     table.Cell().Padding(2).AlignRight().Text(line.LotNo).FontSize(7.5f);
                     table.Cell().Padding(2).AlignRight().Text(line.Carton).FontSize(7.5f);
                     table.Cell().Padding(2).AlignRight().Text(line.Skins.ToString("N0")).FontSize(7.5f);
+                    if (isInvoice) table.Cell().Padding(2).AlignRight().Text(line.HammerPrice > 0 ? (line.HammerPrice * line.Skins).ToString("N2") : "").FontSize(7.5f);
                     table.Cell().Padding(2).Text("").FontSize(7.5f);
                     table.Cell().Padding(2).Text("").FontSize(7.5f);
                     table.Cell().Padding(2).Text("").FontSize(7.5f);
                 }
                 else if (line.IsPackedBoxSummary)
                 {
-                    // Packed box summary: box number, total skins, volume, net weight, gross weight
                     table.Cell().Padding(2).Text("").FontSize(7.5f);
                     table.Cell().Padding(2).Text("").FontSize(7.5f);
                     table.Cell().Padding(2).AlignRight().Text(line.Carton).Bold().FontSize(7.5f);
                     table.Cell().Padding(2).AlignRight().Text(line.Skins.ToString("N0")).Bold().FontSize(7.5f);
+                    if (isInvoice) table.Cell().Padding(2).Text("").FontSize(7.5f);
                     table.Cell().Padding(2).AlignRight().Text(line.VolumeM3 > 0 ? line.VolumeM3.ToString("N4") : "").Bold().FontSize(7.5f);
                     table.Cell().Padding(2).AlignRight().Text(line.NetWeight > 0 ? line.NetWeight.ToString("N2") : "").Bold().FontSize(7.5f);
                     table.Cell().Padding(2).AlignRight().Text(line.GrossWeight > 0 ? line.GrossWeight.ToString("N2") : "").Bold().FontSize(7.5f);
                 }
                 else
                 {
-                    // Regular storage box line: all columns
+                    var price = line.HammerPrice * line.Skins;
                     table.Cell().Padding(2).Text(line.Text).FontSize(7.5f);
                     table.Cell().Padding(2).AlignRight().Text(line.LotNo).FontSize(7.5f);
                     table.Cell().Padding(2).AlignRight().Text(line.Carton).FontSize(7.5f);
                     table.Cell().Padding(2).AlignRight().Text(line.Skins.ToString("N0")).FontSize(7.5f);
+                    if (isInvoice) table.Cell().Padding(2).AlignRight().Text(price > 0 ? price.ToString("N2") : "").FontSize(7.5f);
                     table.Cell().Padding(2).AlignRight().Text(line.VolumeM3 > 0 ? line.VolumeM3.ToString("N4") : "").FontSize(7.5f);
                     table.Cell().Padding(2).AlignRight().Text(line.NetWeight > 0 ? line.NetWeight.ToString("N2") : "").FontSize(7.5f);
                     table.Cell().Padding(2).AlignRight().Text(line.GrossWeight > 0 ? line.GrossWeight.ToString("N2") : "").FontSize(7.5f);
@@ -269,7 +279,7 @@ public static class PackingListPdfService
         });
     }
 
-    private static void ComposeSectionTotal(IContainer container, string label, int boxes, int skins, decimal vol, decimal net, decimal gross)
+    private static void ComposeSectionTotal(IContainer container, string label, int boxes, int skins, decimal price, decimal vol, decimal net, decimal gross, bool isInvoice)
     {
         container.Column(col =>
         {
@@ -281,6 +291,7 @@ public static class PackingListPdfService
                 row.RelativeItem(5).Text(label).Bold().FontSize(8);
                 row.RelativeItem(1.5f).AlignRight().Text(boxes.ToString("N0")).Bold().FontSize(8);
                 row.RelativeItem(1.2f).AlignRight().Text(skins.ToString("N0")).Bold().FontSize(8);
+                if (isInvoice) row.RelativeItem(1.5f).AlignRight().Text(price.ToString("N2")).Bold().FontSize(8);
                 row.RelativeItem(1).AlignRight().Text(vol.ToString("N4")).Bold().FontSize(8);
                 row.RelativeItem(1.2f).AlignRight().Text(net.ToString("N2")).Bold().FontSize(8);
                 row.RelativeItem(1.2f).AlignRight().Text(gross.ToString("N2")).Bold().FontSize(8);
@@ -300,6 +311,7 @@ public static class PackingListPdfService
                 row.RelativeItem(5).Text("Grand total").Bold().FontSize(9);
                 row.RelativeItem(1.5f).AlignRight().Text(data.TotalCartons.ToString("N0")).Bold().FontSize(9);
                 row.RelativeItem(1.2f).AlignRight().Text(data.TotalSkins.ToString("N0")).Bold().FontSize(9);
+                if (data.IsShippingInvoice) row.RelativeItem(1.5f).AlignRight().Text(data.TotalPrice.ToString("N2")).Bold().FontSize(9);
                 row.RelativeItem(1).AlignRight().Text(data.TotalVolume.ToString("N4")).Bold().FontSize(9);
                 row.RelativeItem(1.2f).AlignRight().Text(data.TotalNetWeight.ToString("N2")).Bold().FontSize(9);
                 row.RelativeItem(1.2f).AlignRight().Text(data.TotalGrossWeight.ToString("N2")).Bold().FontSize(9);

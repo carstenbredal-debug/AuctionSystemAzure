@@ -73,6 +73,7 @@ public class ShipmentFunctions
                 s.Status,
                 s.Notes,
                 s.PackingListPdfUrl,
+                s.ShippingInvoicePdfUrl,
                 s.CreatedAt,
                 s.ShippedAt,
                 s.DeliveredAt,
@@ -893,6 +894,9 @@ public class ShipmentFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "shipments/{id:int}/packing-list-pdf")] HttpRequestData req,
         int id)
     {
+        var pdfQuery = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+        var isShippingInvoice = pdfQuery["type"] == "shipping-invoice";
+
         var shipment = await _db.Shipments
             .Include(s => s.Shipper)
             .Include(s => s.Buyer)
@@ -904,6 +908,18 @@ public class ShipmentFunctions
 
         // Collect lot numbers from shipment lines
         var pdfLotNumbers = shipment.Lines.Select(l => l.LotNumber).Distinct().ToList();
+
+        // Lookup HammerPrice per lot (for shipping invoice)
+        var pdfLotPrices = new Dictionary<int, decimal>();
+        if (isShippingInvoice && pdfLotNumbers.Count > 0)
+        {
+            var lots = await _db.Lots
+                .Where(l => pdfLotNumbers.Contains(l.LotNumber) && l.HammerPrice != null)
+                .Select(l => new { l.LotNumber, Price = l.HammerPrice!.Value })
+                .ToListAsync();
+            foreach (var l in lots)
+                pdfLotPrices[l.LotNumber] = l.Price;
+        }
 
         // Determine auction for snapshot
         var pdfAuctionNum = await _db.Lots
@@ -1051,6 +1067,7 @@ public class ShipmentFunctions
                     LotNo = cl.LotNumber.ToString(),
                     Carton = boxNum.ToString(),
                     Skins = bi.Skins,
+                    HammerPrice = pdfLotPrices.GetValueOrDefault(cl.LotNumber),
                     VolumeM3 = vol,
                     NetWeight = net,
                     GrossWeight = gross
@@ -1112,17 +1129,19 @@ public class ShipmentFunctions
                     foreach (var sl in pb.ShowLots)
                     {
                         var slDesc = pdfBoxDesc.GetValueOrDefault(sl.BoxNumber, "");
-                        var slLotNo = pdfCatalogLots
+                        var slCatLot = pdfCatalogLots
                             .FirstOrDefault(cl => !string.IsNullOrEmpty(cl.IncludedBoxNumbers) &&
                                 cl.IncludedBoxNumbers.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                                    .Any(b => int.TryParse(b.Trim(), out var n) && n == sl.BoxNumber))
-                            ?.LotNumber.ToString() ?? "";
+                                    .Any(b => int.TryParse(b.Trim(), out var n) && n == sl.BoxNumber));
+                        var slLotNo = slCatLot?.LotNumber.ToString() ?? "";
+                        var slHammer = slCatLot != null ? pdfLotPrices.GetValueOrDefault(slCatLot.LotNumber) : 0m;
                         remaining.Add(new PackingListLine
                         {
                             Text = slDesc,
                             LotNo = slLotNo,
                             Carton = sl.BoxNumber.ToString(),
                             Skins = sl.Skins,
+                            HammerPrice = slHammer,
                             IsShowLot = true
                         });
                     }
@@ -1184,6 +1203,8 @@ public class ShipmentFunctions
             if (!string.IsNullOrWhiteSpace(shipment.ShippingAddress.Country)) shipToLines.Add(shipment.ShippingAddress.Country);
         }
 
+        var pdfTotalPrice = pdfLines.Sum(l => l.HammerPrice * l.Skins);
+
         var pdfData = new PackingListData
         {
             ShipmentNumber = shipment.ShipmentNumber,
@@ -1200,9 +1221,11 @@ public class ShipmentFunctions
             Lines = pdfLines,
             TotalCartons = pdfTotalBoxes,
             TotalSkins = pdfTotalSkins,
+            TotalPrice = pdfTotalPrice,
             TotalVolume = pdfTotalVol,
             TotalNetWeight = pdfTotalNet,
-            TotalGrossWeight = pdfTotalGross
+            TotalGrossWeight = pdfTotalGross,
+            IsShippingInvoice = isShippingInvoice
         };
 
         // Generate PDF
@@ -1213,20 +1236,26 @@ public class ShipmentFunctions
         {
             try
             {
-                var fileName = $"packing-lists/{shipment.ShipmentNumber}.pdf";
+                var folder = isShippingInvoice ? "shipping-invoices" : "packing-lists";
+                var fileName = $"{folder}/{shipment.ShipmentNumber}.pdf";
                 var url = await _blobStorage.UploadPdfAsync(fileName, pdfBytes);
-                shipment.PackingListPdfUrl = url;
+                if (isShippingInvoice)
+                    shipment.ShippingInvoicePdfUrl = url;
+                else
+                    shipment.PackingListPdfUrl = url;
                 await _db.SaveChangesAsync();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to upload packing list PDF for {ShipmentNumber}", shipment.ShipmentNumber);
+                _logger.LogError(ex, "Failed to upload {DocType} PDF for {ShipmentNumber}",
+                    isShippingInvoice ? "shipping invoice" : "packing list", shipment.ShipmentNumber);
             }
         }
 
+        var docName = isShippingInvoice ? "Shipping invoice" : "Packing list";
         var pdfResponse = req.CreateResponse(System.Net.HttpStatusCode.OK);
         pdfResponse.Headers.Add("Content-Type", "application/pdf");
-        pdfResponse.Headers.Add("Content-Disposition", $"attachment; filename=\"Packing list - {shipment.ShipmentNumber}.pdf\"");
+        pdfResponse.Headers.Add("Content-Disposition", $"attachment; filename=\"{docName} - {shipment.ShipmentNumber}.pdf\"");
         await pdfResponse.Body.WriteAsync(pdfBytes);
         return pdfResponse;
     }

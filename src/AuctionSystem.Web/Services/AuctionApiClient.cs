@@ -1034,8 +1034,14 @@ public class AuctionApiClient
     {
         var resp = await _http.PostAsync($"api/shipments/{shipmentId}/packing-list-pdf", null);
         if (!resp.IsSuccessStatusCode) return null;
-        // Return the PDF URL from the response header or use the shipment to get it
         return $"api/shipments/{shipmentId}/packing-list-pdf";
+    }
+
+    public async Task<string?> GenerateShippingInvoicePdfAsync(int shipmentId)
+    {
+        var resp = await _http.PostAsync($"api/shipments/{shipmentId}/packing-list-pdf?type=shipping-invoice", null);
+        if (!resp.IsSuccessStatusCode) return null;
+        return $"api/shipments/{shipmentId}/packing-list-pdf?type=shipping-invoice";
     }
 
     // Shippers

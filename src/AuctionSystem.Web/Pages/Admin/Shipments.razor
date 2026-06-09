@@ -85,11 +85,32 @@ else
                                         <span>Packing List</span>
                                     }
                                 </button>
-                                @if (!string.IsNullOrEmpty(s.PackingListPdfUrl))
+                                <button class="btn btn-sm btn-outline-info me-1" @onclick="() => OpenShippingInvoicePdf(s)" disabled="@(_generatingInvoice && _generatingInvoiceId == s.Id)">
+                                    @if (_generatingInvoice && _generatingInvoiceId == s.Id)
+                                    {
+                                        <span>Generating...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Shipping Invoice</span>
+                                    }
+                                </button>
+                                @if (!string.IsNullOrEmpty(s.PackingListPdfUrl) || !string.IsNullOrEmpty(s.ShippingInvoicePdfUrl))
                                 {
-                                    <button class="btn btn-sm btn-outline-secondary me-1" @onclick="() => RegeneratePackingListPdf(s)" disabled="@_generatingPdf">
-                                        @(_generatingPdfId == s.Id ? "Regenerating..." : "Regenerate")
-                                    </button>
+                                    <div class="btn-group me-1">
+                                        @if (!string.IsNullOrEmpty(s.PackingListPdfUrl))
+                                        {
+                                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => RegeneratePackingListPdf(s)" disabled="@_generatingPdf" title="Regenerate Packing List">
+                                                @(_generatingPdfId == s.Id ? "..." : "↻ PL")
+                                            </button>
+                                        }
+                                        @if (!string.IsNullOrEmpty(s.ShippingInvoicePdfUrl))
+                                        {
+                                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => RegenerateShippingInvoicePdf(s)" disabled="@_generatingInvoice" title="Regenerate Shipping Invoice">
+                                                @(_generatingInvoiceId == s.Id ? "..." : "↻ SI")
+                                            </button>
+                                        }
+                                    </div>
                                 }
                                 @if (s.Status == "Pending" || s.Status == "ShowLot Packing" || s.Status == "Packing" || s.Status == "Packed")
                                 {
@@ -337,6 +358,8 @@ else
     // PDF generation
     private bool _generatingPdf;
     private int _generatingPdfId;
+    private bool _generatingInvoice;
+    private int _generatingInvoiceId;
 
     protected override async Task OnInitializedAsync()
     {
@@ -576,6 +599,70 @@ else
 
         _generatingPdf = false;
         _generatingPdfId = 0;
+    }
+
+    private async Task OpenShippingInvoicePdf(ShipmentListDto shipment)
+    {
+        if (!string.IsNullOrEmpty(shipment.ShippingInvoicePdfUrl))
+        {
+            await JS.InvokeVoidAsync("open", shipment.ShippingInvoicePdfUrl, "_blank");
+            return;
+        }
+
+        _generatingInvoice = true;
+        _generatingInvoiceId = shipment.Id;
+        _error = null;
+        StateHasChanged();
+
+        try
+        {
+            var url = await Api.GenerateShippingInvoicePdfAsync(shipment.Id);
+            if (url != null)
+            {
+                await LoadShipments();
+                await JS.InvokeVoidAsync("open", url, "_blank");
+            }
+            else
+            {
+                _error = "Failed to generate shipping invoice PDF.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+
+        _generatingInvoice = false;
+        _generatingInvoiceId = 0;
+    }
+
+    private async Task RegenerateShippingInvoicePdf(ShipmentListDto shipment)
+    {
+        _generatingInvoice = true;
+        _generatingInvoiceId = shipment.Id;
+        _error = null;
+        StateHasChanged();
+
+        try
+        {
+            var url = await Api.GenerateShippingInvoicePdfAsync(shipment.Id);
+            if (url != null)
+            {
+                await LoadShipments();
+                await JS.InvokeVoidAsync("open", url, "_blank");
+            }
+            else
+            {
+                _error = "Failed to regenerate shipping invoice PDF.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+
+        _generatingInvoice = false;
+        _generatingInvoiceId = 0;
     }
 
     private static string GetStatusBadgeClass(string status) => status switch

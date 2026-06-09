@@ -489,6 +489,11 @@ using (var scope = host.Services.CreateScope())
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Shipments') AND name = 'PackingListPdfUrl')
                 ALTER TABLE auction.Shipments ADD PackingListPdfUrl NVARCHAR(MAX) NULL;
         ");
+        // Add ShippingInvoicePdfUrl column to Shipments if missing
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Shipments') AND name = 'ShippingInvoicePdfUrl')
+                ALTER TABLE auction.Shipments ADD ShippingInvoicePdfUrl NVARCHAR(MAX) NULL;
+        ");
         // Drop auction.Boxes table if it exists (replaced by view)
         db.Database.ExecuteSqlRaw(@"
             IF EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'Boxes')
