@@ -20,7 +20,11 @@
     </select>
 </div>
 
-@if (_selectedAuctionId == 0)
+@if (!string.IsNullOrEmpty(_auctionBlockedMessage))
+{
+    <div class="alert alert-warning">@_auctionBlockedMessage</div>
+}
+else if (_selectedAuctionId == 0)
 {
     <div class="alert alert-info">Please select an auction to begin entering data.</div>
 }
@@ -157,6 +161,7 @@ else
 @code {
     private List<AuctionDto> _auctions = new();
     private int _selectedAuctionId;
+    private string? _auctionBlockedMessage;
     private List<BrokerDto> _brokers = new();
     private List<TypistEntryDto> _recentEntries = new();
     private NextUnsoldLotDto? _nextLot;
@@ -187,9 +192,20 @@ else
         _nextLot = null;
         _successMessage = null;
         _errorMessage = null;
+        _auctionBlockedMessage = null;
 
         if (_selectedAuctionId > 0)
         {
+            // Check if this auction already has 2 active typists (and current user is not one of them)
+            var activeTypists = await Api.GetActiveTypistsAsync(_selectedAuctionId);
+            if (activeTypists != null && activeTypists.Count >= 2 && _currentUser != null
+                && !activeTypists.ActiveTypistIds.Contains(_currentUser.Id))
+            {
+                _auctionBlockedMessage = "This auction already has 2 active typists. Only 2 typists can work on an auction at a time.";
+                _selectedAuctionId = 0;
+                return;
+            }
+
             _recentEntries = await Api.GetRecentTypistEntriesAsync(_selectedAuctionId);
             _nextLot = await Api.GetNextUnsoldLotForTypistAsync(_currentUser?.Id, _selectedAuctionId);
             _pollTimer = new System.Threading.Timer(async _ => await PollForUpdates(), null, 3000, 3000);

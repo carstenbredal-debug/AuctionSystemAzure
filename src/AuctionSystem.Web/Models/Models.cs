@@ -622,6 +622,13 @@ public class TypistSubmitResult
     public bool WaitingForOtherTypist { get; set; }
 }
 
+public class ActiveTypistsResult
+{
+    public int AuctionId { get; set; }
+    public List<int> ActiveTypistIds { get; set; } = new();
+    public int Count { get; set; }
+}
+
 public class TypistDisagreementGroup
 {
     public int LotNumber { get; set; }

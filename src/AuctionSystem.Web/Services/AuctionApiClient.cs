@@ -663,6 +663,18 @@ public class AuctionApiClient
         return await _http.GetFromJsonAsync<List<TypistEntryDto>>(url) ?? new();
     }
 
+    public async Task<ActiveTypistsResult?> GetActiveTypistsAsync(int auctionId)
+    {
+        try { return await _http.GetFromJsonAsync<ActiveTypistsResult>($"api/typist-entries/active-typists?auctionId={auctionId}"); }
+        catch { return null; }
+    }
+
+    public async Task<bool> ResetTypistLotAsync(int lotNumber)
+    {
+        var resp = await _http.PostAsync($"api/typist-entries/reset-lot/{lotNumber}", null);
+        return resp.IsSuccessStatusCode;
+    }
+
     // Auction Transactions
     public async Task<List<AuctionTransactionDto>> GetAuctionTransactionsAsync(int? auctionId = null)
     {

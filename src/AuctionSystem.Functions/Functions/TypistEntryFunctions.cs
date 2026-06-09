@@ -45,6 +45,19 @@ public class TypistEntryFunctions
         if (typistUser == null)
             return await CreateErrorResponse(req, "Typist user not found");
 
+        // Enforce max 2 unique typists per auction
+        if (body.AuctionId > 0)
+        {
+            var activeTypistIds = await _db.TypistEntries
+                .Where(e => e.AuctionId == body.AuctionId && !e.IsResolved && !e.IsMatched)
+                .Select(e => e.TypistUserId)
+                .Distinct()
+                .ToListAsync();
+
+            if (activeTypistIds.Count >= 2 && !activeTypistIds.Contains(body.TypistUserId))
+                return await CreateErrorResponse(req, "This auction already has 2 active typists. Only 2 typists can work on an auction at a time.");
+        }
+
         // Check if this typist already submitted for this lot (and not resolved)
         var existingEntry = await _db.TypistEntries
             .Where(e => e.LotNumber == body.LotNumber && e.TypistUserId == body.TypistUserId
@@ -488,6 +501,64 @@ public class TypistEntryFunctions
             .ToListAsync();
 
         return await CreateJsonResponse(req, recentLots);
+    }
+
+    [Function("ResetTypistLot")]
+    public async Task<HttpResponseData> ResetLot(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "typist-entries/reset-lot/{lotNumber:int}")] HttpRequestData req,
+        int lotNumber)
+    {
+        var entries = await _db.TypistEntries
+            .Where(e => e.LotNumber == lotNumber)
+            .ToListAsync();
+
+        if (entries.Count == 0)
+            return await CreateErrorResponse(req, $"No entries found for lot {lotNumber}");
+
+        _db.TypistEntries.RemoveRange(entries);
+
+        // Also reset the lot status back to unsold if it was marked sold by these entries
+        var lot = await _db.Lots.FirstOrDefaultAsync(l => l.LotNumber == lotNumber);
+        if (lot != null && lot.Status == LotStatus.Sold)
+        {
+            lot.Status = LotStatus.Active;
+            lot.HammerPrice = null;
+        }
+
+        // Remove auction result if created
+        var resultIds = entries.Where(e => e.AuctionResultId.HasValue).Select(e => e.AuctionResultId!.Value).Distinct().ToList();
+        if (resultIds.Count > 0)
+        {
+            var results = await _db.AuctionResults.Where(r => resultIds.Contains(r.Id)).ToListAsync();
+            var transactions = await _db.AuctionTransactions.Where(t => resultIds.Contains(t.AuctionResultId ?? 0)).ToListAsync();
+            _db.AuctionTransactions.RemoveRange(transactions);
+            _db.AuctionResults.RemoveRange(results);
+        }
+
+        await _db.SaveChangesAsync();
+        _logger.LogInformation("Reset lot {LotNumber}: removed {Count} entries", lotNumber, entries.Count);
+
+        return await CreateJsonResponse(req, new { success = true, lotNumber, entriesRemoved = entries.Count });
+    }
+
+    [Function("GetActiveTypists")]
+    public async Task<HttpResponseData> GetActiveTypists(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "typist-entries/active-typists")] HttpRequestData req)
+    {
+        var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+        int.TryParse(query["auctionId"], out var auctionId);
+
+        if (auctionId <= 0)
+            return await CreateErrorResponse(req, "auctionId is required");
+
+        // Active typists = distinct users who have submitted entries for this auction that are not fully resolved
+        var activeTypistIds = await _db.TypistEntries
+            .Where(e => e.AuctionId == auctionId && !e.IsResolved && !e.IsMatched)
+            .Select(e => e.TypistUserId)
+            .Distinct()
+            .ToListAsync();
+
+        return await CreateJsonResponse(req, new { auctionId, activeTypistIds, count = activeTypistIds.Count });
     }
 
     private static async Task<HttpResponseData> CreateJsonResponse<T>(
