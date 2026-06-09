@@ -1085,6 +1085,7 @@ public class ShipmentFunctions
                 int newSkins = 0, newBoxes = 0;
                 decimal newVol = 0, newNet = 0, newGross = 0;
 
+                // Keep non-showlot (storage) lines as-is
                 foreach (var line in pdfLines)
                 {
                     if (!int.TryParse(line.Carton, out var cn) || !pdfPackedNums.Contains(cn))
@@ -1098,21 +1099,41 @@ public class ShipmentFunctions
                     }
                 }
 
+                // For each packed box: add individual showlot lines (no weight) + packed box summary line
                 foreach (var pb in pdfPackedBoxes)
                 {
+                    // Individual showlot lines
+                    foreach (var sl in pb.ShowLots)
+                    {
+                        var slDesc = pdfBoxDesc.GetValueOrDefault(sl.BoxNumber, "");
+                        var slLotNo = pdfCatalogLots
+                            .FirstOrDefault(cl => !string.IsNullOrEmpty(cl.IncludedBoxNumbers) &&
+                                cl.IncludedBoxNumbers.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                    .Any(b => int.TryParse(b.Trim(), out var n) && n == sl.BoxNumber))
+                            ?.LotNumber.ToString() ?? "";
+                        remaining.Add(new PackingListLine
+                        {
+                            Text = slDesc,
+                            LotNo = slLotNo,
+                            Carton = sl.BoxNumber.ToString(),
+                            Skins = sl.Skins,
+                            IsShowLot = true
+                        });
+                    }
+
+                    // Packed box summary line with totals
                     var vol = pb.LengthM * pb.WidthM * pb.HeightM;
                     var pbSkins = pb.ShowLots.Sum(s => s.Skins);
                     var gross = pb.GrossWeight > 0 ? pb.GrossWeight : pb.Weight;
                     var net = pb.NetWeight > 0 ? pb.NetWeight : gross - pb.TareWeight;
                     remaining.Add(new PackingListLine
                     {
-                        Text = $"Packed Box {pb.BoxNumber} ({pb.BoxType})",
-                        LotNo = "",
                         Carton = pb.BoxNumber,
                         Skins = pbSkins,
                         VolumeM3 = vol,
                         NetWeight = net,
-                        GrossWeight = gross
+                        GrossWeight = gross,
+                        IsPackedBoxSummary = true
                     });
                     newSkins += pbSkins;
                     newBoxes++;

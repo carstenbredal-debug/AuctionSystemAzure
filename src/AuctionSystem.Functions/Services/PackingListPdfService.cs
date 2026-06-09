@@ -13,6 +13,8 @@ public class PackingListLine
     public decimal VolumeM3 { get; set; }
     public decimal NetWeight { get; set; }
     public decimal GrossWeight { get; set; }
+    public bool IsShowLot { get; set; }
+    public bool IsPackedBoxSummary { get; set; }
 }
 
 public class PackingListData
@@ -186,13 +188,39 @@ public static class PackingListPdfService
 
             foreach (var line in data.Lines)
             {
-                table.Cell().Padding(2).Text(line.Text).FontSize(7.5f);
-                table.Cell().Padding(2).AlignRight().Text(line.LotNo).FontSize(7.5f);
-                table.Cell().Padding(2).AlignRight().Text(line.Carton).FontSize(7.5f);
-                table.Cell().Padding(2).AlignRight().Text(line.Skins.ToString("N0")).FontSize(7.5f);
-                table.Cell().Padding(2).AlignRight().Text(line.VolumeM3 > 0 ? line.VolumeM3.ToString("N4") : "").FontSize(7.5f);
-                table.Cell().Padding(2).AlignRight().Text(line.NetWeight > 0 ? line.NetWeight.ToString("N2") : "").FontSize(7.5f);
-                table.Cell().Padding(2).AlignRight().Text(line.GrossWeight > 0 ? line.GrossWeight.ToString("N2") : "").FontSize(7.5f);
+                if (line.IsShowLot)
+                {
+                    // ShowLot line: description, lot no, box number, skins only (no weight/volume)
+                    table.Cell().Padding(2).Text(line.Text).FontSize(7.5f);
+                    table.Cell().Padding(2).AlignRight().Text(line.LotNo).FontSize(7.5f);
+                    table.Cell().Padding(2).AlignRight().Text(line.Carton).FontSize(7.5f);
+                    table.Cell().Padding(2).AlignRight().Text(line.Skins.ToString("N0")).FontSize(7.5f);
+                    table.Cell().Padding(2).Text("").FontSize(7.5f);
+                    table.Cell().Padding(2).Text("").FontSize(7.5f);
+                    table.Cell().Padding(2).Text("").FontSize(7.5f);
+                }
+                else if (line.IsPackedBoxSummary)
+                {
+                    // Packed box summary: box number, total skins, volume, net weight, gross weight
+                    table.Cell().Padding(2).Text("").FontSize(7.5f);
+                    table.Cell().Padding(2).Text("").FontSize(7.5f);
+                    table.Cell().Padding(2).AlignRight().Text(line.Carton).Bold().FontSize(7.5f);
+                    table.Cell().Padding(2).AlignRight().Text(line.Skins.ToString("N0")).Bold().FontSize(7.5f);
+                    table.Cell().Padding(2).AlignRight().Text(line.VolumeM3 > 0 ? line.VolumeM3.ToString("N4") : "").Bold().FontSize(7.5f);
+                    table.Cell().Padding(2).AlignRight().Text(line.NetWeight > 0 ? line.NetWeight.ToString("N2") : "").Bold().FontSize(7.5f);
+                    table.Cell().Padding(2).AlignRight().Text(line.GrossWeight > 0 ? line.GrossWeight.ToString("N2") : "").Bold().FontSize(7.5f);
+                }
+                else
+                {
+                    // Regular storage box line: all columns
+                    table.Cell().Padding(2).Text(line.Text).FontSize(7.5f);
+                    table.Cell().Padding(2).AlignRight().Text(line.LotNo).FontSize(7.5f);
+                    table.Cell().Padding(2).AlignRight().Text(line.Carton).FontSize(7.5f);
+                    table.Cell().Padding(2).AlignRight().Text(line.Skins.ToString("N0")).FontSize(7.5f);
+                    table.Cell().Padding(2).AlignRight().Text(line.VolumeM3 > 0 ? line.VolumeM3.ToString("N4") : "").FontSize(7.5f);
+                    table.Cell().Padding(2).AlignRight().Text(line.NetWeight > 0 ? line.NetWeight.ToString("N2") : "").FontSize(7.5f);
+                    table.Cell().Padding(2).AlignRight().Text(line.GrossWeight > 0 ? line.GrossWeight.ToString("N2") : "").FontSize(7.5f);
+                }
             }
         });
     }
