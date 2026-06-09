@@ -215,22 +215,64 @@ public class ShipmentFunctions
 
         _db.Shipments.Add(shipment);
 
-        // Check if any box in the shipment lots has a showlot type
-        var catalogLots = await _catalogDb.CatalogLots
-            .Where(cl => body.LotNumbers.Contains(cl.LotNumber))
-            .Select(cl => new { cl.LotNumber, cl.IncludedBoxNumbers })
-            .ToListAsync();
-        var allBoxNumbers = catalogLots
-            .Where(cl => !string.IsNullOrEmpty(cl.IncludedBoxNumbers))
-            .SelectMany(cl => cl.IncludedBoxNumbers!.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                .Select(b => int.TryParse(b.Trim(), out var n) ? n : 0).Where(n => n > 0))
-            .Distinct().ToList();
+        // Determine auction number for snapshot tables
+        var auctionNumber = await _db.Lots
+            .Where(l => body.LotNumbers.Contains(l.LotNumber))
+            .Select(l => l.Auction.AuctionNumber)
+            .FirstOrDefaultAsync();
+
+        // Try snapshot tables first, fall back to live tables
+        var snapshotLotsTable = auctionNumber != null ? $"auction.[{auctionNumber}.Lots]" : null;
+        var snapshotBoxesTable = auctionNumber != null ? $"auction.[{auctionNumber}.Boxes]" : null;
+        var useSnapshot = false;
+        if (snapshotLotsTable != null)
+        {
+            try
+            {
+                await _catalogDb.Database.SqlQueryRaw<int>($"SELECT TOP 1 1 AS Value FROM {snapshotLotsTable}").FirstOrDefaultAsync();
+                useSnapshot = true;
+            }
+            catch { useSnapshot = false; }
+        }
+
+        // Get catalog lots from snapshot or live table
+        List<dynamic> catalogLots;
+        if (useSnapshot)
+        {
+            var snapshotLots = await _catalogDb.Database
+                .SqlQueryRaw<CatalogLotResult>($"SELECT LotNumber, IncludedBoxNumbers FROM {snapshotLotsTable} WHERE LotNumber IN (" +
+                    string.Join(",", body.LotNumbers) + ")")
+                .ToListAsync();
+            catalogLots = snapshotLots.Select(cl => (dynamic)new { cl.LotNumber, cl.IncludedBoxNumbers }).ToList();
+        }
+        else
+        {
+            var liveLots = await _catalogDb.CatalogLots
+                .Where(cl => body.LotNumbers.Contains(cl.LotNumber))
+                .Select(cl => new { cl.LotNumber, cl.IncludedBoxNumbers })
+                .ToListAsync();
+            catalogLots = liveLots.Select(cl => (dynamic)new { cl.LotNumber, cl.IncludedBoxNumbers }).ToList();
+        }
+
+        var allBoxNumbers = new List<int>();
+        foreach (var cl in catalogLots)
+        {
+            string? boxNums = cl.IncludedBoxNumbers;
+            if (string.IsNullOrEmpty(boxNums)) continue;
+            foreach (var boxStr in boxNums.Split(',', StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (int.TryParse(boxStr.Trim(), out var n) && n > 0)
+                    allBoxNumbers.Add(n);
+            }
+        }
+        allBoxNumbers = allBoxNumbers.Distinct().ToList();
 
         var hasShowLot = false;
         if (allBoxNumbers.Count > 0)
         {
+            var boxTable = useSnapshot ? snapshotBoxesTable! : "auction.boxes";
             hasShowLot = await _catalogDb.Database
-                .SqlQueryRaw<int>("SELECT 1 AS Value FROM auction.boxes WHERE BoxNumber IN (" +
+                .SqlQueryRaw<int>($"SELECT 1 AS Value FROM {boxTable} WHERE BoxNumber IN (" +
                     string.Join(",", allBoxNumbers) + ") AND BoxStatus = 'Showlot'")
                 .AnyAsync();
         }
@@ -252,36 +294,55 @@ public class ShipmentFunctions
         var boxToLotMap = new Dictionary<int, int>();
         foreach (var cl in catalogLots)
         {
-            if (string.IsNullOrEmpty(cl.IncludedBoxNumbers)) continue;
-            foreach (var boxStr in cl.IncludedBoxNumbers.Split(',', StringSplitOptions.RemoveEmptyEntries))
+            string? incBoxNums = cl.IncludedBoxNumbers;
+            if (string.IsNullOrEmpty(incBoxNums)) continue;
+            foreach (var boxStr in incBoxNums.Split(',', StringSplitOptions.RemoveEmptyEntries))
             {
                 if (int.TryParse(boxStr.Trim(), out var bn) && bn > 0)
-                    boxToLotMap[bn] = cl.LotNumber;
+                    boxToLotMap[bn] = (int)cl.LotNumber;
             }
         }
 
-        // Get all box data and locations
+        // Get all box data and locations from snapshot or live tables
         var allBoxData = new List<BoxViewResult>();
         var boxLocations = new Dictionary<int, string>();
         if (allBoxNumbers.Count > 0)
         {
-            allBoxData = await _catalogDb.Database
-                .SqlQueryRaw<BoxViewResult>("SELECT BoxNumber, Skins, BoxType, BoxStatus FROM auction.boxes WHERE BoxNumber IN (" +
-                    string.Join(",", allBoxNumbers) + ")")
-                .ToListAsync();
-
-            // Get locations from boxstatingfromkphg
-            try
+            if (useSnapshot)
             {
-                var staging = await _catalogDb.Database
-                    .SqlQueryRaw<BoxStagingResult>("SELECT CAST(BoxNumber AS INT) AS BoxNumber, Weight AS BoxWeight, BoxLocation FROM dbo.boxstatingfromkphg WHERE BoxNumber IN (" +
+                // Read from snapshot — boxes table already has BoxLocation
+                allBoxData = await _catalogDb.Database
+                    .SqlQueryRaw<BoxViewResult>($"SELECT BoxNumber, Skins, BoxType, BoxStatus FROM {snapshotBoxesTable} WHERE BoxNumber IN (" +
                         string.Join(",", allBoxNumbers) + ")")
                     .ToListAsync();
-                foreach (var s in staging)
+
+                var locations = await _catalogDb.Database
+                    .SqlQueryRaw<BoxStagingResult>($"SELECT BoxNumber, 0 AS BoxWeight, BoxLocation FROM {snapshotBoxesTable} WHERE BoxNumber IN (" +
+                        string.Join(",", allBoxNumbers) + ")")
+                    .ToListAsync();
+                foreach (var s in locations)
                     if (!string.IsNullOrEmpty(s.BoxLocation))
                         boxLocations[s.BoxNumber] = s.BoxLocation;
             }
-            catch { /* table may not exist */ }
+            else
+            {
+                allBoxData = await _catalogDb.Database
+                    .SqlQueryRaw<BoxViewResult>("SELECT BoxNumber, Skins, BoxType, BoxStatus FROM auction.boxes WHERE BoxNumber IN (" +
+                        string.Join(",", allBoxNumbers) + ")")
+                    .ToListAsync();
+
+                try
+                {
+                    var staging = await _catalogDb.Database
+                        .SqlQueryRaw<BoxStagingResult>("SELECT CAST(BoxNumber AS INT) AS BoxNumber, Weight AS BoxWeight, BoxLocation FROM dbo.boxstatingfromkphg WHERE BoxNumber IN (" +
+                            string.Join(",", allBoxNumbers) + ")")
+                        .ToListAsync();
+                    foreach (var s in staging)
+                        if (!string.IsNullOrEmpty(s.BoxLocation))
+                            boxLocations[s.BoxNumber] = s.BoxLocation;
+                }
+                catch { /* table may not exist */ }
+            }
         }
 
         // Generate packing order number helper
@@ -538,42 +599,84 @@ public class ShipmentFunctions
         // Collect lot numbers directly from shipment lines
         var lotNumbers = shipment.Lines.Select(l => l.LotNumber).Distinct().ToList();
 
-        // Get CatalogLots to resolve box numbers
-        var catalogLots = await _catalogDb.CatalogLots
-            .Where(cl => lotNumbers.Contains(cl.LotNumber))
-            .Select(cl => new { cl.LotNumber, cl.IncludedBoxNumbers })
-            .ToListAsync();
+        // Determine auction number for snapshot tables
+        var plAuctionNum = await _db.Lots
+            .Where(l => lotNumbers.Contains(l.LotNumber))
+            .Select(l => l.Auction.AuctionNumber)
+            .FirstOrDefaultAsync();
+        var plSnapshotLots = plAuctionNum != null ? $"auction.[{plAuctionNum}.Lots]" : null;
+        var plSnapshotBoxes = plAuctionNum != null ? $"auction.[{plAuctionNum}.Boxes]" : null;
+        var plUseSnapshot = false;
+        if (plSnapshotLots != null)
+        {
+            try
+            {
+                await _catalogDb.Database.SqlQueryRaw<int>($"SELECT TOP 1 1 AS Value FROM {plSnapshotLots}").FirstOrDefaultAsync();
+                plUseSnapshot = true;
+            }
+            catch { }
+        }
 
-        var allBoxNumbers = catalogLots
+        // Get CatalogLots to resolve box numbers (from snapshot or live)
+        List<CatalogLotResult> plCatalogLots;
+        if (plUseSnapshot)
+        {
+            plCatalogLots = await _catalogDb.Database
+                .SqlQueryRaw<CatalogLotResult>($"SELECT LotNumber, IncludedBoxNumbers FROM {plSnapshotLots} WHERE LotNumber IN (" +
+                    string.Join(",", lotNumbers) + ")")
+                .ToListAsync();
+        }
+        else
+        {
+            plCatalogLots = await _catalogDb.CatalogLots
+                .Where(cl => lotNumbers.Contains(cl.LotNumber))
+                .Select(cl => new CatalogLotResult { LotNumber = cl.LotNumber, IncludedBoxNumbers = cl.IncludedBoxNumbers ?? "" })
+                .ToListAsync();
+        }
+
+        var allBoxNumbers = plCatalogLots
             .Where(cl => !string.IsNullOrEmpty(cl.IncludedBoxNumbers))
             .SelectMany(cl => cl.IncludedBoxNumbers!.Split(',', StringSplitOptions.RemoveEmptyEntries)
                 .Select(b => int.TryParse(b.Trim(), out var n) ? n : 0).Where(n => n > 0))
             .Distinct().ToList();
 
-        // Get box info (skins, box type)
+        // Get box info (skins, box type) from snapshot or live
         var boxInfo = new Dictionary<int, (int Skins, string BoxType)>();
         if (allBoxNumbers.Count > 0)
         {
+            var boxTable = plUseSnapshot ? plSnapshotBoxes! : "auction.boxes";
             var boxData = await _catalogDb.Database
-                .SqlQueryRaw<BoxViewResult>("SELECT BoxNumber, Skins, BoxType, BoxStatus FROM auction.boxes WHERE BoxNumber IN (" +
+                .SqlQueryRaw<BoxViewResult>($"SELECT BoxNumber, Skins, BoxType, BoxStatus FROM {boxTable} WHERE BoxNumber IN (" +
                     string.Join(",", allBoxNumbers) + ")")
                 .ToListAsync();
             foreach (var b in boxData)
                 boxInfo[b.BoxNumber] = (b.Skins, b.BoxType);
         }
 
-        // Get box staging (actual weight)
+        // Get box staging (actual weight + location) from snapshot or live
         var boxStaging = new Dictionary<int, (decimal? Weight, string? Location)>();
         if (allBoxNumbers.Count > 0)
         {
             try
             {
-                var staging = await _catalogDb.Database
-                    .SqlQueryRaw<BoxStagingResult>("SELECT CAST(BoxNumber AS INT) AS BoxNumber, Weight AS BoxWeight, BoxLocation FROM dbo.boxstatingfromkphg WHERE BoxNumber IN (" +
-                        string.Join(",", allBoxNumbers) + ")")
-                    .ToListAsync();
-                foreach (var s in staging)
-                    boxStaging[s.BoxNumber] = (s.BoxWeight, s.BoxLocation);
+                if (plUseSnapshot)
+                {
+                    var snapBoxes = await _catalogDb.Database
+                        .SqlQueryRaw<BoxStagingResult>($"SELECT BoxNumber, 0 AS BoxWeight, BoxLocation FROM {plSnapshotBoxes} WHERE BoxNumber IN (" +
+                            string.Join(",", allBoxNumbers) + ")")
+                        .ToListAsync();
+                    foreach (var s in snapBoxes)
+                        boxStaging[s.BoxNumber] = (0, s.BoxLocation);
+                }
+                else
+                {
+                    var staging = await _catalogDb.Database
+                        .SqlQueryRaw<BoxStagingResult>("SELECT CAST(BoxNumber AS INT) AS BoxNumber, Weight AS BoxWeight, BoxLocation FROM dbo.boxstatingfromkphg WHERE BoxNumber IN (" +
+                            string.Join(",", allBoxNumbers) + ")")
+                        .ToListAsync();
+                    foreach (var s in staging)
+                        boxStaging[s.BoxNumber] = (s.BoxWeight, s.BoxLocation);
+                }
             }
             catch { /* table may not exist */ }
         }
@@ -587,7 +690,7 @@ public class ShipmentFunctions
         decimal totalGrossWeight = 0, totalNetWeight = 0, totalVolume = 0;
         int totalBoxes = 0, totalSkins = 0;
 
-        foreach (var cl in catalogLots)
+        foreach (var cl in plCatalogLots)
         {
             if (string.IsNullOrEmpty(cl.IncludedBoxNumbers)) continue;
             foreach (var boxStr in cl.IncludedBoxNumbers.Split(',', StringSplitOptions.RemoveEmptyEntries))
@@ -1113,6 +1216,12 @@ public class ShipmentFunctions
         public int BoxNumber { get; set; }
         public decimal? BoxWeight { get; set; }
         public string? BoxLocation { get; set; }
+    }
+
+    private class CatalogLotResult
+    {
+        public int LotNumber { get; set; }
+        public string IncludedBoxNumbers { get; set; } = "";
     }
 }
 

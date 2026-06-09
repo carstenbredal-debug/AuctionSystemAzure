@@ -53,10 +53,25 @@ public class AuctionResultFunctions
             return response;
         }
 
-        // Look up lot in auction.Lots and CatalogLots
+        // Look up lot in auction.Lots and snapshot/CatalogLots
         var auctionLot = await _db.Lots
+            .Include(l => l.Auction)
             .FirstOrDefaultAsync(l => l.LotNumber == body.LotNumber);
-        var catalogLot = await _catalogDb.CatalogLots
+
+        // Try snapshot table first, fall back to live CatalogLots
+        CatalogLot? catalogLot = null;
+        if (auctionLot?.Auction?.AuctionNumber != null)
+        {
+            var snapTable = $"auction.[{auctionLot.Auction.AuctionNumber}.Lots]";
+            try
+            {
+                catalogLot = await _catalogDb.Database
+                    .SqlQueryRaw<CatalogLot>($"SELECT * FROM {snapTable} WHERE LotNumber = {body.LotNumber}")
+                    .FirstOrDefaultAsync();
+            }
+            catch { }
+        }
+        catalogLot ??= await _catalogDb.CatalogLots
             .FirstOrDefaultAsync(cl => cl.LotNumber == body.LotNumber);
 
         var result = new AuctionResult

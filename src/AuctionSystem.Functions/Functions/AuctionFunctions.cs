@@ -265,13 +265,18 @@ public class AuctionFunctions
 
         try
         {
-            // Transaction tables (always deleted)
-            var transactionTables = new[] { "AuctionTransactions", "TypistEntries", "InvoiceLines", "Invoices",
+            // Transaction tables (always deleted) — order matters for FK dependencies
+            var transactionTables = new[] {
+                "PackedBoxes", "PackingOrderLines", "PackingOrders",
+                "ShipmentLines", "Shipments",
+                "LotSalesHistories", "AuctionTransactions", "TypistEntries",
+                "InvoiceLines", "Invoices",
                 "TakebackRequests", "LotAllocations", "AuctionResults", "Settlements", "Bids", "Lots", "Auctions",
                 "BrokerCustomerRequests" };
 
             // Entity tables (only deleted if keepEntities=false)
-            var entityTables = new[] { "BrokerBuyers", "Buyers", "Brokers", "Farmers", "AppUsers" };
+            var entityTables = new[] { "BrokerBuyers", "Buyers", "Brokers", "Farmers", "AppUsers",
+                "ShippingAddresses", "Shippers", "BoxTypeDimensions" };
 
             var allTables = keepEntities ? transactionTables : transactionTables.Concat(entityTables).ToArray();
 
@@ -287,6 +292,18 @@ public class AuctionFunctions
             // Re-enable FK constraints
             foreach (var t in constraintTables)
                 await _db.Database.ExecuteSqlRawAsync($"ALTER TABLE auction.[{t}] WITH CHECK CHECK CONSTRAINT ALL");
+
+            // Drop auction snapshot tables (e.g. auction.[261.Lots], [261.Boxes], [261.Skins])
+            try
+            {
+                var snapshotTables = await _db.Database
+                    .SqlQueryRaw<string>("SELECT QUOTENAME(SCHEMA_NAME(schema_id)) + '.' + QUOTENAME(name) AS Value FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND (name LIKE '%.Lots' OR name LIKE '%.Boxes' OR name LIKE '%.Skins')")
+                    .ToListAsync();
+                foreach (var tbl in snapshotTables)
+                    await _db.Database.ExecuteSqlRawAsync($"DROP TABLE {tbl}");
+                _logger.LogInformation("Dropped {Count} auction snapshot tables", snapshotTables.Count);
+            }
+            catch (Exception ex2) { _logger.LogWarning(ex2, "Failed to drop snapshot tables"); }
 
             var brokerCount = await _db.Brokers.CountAsync();
             var buyerCount = await _db.Buyers.CountAsync();

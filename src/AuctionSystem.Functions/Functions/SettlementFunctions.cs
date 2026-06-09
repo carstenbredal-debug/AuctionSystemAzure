@@ -419,17 +419,43 @@ public class SettlementFunctions
     {
         var (uncreditedLotNumbers, lotInvoiceMap) = await BuildUncreditedLotMapAsync();
 
-        var catalogLots = await _catalogDb.CatalogLots
-            .Where(cl => uncreditedLotNumbers.Contains(cl.LotNumber))
-            .Select(cl => new CatalogLotInfo(cl.LotNumber, cl.IncludedBoxNumbers))
-            .ToListAsync();
+        // Determine auction number for snapshot tables
+        var auctionNum = await _db.Lots
+            .Where(l => uncreditedLotNumbers.Contains(l.LotNumber))
+            .Select(l => l.Auction.AuctionNumber)
+            .FirstOrDefaultAsync();
+        var snapshotLotsTable = auctionNum != null ? $"auction.[{auctionNum}.Lots]" : null;
+        var snapshotBoxesTable = auctionNum != null ? $"auction.[{auctionNum}.Boxes]" : null;
+        var useSnapshot = false;
+        if (snapshotLotsTable != null)
+        {
+            try { await _catalogDb.Database.SqlQueryRaw<int>($"SELECT TOP 1 1 AS Value FROM {snapshotLotsTable}").FirstOrDefaultAsync(); useSnapshot = true; }
+            catch { }
+        }
 
-        var boxInfo = await FetchBoxInfoAsync(catalogLots);
+        List<CatalogLotInfo> catalogLots;
+        if (useSnapshot)
+        {
+            var rawLots = await _catalogDb.Database
+                .SqlQueryRaw<CatalogLotInfoResult>($"SELECT LotNumber, IncludedBoxNumbers FROM {snapshotLotsTable} WHERE LotNumber IN (" +
+                    string.Join(",", uncreditedLotNumbers) + ")")
+                .ToListAsync();
+            catalogLots = rawLots.Select(r => new CatalogLotInfo(r.LotNumber, r.IncludedBoxNumbers)).ToList();
+        }
+        else
+        {
+            catalogLots = await _catalogDb.CatalogLots
+                .Where(cl => uncreditedLotNumbers.Contains(cl.LotNumber))
+                .Select(cl => new CatalogLotInfo(cl.LotNumber, cl.IncludedBoxNumbers))
+                .ToListAsync();
+        }
+
+        var boxInfo = await FetchBoxInfoAsync(catalogLots, useSnapshot ? snapshotBoxesTable : null);
 
         var dimensions = await _db.BoxTypeDimensions.ToListAsync();
         var dimLookup = dimensions.ToDictionary(d => d.BoxType, d => d);
 
-        var boxStagingLookup = await FetchBoxStagingAsync(catalogLots);
+        var boxStagingLookup = await FetchBoxStagingAsync(catalogLots, useSnapshot ? snapshotBoxesTable : null);
 
         var shippingBoxes = BuildShippingBoxList(catalogLots, lotInvoiceMap, boxInfo, dimLookup, boxStagingLookup);
         return await CreateJsonResponse(req, shippingBoxes);
@@ -467,7 +493,7 @@ public class SettlementFunctions
 
     private record CatalogLotInfo(int LotNumber, string? IncludedBoxNumbers);
 
-    private async Task<Dictionary<int, BoxViewInfo>> FetchBoxInfoAsync(List<CatalogLotInfo> catalogLots)
+    private async Task<Dictionary<int, BoxViewInfo>> FetchBoxInfoAsync(List<CatalogLotInfo> catalogLots, string? snapshotBoxesTable = null)
     {
         var allBoxNumbers = catalogLots
             .Where(cl => !string.IsNullOrEmpty(cl.IncludedBoxNumbers))
@@ -478,8 +504,9 @@ public class SettlementFunctions
         var result = new Dictionary<int, BoxViewInfo>();
         if (allBoxNumbers.Count > 0)
         {
+            var boxTable = snapshotBoxesTable ?? "auction.boxes";
             var boxData = await _catalogDb.Database
-                .SqlQueryRaw<BoxViewInfo>("SELECT BoxNumber, Skins, BoxType FROM auction.boxes WHERE BoxNumber IN (" +
+                .SqlQueryRaw<BoxViewInfo>($"SELECT BoxNumber, Skins, BoxType FROM {boxTable} WHERE BoxNumber IN (" +
                     string.Join(",", allBoxNumbers) + ")")
                 .ToListAsync();
             foreach (var b in boxData)
@@ -488,7 +515,7 @@ public class SettlementFunctions
         return result;
     }
 
-    private async Task<Dictionary<int, BoxStagingInfo>> FetchBoxStagingAsync(List<CatalogLotInfo> catalogLots)
+    private async Task<Dictionary<int, BoxStagingInfo>> FetchBoxStagingAsync(List<CatalogLotInfo> catalogLots, string? snapshotBoxesTable = null)
     {
         var allBoxNumbers = catalogLots
             .Where(cl => !string.IsNullOrEmpty(cl.IncludedBoxNumbers))
@@ -501,16 +528,34 @@ public class SettlementFunctions
         {
             try
             {
-                var staging = await _catalogDb.Database
-                    .SqlQueryRaw<BoxStagingInfo>("SELECT CAST(BoxNumber AS INT) AS BoxNumber, Weight AS BoxWeight, BoxLocation FROM dbo.boxstatingfromkphg WHERE BoxNumber IN (" +
-                        string.Join(",", allBoxNumbers) + ")")
-                    .ToListAsync();
-                foreach (var s in staging)
-                    result[s.BoxNumber] = s;
+                if (snapshotBoxesTable != null)
+                {
+                    var snapBoxes = await _catalogDb.Database
+                        .SqlQueryRaw<BoxStagingInfo>($"SELECT BoxNumber, 0 AS BoxWeight, BoxLocation FROM {snapshotBoxesTable} WHERE BoxNumber IN (" +
+                            string.Join(",", allBoxNumbers) + ")")
+                        .ToListAsync();
+                    foreach (var s in snapBoxes)
+                        result[s.BoxNumber] = s;
+                }
+                else
+                {
+                    var staging = await _catalogDb.Database
+                        .SqlQueryRaw<BoxStagingInfo>("SELECT CAST(BoxNumber AS INT) AS BoxNumber, Weight AS BoxWeight, BoxLocation FROM dbo.boxstatingfromkphg WHERE BoxNumber IN (" +
+                            string.Join(",", allBoxNumbers) + ")")
+                        .ToListAsync();
+                    foreach (var s in staging)
+                        result[s.BoxNumber] = s;
+                }
             }
             catch { /* table may not exist yet */ }
         }
         return result;
+    }
+
+    private class CatalogLotInfoResult
+    {
+        public int LotNumber { get; set; }
+        public string IncludedBoxNumbers { get; set; } = "";
     }
 
     private class BoxStagingInfo
