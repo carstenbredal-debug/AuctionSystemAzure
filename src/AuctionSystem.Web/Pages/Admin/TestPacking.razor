@@ -2,115 +2,182 @@
 @attribute [Authorize(Roles = "Admin")]
 @inject AuctionApiClient Api
 
-<h4 class="mb-4">Test Packing — XML Files from Blob Storage</h4>
-
-<button class="btn btn-primary mb-3" @onclick="LoadXmls" disabled="@_loading">
-    @(_loading ? "Loading..." : "Refresh")
-</button>
-@if (_xmls.Count > 0)
-{
-    <button class="btn btn-danger mb-3 ms-2" @onclick="ClearAll" disabled="@_loading">Clear All</button>
-}
+<h4 class="mb-4">Test Packing — External System Simulator</h4>
+<p class="text-muted mb-3">This page simulates the external packing system that reads packing order XML files from blob storage, displays the boxes to pick, and confirms the pick.</p>
 
 @if (_error != null)
 {
     <div class="alert alert-danger">@_error</div>
 }
-else if (_xmls.Count == 0 && !_loading)
-{
-    <div class="alert alert-info">No packing order XML files found in blob storage.</div>
-}
-else
+
+@if (_selectedOrder == null)
 {
     <div class="section-container">
+        <div class="section-header d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">Pending Packing Orders</h6>
+            <button class="btn btn-sm btn-outline-primary" @onclick="LoadXmls" disabled="@_loading">
+                @(_loading ? "Loading..." : "Refresh")
+            </button>
+        </div>
         <div class="section-body">
-            <table class="table table-striped table-hover mb-0">
-                <thead class="table-dark">
-                    <tr>
-                        <th>Packing Order #</th>
-                        <th>Shipment #</th>
-                        <th>Buyer</th>
-                        <th>Status</th>
-                        <th>Folder</th>
-                        <th>Showlots</th>
-                        <th>Created</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var xml in _xmls)
-                    {
+            @if (_pendingOrders.Count == 0 && !_loading)
+            {
+                <div class="alert alert-info mb-0">No pending packing orders to process. Packing orders appear here when shipments are created.</div>
+            }
+            else
+            {
+                <table class="table table-striped table-hover mb-0">
+                    <thead class="table-dark">
                         <tr>
-                            <td>
-                                <a href="javascript:void(0)" @onclick="() => ToggleExpand(xml.FileName)">
-                                    <strong>@xml.PackingOrderNumber</strong>
-                                </a>
-                            </td>
-                            <td>@xml.ShipmentNumber</td>
-                            <td>@xml.BuyerName (@xml.BuyerNumber)</td>
-                            <td><span class="badge @GetStatusBadgeClass(xml.Status)">@xml.Status</span></td>
-                            <td><span class="badge @(xml.Folder == "new" ? "bg-warning text-dark" : "bg-success")">@xml.Folder</span></td>
-                            <td>@xml.ShowLotCount</td>
-                            <td>@xml.CreatedAt</td>
+                            <th>Packing Order #</th>
+                            <th>Shipment #</th>
+                            <th>Buyer</th>
+                            <th>Boxes</th>
+                            <th>Status</th>
+                            <th></th>
                         </tr>
-                        @if (_expandedFile == xml.FileName)
+                    </thead>
+                    <tbody>
+                        @foreach (var order in _pendingOrders)
                         {
                             <tr>
-                                <td colspan="7" class="p-0">
-                                    <div class="bg-light p-3">
-                                        <h6 class="mb-2">Showlot Boxes</h6>
-                                        @if (xml.Lines.Count == 0)
-                                        {
-                                            <p class="text-muted mb-0">No showlot boxes.</p>
-                                        }
-                                        else
-                                        {
-                                            <table class="table table-sm table-bordered mb-0">
-                                                <thead>
-                                                    <tr>
-                                                        <th>Box #</th>
-                                                        <th>Lot #</th>
-                                                        <th>Skins</th>
-                                                        <th>Box Type</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    @foreach (var line in xml.Lines)
-                                                    {
-                                                        <tr>
-                                                            <td>@line.BoxNumber</td>
-                                                            <td>@line.LotNumber</td>
-                                                            <td>@line.Skins</td>
-                                                            <td>@line.BoxType</td>
-                                                        </tr>
-                                                    }
-                                                </tbody>
-                                                <tfoot>
-                                                    <tr class="fw-bold">
-                                                        <td>Total</td>
-                                                        <td>@xml.Lines.Select(l => l.LotNumber).Distinct().Count() lots</td>
-                                                        <td>@xml.Lines.Sum(l => l.Skins)</td>
-                                                        <td></td>
-                                                    </tr>
-                                                </tfoot>
-                                            </table>
-                                        }
-                                        <div class="mt-2 text-muted small">File: @xml.FileName</div>
-                                    </div>
+                                <td><strong>@order.PackingOrderNumber</strong></td>
+                                <td>@order.ShipmentNumber</td>
+                                <td>@order.BuyerName (@order.BuyerNumber)</td>
+                                <td>@order.Lines.Count</td>
+                                <td><span class="badge bg-warning text-dark">Awaiting Pick</span></td>
+                                <td>
+                                    <button class="btn btn-sm btn-primary" @onclick="() => SelectOrder(order)">
+                                        Process →
+                                    </button>
                                 </td>
                             </tr>
                         }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+
+    @if (_processedOrders.Count > 0)
+    {
+        <div class="section-container mt-4">
+            <div class="section-header">
+                <h6 class="mb-0">Processed Orders</h6>
+            </div>
+            <div class="section-body">
+                <table class="table table-striped table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Packing Order #</th>
+                            <th>Shipment #</th>
+                            <th>Buyer</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var order in _processedOrders)
+                        {
+                            <tr>
+                                <td><strong>@order.PackingOrderNumber</strong></td>
+                                <td>@order.ShipmentNumber</td>
+                                <td>@order.BuyerName (@order.BuyerNumber)</td>
+                                <td><span class="badge bg-success">Picked</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+}
+else
+{
+    <div class="mb-3">
+        <button class="btn btn-outline-secondary" @onclick="BackToList">← Back to list</button>
+    </div>
+
+    <div class="section-container">
+        <div class="section-header">
+            <h6 class="mb-0">Packing Order: @_selectedOrder.PackingOrderNumber — @_selectedOrder.ShipmentNumber</h6>
+        </div>
+        <div class="section-body">
+            <div class="row mb-3">
+                <div class="col-md-4"><strong>Buyer:</strong> @_selectedOrder.BuyerName (@_selectedOrder.BuyerNumber)</div>
+                <div class="col-md-4"><strong>Boxes:</strong> @_selectedOrder.Lines.Count</div>
+                <div class="col-md-4"><strong>Total Skins:</strong> @_selectedOrder.Lines.Sum(l => l.Skins)</div>
+            </div>
+
+            <h6 class="mb-2">Boxes to Pick</h6>
+            <table class="table table-bordered table-hover mb-3">
+                <thead class="table-dark">
+                    <tr>
+                        <th style="width:40px">
+                            <input type="checkbox" checked="@AllSelected" @onchange="ToggleAll" />
+                        </th>
+                        <th>Box #</th>
+                        <th>Lot #</th>
+                        <th>Skins</th>
+                        <th>Box Type</th>
+                        <th>Location</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var line in _selectedOrder.Lines)
+                    {
+                        <tr class="@(IsSelected(line.BoxNumber) ? "table-success" : "")">
+                            <td>
+                                <input type="checkbox" checked="@IsSelected(line.BoxNumber)" @onchange="() => ToggleBox(line.BoxNumber)" />
+                            </td>
+                            <td><strong>@line.BoxNumber</strong></td>
+                            <td>@line.LotNumber</td>
+                            <td>@line.Skins</td>
+                            <td>@line.BoxType</td>
+                            <td>@line.Location</td>
+                            <td>
+                                @if (IsSelected(line.BoxNumber))
+                                {
+                                    <span class="badge bg-success">Picked</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">Pending</span>
+                                }
+                            </td>
+                        </tr>
                     }
                 </tbody>
             </table>
+
+            <div class="d-flex gap-2">
+                <button class="btn btn-success" @onclick="ConfirmPicking" disabled="@(_confirming || _pickedBoxNumbers.Count == 0)">
+                    @(_confirming ? "Confirming..." : $"Confirm Pick ({_pickedBoxNumbers.Count} boxes)")
+                </button>
+                <button class="btn btn-outline-secondary" @onclick="BackToList">Cancel</button>
+            </div>
+
+            @if (_confirmSuccess)
+            {
+                <div class="alert alert-success mt-3">
+                    Pick confirmed! @_pickedBoxNumbers.Count boxes marked as picked. Packing order moved to processed.
+                </div>
+            }
         </div>
     </div>
 }
 
 @code {
-    private List<PackingOrderXmlDto> _xmls = new();
+    private List<PackingOrderXmlDto> _pendingOrders = new();
+    private List<PackingOrderXmlDto> _processedOrders = new();
+    private PackingOrderXmlDto? _selectedOrder;
+    private HashSet<int> _pickedBoxNumbers = new();
     private bool _loading = true;
+    private bool _confirming;
+    private bool _confirmSuccess;
     private string? _error;
-    private string? _expandedFile;
+
+    private bool AllSelected => _selectedOrder != null && _pickedBoxNumbers.Count == _selectedOrder.Lines.Count;
 
     protected override async Task OnInitializedAsync()
     {
@@ -123,7 +190,9 @@ else
         _error = null;
         try
         {
-            _xmls = await Api.GetPackingOrderXmlsAsync();
+            var xmls = await Api.GetPackingOrderXmlsAsync();
+            _pendingOrders = xmls.Where(x => x.Folder == "new").ToList();
+            _processedOrders = xmls.Where(x => x.Folder == "processed" || x.Folder == "completed").ToList();
         }
         catch (Exception ex)
         {
@@ -132,29 +201,65 @@ else
         _loading = false;
     }
 
-    private async Task ClearAll()
+    private void SelectOrder(PackingOrderXmlDto order)
     {
-        _loading = true;
+        _selectedOrder = order;
+        _pickedBoxNumbers = new HashSet<int>(order.Lines.Select(l => l.BoxNumber));
+        _confirmSuccess = false;
+    }
+
+    private void BackToList()
+    {
+        _selectedOrder = null;
+        _pickedBoxNumbers.Clear();
+        _confirmSuccess = false;
+        _ = LoadXmls();
+    }
+
+    private bool IsSelected(int boxNumber) => _pickedBoxNumbers.Contains(boxNumber);
+
+    private void ToggleBox(int boxNumber)
+    {
+        if (_pickedBoxNumbers.Contains(boxNumber))
+            _pickedBoxNumbers.Remove(boxNumber);
+        else
+            _pickedBoxNumbers.Add(boxNumber);
+    }
+
+    private void ToggleAll()
+    {
+        if (AllSelected)
+            _pickedBoxNumbers.Clear();
+        else if (_selectedOrder != null)
+            _pickedBoxNumbers = new HashSet<int>(_selectedOrder.Lines.Select(l => l.BoxNumber));
+    }
+
+    private async Task ConfirmPicking()
+    {
+        if (_selectedOrder == null) return;
+        _confirming = true;
+        _error = null;
         try
         {
-            await Api.ClearPackingOrderXmlsAsync();
-            _xmls.Clear();
+            var success = await Api.ConfirmPickingAsync(_selectedOrder.PackingOrderNumber, _pickedBoxNumbers.ToList());
+            if (success)
+            {
+                _confirmSuccess = true;
+                await Task.Delay(2000);
+                _selectedOrder = null;
+                _pickedBoxNumbers.Clear();
+                _confirmSuccess = false;
+                await LoadXmls();
+            }
+            else
+            {
+                _error = "Failed to confirm picking. Please try again.";
+            }
         }
-        catch (Exception ex) { _error = ex.Message; }
-        _loading = false;
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        _confirming = false;
     }
-
-    private void ToggleExpand(string fileName)
-    {
-        _expandedFile = _expandedFile == fileName ? null : fileName;
-    }
-
-    private static string GetStatusBadgeClass(string status) => status switch
-    {
-        "Ready to Pack" => "bg-warning text-dark",
-        "In Production" => "bg-primary",
-        "Packed" => "bg-success",
-        "Error" => "bg-danger",
-        _ => "bg-secondary"
-    };
 }

@@ -942,6 +942,12 @@ public class AuctionApiClient
         return await resp.Content.ReadFromJsonAsync<List<PackingOrderXmlDto>>() ?? new();
     }
 
+    public async Task<bool> ConfirmPickingAsync(string packingOrderNumber, List<int> pickedBoxNumbers)
+    {
+        var resp = await _http.PostAsJsonAsync("api/shipments/packing-orders/confirm-picking", new { packingOrderNumber, pickedBoxNumbers });
+        return resp.IsSuccessStatusCode;
+    }
+
     public async Task<bool> PackShowLotsAsync(int packingOrderId, string boxType, decimal weight, List<int> showLotLineIds)
     {
         var resp = await _http.PostAsJsonAsync($"api/shipments/packing-orders/{packingOrderId}/pack", new { boxType, weight, showLotLineIds });

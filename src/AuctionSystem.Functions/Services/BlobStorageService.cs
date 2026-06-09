@@ -38,7 +38,7 @@ public class BlobStorageService
     }
 
     private BlobContainerClient? _packingContainer;
-    private async Task<BlobContainerClient> GetPackingContainerAsync()
+    public async Task<BlobContainerClient> GetPackingContainerAsync()
     {
         if (_packingContainer != null && _packingContainerEnsured) return _packingContainer;
         _packingContainer = _serviceClient.GetBlobContainerClient("packing-orders");

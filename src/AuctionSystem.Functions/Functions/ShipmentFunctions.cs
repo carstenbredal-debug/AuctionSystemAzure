@@ -1002,12 +1002,13 @@ public class ShipmentFunctions
             {
                 var doc = XDocument.Parse(content);
                 var root = doc.Root!;
-                var boxes = root.Element("ShowLotBoxes")?.Elements("Box").Select(b => new
+                var boxes = (root.Element("Boxes") ?? root.Element("ShowLotBoxes"))?.Elements("Box").Select(b => new
                 {
                     BoxNumber = int.TryParse(b.Element("BoxNumber")?.Value, out var bn) ? bn : 0,
                     LotNumber = int.TryParse(b.Element("LotNumber")?.Value, out var ln) ? ln : 0,
                     Skins = int.TryParse(b.Element("Skins")?.Value, out var sk) ? sk : 0,
-                    BoxType = b.Element("BoxType")?.Value ?? ""
+                    BoxType = b.Element("BoxType")?.Value ?? "",
+                    Location = b.Element("Location")?.Value ?? ""
                 }).ToList() ?? new();
 
                 results.Add(new
@@ -1049,6 +1050,94 @@ public class ShipmentFunctions
         response.Headers.Add("Content-Type", "application/json");
         await response.WriteStringAsync(JsonSerializer.Serialize(results, JsonOptions));
         return response;
+    }
+
+    [Function("ConfirmPicking")]
+    public async Task<HttpResponseData> ConfirmPicking(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "shipments/packing-orders/confirm-picking")] HttpRequestData req)
+    {
+        if (_blobStorage == null)
+            return req.CreateResponse(System.Net.HttpStatusCode.ServiceUnavailable);
+
+        var body = await req.ReadFromJsonAsync<ConfirmPickingDto>();
+        if (body == null || string.IsNullOrEmpty(body.PackingOrderNumber))
+            return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+
+        try
+        {
+            // Move XML from new/ to processed/
+            var container = await _blobStorage.GetPackingContainerAsync();
+            var sourceBlob = container.GetBlobClient($"new/{body.PackingOrderNumber}.xml");
+            if (!await sourceBlob.ExistsAsync())
+            {
+                var notFound = req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+                notFound.Headers.Add("Content-Type", "application/json");
+                await notFound.WriteStringAsync(JsonSerializer.Serialize(new { error = $"XML file new/{body.PackingOrderNumber}.xml not found" }, JsonOptions));
+                return notFound;
+            }
+
+            // Read the original XML
+            var download = await sourceBlob.DownloadContentAsync();
+            var originalXml = download.Value.Content.ToString();
+
+            // Generate response XML with picked confirmation
+            var responseXml = new XDocument(
+                new XDeclaration("1.0", "utf-8", "yes"),
+                new XElement("PickingResponse",
+                    new XElement("PackingOrderNumber", body.PackingOrderNumber),
+                    new XElement("PickedAt", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")),
+                    new XElement("Status", "Picked"),
+                    new XElement("PickedBoxes",
+                        new XAttribute("Count", body.PickedBoxNumbers?.Count ?? 0),
+                        (body.PickedBoxNumbers ?? new()).Select(bn =>
+                            new XElement("Box", new XElement("BoxNumber", bn))
+                        )
+                    )
+                )
+            );
+
+            // Upload response to processed/ folder
+            await _blobStorage.UploadPackingXmlAsync($"processed/{body.PackingOrderNumber}.xml", responseXml.ToString());
+
+            // Delete from new/ folder
+            await sourceBlob.DeleteIfExistsAsync();
+
+            // Update packing order status in DB
+            var packingOrder = await _db.PackingOrders
+                .Include(po => po.Shipment)
+                .FirstOrDefaultAsync(po => po.PackingOrderNumber == body.PackingOrderNumber);
+            if (packingOrder != null)
+            {
+                packingOrder.Status = "Picked";
+                
+                // Check if all packing orders for this shipment are picked
+                if (packingOrder.ShipmentId > 0)
+                {
+                    var allOrders = await _db.PackingOrders
+                        .Where(po => po.ShipmentId == packingOrder.ShipmentId)
+                        .ToListAsync();
+                    var allPicked = allOrders.All(po => po.Id == packingOrder.Id || po.Status == "Picked");
+                    if (allPicked && packingOrder.Shipment != null)
+                    {
+                        packingOrder.Shipment.Status = "Packed";
+                    }
+                }
+                await _db.SaveChangesAsync();
+            }
+
+            var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+            response.Headers.Add("Content-Type", "application/json");
+            await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true, packingOrderNumber = body.PackingOrderNumber, pickedBoxes = body.PickedBoxNumbers?.Count ?? 0 }, JsonOptions));
+            return response;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ConfirmPicking failed for {PackingOrderNumber}", body.PackingOrderNumber);
+            var err = req.CreateResponse(System.Net.HttpStatusCode.InternalServerError);
+            err.Headers.Add("Content-Type", "application/json");
+            await err.WriteStringAsync(JsonSerializer.Serialize(new { error = ex.Message }, JsonOptions));
+            return err;
+        }
     }
 
     [Function("PackShowLots")]
@@ -1295,4 +1384,10 @@ public class PackShowLotsDto
     public string BoxType { get; set; } = "";
     public decimal Weight { get; set; }
     public List<int> ShowLotLineIds { get; set; } = new();
+}
+
+public class ConfirmPickingDto
+{
+    public string PackingOrderNumber { get; set; } = "";
+    public List<int> PickedBoxNumbers { get; set; } = new();
 }
