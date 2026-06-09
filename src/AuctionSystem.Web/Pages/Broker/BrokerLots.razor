@@ -16,7 +16,6 @@
         <div class="col-md-4">
             <label class="form-label fw-bold">Auction</label>
             <select class="form-select" @bind="_selectedAuctionId" @bind:after="OnAuctionFilterChanged">
-                <option value="0">All Auctions</option>
                 @foreach (var a in _auctions)
                 {
                     <option value="@a.Id">@a.AuctionNumber - @a.Title</option>
@@ -708,6 +707,8 @@ else if (_activeTab == "takeback")
                 _auctions = (await Api.GetAuctionsAsync())
                     .Where(a => a.Status == AuctionStatus.Active || a.Status == AuctionStatus.Closed)
                     .ToList();
+                if (_auctions.Any())
+                    _selectedAuctionId = _auctions.First().Id;
                 _allResults = await Api.GetAuctionResultsByBrokerAsync(_brokerId);
                 // Get buyers from junction table (direct links) + customer requests
                 var linkedBuyers = await Api.GetBrokerLinkedBuyersAsync(_brokerId);
@@ -733,7 +734,7 @@ else if (_activeTab == "takeback")
 
     private List<AuctionResultDto> GetFilteredResults()
     {
-        if (_selectedAuctionId <= 0) return _allResults;
+        if (_selectedAuctionId <= 0) return new();
         return _allResults.Where(r => r.AuctionId == _selectedAuctionId).ToList();
     }
 
