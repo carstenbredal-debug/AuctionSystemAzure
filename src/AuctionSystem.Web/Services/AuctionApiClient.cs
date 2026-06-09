@@ -31,6 +31,12 @@ public class AuctionApiClient
     public async Task UpdateAuctionStatusAsync(int id, AuctionStatus status)
         => await _http.PutAsJsonAsync($"api/auctions/{id}/status", status);
 
+    public async Task<bool> DeleteAuctionAsync(int id)
+    {
+        var resp = await _http.DeleteAsync($"api/auctions/{id}");
+        return resp.IsSuccessStatusCode;
+    }
+
     public async Task RecordHammerPriceAsync(int lotId, decimal hammerPrice, int winningBrokerId)
         => await _http.PostAsJsonAsync($"api/lots/{lotId}/hammer", new { hammerPrice, winningBrokerId });
 

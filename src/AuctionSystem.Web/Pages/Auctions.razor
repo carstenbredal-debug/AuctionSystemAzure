@@ -38,7 +38,17 @@
                     }
                 </select>
             </div>
+            @if (selectedAuction.Status == AuctionStatus.Draft)
+            {
+                <button class="btn btn-outline-danger btn-sm" @onclick="DeleteAuction" disabled="@deletingAuction">
+                    @(deletingAuction ? "Deleting..." : "Delete Auction")
+                </button>
+            }
         </div>
+        @if (!string.IsNullOrEmpty(deleteError))
+        {
+            <div class="alert alert-danger">@deleteError</div>
+        }
 
         <ul class="nav nav-tabs mb-3">
             <li class="nav-item">
@@ -319,6 +329,8 @@ else
     private List<LotDto> lots = new();
     private string activeTab = "lots";
     private bool loadingAuction;
+    private bool deletingAuction;
+    private string? deleteError;
 
     // Import tab state
     private List<CatalogLotDto> catalogLots = new();
@@ -523,6 +535,22 @@ else
             importIsError = true;
         }
         importing = false;
+    }
+
+    private async Task DeleteAuction()
+    {
+        deletingAuction = true;
+        deleteError = null;
+        try
+        {
+            var success = await Api.DeleteAuctionAsync(Id!.Value);
+            if (success)
+                Nav.NavigateTo("/auctions");
+            else
+                deleteError = "Failed to delete auction.";
+        }
+        catch (Exception ex) { deleteError = ex.Message; }
+        deletingAuction = false;
     }
 
     private async Task OnStatusChanged(ChangeEventArgs e)
