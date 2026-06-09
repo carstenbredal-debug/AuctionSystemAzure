@@ -3,6 +3,7 @@
 @using AuctionSystem.Web.Services
 @attribute [Authorize(Roles = "Admin")]
 @inject AuctionApiClient Api
+@inject IJSRuntime JS
 
 <h4 class="mb-4">Shipments</h4>
 
@@ -74,22 +75,21 @@ else
                             <td>@(s.ShippedAt?.ToString("yyyy-MM-dd") ?? "-")</td>
                             <td>@(s.DeliveredAt?.ToString("yyyy-MM-dd") ?? "-")</td>
                             <td>
-                                <a href="admin/shipments/@s.Id/packing-list" class="btn btn-sm btn-outline-secondary me-1" target="_blank">Packing List</a>
-                                @if (s.Status == "Packed" || s.Status == "Shipped" || s.Status == "Delivered")
-                                {
-                                    @if (!string.IsNullOrEmpty(s.PackingListPdfUrl))
+                                <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => OpenPackingListPdf(s)" disabled="@(_generatingPdf && _generatingPdfId == s.Id)">
+                                    @if (_generatingPdf && _generatingPdfId == s.Id)
                                     {
-                                        <a href="@s.PackingListPdfUrl" class="btn btn-sm btn-outline-primary me-1" target="_blank">PDF</a>
-                                        <button class="btn btn-sm btn-outline-secondary me-1" @onclick="() => GeneratePackingListPdf(s)" disabled="@_generatingPdf">
-                                            @(_generatingPdfId == s.Id ? "Regenerating..." : "Regenerate")
-                                        </button>
+                                        <span>Generating...</span>
                                     }
                                     else
                                     {
-                                        <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => GeneratePackingListPdf(s)" disabled="@_generatingPdf">
-                                            @(_generatingPdfId == s.Id ? "Generating..." : "Generate PDF")
-                                        </button>
+                                        <span>Packing List</span>
                                     }
+                                </button>
+                                @if (!string.IsNullOrEmpty(s.PackingListPdfUrl))
+                                {
+                                    <button class="btn btn-sm btn-outline-secondary me-1" @onclick="() => RegeneratePackingListPdf(s)" disabled="@_generatingPdf">
+                                        @(_generatingPdfId == s.Id ? "Regenerating..." : "Regenerate")
+                                    </button>
                                 }
                                 @if (s.Status == "Pending" || s.Status == "ShowLot Packing" || s.Status == "Packing" || s.Status == "Packed")
                                 {
@@ -509,7 +509,44 @@ else
         _saving = false;
     }
 
-    private async Task GeneratePackingListPdf(ShipmentListDto shipment)
+    private async Task OpenPackingListPdf(ShipmentListDto shipment)
+    {
+        // If PDF already exists, open it directly
+        if (!string.IsNullOrEmpty(shipment.PackingListPdfUrl))
+        {
+            await JS.InvokeVoidAsync("open", shipment.PackingListPdfUrl, "_blank");
+            return;
+        }
+
+        // Generate then open
+        _generatingPdf = true;
+        _generatingPdfId = shipment.Id;
+        _error = null;
+        StateHasChanged();
+
+        try
+        {
+            var url = await Api.GeneratePackingListPdfAsync(shipment.Id);
+            if (url != null)
+            {
+                await LoadShipments();
+                await JS.InvokeVoidAsync("open", url, "_blank");
+            }
+            else
+            {
+                _error = "Failed to generate packing list PDF.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+
+        _generatingPdf = false;
+        _generatingPdfId = 0;
+    }
+
+    private async Task RegeneratePackingListPdf(ShipmentListDto shipment)
     {
         _generatingPdf = true;
         _generatingPdfId = shipment.Id;
@@ -521,12 +558,12 @@ else
             var url = await Api.GeneratePackingListPdfAsync(shipment.Id);
             if (url != null)
             {
-                _success = $"Packing list PDF generated for {shipment.ShipmentNumber}.";
                 await LoadShipments();
+                await JS.InvokeVoidAsync("open", url, "_blank");
             }
             else
             {
-                _error = "Failed to generate packing list PDF.";
+                _error = "Failed to regenerate packing list PDF.";
             }
         }
         catch (Exception ex)
