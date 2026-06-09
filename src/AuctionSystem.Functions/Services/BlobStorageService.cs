@@ -97,6 +97,21 @@ public class BlobStorageService
         return results;
     }
 
+    public async Task<int> ClearAllPackingOrderXmlsAsync()
+    {
+        var container = await GetPackingContainerAsync();
+        int deleted = 0;
+        foreach (var folder in new[] { "new", "processed", "completed" })
+        {
+            await foreach (var blob in container.GetBlobsAsync(BlobTraits.None, BlobStates.None, $"{folder}/", default))
+            {
+                await container.GetBlobClient(blob.Name).DeleteIfExistsAsync();
+                deleted++;
+            }
+        }
+        return deleted;
+    }
+
     public async Task<string> UploadPdfAsync(string fileName, byte[] pdfData)
     {
         await EnsureContainerAsync();

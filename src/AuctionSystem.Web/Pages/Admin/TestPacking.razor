@@ -7,6 +7,10 @@
 <button class="btn btn-primary mb-3" @onclick="LoadXmls" disabled="@_loading">
     @(_loading ? "Loading..." : "Refresh")
 </button>
+@if (_xmls.Count > 0)
+{
+    <button class="btn btn-danger mb-3 ms-2" @onclick="ClearAll" disabled="@_loading">Clear All</button>
+}
 
 @if (_error != null)
 {
@@ -125,6 +129,18 @@ else
         {
             _error = ex.Message;
         }
+        _loading = false;
+    }
+
+    private async Task ClearAll()
+    {
+        _loading = true;
+        try
+        {
+            await Api.ClearPackingOrderXmlsAsync();
+            _xmls.Clear();
+        }
+        catch (Exception ex) { _error = ex.Message; }
         _loading = false;
     }
 

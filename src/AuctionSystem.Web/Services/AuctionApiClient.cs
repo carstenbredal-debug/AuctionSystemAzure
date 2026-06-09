@@ -903,6 +903,12 @@ public class AuctionApiClient
         return resp.IsSuccessStatusCode;
     }
 
+    public async Task ClearPackingOrderXmlsAsync()
+    {
+        var resp = await _http.DeleteAsync("api/shipments/packing-orders/xmls");
+        resp.EnsureSuccessStatusCode();
+    }
+
     public async Task<List<PackingOrderXmlDto>> GetPackingOrderXmlsAsync()
     {
         var resp = await _http.GetAsync("api/shipments/packing-orders/xmls");

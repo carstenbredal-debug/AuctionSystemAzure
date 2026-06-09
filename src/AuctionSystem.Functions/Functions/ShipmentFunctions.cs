@@ -944,6 +944,19 @@ public class ShipmentFunctions
         return response;
     }
 
+    [Function("ClearPackingOrderXmls")]
+    public async Task<HttpResponseData> ClearPackingOrderXmls(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "shipments/packing-orders/xmls")] HttpRequestData req)
+    {
+        if (_blobStorage == null)
+            return req.CreateResponse(System.Net.HttpStatusCode.ServiceUnavailable);
+        var deleted = await _blobStorage.ClearAllPackingOrderXmlsAsync();
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true, deletedFiles = deleted }, JsonOptions));
+        return response;
+    }
+
     [Function("GetPackingOrderXmls")]
     public async Task<HttpResponseData> GetPackingOrderXmls(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "shipments/packing-orders/xmls")] HttpRequestData req)
