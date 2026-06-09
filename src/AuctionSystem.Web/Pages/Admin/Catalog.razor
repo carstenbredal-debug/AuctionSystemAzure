@@ -221,7 +221,22 @@
         try
         {
             Auctions = await Api.GetAuctionsAsync();
-            var filters = await Http.GetFromJsonAsync<FilterOptions>("api/catalog/filters");
+        }
+        catch { }
+    }
+
+    private async Task LoadFilters()
+    {
+        try
+        {
+            var filterUrl = "api/catalog/filters";
+            if (SelectedAuctionId > 0)
+            {
+                var auction = Auctions.FirstOrDefault(a => a.Id == SelectedAuctionId);
+                if (auction != null)
+                    filterUrl += $"?auctionNumber={Uri.EscapeDataString(auction.AuctionNumber)}";
+            }
+            var filters = await Http.GetFromJsonAsync<FilterOptions>(filterUrl);
             if (filters != null)
             {
                 SalesTypes = filters.Types ?? new();
@@ -336,6 +351,7 @@
         CatalogLots.Clear();
         ResultMessage = "";
         IsError = false;
+        await LoadFilters();
     }
 
     private string BuildQueryString()

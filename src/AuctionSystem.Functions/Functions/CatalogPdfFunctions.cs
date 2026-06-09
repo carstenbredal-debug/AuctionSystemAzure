@@ -34,6 +34,14 @@ public class CatalogPdfFunctions
             ?? "";
     }
 
+    private static string GetCatalogTable(System.Collections.Specialized.NameValueCollection query)
+    {
+        var auctionNumber = query["auctionNumber"];
+        if (!string.IsNullOrEmpty(auctionNumber))
+            return $"auction.[{auctionNumber}.Lots]";
+        return "auction.cataloglots";
+    }
+
     private static void RegisterFonts()
     {
         if (_fontsRegistered) return;
@@ -115,7 +123,7 @@ public class CatalogPdfFunctions
                         PARTITION BY StringNumber
                     ) AS StringBoxCount
 
-                FROM auction.cataloglots
+                FROM " + GetCatalogTable(query) + @"
                 WHERE 1=1";
 
             var parameters = new DynamicParameters();

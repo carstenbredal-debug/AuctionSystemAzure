@@ -30,6 +30,14 @@ public class CatalogApiFunctions
             ?? "";
     }
 
+    private static string GetCatalogTable(System.Collections.Specialized.NameValueCollection query)
+    {
+        var auctionNumber = query["auctionNumber"];
+        if (!string.IsNullOrEmpty(auctionNumber))
+            return $"auction.[{auctionNumber}.Lots]";
+        return "auction.cataloglots";
+    }
+
     [Function("GetCatalogFilters")]
     public async Task<HttpResponseData> GetFilters(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "catalog/filters")]
@@ -50,42 +58,45 @@ public class CatalogApiFunctions
             using var connection = new SqlConnection(connectionString);
             await connection.OpenAsync();
 
+            var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+            var table = GetCatalogTable(query);
+
             var filters = new Dictionary<string, List<string>>();
 
             filters["types"] = (await connection.QueryAsync<string>(
-                "SELECT DISTINCT SalesType FROM auction.cataloglots WHERE SalesType IS NOT NULL ORDER BY SalesType"
+                $"SELECT DISTINCT SalesType FROM {table} WHERE SalesType IS NOT NULL ORDER BY SalesType"
             )).ToList();
 
             filters["genders"] = (await connection.QueryAsync<string>(
-                "SELECT DISTINCT Gender FROM auction.cataloglots WHERE Gender IS NOT NULL ORDER BY Gender"
+                $"SELECT DISTINCT Gender FROM {table} WHERE Gender IS NOT NULL ORDER BY Gender"
             )).ToList();
 
             filters["groups"] = (await connection.QueryAsync<string>(
-                "SELECT DISTINCT [Group] FROM auction.cataloglots WHERE [Group] IS NOT NULL ORDER BY [Group]"
+                $"SELECT DISTINCT [Group] FROM {table} WHERE [Group] IS NOT NULL ORDER BY [Group]"
             )).ToList();
 
             filters["colors"] = (await connection.QueryAsync<string>(
-                "SELECT DISTINCT Color FROM auction.cataloglots WHERE Color IS NOT NULL ORDER BY Color"
+                $"SELECT DISTINCT Color FROM {table} WHERE Color IS NOT NULL ORDER BY Color"
             )).ToList();
 
             filters["qualities"] = (await connection.QueryAsync<string>(
-                "SELECT DISTINCT Quality FROM auction.cataloglots WHERE Quality IS NOT NULL ORDER BY Quality"
+                $"SELECT DISTINCT Quality FROM {table} WHERE Quality IS NOT NULL ORDER BY Quality"
             )).ToList();
 
             filters["clarities"] = (await connection.QueryAsync<string>(
-                "SELECT DISTINCT Clarity FROM auction.cataloglots WHERE Clarity IS NOT NULL ORDER BY Clarity"
+                $"SELECT DISTINCT Clarity FROM {table} WHERE Clarity IS NOT NULL ORDER BY Clarity"
             )).ToList();
 
             filters["sizes"] = (await connection.QueryAsync<string>(
-                "SELECT DISTINCT Size FROM auction.cataloglots WHERE Size IS NOT NULL ORDER BY Size"
+                $"SELECT DISTINCT Size FROM {table} WHERE Size IS NOT NULL ORDER BY Size"
             )).ToList();
 
             filters["hairLengths"] = (await connection.QueryAsync<string>(
-                "SELECT DISTINCT HairLength FROM auction.cataloglots WHERE HairLength IS NOT NULL ORDER BY HairLength"
+                $"SELECT DISTINCT HairLength FROM {table} WHERE HairLength IS NOT NULL ORDER BY HairLength"
             )).ToList();
 
             filters["damages"] = (await connection.QueryAsync<string>(
-                "SELECT DISTINCT Damages FROM auction.cataloglots WHERE Damages IS NOT NULL ORDER BY Damages"
+                $"SELECT DISTINCT Damages FROM {table} WHERE Damages IS NOT NULL ORDER BY Damages"
             )).ToList();
 
             _logger.LogInformation("Filters loaded.");
@@ -156,7 +167,7 @@ public class CatalogApiFunctions
                         PARTITION BY StringNumber
                     ) AS StringTotalSkins
 
-                FROM auction.cataloglots
+                FROM " + GetCatalogTable(query) + @"
                 WHERE 1=1";
 
             var parameters = new DynamicParameters();
@@ -204,7 +215,7 @@ public class CatalogApiFunctions
 
             var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
 
-            var sql = "SELECT COUNT(*) FROM auction.cataloglots WHERE 1=1";
+            var sql = $"SELECT COUNT(*) FROM {GetCatalogTable(query)} WHERE 1=1";
             var parameters = new DynamicParameters();
 
             AddFilterParameters(query, ref sql, parameters);
