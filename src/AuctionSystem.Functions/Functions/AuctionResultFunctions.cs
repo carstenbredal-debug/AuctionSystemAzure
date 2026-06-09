@@ -1089,6 +1089,48 @@ public class AuctionResultFunctions
         await response.WriteStringAsync(JsonSerializer.Serialize(new { total = results.Count, updated, notFound = results.Count - updated }, JsonOptions));
         return response;
     }
+
+    [Function("UnsellInvoice")]
+    public async Task<HttpResponseData> UnsellInvoice(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "settlements/invoices/{invoiceId:int}/unsell")] HttpRequestData req, int invoiceId)
+    {
+        var invoice = await _db.Invoices.Include(i => i.Lines).FirstOrDefaultAsync(i => i.Id == invoiceId);
+        if (invoice == null)
+            return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        // Get auction results linked to this invoice's lot numbers
+        var lotNumbers = invoice.Lines.Select(l => l.LotNumber).ToList();
+        var results = await _db.AuctionResults
+            .Where(r => lotNumbers.Contains(r.LotNumber) && r.SoldToBuyerId == invoice.BuyerId)
+            .ToListAsync();
+
+        // Clear sold status on results
+        foreach (var r in results)
+        {
+            r.SoldToBuyerId = null;
+            r.SoldAt = null;
+            r.CommissionType = null;
+            r.CommissionValue = null;
+            r.CommissionAmount = null;
+        }
+
+        // Delete invoice lines and invoice
+        _db.InvoiceLines.RemoveRange(invoice.Lines);
+        _db.Invoices.Remove(invoice);
+
+        // Delete related sales history
+        var history = await _db.LotSalesHistories
+            .Where(h => h.InvoiceId == invoiceId)
+            .ToListAsync();
+        _db.LotSalesHistories.RemoveRange(history);
+
+        await _db.SaveChangesAsync();
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(new { deleted = true, lotsUnsold = results.Count }, JsonOptions));
+        return response;
+    }
 }
 
 public class SubmitAuctionResultRequest
