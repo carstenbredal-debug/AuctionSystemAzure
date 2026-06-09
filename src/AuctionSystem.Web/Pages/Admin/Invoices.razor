@@ -608,14 +608,15 @@ else
         if (resp.IsSuccessStatusCode)
         {
             var inv = _invoices.FirstOrDefault(i => i.Id == invoiceId);
-            if (inv != null)
-            {
-                inv.Status = StatusPaid;
-                inv.RemainingBalance = 0;
-            }
             try
             {
                 var json = await resp.Content.ReadFromJsonAsync<BcStatusResponse>();
+                // Use the actual status returned by the backend (may be Downpayment if BC has remaining)
+                if (inv != null && !string.IsNullOrEmpty(json?.Status))
+                    inv.Status = json.Status;
+                else if (inv != null)
+                    inv.Status = StatusPaid;
+
                 if (!string.IsNullOrEmpty(json?.BcPaymentError))
                     _bcError = $"Invoice marked as Paid locally, but BC payment failed: {json.BcPaymentError}";
                 else if (!string.IsNullOrEmpty(json?.BcPaymentSuccess))
@@ -623,7 +624,11 @@ else
                 else
                     _bcSuccess = "Invoice marked as Paid.";
             }
-            catch { _bcSuccess = "Invoice marked as Paid."; }
+            catch
+            {
+                if (inv != null) inv.Status = StatusPaid;
+                _bcSuccess = "Invoice marked as Paid.";
+            }
         }
         else
         {
