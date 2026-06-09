@@ -271,9 +271,25 @@ public class AuctionResultFunctions
             })
             .ToListAsync();
 
+        var allLotNumbers = results.Select(r => r.LotNumber).Distinct().ToList();
+        var allLotShipmentStatus = await GetLotShipmentStatusAsync(allLotNumbers);
+
+        var enrichedAll = results.Select(r => new
+        {
+            r.Id, r.LotNumber, r.BrokerId,
+            r.brokerName, r.brokerNumber,
+            r.PriceEur, r.SalesType, r.Gender, r.Group, r.Color, r.Quality,
+            r.Size, r.Clarity, r.HairLength, r.TotalSkins, r.BoxCount,
+            r.Processed, r.ReceivedAt, r.ProcessedAt,
+            r.SoldToBuyerId, r.soldToBuyerName, r.soldToBuyerNumber,
+            r.SoldAt, r.CommissionType, r.CommissionValue, r.CommissionAmount,
+            r.LastModifiedBy, r.LastModifiedAt,
+            ShippingStatus = allLotShipmentStatus.GetValueOrDefault(r.LotNumber)
+        });
+
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
-        await response.WriteStringAsync(JsonSerializer.Serialize(results, JsonOptions));
+        await response.WriteStringAsync(JsonSerializer.Serialize(enrichedAll, JsonOptions));
         return response;
     }
 
@@ -300,9 +316,26 @@ public class AuctionResultFunctions
             })
             .ToListAsync();
 
+        // Get shipping status for lots
+        var lotNumbers = results.Select(r => r.LotNumber).Distinct().ToList();
+        var lotShipmentStatus = await GetLotShipmentStatusAsync(lotNumbers);
+
+        var enriched = results.Select(r => new
+        {
+            r.Id, r.AuctionId, r.LotNumber, r.BrokerId,
+            r.brokerName, r.brokerNumber,
+            r.PriceEur, r.SalesType, r.Gender, r.Group, r.Color, r.Quality,
+            r.Size, r.Clarity, r.HairLength, r.TotalSkins, r.BoxCount,
+            r.Processed, r.ReceivedAt, r.ProcessedAt,
+            r.SoldToBuyerId, r.soldToBuyerName, r.soldToBuyerNumber,
+            r.SoldAt, r.CommissionType, r.CommissionValue, r.CommissionAmount,
+            r.LastModifiedBy, r.LastModifiedAt,
+            ShippingStatus = lotShipmentStatus.GetValueOrDefault(r.LotNumber)
+        });
+
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
-        await response.WriteStringAsync(JsonSerializer.Serialize(results, JsonOptions));
+        await response.WriteStringAsync(JsonSerializer.Serialize(enriched, JsonOptions));
         return response;
     }
 
@@ -517,9 +550,25 @@ public class AuctionResultFunctions
             })
             .ToListAsync();
 
+        var buyerLotNumbers = results.Select(r => r.LotNumber).Distinct().ToList();
+        var buyerLotShipmentStatus = await GetLotShipmentStatusAsync(buyerLotNumbers);
+
+        var enrichedBuyer = results.Select(r => new
+        {
+            r.Id, r.LotNumber, r.BrokerId,
+            r.brokerName, r.brokerNumber,
+            r.PriceEur, r.SalesType, r.Gender, r.Group, r.Color, r.Quality,
+            r.Size, r.Clarity, r.HairLength, r.TotalSkins, r.BoxCount,
+            r.Processed, r.ReceivedAt, r.ProcessedAt,
+            r.SoldToBuyerId, r.soldToBuyerName, r.soldToBuyerNumber,
+            r.SoldAt, r.CommissionType, r.CommissionValue, r.CommissionAmount,
+            r.LastModifiedBy, r.LastModifiedAt,
+            ShippingStatus = buyerLotShipmentStatus.GetValueOrDefault(r.LotNumber)
+        });
+
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
-        await response.WriteStringAsync(JsonSerializer.Serialize(results, JsonOptions));
+        await response.WriteStringAsync(JsonSerializer.Serialize(enrichedBuyer, JsonOptions));
         return response;
     }
     [Function("RequestTakeback")]
@@ -1141,6 +1190,21 @@ public class AuctionResultFunctions
         response.Headers.Add("Content-Type", "application/json");
         await response.WriteStringAsync(JsonSerializer.Serialize(new { deleted = true, lotsUnsold = results.Count }, JsonOptions));
         return response;
+    }
+
+    private async Task<Dictionary<int, string>> GetLotShipmentStatusAsync(List<int> lotNumbers)
+    {
+        if (lotNumbers.Count == 0) return new();
+
+        var lotShipmentMap = await _db.ShipmentLines
+            .Where(sl => lotNumbers.Contains(sl.LotNumber))
+            .Include(sl => sl.Shipment)
+            .Select(sl => new { sl.LotNumber, sl.Shipment!.Status })
+            .ToListAsync();
+
+        return lotShipmentMap
+            .GroupBy(x => x.LotNumber)
+            .ToDictionary(g => g.Key, g => g.First().Status);
     }
 }
 

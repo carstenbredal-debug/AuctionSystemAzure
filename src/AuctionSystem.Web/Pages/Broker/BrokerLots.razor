@@ -131,7 +131,23 @@ else if (_activeTab == "purchased")
                             <td>€@CalcAuctionFee(r.TotalSkins, r.PriceEur).ToString("N2")</td>
                             <td>€@((r.CommissionAmount ?? 0).ToString("N2"))</td>
                             <td>
-                                @if (r.SoldToBuyerId != null)
+                                @if (!string.IsNullOrEmpty(r.ShippingStatus) && r.ShippingStatus == "Shipped")
+                                {
+                                    <span class="badge bg-primary">Shipped</span>
+                                }
+                                else if (!string.IsNullOrEmpty(r.ShippingStatus) && r.ShippingStatus == "Delivered")
+                                {
+                                    <span class="badge bg-dark">Delivered</span>
+                                }
+                                else if (!string.IsNullOrEmpty(r.ShippingStatus) && (r.ShippingStatus == "Packed" || r.ShippingStatus == "Packing"))
+                                {
+                                    <span class="badge bg-info">Packed</span>
+                                }
+                                else if (!string.IsNullOrEmpty(r.ShippingStatus))
+                                {
+                                    <span class="badge bg-secondary">@r.ShippingStatus</span>
+                                }
+                                else if (r.SoldToBuyerId != null)
                                 {
                                     <span class="badge bg-success">Invoiced</span>
                                 }
@@ -643,7 +659,7 @@ else if (_activeTab == "takeback")
             "HammerPrice" => r => r.TotalSkins * r.PriceEur,
             "AuctionFee" => r => CalcAuctionFee(r.TotalSkins, r.PriceEur),
             "Commission" => r => r.CommissionAmount ?? 0m,
-            "Status" => r => r.SoldToBuyerId != null ? 1 : 0,
+            "Status" => r => !string.IsNullOrEmpty(r.ShippingStatus) ? r.ShippingStatus : (r.SoldToBuyerId != null ? "Invoiced" : "Un-Invoiced"),
             "SoldTo" => r => r.SoldToBuyerNumber ?? "",
             "SoldDate" => r => r.SoldAt ?? DateTime.MinValue,
             "InitiatedBy" => r => r.LastModifiedBy ?? "",
@@ -1050,7 +1066,7 @@ else if (_activeTab == "takeback")
             r.TotalSkins * r.PriceEur,
             CalcAuctionFee(r.TotalSkins, r.PriceEur),
             r.CommissionAmount ?? 0m,
-            r.SoldToBuyerId != null ? "Invoiced" : "Un-Invoiced"
+            !string.IsNullOrEmpty(r.ShippingStatus) ? r.ShippingStatus : (r.SoldToBuyerId != null ? "Invoiced" : "Un-Invoiced")
         }).ToArray();
 
         await JS.InvokeVoidAsync("exportToExcel", $"PurchasedLots_{DateTime.Now:yyyyMMdd}.xlsx", "Purchased Lots", headers, rows);

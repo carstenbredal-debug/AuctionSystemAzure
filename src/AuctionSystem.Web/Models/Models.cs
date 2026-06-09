@@ -347,6 +347,7 @@ public class AuctionResultDto
     public string? LastModifiedBy { get; set; }
     public DateTime? LastModifiedAt { get; set; }
     public int AuctionId { get; set; }
+    public string? ShippingStatus { get; set; }
 }
 
 public class LotSalesHistoryDto
