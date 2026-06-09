@@ -422,6 +422,21 @@ public class ShipmentFunctions
 
             _db.PackingOrders.Add(packingOrder);
             await _db.SaveChangesAsync();
+
+            // Generate XML and push to blob storage
+            if (_blobStorage != null)
+            {
+                try
+                {
+                    var xml = GeneratePackingOrderXml(packingOrder, shipment);
+                    await _blobStorage.UploadPackingOrderXmlAsync(packingOrder.PackingOrderNumber, xml);
+                    _logger.LogInformation("Packing order XML {Number} uploaded to blob storage", packingOrder.PackingOrderNumber);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to upload packing order XML {Number}", packingOrder.PackingOrderNumber);
+                }
+            }
         }
 
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
