@@ -532,7 +532,7 @@ public class SettlementFunctions
                 if (snapshotBoxesTable != null)
                 {
                     var snapBoxes = await _catalogDb.Database
-                        .SqlQueryRaw<BoxStagingInfo>($"SELECT BoxNumber, 0 AS BoxWeight, BoxLocation FROM {snapshotBoxesTable} WHERE BoxNumber IN (" +
+                        .SqlQueryRaw<BoxStagingInfo>($"SELECT BoxNumber, CAST(0 AS DECIMAL(18,2)) AS BoxWeight, BoxLocation FROM {snapshotBoxesTable} WHERE BoxNumber IN (" +
                             string.Join(",", allBoxNumbers) + ")")
                         .ToListAsync();
                     foreach (var s in snapBoxes)

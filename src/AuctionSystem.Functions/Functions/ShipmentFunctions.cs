@@ -317,7 +317,7 @@ public class ShipmentFunctions
                     .ToListAsync();
 
                 var locations = await _catalogDb.Database
-                    .SqlQueryRaw<BoxStagingResult>($"SELECT BoxNumber, 0 AS BoxWeight, BoxLocation FROM {snapshotBoxesTable} WHERE BoxNumber IN (" +
+                    .SqlQueryRaw<BoxStagingResult>($"SELECT BoxNumber, CAST(0 AS DECIMAL(18,2)) AS BoxWeight, BoxLocation FROM {snapshotBoxesTable} WHERE BoxNumber IN (" +
                         string.Join(",", allBoxNumbers) + ")")
                     .ToListAsync();
                 foreach (var s in locations)
@@ -686,7 +686,7 @@ public class ShipmentFunctions
                 if (plUseSnapshot)
                 {
                     var snapBoxes = await _catalogDb.Database
-                        .SqlQueryRaw<BoxStagingResult>($"SELECT BoxNumber, 0 AS BoxWeight, BoxLocation FROM {plSnapshotBoxes} WHERE BoxNumber IN (" +
+                        .SqlQueryRaw<BoxStagingResult>($"SELECT BoxNumber, CAST(0 AS DECIMAL(18,2)) AS BoxWeight, BoxLocation FROM {plSnapshotBoxes} WHERE BoxNumber IN (" +
                             string.Join(",", allBoxNumbers) + ")")
                         .ToListAsync();
                     foreach (var s in snapBoxes)
