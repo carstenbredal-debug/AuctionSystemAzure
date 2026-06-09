@@ -255,57 +255,71 @@ public class AuctionFunctions
     public async Task<HttpResponseData> DeleteAuction(
         [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "auctions/{auctionId:int}")] HttpRequestData req, int auctionId)
     {
-        var auction = await _db.Auctions.Include(a => a.Lots).FirstOrDefaultAsync(a => a.Id == auctionId);
-        if (auction == null)
-            return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
-
-        if (auction.Status != AuctionStatus.Draft)
-            return await CreateJsonResponse(req, new { error = "Can only delete auctions in Draft status" }, System.Net.HttpStatusCode.BadRequest);
-
-        var soldLots = await _db.AuctionResults.AnyAsync(r => auction.Lots.Select(l => l.LotNumber).Contains(r.LotNumber));
-        if (soldLots)
-            return await CreateJsonResponse(req, new { error = "Cannot delete auction with sold lots" }, System.Net.HttpStatusCode.BadRequest);
-
-        var auctionNum = auction.AuctionNumber;
-
-        // Delete related data in FK order
-        var lotIds = auction.Lots.Select(l => l.Id).ToList();
-        var lotNumbers = auction.Lots.Select(l => l.LotNumber).ToList();
-
-        if (lotIds.Count > 0)
+        try
         {
-            await _db.Database.ExecuteSqlRawAsync($"DELETE FROM auction.PackedBoxes WHERE PackingOrderLineId IN (SELECT Id FROM auction.PackingOrderLines WHERE PackingOrderId IN (SELECT Id FROM auction.PackingOrders WHERE ShipmentId IN (SELECT Id FROM auction.Shipments WHERE Id IN (SELECT ShipmentId FROM auction.ShipmentLines WHERE LotId IN (SELECT Id FROM auction.Lots WHERE AuctionId = {auctionId})))))");
-            await _db.Database.ExecuteSqlRawAsync($"DELETE FROM auction.PackingOrderLines WHERE PackingOrderId IN (SELECT Id FROM auction.PackingOrders WHERE ShipmentId IN (SELECT Id FROM auction.Shipments WHERE Id IN (SELECT ShipmentId FROM auction.ShipmentLines WHERE LotId IN (SELECT Id FROM auction.Lots WHERE AuctionId = {auctionId}))))");
-            await _db.Database.ExecuteSqlRawAsync($"DELETE FROM auction.PackingOrders WHERE ShipmentId IN (SELECT Id FROM auction.Shipments WHERE Id IN (SELECT ShipmentId FROM auction.ShipmentLines WHERE LotId IN (SELECT Id FROM auction.Lots WHERE AuctionId = {auctionId})))");
-            await _db.Database.ExecuteSqlRawAsync($"DELETE FROM auction.ShipmentLines WHERE LotId IN (SELECT Id FROM auction.Lots WHERE AuctionId = {auctionId})");
-            await _db.Database.ExecuteSqlRawAsync($"DELETE FROM auction.Shipments WHERE Id NOT IN (SELECT DISTINCT ShipmentId FROM auction.ShipmentLines)");
-            await _db.Database.ExecuteSqlRawAsync($"DELETE FROM auction.InvoiceLines WHERE LotNumber IN ({string.Join(",", lotNumbers)})");
-            await _db.Database.ExecuteSqlRawAsync($"DELETE FROM auction.Invoices WHERE Id NOT IN (SELECT DISTINCT InvoiceId FROM auction.InvoiceLines)");
-            await _db.Database.ExecuteSqlRawAsync($"DELETE FROM auction.LotAllocations WHERE LotId IN (SELECT Id FROM auction.Lots WHERE AuctionId = {auctionId})");
-            await _db.Database.ExecuteSqlRawAsync($"DELETE FROM auction.TypistEntries WHERE LotNumber IN ({string.Join(",", lotNumbers)})");
-            await _db.Database.ExecuteSqlRawAsync($"DELETE FROM auction.AuctionTransactions WHERE LotNumber IN ({string.Join(",", lotNumbers)})");
-            await _db.Database.ExecuteSqlRawAsync($"DELETE FROM auction.AuctionResults WHERE LotNumber IN ({string.Join(",", lotNumbers)})");
-        }
+            var auction = await _db.Auctions.Include(a => a.Lots).FirstOrDefaultAsync(a => a.Id == auctionId);
+            if (auction == null)
+                return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
 
-        _db.Lots.RemoveRange(auction.Lots);
-        _db.Auctions.Remove(auction);
-        await _db.SaveChangesAsync();
+            if (auction.Status != AuctionStatus.Draft)
+                return await CreateJsonResponse(req, new { error = "Can only delete auctions in Draft status" }, System.Net.HttpStatusCode.BadRequest);
 
-        // Drop snapshot tables
-        if (!string.IsNullOrEmpty(auctionNum))
-        {
-            try
+            var lotNumbers = auction.Lots.Select(l => l.LotNumber).ToList();
+            var soldLots = lotNumbers.Count > 0 && await _db.AuctionResults.AnyAsync(r => lotNumbers.Contains(r.LotNumber));
+            if (soldLots)
+                return await CreateJsonResponse(req, new { error = "Cannot delete auction with sold lots" }, System.Net.HttpStatusCode.BadRequest);
+
+            var auctionNum = auction.AuctionNumber;
+
+            // Delete related data using AuctionId-based subqueries (avoids huge IN clauses)
+            await _db.Database.ExecuteSqlRawAsync(
+                "DELETE FROM auction.PackedBoxes WHERE PackingOrderLineId IN (SELECT Id FROM auction.PackingOrderLines WHERE PackingOrderId IN (SELECT Id FROM auction.PackingOrders WHERE ShipmentId IN (SELECT Id FROM auction.Shipments WHERE Id IN (SELECT ShipmentId FROM auction.ShipmentLines WHERE LotId IN (SELECT Id FROM auction.Lots WHERE AuctionId = {0})))))", auctionId);
+            await _db.Database.ExecuteSqlRawAsync(
+                "DELETE FROM auction.PackingOrderLines WHERE PackingOrderId IN (SELECT Id FROM auction.PackingOrders WHERE ShipmentId IN (SELECT Id FROM auction.Shipments WHERE Id IN (SELECT ShipmentId FROM auction.ShipmentLines WHERE LotId IN (SELECT Id FROM auction.Lots WHERE AuctionId = {0}))))", auctionId);
+            await _db.Database.ExecuteSqlRawAsync(
+                "DELETE FROM auction.PackingOrders WHERE ShipmentId IN (SELECT Id FROM auction.Shipments WHERE Id IN (SELECT ShipmentId FROM auction.ShipmentLines WHERE LotId IN (SELECT Id FROM auction.Lots WHERE AuctionId = {0})))", auctionId);
+            await _db.Database.ExecuteSqlRawAsync(
+                "DELETE FROM auction.ShipmentLines WHERE LotId IN (SELECT Id FROM auction.Lots WHERE AuctionId = {0})", auctionId);
+            await _db.Database.ExecuteSqlRawAsync(
+                "DELETE FROM auction.Shipments WHERE Id NOT IN (SELECT DISTINCT ShipmentId FROM auction.ShipmentLines)");
+            await _db.Database.ExecuteSqlRawAsync(
+                "DELETE FROM auction.InvoiceLines WHERE LotNumber IN (SELECT LotNumber FROM auction.Lots WHERE AuctionId = {0})", auctionId);
+            await _db.Database.ExecuteSqlRawAsync(
+                "DELETE FROM auction.Invoices WHERE Id NOT IN (SELECT DISTINCT InvoiceId FROM auction.InvoiceLines)");
+            await _db.Database.ExecuteSqlRawAsync(
+                "DELETE FROM auction.LotAllocations WHERE LotId IN (SELECT Id FROM auction.Lots WHERE AuctionId = {0})", auctionId);
+            await _db.Database.ExecuteSqlRawAsync(
+                "DELETE FROM auction.TypistEntries WHERE LotNumber IN (SELECT LotNumber FROM auction.Lots WHERE AuctionId = {0})", auctionId);
+            await _db.Database.ExecuteSqlRawAsync(
+                "DELETE FROM auction.AuctionTransactions WHERE LotNumber IN (SELECT LotNumber FROM auction.Lots WHERE AuctionId = {0})", auctionId);
+            await _db.Database.ExecuteSqlRawAsync(
+                "DELETE FROM auction.AuctionResults WHERE LotNumber IN (SELECT LotNumber FROM auction.Lots WHERE AuctionId = {0})", auctionId);
+
+            _db.Lots.RemoveRange(auction.Lots);
+            _db.Auctions.Remove(auction);
+            await _db.SaveChangesAsync();
+
+            // Drop snapshot tables
+            if (!string.IsNullOrEmpty(auctionNum))
             {
-                var conn = _catalogDb.Database.GetConnectionString();
-                using var sqlConn = new Microsoft.Data.SqlClient.SqlConnection(conn);
-                await sqlConn.OpenAsync();
-                foreach (var suffix in new[] { "Lots", "Boxes", "Skins" })
-                    await ExecuteSql(sqlConn, $"IF OBJECT_ID('auction.[{auctionNum}.{suffix}]', 'U') IS NOT NULL DROP TABLE auction.[{auctionNum}.{suffix}]");
+                try
+                {
+                    var conn = _catalogDb.Database.GetConnectionString();
+                    using var sqlConn = new Microsoft.Data.SqlClient.SqlConnection(conn);
+                    await sqlConn.OpenAsync();
+                    foreach (var suffix in new[] { "Lots", "Boxes", "Skins" })
+                        await ExecuteSql(sqlConn, $"IF OBJECT_ID('auction.[{auctionNum}.{suffix}]', 'U') IS NOT NULL DROP TABLE auction.[{auctionNum}.{suffix}]");
+                }
+                catch (Exception ex) { _logger.LogWarning(ex, "Failed to drop snapshot tables for auction {Num}", auctionNum); }
             }
-            catch (Exception ex) { _logger.LogWarning(ex, "Failed to drop snapshot tables for auction {Num}", auctionNum); }
-        }
 
-        return await CreateJsonResponse(req, new { success = true, auctionNumber = auctionNum });
+            return await CreateJsonResponse(req, new { success = true, auctionNumber = auctionNum });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete auction {Id}", auctionId);
+            return await CreateJsonResponse(req, new { error = $"Delete failed: {ex.Message}" }, System.Net.HttpStatusCode.InternalServerError);
+        }
     }
 
     [Function("ResetAllData")]
