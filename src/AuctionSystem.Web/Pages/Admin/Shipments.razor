@@ -94,7 +94,10 @@ else
                                 @if (s.Status == "Pending" || s.Status == "ShowLot Packing" || s.Status == "Packing" || s.Status == "Packed")
                                 {
                                     <button class="btn btn-sm btn-success me-1" @onclick="() => MarkShipped(s)">Ship</button>
-                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteShipment(s.Id)">Delete</button>
+                                    @if (s.Status != "Packed")
+                                    {
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteShipment(s.Id)">Delete</button>
+                                    }
                                 }
                                 else if (s.Status == "Shipped")
                                 {
