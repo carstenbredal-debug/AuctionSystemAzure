@@ -104,7 +104,7 @@ public static class PackingListPdfService
                     left.Item().Row(infoRow =>
                     {
                         infoRow.RelativeItem().Text("POLAND").FontSize(6.5f);
-                        infoRow.RelativeItem().Text("shipping@kopenhagenfur.com").FontSize(6.5f);
+                        infoRow.RelativeItem().Text("cargobooking@kopenhagenfur.com").FontSize(6.5f);
                     });
                 });
                 row.RelativeItem(3).AlignRight().AlignTop()
