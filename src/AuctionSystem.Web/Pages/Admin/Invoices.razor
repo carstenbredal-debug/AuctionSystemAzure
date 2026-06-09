@@ -180,49 +180,26 @@ else
                             </td>
                             <td>
                                 @{
-                                    var isFullyPaid = inv.Status == "Paid" || (inv.RemainingBalance.HasValue && inv.RemainingBalance.Value == 0);
-                                }
-                                @if (!inv.IsCreditNote && !isFullyPaid && creditStatus != "Fully Credited")
-                                {
+                                    var isFullyPaid = inv.Status == "Paid" || inv.Status == "Closed" || (inv.RemainingBalance.HasValue && inv.RemainingBalance.Value == 0);
                                     var invId = inv.Id;
-                                    @if (inv.Status == "Downpayment")
-                                    {
-                                        <span class="text-info me-1">Partially Paid</span>
-                                    }
-                                    @if (inv.Status == "ReleasedToShip")
-                                    {
-                                        <span class="badge bg-primary me-1">Released to Ship</span>
-                                    }
-                                    @if (_updatingId == invId)
-                                    {
-                                        <span class="spinner-border spinner-border-sm text-primary me-2" role="status"></span>
-                                        <span class="text-muted">Processing...</span>
-                                    }
-                                    else
-                                    {
-                                        <button class="btn btn-sm btn-outline-info me-1" @onclick="() => OpenDownpaymentPopup(invId)" disabled="@_updatingId.HasValue">Partial Payment</button>
-                                        <button class="btn btn-sm btn-outline-success" @onclick="() => OpenFullyPaidPopup(invId)" disabled="@_updatingId.HasValue">Full Payment</button>
-                                    }
                                 }
-                                else if (isFullyPaid)
+                                @if (_updatingId == invId)
                                 {
-                                    <span class="text-success">Paid</span>
-                                    @if (inv.ShippingStatus == "Released" || inv.Status == "ReleasedToShip")
-                                    {
-                                        <span class="badge bg-primary ms-1">Released to Ship</span>
-                                    }
-                                    @if (inv.ShippingStatus == "InShipment")
-                                    {
-                                        <span class="badge bg-info ms-1">In Shipment</span>
-                                    }
-                                    @if (inv.ShippingStatus == "Shipped")
-                                    {
-                                        <span class="badge bg-success ms-1">Shipped</span>
-                                    }
-                                    @if (inv.ShippingStatus == "Delivered")
-                                    {
-                                        <span class="badge bg-success ms-1">Delivered</span>
-                                    }
+                                    <span class="spinner-border spinner-border-sm text-primary me-2" role="status"></span>
+                                    <span class="text-muted">Processing...</span>
+                                }
+                                else if (!inv.IsCreditNote && !isFullyPaid && creditStatus != "Fully Credited")
+                                {
+                                    <button class="btn btn-sm btn-outline-info me-1" @onclick="() => OpenDownpaymentPopup(invId)" disabled="@_updatingId.HasValue">Partial Payment</button>
+                                    <button class="btn btn-sm btn-outline-success" @onclick="() => SubmitFullyPaid(invId)" disabled="@_updatingId.HasValue">Full Payment</button>
+                                }
+                                else if (isFullyPaid && inv.Status != "Closed")
+                                {
+                                    <button class="btn btn-sm btn-success" @onclick="() => SendToShipping(invId)" disabled="@_updatingId.HasValue">To Shipping</button>
+                                }
+                                else if (inv.Status == "Closed")
+                                {
+                                    <span class="badge bg-dark">Shipped</span>
                                 }
                             </td>
                             <td>
@@ -329,47 +306,7 @@ else
     </div>
 }
 
-@if (_showShippingConfirm)
-{
-    <div class="modal d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Release Lots for Shipping?</h5>
-                    <button type="button" class="btn-close" @onclick="() => _showShippingConfirm = false"></button>
-                </div>
-                <div class="modal-body">
-                    <p>Do you want to release all uncredited lots on this invoice for shipping?</p>
-                </div>
-                <div class="modal-footer">
-                    <button class="btn btn-secondary" @onclick="() => SubmitDownpayment(false)">No</button>
-                    <button class="btn btn-success" @onclick="() => SubmitDownpayment(true)">Yes — Release for Shipping</button>
-                </div>
-            </div>
-        </div>
-    </div>
-}
 
-@if (_showFullyPaidShippingConfirm)
-{
-    <div class="modal d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Release Lots for Shipping?</h5>
-                    <button type="button" class="btn-close" @onclick="() => _showFullyPaidShippingConfirm = false"></button>
-                </div>
-                <div class="modal-body">
-                    <p>Do you want to release all uncredited lots on this invoice for shipping?</p>
-                </div>
-                <div class="modal-footer">
-                    <button class="btn btn-secondary" @onclick="() => SubmitFullyPaid(false)">No</button>
-                    <button class="btn btn-success" @onclick="() => SubmitFullyPaid(true)">Yes — Release for Shipping</button>
-                </div>
-            </div>
-        </div>
-    </div>
-}
 
 @if (_showPaymentHistory && _paymentHistory != null)
 {
@@ -504,20 +441,15 @@ else
     private string _selectedStatus = "";
     private List<string> _brokerNames = new();
     private List<string> _buyerNames = new();
-    private List<string> _statusOptions = new() { "Issued", "Partially Paid", "Paid", "Released to Ship", "Partially Credited", "Fully Credited", "Alloted" };
+    private List<string> _statusOptions = new() { "Issued", "Partially Paid", "Paid", "Closed", "Partially Credited", "Fully Credited", "Alloted" };
     private int? _updatingId;
     private int? _expandedInvoiceId;
 
     // Partial Payment popup state
     private bool _showDownpaymentPopup;
-    private bool _showShippingConfirm;
     private int _dpInvoiceId;
     private decimal _dpAmount;
     private string _dpAmountType = "percentage";
-
-    // Fully Paid popup state
-    private bool _showFullyPaidShippingConfirm;
-    private int _fpInvoiceId;
 
     // Balance check state
     private bool _showInsufficientBalancePopup;
@@ -615,58 +547,11 @@ else
         _updatingId = _dpInvoiceId;
         StateHasChanged();
 
-        var balance = await Api.CheckBcPaymentBalanceAsync(_dpInvoiceId);
-        _updatingId = null;
-
-        var dpInv = _invoices.FirstOrDefault(i => i.Id == _dpInvoiceId);
-        var alreadyShipped = dpInv?.Status == "ReleasedToShip";
-
-        if (balance == null || !balance.Available)
-        {
-            await ProceedWithDownpayment(alreadyShipped);
-            return;
-        }
-
-        var isPercentage = _dpAmountType == "percentage";
-        var actualAmount = isPercentage && dpInv != null ? dpInv.TotalAmount * _dpAmount / 100 : _dpAmount;
-
-        if (balance.AvailableAmount >= actualAmount)
-        {
-            await ProceedWithDownpayment(alreadyShipped);
-        }
-        else
-        {
-            _bcAvailableAmount = balance.AvailableAmount;
-            _bcInvoiceAmount = actualAmount;
-            _balanceContext = "downpayment";
-            _showInsufficientBalancePopup = true;
-        }
-    }
-
-    private async Task ProceedWithDownpayment(bool alreadyShipped)
-    {
-        if (alreadyShipped)
-            await SubmitDownpayment(true);
-        else
-            _showShippingConfirm = true;
-    }
-
-    private async Task SubmitDownpayment(bool releaseForShipping)
-    {
-        _showShippingConfirm = false;
-        _updatingId = _dpInvoiceId;
-        _bcError = null;
-        _bcSuccess = null;
-        StateHasChanged();
-        var resp = await Api.ProcessDownpaymentAsync(_dpInvoiceId, _dpAmount, _dpAmountType == "percentage", releaseForShipping);
+        var resp = await Api.ProcessDownpaymentAsync(_dpInvoiceId, _dpAmount, _dpAmountType == "percentage", false);
         if (resp.IsSuccessStatusCode)
         {
             var inv = _invoices.FirstOrDefault(i => i.Id == _dpInvoiceId);
-            if (inv != null)
-            {
-                inv.Status = releaseForShipping ? "ReleasedToShip" : "Downpayment";
-                if (releaseForShipping) inv.ShippingStatus = "Released";
-            }
+            if (inv != null) inv.Status = "Downpayment";
             ParseBcResponse(resp, "Partial payment recorded");
             await CheckAndMarkPaidIfZeroBalance(_dpInvoiceId);
         }
@@ -677,112 +562,71 @@ else
         _updatingId = null;
     }
 
-    private async Task OpenFullyPaidPopup(int invoiceId)
+    private async Task SubmitFullyPaid(int invoiceId)
     {
-        _fpInvoiceId = invoiceId;
-        _bcError = null;
-        _bcSuccess = null;
         _updatingId = invoiceId;
-        StateHasChanged();
-
-        var balance = await Api.CheckBcPaymentBalanceAsync(invoiceId);
-        _updatingId = null;
-
-        var fpInv = _invoices.FirstOrDefault(i => i.Id == invoiceId);
-        var fpAlreadyShipped = fpInv?.Status == "ReleasedToShip";
-
-        if (balance == null || !balance.Available || balance.Sufficient)
-        {
-            await ProceedWithFullyPaid(fpAlreadyShipped);
-        }
-        else
-        {
-            _bcAvailableAmount = balance.AvailableAmount;
-            _bcInvoiceAmount = balance.InvoiceAmount;
-            _balanceContext = "fullypaid";
-            _showInsufficientBalancePopup = true;
-        }
-    }
-
-    private async Task ProceedWithFullyPaid(bool alreadyShipped)
-    {
-        if (alreadyShipped)
-            await SubmitFullyPaid(true);
-        else
-            _showFullyPaidShippingConfirm = true;
-    }
-
-    private async Task ConfirmApplyAvailable()
-    {
-        _showInsufficientBalancePopup = false;
-        // Skip shipping question if already released to ship
-        if (_balanceContext == "fullypaid")
-        {
-            var fpInv = _invoices.FirstOrDefault(i => i.Id == _fpInvoiceId);
-            if (fpInv?.Status == "ReleasedToShip")
-                await SubmitFullyPaid(true);
-            else
-                _showFullyPaidShippingConfirm = true;
-        }
-        else
-        {
-            var dpInv = _invoices.FirstOrDefault(i => i.Id == _dpInvoiceId);
-            if (dpInv?.Status == "ReleasedToShip")
-                await SubmitDownpayment(true);
-            else
-                _showShippingConfirm = true;
-        }
-    }
-
-    private void CancelInsufficientBalance()
-    {
-        _showInsufficientBalancePopup = false;
-    }
-
-    private async Task SubmitFullyPaid(bool releaseForShipping)
-    {
-        _showFullyPaidShippingConfirm = false;
-        _updatingId = _fpInvoiceId;
         _bcError = null;
         _bcSuccess = null;
         StateHasChanged();
 
-        var resp = await Api.UpdateInvoiceStatusAsync(_fpInvoiceId, StatusPaid, releaseForShipping);
+        var resp = await Api.UpdateInvoiceStatusAsync(invoiceId, StatusPaid, false);
         if (resp.IsSuccessStatusCode)
         {
-            // Read actual status from backend (may be Downpayment if BC had insufficient balance)
-            var inv = _invoices.FirstOrDefault(i => i.Id == _fpInvoiceId);
+            var inv = _invoices.FirstOrDefault(i => i.Id == invoiceId);
+            if (inv != null) inv.Status = StatusPaid;
             try
             {
                 var json = await resp.Content.ReadFromJsonAsync<BcStatusResponse>();
-                var actualStatus = json?.Status ?? (releaseForShipping ? "ReleasedToShip" : StatusPaid);
-                if (inv != null)
-                {
-                    inv.Status = actualStatus;
-                    if (releaseForShipping) inv.ShippingStatus = "Released";
-                }
                 if (!string.IsNullOrEmpty(json?.BcPaymentError))
-                    _bcError = $"Invoice marked as {actualStatus} locally, but BC payment application failed: {json.BcPaymentError}";
+                    _bcError = $"Invoice marked as Paid locally, but BC payment failed: {json.BcPaymentError}";
                 else if (!string.IsNullOrEmpty(json?.BcPaymentSuccess))
                     _bcSuccess = $"Payment applied. BC: {json.BcPaymentSuccess}";
                 else
-                    _bcSuccess = $"Invoice marked as {actualStatus}.";
+                    _bcSuccess = "Invoice marked as Paid.";
             }
-            catch
-            {
-                if (inv != null)
-                {
-                    inv.Status = releaseForShipping ? "ReleasedToShip" : StatusPaid;
-                    if (releaseForShipping) inv.ShippingStatus = "Released";
-                }
-                _bcSuccess = "Invoice status updated.";
-            }
+            catch { _bcSuccess = "Invoice marked as Paid."; }
         }
         else
         {
             _bcError = $"Failed to update invoice status (HTTP {(int)resp.StatusCode}).";
         }
         _updatingId = null;
+    }
+
+    private async Task SendToShipping(int invoiceId)
+    {
+        _updatingId = invoiceId;
+        _bcError = null;
+        _bcSuccess = null;
+        StateHasChanged();
+
+        var resp = await Api.UpdateInvoiceStatusAsync(invoiceId, "Closed", true);
+        if (resp.IsSuccessStatusCode)
+        {
+            var inv = _invoices.FirstOrDefault(i => i.Id == invoiceId);
+            if (inv != null)
+            {
+                inv.Status = "Closed";
+                inv.ShippingStatus = "Released";
+            }
+            _bcSuccess = "Invoice closed and sent to shipping.";
+        }
+        else
+        {
+            _bcError = $"Failed to send to shipping (HTTP {(int)resp.StatusCode}).";
+        }
+        _updatingId = null;
+    }
+
+    private async Task ConfirmApplyAvailable()
+    {
+        _showInsufficientBalancePopup = false;
+        await ConfirmDownpayment();
+    }
+
+    private void CancelInsufficientBalance()
+    {
+        _showInsufficientBalancePopup = false;
     }
 
     private async Task CheckAndMarkPaidIfZeroBalance(int invoiceId)
@@ -825,7 +669,7 @@ else
 
     private string FormatStatus(string status) => status switch
     {
-        "ReleasedToShip" => "Released to Ship",
+        "Closed" => "Closed",
         "Downpayment" => "Partially Paid",
         "PartiallyCredited" => "Partially Credited",
         "FullyCredited" => "Fully Credited",
@@ -840,7 +684,7 @@ else
         "Issued" => "info",
         "Partially Paid" => "info",
         "Alloted" => "success",
-        "Released to Ship" => "primary",
+        "Closed" => "dark",
         "Overdue" => "danger",
         _ => "secondary"
     };
