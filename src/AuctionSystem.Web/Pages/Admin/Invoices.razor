@@ -193,7 +193,7 @@ else
                                     <button class="btn btn-sm btn-outline-info me-1" @onclick="() => OpenDownpaymentPopup(invId)" disabled="@_updatingId.HasValue">Partial Payment</button>
                                     <button class="btn btn-sm btn-outline-success" @onclick="() => SubmitFullyPaid(invId)" disabled="@_updatingId.HasValue">Full Payment</button>
                                 }
-                                else if (isFullyPaid && inv.Status != "Closed" && inv.Status != "Packing")
+                                else if (isFullyPaid && inv.Status == "Paid")
                                 {
                                     <button class="btn btn-sm btn-success" @onclick="() => SendToShipping(invId)" disabled="@_updatingId.HasValue">To Shipping</button>
                                 }
@@ -201,7 +201,7 @@ else
                                 {
                                     <span class="badge bg-info">Packing</span>
                                 }
-                                else if (inv.Status == "Closed")
+                                else if (inv.Status == "Closed" || inv.Status == "ReleasedToShip" || inv.Status == "Packed")
                                 {
                                     <span class="badge bg-dark">Shipped</span>
                                 }
