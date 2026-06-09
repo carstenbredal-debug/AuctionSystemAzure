@@ -162,6 +162,31 @@ public static class PackingListPdfService
 
     private static void ComposeContent(IContainer container, PackingListData data)
     {
+        var showLotLines = data.Lines.Where(l => l.IsShowLot || l.IsPackedBoxSummary).ToList();
+        var storageLines = data.Lines.Where(l => !l.IsShowLot && !l.IsPackedBoxSummary).ToList();
+
+        container.Column(col =>
+        {
+            // ShowLot section first (if any)
+            if (showLotLines.Count > 0)
+            {
+                col.Item().Element(c => ComposeTable(c, showLotLines));
+
+                // Page break before storage boxes (if any)
+                if (storageLines.Count > 0)
+                    col.Item().PageBreak();
+            }
+
+            // Storage boxes section
+            if (storageLines.Count > 0)
+            {
+                col.Item().Element(c => ComposeTable(c, storageLines));
+            }
+        });
+    }
+
+    private static void ComposeTable(IContainer container, List<PackingListLine> lines)
+    {
         container.Table(table =>
         {
             table.ColumnsDefinition(c =>
@@ -186,7 +211,7 @@ public static class PackingListPdfService
                 header.Cell().BorderBottom(1).PaddingBottom(3).AlignRight().Text("Gross weight").Bold().FontSize(7.5f);
             });
 
-            foreach (var line in data.Lines)
+            foreach (var line in lines)
             {
                 if (line.IsShowLot)
                 {
