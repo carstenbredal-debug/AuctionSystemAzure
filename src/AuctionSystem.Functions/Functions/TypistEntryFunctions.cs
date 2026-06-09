@@ -517,6 +517,11 @@ public class TypistEntryFunctions
             if (entries.Count == 0)
                 return await CreateErrorResponse(req, $"No entries found for lot {lotNumber}");
 
+            // Clear circular FK references (MatchedWithEntryId) before deleting
+            foreach (var e in entries)
+                e.MatchedWithEntryId = null;
+            await _db.SaveChangesAsync();
+
             // Remove auction result and transactions first (FK constraints)
             var resultIds = entries.Where(e => e.AuctionResultId.HasValue).Select(e => e.AuctionResultId!.Value).Distinct().ToList();
             if (resultIds.Count > 0)
