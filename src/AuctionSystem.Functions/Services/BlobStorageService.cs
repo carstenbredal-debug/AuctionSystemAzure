@@ -68,7 +68,7 @@ public class BlobStorageService
     public async Task DeletePackingOrderXmlsAsync(string packingOrderNumber)
     {
         var container = await GetPackingContainerAsync();
-        foreach (var folder in new[] { "new", "processed", "completed" })
+        foreach (var folder in new[] { "new", "processed" })
         {
             var blobClient = container.GetBlobClient($"{folder}/{packingOrderNumber}.xml");
             await blobClient.DeleteIfExistsAsync();
@@ -81,7 +81,7 @@ public class BlobStorageService
         var container = await GetPackingContainerAsync();
         var results = new List<(string FileName, string Folder, string Content)>();
 
-        foreach (var folder in new[] { "new", "processed", "completed" })
+        foreach (var folder in new[] { "new", "processed" })
         {
             await foreach (var blob in container.GetBlobsAsync(BlobTraits.None, BlobStates.None, $"{folder}/", default))
             {
@@ -101,7 +101,7 @@ public class BlobStorageService
     {
         var container = await GetPackingContainerAsync();
         int deleted = 0;
-        foreach (var folder in new[] { "new", "processed", "completed" })
+        foreach (var folder in new[] { "new", "processed" })
         {
             await foreach (var blob in container.GetBlobsAsync(BlobTraits.None, BlobStates.None, $"{folder}/", default))
             {

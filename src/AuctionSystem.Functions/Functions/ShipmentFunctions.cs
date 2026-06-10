@@ -1639,22 +1639,6 @@ public class ShipmentFunctions
         packedBox.Status = "Approved";
         await _db.SaveChangesAsync();
 
-        // Generate response XML and upload to blob
-        if (_blobStorage != null)
-        {
-            try
-            {
-                var xml = GeneratePackedBoxResponseXml(packedBox);
-                var blobName = $"completed/{packedBox.PackingOrder!.PackingOrderNumber}-BOX{packedBox.Id}.xml";
-                await _blobStorage.UploadPackingXmlAsync(blobName, xml);
-                _logger.LogInformation("Packed box response XML {Name} uploaded", blobName);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to upload packed box response XML for box {Id}", packedBoxId);
-            }
-        }
-
         // Check if all showlot lines are packed — if so, update packing order status
         var order = await _db.PackingOrders
             .Include(o => o.Lines)
@@ -1822,48 +1806,6 @@ public class ShipmentFunctions
                         )
                     )
                 )
-            )
-        );
-        return doc.ToString();
-    }
-
-    private static string GeneratePackedBoxResponseXml(PackedBox packedBox)
-    {
-        var order = packedBox.PackingOrder!;
-        var shipment = order.Shipment!;
-        var doc = new XDocument(
-            new XDeclaration("1.0", "utf-8", "yes"),
-            new XElement("PackedBoxResponse",
-                new XElement("PackingOrderNumber", order.PackingOrderNumber),
-                new XElement("ShipmentNumber", shipment.ShipmentNumber),
-                new XElement("PackedBoxId", packedBox.Id),
-                new XElement("BoxType", packedBox.BoxType),
-                new XElement("Weight", packedBox.Weight),
-                new XElement("Dimensions",
-                    new XElement("HeightM", packedBox.HeightM),
-                    new XElement("WidthM", packedBox.WidthM),
-                    new XElement("LengthM", packedBox.LengthM)
-                ),
-                new XElement("Buyer",
-                    new XElement("Name", shipment.Buyer?.Name ?? ""),
-                    new XElement("BuyerNumber", shipment.Buyer?.BuyerNumber ?? "")
-                ),
-                new XElement("Shipper",
-                    new XElement("Name", shipment.Shipper?.Name ?? "")
-                ),
-                new XElement("ShowLots",
-                    new XAttribute("Count", packedBox.ShowLots.Count),
-                    new XAttribute("TotalSkins", packedBox.ShowLots.Sum(l => l.Skins)),
-                    packedBox.ShowLots.Select(l =>
-                        new XElement("ShowLot",
-                            new XElement("BoxNumber", l.BoxNumber),
-                            new XElement("LotNumber", l.LotNumber),
-                            new XElement("Skins", l.Skins),
-                            new XElement("OriginalBoxType", l.BoxType)
-                        )
-                    )
-                ),
-                new XElement("ApprovedAt", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"))
             )
         );
         return doc.ToString();
