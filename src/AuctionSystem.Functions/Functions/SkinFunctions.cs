@@ -94,20 +94,9 @@ public class SkinFunctions
             }
         }
 
-        // Total value: count actual skins per box × price per skin
-        var skinsPerBox = await _catalogDb.Skins
-            .Where(s => s.IsActive && soldBoxNumbers.Contains(s.BoxNumber))
-            .GroupBy(s => s.BoxNumber)
-            .Select(g => new { BoxNumber = g.Key, Count = g.Count() })
-            .ToDictionaryAsync(x => x.BoxNumber, x => x.Count);
-
-        var totalValue = skinsPerBox.Sum(kvp =>
-            saleInfoByBox.TryGetValue(kvp.Key, out var info) ? kvp.Value * info.PriceEur : 0m);
-
         var result = new
         {
             totalSkins = totalCount,
-            totalValue,
             page,
             pageSize,
             totalPages = (int)Math.Ceiling((double)totalCount / pageSize),
