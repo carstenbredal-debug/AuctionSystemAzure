@@ -1013,26 +1013,54 @@ public class SettlementFunctions
         if (payments.Count == 0)
             throw new InvalidOperationException($"No open payment found for customer {customerNumber} in BC");
 
-        // Use the first open payment entry
-        var paymentEntry = payments.First();
+        // Get the remaining amount on the invoice in BC
+        var remainingOnInvoice = bcInvoiceEntry?.RemainingAmount ?? 0m;
+        if (remainingOnInvoice == 0)
+            throw new InvalidOperationException("Invoice has no remaining amount in BC");
 
-        // Apply the payment to the invoice via the custom API
-        // BC extension handles posting date automatically (uses max of today, payment date, invoice date)
-        var amountToApply = partialAmount ?? 0; // 0 means full invoice amount (handled by AL)
-        var result = await _bcClient.ApplyPaymentToInvoiceAsync(
-            companyId,
-            customerNumber,
-            paymentEntry.EntryNo,
-            invoice.BcInvoiceNumber!,
-            amountToApply);
+        var targetAmount = partialAmount ?? remainingOnInvoice;
+        var totalApplied = 0m;
+        var messages = new List<string>();
 
-        if (result.ResultStatus == "Error")
-            throw new InvalidOperationException($"BC payment application failed: {result.ResultMessage}");
+        // Apply payments one by one until the invoice is fully covered
+        foreach (var paymentEntry in payments.OrderByDescending(p => Math.Abs(p.RemainingAmount)))
+        {
+            if (totalApplied >= targetAmount) break;
 
-        _logger.LogInformation("Applied payment entry #{EntryNo} to invoice {BcNumber}, amount {Amount}",
-            paymentEntry.EntryNo, invoice.BcInvoiceNumber, result.AmountToApply);
+            var paymentAvailable = Math.Abs(paymentEntry.RemainingAmount);
+            if (paymentAvailable <= 0) continue;
 
-        return result.ResultMessage;
+            var amountToApply = Math.Min(paymentAvailable, targetAmount - totalApplied);
+
+            var result = await _bcClient.ApplyPaymentToInvoiceAsync(
+                companyId,
+                customerNumber,
+                paymentEntry.EntryNo,
+                invoice.BcInvoiceNumber!,
+                amountToApply);
+
+            if (result.ResultStatus == "Error")
+            {
+                _logger.LogWarning("BC payment application failed for entry #{EntryNo}: {Message}",
+                    paymentEntry.EntryNo, result.ResultMessage);
+                messages.Add($"Entry #{paymentEntry.EntryNo} failed: {result.ResultMessage}");
+                continue;
+            }
+
+            totalApplied += amountToApply;
+            _logger.LogInformation("Applied payment entry #{EntryNo} to invoice {BcNumber}, amount {Amount}",
+                paymentEntry.EntryNo, invoice.BcInvoiceNumber, amountToApply);
+            messages.Add($"Applied {amountToApply:N2} from entry #{paymentEntry.EntryNo}");
+        }
+
+        if (totalApplied == 0)
+            throw new InvalidOperationException($"Could not apply any payments to invoice. {string.Join("; ", messages)}");
+
+        var summary = $"Total applied: {totalApplied:N2} of {targetAmount:N2}";
+        if (totalApplied < targetAmount)
+            summary += $" (shortfall: {targetAmount - totalApplied:N2})";
+
+        return string.Join(". ", messages) + $". {summary}";
     }
 
     [Function("DiagnosePaymentApplication")]
