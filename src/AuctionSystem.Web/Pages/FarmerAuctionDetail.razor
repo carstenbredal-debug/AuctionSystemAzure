@@ -56,21 +56,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        // Get current user's farmer name
-        var auth = await AuthState.GetAuthenticationStateAsync();
-        var oid = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        string? farmerName = null;
-
-        if (oid != null)
-        {
-            var user = await Api.GetCurrentUserAsync(oid);
-            if (user?.FarmerId != null)
-            {
-                var farmers = await Api.GetFarmersAsync();
-                var farmer = farmers.FirstOrDefault(f => f.Id == user.FarmerId);
-                farmerName = farmer?.Name;
-            }
-        }
+        var farmerName = await ResolveFarmerNameAsync();
 
         if (string.IsNullOrEmpty(farmerName))
         {
@@ -90,9 +76,27 @@ else
         }
         catch
         {
-            // API not available or no data
         }
 
         _loading = false;
+    }
+
+    private async Task<string?> ResolveFarmerNameAsync()
+    {
+        var auth = await AuthState.GetAuthenticationStateAsync();
+        var oid = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        var email = auth.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value;
+
+        // Try OID lookup first, then email lookup
+        AppUserDto? user = null;
+        if (oid != null)
+            user = await Api.GetCurrentUserAsync(oid);
+        if (user == null && !string.IsNullOrEmpty(email))
+            user = await Api.GetCurrentUserAsync(email);
+
+        if (user?.FarmerId == null) return null;
+
+        var farmers = await Api.GetFarmersAsync();
+        return farmers.FirstOrDefault(f => f.Id == user.FarmerId)?.Name;
     }
 }

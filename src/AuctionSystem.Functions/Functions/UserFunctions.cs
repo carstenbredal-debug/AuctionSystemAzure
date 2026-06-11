@@ -29,6 +29,9 @@ public class UserFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "users/me/{objectId}")] HttpRequestData req, string objectId)
     {
         var user = await _db.AppUsers.FirstOrDefaultAsync(u => u.AzureAdObjectId == objectId && u.IsActive);
+        // Fallback: try matching by email for External ID users
+        if (user == null)
+            user = await _db.AppUsers.FirstOrDefaultAsync(u => u.Email == objectId && u.IsActive);
         if (user == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
         return await CreateJsonResponse(req, user);
     }
