@@ -146,7 +146,9 @@ else
 
     private async Task RemoveLink(BrokerCustomerRequestDto link)
     {
-        await Api.DeleteCustomerRequestAsync(link.Id);
+        await Api.UnlinkBrokerBuyerAsync(link.BrokerId, link.BuyerId);
+        if (link.Id > 0)
+            await Api.DeleteCustomerRequestAsync(link.Id);
         _message = "Relationship removed."; _messageIsError = false;
         await LoadData();
     }

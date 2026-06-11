@@ -237,12 +237,35 @@ public class CustomerRequestFunctions
     public async Task<HttpResponseData> GetAll(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "management/customer-links")] HttpRequestData req)
     {
-        var requests = await _db.BrokerCustomerRequests
-            .Include(r => r.Broker)
-            .Include(r => r.Buyer)
-            .OrderByDescending(r => r.RequestedAt)
+        // Get all actual broker-buyer links from the junction table
+        var brokerBuyers = await _db.BrokerBuyers
+            .Include(bb => bb.Broker)
+            .Include(bb => bb.Buyer)
             .ToListAsync();
-        return await CreateJsonResponse(req, requests);
+
+        // Get request records for status info
+        var requests = await _db.BrokerCustomerRequests.ToListAsync();
+        var requestLookup = requests.ToDictionary(r => (r.BrokerId, r.BuyerId));
+
+        // Build combined list — every BrokerBuyer link is a relationship
+        var results = brokerBuyers.Select(bb =>
+        {
+            requestLookup.TryGetValue((bb.BrokerId, bb.BuyerId), out var reqRecord);
+            return new
+            {
+                id = reqRecord?.Id ?? 0,
+                brokerId = bb.BrokerId,
+                broker = new { bb.Broker.Id, bb.Broker.BrokerNumber, bb.Broker.CompanyName },
+                buyerId = bb.BuyerId,
+                buyer = new { bb.Buyer.Id, bb.Buyer.BuyerNumber, bb.Buyer.Name },
+                status = reqRecord?.Status ?? Domain.Enums.CustomerRequestStatus.Approved,
+                initiatedBy = reqRecord?.InitiatedBy ?? "Admin",
+                requestedAt = reqRecord?.RequestedAt ?? bb.CreatedAt,
+                respondedAt = reqRecord?.RespondedAt
+            };
+        }).OrderBy(r => r.broker.BrokerNumber).ThenBy(r => r.buyer.BuyerNumber).ToList();
+
+        return await CreateJsonResponse(req, results);
     }
 
     [Function("DeleteCustomerRequest")]
