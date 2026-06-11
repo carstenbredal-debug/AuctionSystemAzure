@@ -41,7 +41,7 @@
                     }
                     @foreach (var a in _auctionSummaries)
                     {
-                        <tr style="cursor: pointer;" @onclick="() => Nav.NavigateTo($&quot;/farmer/auction/{a.AuctionId}?farmerId={selectedFarmerId}&quot;)">
+                        <tr style="cursor: pointer;" @onclick="() => GoToAuction(a.AuctionId)">
                             <td><strong>@a.AuctionTitle</strong></td>
                             <td>@a.ScheduledDate.ToString("yyyy-MM-dd")</td>
                             <td>@a.TotalSkins.ToString("N0")</td>
@@ -91,6 +91,11 @@
             })
             .OrderByDescending(a => a.ScheduledDate)
             .ToList();
+    }
+
+    private void GoToAuction(int auctionId)
+    {
+        Nav.NavigateTo($"/farmer/auction/{auctionId}?farmerId={selectedFarmerId}");
     }
 
     private string GetStatusColor(AuctionStatus status) => status switch
