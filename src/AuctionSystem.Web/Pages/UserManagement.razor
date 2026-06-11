@@ -569,6 +569,10 @@ else
         </div>
     }
 
+    <div class="mb-3">
+        <input class="form-control" type="search" placeholder="Search by name, email, or linked entity..." @bind="_searchText" @bind:event="oninput" />
+    </div>
+
     <ul class="nav nav-tabs mb-3">
         @foreach (var tab in _roleTabs)
         {
@@ -643,6 +647,7 @@ else
 
 @code {
     private string _activeTab = "All";
+    private string _searchText = "";
     private readonly string[] _roleTabs = { "All", "Admin", "Broker", "Buyer", "Farmer", "Typist" };
     private List<AppUserDto> _users = new();
     private List<BrokerDto> _brokers = new();
@@ -999,8 +1004,19 @@ else
         _ => "secondary"
     };
 
-    private List<AppUserDto> GetFilteredUsers() =>
-        _activeTab == "All" ? _users : _users.Where(u => u.Role == _activeTab).ToList();
+    private List<AppUserDto> GetFilteredUsers()
+    {
+        var list = _activeTab == "All" ? _users : _users.Where(u => u.Role == _activeTab);
+        if (!string.IsNullOrWhiteSpace(_searchText))
+        {
+            var q = _searchText.Trim();
+            list = list.Where(u =>
+                (u.DisplayName?.Contains(q, StringComparison.OrdinalIgnoreCase) == true) ||
+                (u.Email?.Contains(q, StringComparison.OrdinalIgnoreCase) == true) ||
+                GetLinkedEntity(u).Contains(q, StringComparison.OrdinalIgnoreCase));
+        }
+        return list.ToList();
+    }
 
     private int GetTabCount(string tab) =>
         tab == "All" ? _users.Count : _users.Count(u => u.Role == tab);
