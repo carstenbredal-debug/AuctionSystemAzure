@@ -1,6 +1,7 @@
 @page "/farmer"
 @attribute [Authorize(Roles = "Admin,Farmer")]
 @inject AuctionApiClient Api
+@inject NavigationManager Nav
 
 <PageTitle>Farmer Portal - Auction System</PageTitle>
 
@@ -19,72 +20,47 @@
 
 @if (selectedFarmerId > 0)
 {
-    <ul class="nav nav-tabs mb-3">
-        <li class="nav-item"><a class="nav-link @(tab == "lots" ? "active" : "")" href="#" @onclick='() => tab = "lots"' @onclick:preventDefault>My Lots</a></li>
-        <li class="nav-item"><a class="nav-link @(tab == "settlements" ? "active" : "")" href="#" @onclick='() => tab = "settlements"' @onclick:preventDefault>Settlements</a></li>
-    </ul>
-
-    @if (tab == "lots")
-    {
-        <h4>My Lots</h4>
-        <table class="table table-striped">
-            <thead><tr><th>#</th><th>Description</th><th>Auction</th><th>Qty</th><th>Starting</th><th>Hammer</th><th>Status</th></tr></thead>
-            <tbody>
-                @foreach (var lot in lots)
-                {
+    <div class="section-container">
+        <div class="section-header">Auctions</div>
+        <div class="section-body">
+            <table class="table table-striped table-hover mb-0">
+                <thead class="table-dark">
                     <tr>
-                        <td>@lot.LotNumber</td>
-                        <td>@lot.Description</td>
-                        <td>@(lot.Auction?.Title ?? $"Auction {lot.AuctionId}")</td>
-                        <td>@lot.Quantity</td>
-                        <td>@lot.StartingPrice.ToString("N2")</td>
-                        <td>@(lot.HammerPrice?.ToString("N2") ?? "-")</td>
-                        <td><span class="badge bg-@GetLotColor(lot.Status)">@lot.Status</span></td>
+                        <th>Auction</th>
+                        <th>Date</th>
+                        <th>Total Skins</th>
+                        <th>Sold Skins</th>
+                        <th>Total Value</th>
+                        <th>Status</th>
                     </tr>
-                }
-            </tbody>
-        </table>
-    }
-
-    @if (tab == "settlements")
-    {
-        <h4>Settlements</h4>
-        @if (!settlements.Any())
-        {
-            <p class="text-muted">No settlements yet.</p>
-        }
-        else
-        {
-            <table class="table table-striped">
-                <thead><tr><th>Number</th><th>Lot</th><th>Gross</th><th>Commission (10%)</th><th>Fees (2%)</th><th>Net</th><th>Status</th></tr></thead>
+                </thead>
                 <tbody>
-                    @foreach (var s in settlements)
+                    @if (!_auctionSummaries.Any())
                     {
-                        <tr>
-                            <td>@s.SettlementNumber</td>
-                            <td>@(s.Lot != null ? $"Lot #{s.Lot.LotNumber} — {s.Lot.Description}" : $"Lot {s.LotId}")</td>
-                            <td>@s.GrossAmount.ToString("N2")</td>
-                            <td>@s.Commission.ToString("N2")</td>
-                            <td>@s.Fees.ToString("N2")</td>
-                            <td><strong>@s.NetAmount.ToString("N2")</strong></td>
-                            <td><span class="badge bg-@GetSettlementColor(s.Status)">@s.Status</span></td>
+                        <tr><td colspan="6" class="text-center text-muted py-4">No auctions found for this farmer.</td></tr>
+                    }
+                    @foreach (var a in _auctionSummaries)
+                    {
+                        <tr style="cursor: pointer;" @onclick="() => Nav.NavigateTo($&quot;/farmer/auction/{a.AuctionId}?farmerId={selectedFarmerId}&quot;)">
+                            <td><strong>@a.AuctionTitle</strong></td>
+                            <td>@a.ScheduledDate.ToString("yyyy-MM-dd")</td>
+                            <td>@a.TotalSkins.ToString("N0")</td>
+                            <td>@a.SoldSkins.ToString("N0")</td>
+                            <td>@a.TotalValue.ToString("N2")</td>
+                            <td><span class="badge bg-@GetStatusColor(a.Status)">@a.Status</span></td>
                         </tr>
                     }
                 </tbody>
             </table>
-            <div class="alert alert-light">
-                <strong>Total net payout:</strong> @settlements.Sum(s => s.NetAmount).ToString("N2")
-            </div>
-        }
-    }
+        </div>
+    </div>
 }
 
 @code {
     private List<FarmerDto> farmers = new();
     private int selectedFarmerId;
-    private string tab = "lots";
     private List<LotDto> lots = new();
-    private List<SettlementDto> settlements = new();
+    private List<FarmerAuctionSummary> _auctionSummaries = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -95,20 +71,44 @@
     {
         if (selectedFarmerId <= 0) return;
         lots = await Api.GetLotsByFarmerAsync(selectedFarmerId);
-        settlements = await Api.GetSettlementsByFarmerAsync(selectedFarmerId);
+
+        _auctionSummaries = lots
+            .GroupBy(l => l.AuctionId)
+            .Select(g =>
+            {
+                var first = g.First();
+                var soldLots = g.Where(l => l.Status == LotStatus.Sold || l.Status == LotStatus.Broker).ToList();
+                return new FarmerAuctionSummary
+                {
+                    AuctionId = g.Key,
+                    AuctionTitle = first.Auction?.Title ?? first.Auction?.AuctionNumber ?? $"Auction {g.Key}",
+                    ScheduledDate = first.Auction?.ScheduledDate ?? DateTime.MinValue,
+                    Status = first.Auction?.Status ?? AuctionStatus.Draft,
+                    TotalSkins = g.Sum(l => l.Quantity),
+                    SoldSkins = soldLots.Sum(l => l.Quantity),
+                    TotalValue = soldLots.Sum(l => (l.HammerPrice ?? 0) * l.Quantity)
+                };
+            })
+            .OrderByDescending(a => a.ScheduledDate)
+            .ToList();
     }
 
-    private string GetLotColor(LotStatus s) => s switch
+    private string GetStatusColor(AuctionStatus status) => status switch
     {
-        LotStatus.Sold => "success",
-        LotStatus.Active => "warning",
+        AuctionStatus.Draft => "secondary",
+        AuctionStatus.Active => "success",
+        AuctionStatus.Closed => "primary",
         _ => "secondary"
     };
 
-    private string GetSettlementColor(SettlementStatus s) => s switch
+    private class FarmerAuctionSummary
     {
-        SettlementStatus.Completed => "success",
-        SettlementStatus.Pending => "warning",
-        _ => "info"
-    };
+        public int AuctionId { get; set; }
+        public string AuctionTitle { get; set; } = "";
+        public DateTime ScheduledDate { get; set; }
+        public AuctionStatus Status { get; set; }
+        public int TotalSkins { get; set; }
+        public int SoldSkins { get; set; }
+        public decimal TotalValue { get; set; }
+    }
 }
