@@ -2,10 +2,11 @@
 @attribute [Authorize(Roles = "Admin,Farmer")]
 @inject AuctionApiClient Api
 @inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthState
 
 <PageTitle>Auction Detail - Farmer Portal</PageTitle>
 
-<nav class="mb-3"><a href="/farmer">&larr; Back to Farmer Portal</a></nav>
+<nav class="mb-3"><a href="/">&larr; Back to Dashboard</a></nav>
 
 @if (_loading)
 {
@@ -13,8 +14,7 @@
 }
 else
 {
-    <h1>@(_auction?.Title ?? _auction?.AuctionNumber ?? $"Auction {AuctionId}")</h1>
-    <p class="text-muted">@(_auction?.ScheduledDate.ToString("yyyy-MM-dd") ?? "")</p>
+    <h1>Auction @_auctionNumber</h1>
 
     <div class="row mb-4">
         <div class="col-md-4">
@@ -42,77 +42,49 @@ else
             </div>
         </div>
     </div>
-
-    <div class="section-container">
-        <div class="section-header">Lots</div>
-        <div class="section-body">
-            <table class="table table-striped table-hover mb-0">
-                <thead class="table-dark">
-                    <tr>
-                        <th>Lot #</th>
-                        <th>Description</th>
-                        <th>Skins</th>
-                        <th>Hammer Price</th>
-                        <th>Value</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var lot in _lots)
-                    {
-                        <tr>
-                            <td>@lot.LotNumber</td>
-                            <td>@lot.Description</td>
-                            <td>@lot.Quantity</td>
-                            <td>@(lot.HammerPrice?.ToString("N2") ?? "-")</td>
-                            <td>@((lot.Status == LotStatus.Sold || lot.Status == LotStatus.Broker) ? ((lot.HammerPrice ?? 0) * lot.Quantity).ToString("N2") : "-")</td>
-                            <td><span class="badge bg-@GetLotColor(lot.Status)">@lot.Status</span></td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    </div>
 }
 
 @code {
     [Parameter] public int AuctionId { get; set; }
-    [SupplyParameterFromQuery] public int FarmerId { get; set; }
 
     private bool _loading = true;
-    private AuctionDto? _auction;
-    private List<LotDto> _lots = new();
+    private string _auctionNumber = "";
     private int _totalSkins;
     private int _soldSkins;
     private decimal _totalValue;
 
     protected override async Task OnInitializedAsync()
     {
-        if (FarmerId <= 0)
+        var auth = await AuthState.GetAuthenticationStateAsync();
+        var oid = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        int? farmerId = null;
+
+        if (oid != null)
         {
-            Nav.NavigateTo("/farmer");
+            var user = await Api.GetCurrentUserAsync(oid);
+            farmerId = user?.FarmerId;
+        }
+
+        if (farmerId == null || farmerId <= 0)
+        {
+            Nav.NavigateTo("/");
             return;
         }
 
-        var allLots = await Api.GetLotsByFarmerAsync(FarmerId);
-        _lots = allLots.Where(l => l.AuctionId == AuctionId).OrderBy(l => l.LotNumber).ToList();
+        var allLots = await Api.GetLotsByFarmerAsync(farmerId.Value);
+        var lots = allLots.Where(l => l.AuctionId == AuctionId).ToList();
 
-        if (_lots.Any())
-            _auction = _lots.First().Auction;
+        if (lots.Any())
+        {
+            var auction = lots.First().Auction;
+            _auctionNumber = auction?.AuctionNumber ?? auction?.Title ?? $"{AuctionId}";
+        }
 
-        var soldLots = _lots.Where(l => l.Status == LotStatus.Sold || l.Status == LotStatus.Broker).ToList();
-        _totalSkins = _lots.Sum(l => l.Quantity);
+        var soldLots = lots.Where(l => l.Status == LotStatus.Sold || l.Status == LotStatus.Broker).ToList();
+        _totalSkins = lots.Sum(l => l.Quantity);
         _soldSkins = soldLots.Sum(l => l.Quantity);
         _totalValue = soldLots.Sum(l => (l.HammerPrice ?? 0) * l.Quantity);
 
         _loading = false;
     }
-
-    private string GetLotColor(LotStatus s) => s switch
-    {
-        LotStatus.Sold => "success",
-        LotStatus.Broker => "primary",
-        LotStatus.Active => "warning",
-        _ => "secondary"
-    };
 }
