@@ -204,6 +204,117 @@ public class SkinFunctions
         return response;
     }
 
+    [Function("GetFarmerAuctionDetail")]
+    public async Task<HttpResponseData> GetFarmerAuctionDetail(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "skins/farmer-auction-detail")] HttpRequestData req)
+    {
+        var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+        var farmerName = query["farmerName"]?.Trim();
+        var auctionNumber = query["auctionNumber"]?.Trim();
+
+        if (string.IsNullOrEmpty(farmerName) || string.IsNullOrEmpty(auctionNumber))
+        {
+            var badResponse = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+            await badResponse.WriteStringAsync("farmerName and auctionNumber query parameters are required");
+            return badResponse;
+        }
+
+        // Get skins for this farmer in this auction
+        var skins = await _catalogDb.Skins
+            .Where(s => s.IsActive && s.Farmer == farmerName && s.Auction == auctionNumber)
+            .ToListAsync();
+
+        var totalSkins = skins.Count;
+        var boxNumbers = skins.Select(s => s.BoxNumber).Distinct().ToList();
+
+        // Get sold box info
+        var saleInfoByBox = await GetSoldBoxSaleInfoAsync();
+
+        var soldSkinCount = 0;
+        decimal totalValue = 0;
+        foreach (var box in boxNumbers.Where(b => saleInfoByBox.ContainsKey(b)))
+        {
+            var info = saleInfoByBox[box];
+            var skinsInBox = skins.Count(s => s.BoxNumber == box);
+            soldSkinCount += skinsInBox;
+            totalValue += skinsInBox * info.PriceEur;
+        }
+
+        var result = new
+        {
+            auction = auctionNumber,
+            farmerName,
+            totalSkins,
+            soldSkins = soldSkinCount,
+            totalValue
+        };
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(result, JsonOptions));
+        return response;
+    }
+
+    [Function("GetFarmerAuctionSummary")]
+    public async Task<HttpResponseData> GetFarmerAuctionSummary(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "skins/farmer-summary")] HttpRequestData req)
+    {
+        var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+        var farmerName = query["farmerName"]?.Trim();
+
+        if (string.IsNullOrEmpty(farmerName))
+        {
+            var badResponse = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+            await badResponse.WriteStringAsync("farmerName query parameter is required");
+            return badResponse;
+        }
+
+        // Get all skins for this farmer grouped by auction
+        var farmerSkins = await _catalogDb.Skins
+            .Where(s => s.IsActive && s.Farmer == farmerName)
+            .GroupBy(s => s.Auction ?? "Unknown")
+            .Select(g => new
+            {
+                Auction = g.Key,
+                TotalSkins = g.Count(),
+                BoxNumbers = g.Select(s => s.BoxNumber).Distinct().ToList()
+            })
+            .ToListAsync();
+
+        // Get sold box info to determine which skins are sold and their value
+        var saleInfoByBox = await GetSoldBoxSaleInfoAsync();
+
+        var summaries = farmerSkins.Select(a =>
+        {
+            var soldBoxes = a.BoxNumbers.Where(b => saleInfoByBox.ContainsKey(b)).ToList();
+            // Count sold skins (skins in sold boxes)
+            var soldSkinCount = 0;
+            decimal totalValue = 0;
+            foreach (var box in soldBoxes)
+            {
+                var info = saleInfoByBox[box];
+                // Count skins in this box belonging to this farmer
+                var skinsInBox = _catalogDb.Skins
+                    .Count(s => s.IsActive && s.BoxNumber == box && s.Farmer == farmerName);
+                soldSkinCount += skinsInBox;
+                totalValue += skinsInBox * info.PriceEur;
+            }
+
+            return new
+            {
+                auction = a.Auction,
+                totalSkins = a.TotalSkins,
+                soldSkins = soldSkinCount,
+                totalValue
+            };
+        }).ToList();
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(summaries, JsonOptions));
+        return response;
+    }
+
     private async Task<Dictionary<int, BoxSaleInfo>> GetSoldBoxSaleInfoAsync(int? auctionId = null)
     {
         // Get sold auction results with broker and buyer info

@@ -1,5 +1,7 @@
-@page "/farmer/auction/{AuctionId:int}"
+@page "/farmer/auction/{AuctionNumber}"
 @attribute [Authorize(Roles = "Admin,Farmer")]
+@using System.Text.Json
+@inject HttpClient Http
 @inject AuctionApiClient Api
 @inject NavigationManager Nav
 @inject AuthenticationStateProvider AuthState
@@ -14,7 +16,7 @@
 }
 else
 {
-    <h1>Auction @_auctionNumber</h1>
+    <h1>Auction @AuctionNumber</h1>
 
     <div class="row mb-4">
         <div class="col-md-4">
@@ -45,45 +47,51 @@ else
 }
 
 @code {
-    [Parameter] public int AuctionId { get; set; }
+    [Parameter] public string AuctionNumber { get; set; } = "";
 
     private bool _loading = true;
-    private string _auctionNumber = "";
     private int _totalSkins;
     private int _soldSkins;
     private decimal _totalValue;
 
     protected override async Task OnInitializedAsync()
     {
+        // Get current user's farmer name
         var auth = await AuthState.GetAuthenticationStateAsync();
         var oid = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        int? farmerId = null;
+        string? farmerName = null;
 
         if (oid != null)
         {
             var user = await Api.GetCurrentUserAsync(oid);
-            farmerId = user?.FarmerId;
+            if (user?.FarmerId != null)
+            {
+                var farmers = await Api.GetFarmersAsync();
+                var farmer = farmers.FirstOrDefault(f => f.Id == user.FarmerId);
+                farmerName = farmer?.Name;
+            }
         }
 
-        if (farmerId == null || farmerId <= 0)
+        if (string.IsNullOrEmpty(farmerName))
         {
             Nav.NavigateTo("/");
             return;
         }
 
-        var allLots = await Api.GetLotsByFarmerAsync(farmerId.Value);
-        var lots = allLots.Where(l => l.AuctionId == AuctionId).ToList();
-
-        if (lots.Any())
+        try
         {
-            var auction = lots.First().Auction;
-            _auctionNumber = auction?.AuctionNumber ?? auction?.Title ?? $"{AuctionId}";
+            var url = $"api/skins/farmer-auction-detail?farmerName={Uri.EscapeDataString(farmerName)}&auctionNumber={Uri.EscapeDataString(AuctionNumber)}";
+            var json = await Http.GetStringAsync(url);
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            _totalSkins = root.GetProperty("totalSkins").GetInt32();
+            _soldSkins = root.GetProperty("soldSkins").GetInt32();
+            _totalValue = root.GetProperty("totalValue").GetDecimal();
         }
-
-        var soldLots = lots.Where(l => l.Status == LotStatus.Sold || l.Status == LotStatus.Broker).ToList();
-        _totalSkins = lots.Sum(l => l.Quantity);
-        _soldSkins = soldLots.Sum(l => l.Quantity);
-        _totalValue = soldLots.Sum(l => (l.HammerPrice ?? 0) * l.Quantity);
+        catch
+        {
+            // API not available or no data
+        }
 
         _loading = false;
     }

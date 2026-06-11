@@ -1,25 +1,27 @@
 @page "/farmer"
 @attribute [Authorize(Roles = "Admin,Farmer")]
+@using System.Text.Json
+@inject HttpClient Http
 @inject AuctionApiClient Api
 @inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthState
 
 <PageTitle>Farmer Portal - Auction System</PageTitle>
 
 <h1>Farmer Portal</h1>
 
-<div class="mb-3">
-    <label class="form-label"><strong>Select Farmer</strong></label>
-    <select class="form-select w-auto" @bind="selectedFarmerId" @bind:after="LoadFarmerData">
-        <option value="0">Choose...</option>
-        @foreach (var s in farmers)
-        {
-            <option value="@s.Id">@s.Name (@s.FarmerNumber)</option>
-        }
-    </select>
-</div>
-
-@if (selectedFarmerId > 0)
+@if (_loading)
 {
+    <p><em>Loading...</em></p>
+}
+else if (string.IsNullOrEmpty(_farmerName))
+{
+    <div class="alert alert-warning">No farmer account linked to your login.</div>
+}
+else
+{
+    <p class="text-muted">Farmer: <strong>@_farmerName</strong></p>
+
     <div class="section-container">
         <div class="section-header">Auctions</div>
         <div class="section-body">
@@ -27,27 +29,23 @@
                 <thead class="table-dark">
                     <tr>
                         <th>Auction</th>
-                        <th>Date</th>
                         <th>Total Skins</th>
                         <th>Sold Skins</th>
                         <th>Total Value</th>
-                        <th>Status</th>
                     </tr>
                 </thead>
                 <tbody>
                     @if (!_auctionSummaries.Any())
                     {
-                        <tr><td colspan="6" class="text-center text-muted py-4">No auctions found for this farmer.</td></tr>
+                        <tr><td colspan="4" class="text-center text-muted py-4">No auctions found.</td></tr>
                     }
                     @foreach (var a in _auctionSummaries)
                     {
-                        <tr style="cursor: pointer;" @onclick="() => GoToAuction(a.AuctionId)">
-                            <td><strong>@a.AuctionTitle</strong></td>
-                            <td>@a.ScheduledDate.ToString("yyyy-MM-dd")</td>
+                        <tr style="cursor: pointer;" @onclick="() => GoToAuction(a.Auction)">
+                            <td><strong>@a.Auction</strong></td>
                             <td>@a.TotalSkins.ToString("N0")</td>
                             <td>@a.SoldSkins.ToString("N0")</td>
                             <td>@a.TotalValue.ToString("N2")</td>
-                            <td><span class="badge bg-@GetStatusColor(a.Status)">@a.Status</span></td>
                         </tr>
                     }
                 </tbody>
@@ -57,61 +55,51 @@
 }
 
 @code {
-    private List<FarmerDto> farmers = new();
-    private int selectedFarmerId;
-    private List<LotDto> lots = new();
+    private bool _loading = true;
+    private string? _farmerName;
     private List<FarmerAuctionSummary> _auctionSummaries = new();
 
     protected override async Task OnInitializedAsync()
     {
-        farmers = await Api.GetFarmersAsync();
-    }
+        var auth = await AuthState.GetAuthenticationStateAsync();
+        var oid = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
 
-    private async Task LoadFarmerData()
-    {
-        if (selectedFarmerId <= 0) return;
-        lots = await Api.GetLotsByFarmerAsync(selectedFarmerId);
-
-        _auctionSummaries = lots
-            .GroupBy(l => l.AuctionId)
-            .Select(g =>
+        if (oid != null)
+        {
+            var user = await Api.GetCurrentUserAsync(oid);
+            if (user?.FarmerId != null)
             {
-                var first = g.First();
-                var soldLots = g.Where(l => l.Status == LotStatus.Sold || l.Status == LotStatus.Broker).ToList();
-                return new FarmerAuctionSummary
-                {
-                    AuctionId = g.Key,
-                    AuctionTitle = first.Auction?.Title ?? first.Auction?.AuctionNumber ?? $"Auction {g.Key}",
-                    ScheduledDate = first.Auction?.ScheduledDate ?? DateTime.MinValue,
-                    Status = first.Auction?.Status ?? AuctionStatus.Draft,
-                    TotalSkins = g.Sum(l => l.Quantity),
-                    SoldSkins = soldLots.Sum(l => l.Quantity),
-                    TotalValue = soldLots.Sum(l => (l.HammerPrice ?? 0) * l.Quantity)
-                };
-            })
-            .OrderByDescending(a => a.ScheduledDate)
-            .ToList();
+                var farmers = await Api.GetFarmersAsync();
+                var farmer = farmers.FirstOrDefault(f => f.Id == user.FarmerId);
+                _farmerName = farmer?.Name;
+            }
+        }
+
+        if (!string.IsNullOrEmpty(_farmerName))
+        {
+            try
+            {
+                var url = $"api/skins/farmer-summary?farmerName={Uri.EscapeDataString(_farmerName)}";
+                var json = await Http.GetStringAsync(url);
+                _auctionSummaries = JsonSerializer.Deserialize<List<FarmerAuctionSummary>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+            }
+            catch
+            {
+                // API not available
+            }
+        }
+
+        _loading = false;
     }
 
-    private void GoToAuction(int auctionId)
+    private void GoToAuction(string auctionNumber)
     {
-        Nav.NavigateTo($"/farmer/auction/{auctionId}?farmerId={selectedFarmerId}");
+        Nav.NavigateTo($"/farmer/auction/{Uri.EscapeDataString(auctionNumber)}");
     }
-
-    private string GetStatusColor(AuctionStatus status) => status switch
-    {
-        AuctionStatus.Draft => "secondary",
-        AuctionStatus.Active => "success",
-        AuctionStatus.Closed => "primary",
-        _ => "secondary"
-    };
 
     private class FarmerAuctionSummary
     {
-        public int AuctionId { get; set; }
-        public string AuctionTitle { get; set; } = "";
-        public DateTime ScheduledDate { get; set; }
-        public AuctionStatus Status { get; set; }
+        public string Auction { get; set; } = "";
         public int TotalSkins { get; set; }
         public int SoldSkins { get; set; }
         public decimal TotalValue { get; set; }
