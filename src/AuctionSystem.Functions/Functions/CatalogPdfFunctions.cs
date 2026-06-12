@@ -163,9 +163,9 @@ public class CatalogPdfFunctions
 
                     // Load sold lot info from AuctionResults
                     var soldSql = @"SELECT ar.LotNumber, ar.PriceEur
-                        FROM dbo.AuctionResults ar
-                        INNER JOIN dbo.Lots l ON ar.LotNumber = l.LotNumber
-                        INNER JOIN dbo.Auctions a ON l.AuctionId = a.Id
+                        FROM auction.AuctionResults ar
+                        INNER JOIN auction.Lots l ON ar.LotNumber = l.LotNumber
+                        INNER JOIN auction.Auctions a ON l.AuctionId = a.Id
                         WHERE ar.SoldToBuyerId IS NOT NULL AND a.AuctionNumber = @AuctionNumber";
                     var soldRows = await connection.QueryAsync<dynamic>(soldSql, new { AuctionNumber = auctionNumber });
                     var soldByLot = new Dictionary<int, decimal>();
