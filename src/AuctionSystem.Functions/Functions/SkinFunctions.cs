@@ -443,50 +443,66 @@ public class SkinFunctions
         var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
         var farmerName = query["farmerName"]?.Trim();
         var auctionIdStr = query["auctionId"];
-        var boxNumberStr = query["boxNumber"];
+        var lotNumberStr = query["lotNumber"];
         int? auctionId = int.TryParse(auctionIdStr, out var aid) ? aid : null;
-        int? boxNumber = int.TryParse(boxNumberStr, out var bn) ? bn : null;
+        int? lotNumber = int.TryParse(lotNumberStr, out var ln) ? ln : null;
 
-        if (string.IsNullOrEmpty(farmerName) || auctionId == null || boxNumber == null)
+        if (string.IsNullOrEmpty(farmerName) || auctionId == null || lotNumber == null)
             return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
 
         var auction = await _auctionDb.Auctions.FindAsync(auctionId.Value);
         if (auction == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
 
         var skinsTable = $"auction.[{auction.AuctionNumber}.Skins]";
+        var lotsTable = $"auction.[{auction.AuctionNumber}.Lots]";
         var connStr = _auctionDb.Database.GetConnectionString()!;
 
         var saleInfoByBox = await GetSoldBoxSaleInfoAsync(auctionId.Value);
-        var isSold = saleInfoByBox.ContainsKey(boxNumber.Value);
 
-        var skins = new List<object>();
         await using var conn = new SqlConnection(connStr);
         await conn.OpenAsync();
 
+        // Get box numbers for this lot
+        string? boxNumbersCsv = null;
+        await using (var lotCmd = new SqlCommand($"SELECT IncludedBoxNumbers FROM {lotsTable} WHERE LotNumber = @lot", conn))
+        {
+            lotCmd.Parameters.AddWithValue("@lot", lotNumber.Value);
+            boxNumbersCsv = (await lotCmd.ExecuteScalarAsync()) as string;
+        }
+
+        if (string.IsNullOrEmpty(boxNumbersCsv))
+            return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        var boxNumbers = boxNumbersCsv.Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(b => int.TryParse(b.Trim(), out var n) ? n : 0).Where(n => n > 0).ToList();
+
+        var skins = new List<object>();
         await using var cmd = new SqlCommand($@"
-            SELECT Barcode, BoxType, SalesType, Gender, [Group], Size, Color, Quality, Clarity, Damages, HairLength
+            SELECT Barcode, BoxNumber, BoxType, SalesType, Gender, [Group], Size, Color, Quality, Clarity, Damages, HairLength
             FROM {skinsTable}
-            WHERE Farmer = @farmer AND BoxNumber = @box
-            ORDER BY Barcode", conn);
+            WHERE Farmer = @farmer AND BoxNumber IN ({string.Join(",", boxNumbers)})
+            ORDER BY BoxNumber, Barcode", conn);
         cmd.Parameters.AddWithValue("@farmer", farmerName);
-        cmd.Parameters.AddWithValue("@box", boxNumber.Value);
 
         await using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {
+            var boxNum = reader.GetInt32(1);
+            var isSold = saleInfoByBox.ContainsKey(boxNum);
             skins.Add(new
             {
                 barcode = reader.GetInt64(0),
-                boxType = reader.IsDBNull(1) ? null : reader.GetString(1),
-                salesType = reader.IsDBNull(2) ? null : reader.GetString(2),
-                gender = reader.IsDBNull(3) ? null : reader.GetString(3),
-                group = reader.IsDBNull(4) ? null : reader.GetString(4),
-                size = reader.IsDBNull(5) ? null : reader.GetString(5),
-                color = reader.IsDBNull(6) ? null : reader.GetString(6),
-                quality = reader.IsDBNull(7) ? null : reader.GetString(7),
-                clarity = reader.IsDBNull(8) ? null : reader.GetString(8),
-                damages = reader.IsDBNull(9) ? null : reader.GetString(9),
-                hairLength = reader.IsDBNull(10) ? null : reader.GetString(10),
+                boxNumber = boxNum,
+                boxType = reader.IsDBNull(2) ? null : reader.GetString(2),
+                salesType = reader.IsDBNull(3) ? null : reader.GetString(3),
+                gender = reader.IsDBNull(4) ? null : reader.GetString(4),
+                group = reader.IsDBNull(5) ? null : reader.GetString(5),
+                size = reader.IsDBNull(6) ? null : reader.GetString(6),
+                color = reader.IsDBNull(7) ? null : reader.GetString(7),
+                quality = reader.IsDBNull(8) ? null : reader.GetString(8),
+                clarity = reader.IsDBNull(9) ? null : reader.GetString(9),
+                damages = reader.IsDBNull(10) ? null : reader.GetString(10),
+                hairLength = reader.IsDBNull(11) ? null : reader.GetString(11),
                 status = isSold ? "Sold" : "Auction"
             });
         }
