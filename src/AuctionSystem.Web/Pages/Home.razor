@@ -24,7 +24,7 @@ else
                             @foreach (var a in stats.RecentAuctions)
                             {
                                 <tr>
-                                    <td><a href="/farmer/auction/@Uri.EscapeDataString(a.AuctionNumber)">@a.AuctionNumber</a></td>
+                                    <td><a href="/farmer/auction/@a.Id">@a.AuctionNumber</a></td>
                                     <td>@a.Title</td>
                                     <td>@a.ScheduledDate.ToString("yyyy-MM-dd")</td>
                                     <td><span class="badge bg-@GetStatusColor(a.Status)">@a.Status</span></td>

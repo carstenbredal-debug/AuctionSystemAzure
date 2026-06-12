@@ -210,39 +210,71 @@ public class SkinFunctions
     {
         var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
         var farmerName = query["farmerName"]?.Trim();
-        var auctionNumber = query["auctionNumber"]?.Trim();
+        var auctionIdStr = query["auctionId"];
+        int? auctionId = int.TryParse(auctionIdStr, out var aid) ? aid : null;
 
-        if (string.IsNullOrEmpty(farmerName) || string.IsNullOrEmpty(auctionNumber))
+        if (string.IsNullOrEmpty(farmerName) || auctionId == null)
         {
             var badResponse = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
-            await badResponse.WriteStringAsync("farmerName and auctionNumber query parameters are required");
+            await badResponse.WriteStringAsync("farmerName and auctionId query parameters are required");
             return badResponse;
         }
 
-        // Get skins for this farmer in this auction
-        var skins = await _catalogDb.Skins
-            .Where(s => s.IsActive && s.Farmer == farmerName && s.Auction == auctionNumber)
+        // Get all lot numbers for this auction from the Lots table
+        var auctionLotNumbers = await _auctionDb.Lots
+            .Where(l => l.AuctionId == auctionId.Value)
+            .Select(l => l.LotNumber)
             .ToListAsync();
 
-        var totalSkins = skins.Count;
-        var boxNumbers = skins.Select(s => s.BoxNumber).Distinct().ToList();
+        // Get catalog lots to find box numbers
+        var catalogLots = await _catalogDb.CatalogLots
+            .Where(cl => auctionLotNumbers.Contains(cl.LotNumber))
+            .ToListAsync();
 
-        // Get sold box info
-        var saleInfoByBox = await GetSoldBoxSaleInfoAsync();
+        var allBoxNumbers = catalogLots
+            .Where(cl => !string.IsNullOrEmpty(cl.IncludedBoxNumbers))
+            .SelectMany(cl => cl.IncludedBoxNumbers!.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(b => int.TryParse(b.Trim(), out var n) ? n : 0)
+                .Where(n => n > 0))
+            .Distinct()
+            .ToList();
 
+        // Count total skins for this farmer in this auction's boxes
+        var totalSkins = await _catalogDb.Skins
+            .CountAsync(s => s.IsActive && s.Farmer == farmerName && allBoxNumbers.Contains(s.BoxNumber));
+
+        // Get sold box info for this auction
+        var saleInfoByBox = await GetSoldBoxSaleInfoAsync(auctionId.Value);
+
+        // Count sold skins for this farmer
+        var soldBoxNumbers = allBoxNumbers.Where(b => saleInfoByBox.ContainsKey(b)).ToList();
         var soldSkinCount = 0;
         decimal totalValue = 0;
-        foreach (var box in boxNumbers.Where(b => saleInfoByBox.ContainsKey(b)))
+
+        if (soldBoxNumbers.Count > 0)
         {
-            var info = saleInfoByBox[box];
-            var skinsInBox = skins.Count(s => s.BoxNumber == box);
-            soldSkinCount += skinsInBox;
-            totalValue += skinsInBox * info.PriceEur;
+            // Get farmer's skins in sold boxes, grouped by box
+            var farmerSoldSkins = await _catalogDb.Skins
+                .Where(s => s.IsActive && s.Farmer == farmerName && soldBoxNumbers.Contains(s.BoxNumber))
+                .GroupBy(s => s.BoxNumber)
+                .Select(g => new { BoxNumber = g.Key, Count = g.Count() })
+                .ToListAsync();
+
+            foreach (var boxGroup in farmerSoldSkins)
+            {
+                if (saleInfoByBox.TryGetValue(boxGroup.BoxNumber, out var info))
+                {
+                    soldSkinCount += boxGroup.Count;
+                    totalValue += boxGroup.Count * info.PriceEur;
+                }
+            }
         }
 
+        var auction = await _auctionDb.Auctions.FindAsync(auctionId.Value);
         var result = new
         {
-            auction = auctionNumber,
+            auctionId = auctionId.Value,
+            auctionNumber = auction?.AuctionNumber ?? $"{auctionId}",
             farmerName,
             totalSkins,
             soldSkins = soldSkinCount,

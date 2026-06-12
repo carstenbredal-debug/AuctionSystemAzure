@@ -1,4 +1,4 @@
-@page "/farmer/auction/{AuctionNumber}"
+@page "/farmer/auction/{AuctionId:int}"
 @attribute [Authorize(Roles = "Admin,Farmer")]
 @using System.Text.Json
 @inject HttpClient Http
@@ -16,7 +16,7 @@
 }
 else
 {
-    <h1>Auction @AuctionNumber</h1>
+    <h1>Auction @_auctionNumber</h1>
 
     <div class="row mb-4">
         <div class="col-md-4">
@@ -47,9 +47,10 @@ else
 }
 
 @code {
-    [Parameter] public string AuctionNumber { get; set; } = "";
+    [Parameter] public int AuctionId { get; set; }
 
     private bool _loading = true;
+    private string _auctionNumber = "";
     private int _totalSkins;
     private int _soldSkins;
     private decimal _totalValue;
@@ -66,10 +67,11 @@ else
 
         try
         {
-            var url = $"api/skins/farmer-auction-detail?farmerName={Uri.EscapeDataString(farmerName)}&auctionNumber={Uri.EscapeDataString(AuctionNumber)}";
+            var url = $"api/skins/farmer-auction-detail?farmerName={Uri.EscapeDataString(farmerName)}&auctionId={AuctionId}";
             var json = await Http.GetStringAsync(url);
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
+            _auctionNumber = root.GetProperty("auctionNumber").GetString() ?? $"{AuctionId}";
             _totalSkins = root.GetProperty("totalSkins").GetInt32();
             _soldSkins = root.GetProperty("soldSkins").GetInt32();
             _totalValue = root.GetProperty("totalValue").GetDecimal();
@@ -87,7 +89,6 @@ else
         var oid = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         var email = auth.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value;
 
-        // Try OID lookup first, then email lookup
         AppUserDto? user = null;
         if (oid != null)
             user = await Api.GetCurrentUserAsync(oid);
