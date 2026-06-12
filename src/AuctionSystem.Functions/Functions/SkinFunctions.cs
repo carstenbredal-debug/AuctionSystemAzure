@@ -234,11 +234,25 @@ public class SkinFunctions
         var connStr = _auctionDb.Database.GetConnectionString()!;
 
         int totalSkins = 0;
+        int totalRowsInTable = 0;
+        int distinctFarmers = 0;
         var skinsByBox = new Dictionary<int, int>(); // boxNumber → count
 
         await using (var conn = new SqlConnection(connStr))
         {
             await conn.OpenAsync();
+
+            // Debug: total rows in snapshot table
+            await using (var countCmd = new SqlCommand($"SELECT COUNT(*) FROM {skinsTable}", conn))
+            {
+                totalRowsInTable = (int)await countCmd.ExecuteScalarAsync();
+            }
+
+            // Debug: count of distinct farmers
+            await using (var farmerCmd = new SqlCommand($"SELECT COUNT(DISTINCT Farmer) FROM {skinsTable}", conn))
+            {
+                distinctFarmers = (int)await farmerCmd.ExecuteScalarAsync();
+            }
 
             // Total skins for this farmer in the snapshot
             await using (var cmd = new SqlCommand($"SELECT BoxNumber, COUNT(*) AS Cnt FROM {skinsTable} WHERE Farmer = @farmer GROUP BY BoxNumber", conn))
@@ -276,7 +290,8 @@ public class SkinFunctions
             farmerName,
             totalSkins,
             soldSkins = soldSkinCount,
-            totalValue
+            totalValue,
+            _debug = new { snapshotTable = skinsTable, totalRowsInTable, distinctFarmers, farmerBoxCount = skinsByBox.Count }
         };
 
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
