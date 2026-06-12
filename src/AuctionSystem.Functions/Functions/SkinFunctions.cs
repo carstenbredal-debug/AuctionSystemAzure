@@ -241,7 +241,7 @@ public class SkinFunctions
             await conn.OpenAsync();
 
             // Total skins for this farmer in the snapshot
-            await using (var cmd = new SqlCommand($"SELECT BoxNumber, COUNT(*) AS Cnt FROM {skinsTable} WHERE IsActive = 1 AND Farmer = @farmer GROUP BY BoxNumber", conn))
+            await using (var cmd = new SqlCommand($"SELECT BoxNumber, COUNT(*) AS Cnt FROM {skinsTable} WHERE Farmer = @farmer GROUP BY BoxNumber", conn))
             {
                 cmd.Parameters.AddWithValue("@farmer", farmerName);
                 await using var reader = await cmd.ExecuteReaderAsync();
@@ -315,7 +315,7 @@ public class SkinFunctions
                 await using var conn = new SqlConnection(connStr);
                 await conn.OpenAsync();
 
-                await using var cmd = new SqlCommand($"SELECT BoxNumber, COUNT(*) AS Cnt FROM {skinsTable} WHERE IsActive = 1 AND Farmer = @farmer GROUP BY BoxNumber", conn);
+                await using var cmd = new SqlCommand($"SELECT BoxNumber, COUNT(*) AS Cnt FROM {skinsTable} WHERE Farmer = @farmer GROUP BY BoxNumber", conn);
                 cmd.Parameters.AddWithValue("@farmer", farmerName);
                 await using var reader = await cmd.ExecuteReaderAsync();
                 while (await reader.ReadAsync())
