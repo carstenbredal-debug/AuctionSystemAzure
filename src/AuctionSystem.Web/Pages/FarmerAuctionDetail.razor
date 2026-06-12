@@ -126,7 +126,7 @@ else
                                     <td>@(GetLotFieldByColumn(lot, lvl.ColumnName) ?? "")</td>
                                 }
                                 <td class="text-end">@(lot.SoldValue.HasValue ? $"€{lot.SoldValue:N2}" : "-")</td>
-                                <td><span class="badge @(lot.Status == "Sold" ? "bg-success" : "bg-secondary")">@lot.Status</span></td>
+                                <td><span class="badge @(lot.Status == "Hammer" ? "bg-success" : "bg-secondary")">@lot.Status</span></td>
                             </tr>
                         }
                     </tbody>
@@ -175,7 +175,7 @@ else
                             <td>@lot.SalesType - @lot.Gender - @lot.Group</td>
                             <td class="text-end">@(lot.PricePerSkin.HasValue ? $"€{lot.PricePerSkin:N2}" : "-")</td>
                             <td class="text-end">@(lot.SoldValue.HasValue ? $"€{lot.SoldValue:N2}" : "-")</td>
-                            <td><span class="badge @(lot.Status == "Sold" ? "bg-success" : "bg-secondary")">@lot.Status</span></td>
+                            <td><span class="badge @(lot.Status == "Hammer" ? "bg-success" : "bg-secondary")">@lot.Status</span></td>
                         </tr>
                     }
                 </tbody>

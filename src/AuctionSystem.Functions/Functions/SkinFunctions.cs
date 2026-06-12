@@ -378,7 +378,7 @@ public class SkinFunctions
                 color = reader.IsDBNull(8) ? null : reader.GetString(8),
                 clarity = reader.IsDBNull(9) ? null : reader.GetString(9),
                 damages = reader.IsDBNull(10) ? null : reader.GetString(10),
-                status = isSold ? "Sold" : "Auction",
+                status = isSold ? "Hammer" : "Auction",
                 soldValue = soldValue > 0 ? soldValue : (decimal?)null,
                 pricePerSkin
             });
@@ -452,7 +452,7 @@ public class SkinFunctions
                 boxNumber = boxNum,
                 boxType = reader.IsDBNull(1) ? null : reader.GetString(1),
                 skinCount = reader.GetInt32(2),
-                status = isSold ? "Sold" : "Auction",
+                status = isSold ? "Hammer" : "Auction",
                 pricePerSkin = isSold ? price : (decimal?)null,
                 value = isSold ? reader.GetInt32(2) * price : (decimal?)null
             });
@@ -621,9 +621,8 @@ public class SkinFunctions
 
     private async Task<Dictionary<int, BoxSaleInfo>> GetSoldBoxSaleInfoAsync(int? auctionId = null)
     {
-        // Get sold auction results with broker and buyer info
-        var resultsQuery = _auctionDb.AuctionResults
-            .Where(r => r.SoldToBuyerId != null);
+        // Get auction results (any result from the typist means hammer price is determined)
+        IQueryable<Domain.Entities.AuctionResult> resultsQuery = _auctionDb.AuctionResults;
 
         if (auctionId.HasValue)
         {
@@ -642,7 +641,7 @@ public class SkinFunctions
                 r.LotNumber,
                 r.PriceEur,
                 BrokerName = r.Broker.CompanyName,
-                BuyerName = r.SoldToBuyer!.Name
+                BuyerName = r.SoldToBuyer != null ? r.SoldToBuyer.Name : ""
             })
             .ToListAsync();
 

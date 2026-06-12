@@ -161,12 +161,12 @@ public class CatalogPdfFunctions
                         return boxes.Any(b => farmerBoxes.Contains(b));
                     }).ToList();
 
-                    // Load sold lot info from AuctionResults
+                    // Load lot results from AuctionResults (any typist result = hammer price)
                     var soldSql = @"SELECT ar.LotNumber, ar.PriceEur
                         FROM auction.AuctionResults ar
                         INNER JOIN auction.Lots l ON ar.LotNumber = l.LotNumber
                         INNER JOIN auction.Auctions a ON l.AuctionId = a.Id
-                        WHERE ar.SoldToBuyerId IS NOT NULL AND a.AuctionNumber = @AuctionNumber";
+                        WHERE a.AuctionNumber = @AuctionNumber";
                     var soldRows = await connection.QueryAsync<dynamic>(soldSql, new { AuctionNumber = auctionNumber });
                     var soldByLot = new Dictionary<int, decimal>();
                     foreach (var s in soldRows)
@@ -426,7 +426,7 @@ public class CatalogPdfFunctions
         {
             table.Cell().Element(CellStyle).AlignRight().Text(sale.IsSold ? $"\u20ac{sale.PricePerSkin:N2}" : "-");
             table.Cell().Element(CellStyle).AlignRight().Text(sale.IsSold ? $"\u20ac{sale.Value:N2}" : "-");
-            table.Cell().Element(CellStyle).Text(sale.IsSold ? "Sold" : "").FontColor(sale.IsSold ? Colors.Green.Darken2 : Colors.Grey.Medium).Bold();
+            table.Cell().Element(CellStyle).Text(sale.IsSold ? "Hammer" : "").FontColor(sale.IsSold ? Colors.Green.Darken2 : Colors.Grey.Medium).Bold();
         }
         else if (isFarmerCatalog)
         {
@@ -488,7 +488,7 @@ public class CatalogPdfFunctions
                     {
                         Cell().AlignRight().Text(sale.IsSold ? $"\u20ac{sale.PricePerSkin:N2}" : "-");
                         Cell().AlignRight().Text(sale.IsSold ? $"\u20ac{sale.Value:N2}" : "-");
-                        Cell().Text(sale.IsSold ? "Sold" : "").FontColor(sale.IsSold ? Colors.Green.Darken2 : Colors.Grey.Medium).Bold();
+                        Cell().Text(sale.IsSold ? "Hammer" : "").FontColor(sale.IsSold ? Colors.Green.Darken2 : Colors.Grey.Medium).Bold();
                     }
                     else if (isFarmerCatalog)
                     {
