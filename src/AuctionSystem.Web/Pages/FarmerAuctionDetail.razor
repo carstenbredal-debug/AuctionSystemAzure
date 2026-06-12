@@ -62,13 +62,13 @@ else
         }
     </nav>
 
-    @if (_currentLevel < _levels.Length)
+    @if (_currentLevel < _levels.Count)
     {
         <div class="table-responsive">
             <table class="table table-striped table-hover">
                 <thead class="table-dark">
                     <tr>
-                        <th>@_levels[_currentLevel]</th>
+                        <th>@_levels[_currentLevel].DisplayName</th>
                         <th>Skins</th>
                         <th class="text-end">Value of Sold Skins</th>
                     </tr>
@@ -94,15 +94,10 @@ else
                     <tr>
                         <th>Lot Number</th>
                         <th>Skins</th>
-                        <th>Type</th>
-                        <th>Gender</th>
-                        <th>Group</th>
-                        <th>Quality</th>
-                        <th>Hair Length</th>
-                        <th>Size</th>
-                        <th>Color</th>
-                        <th>Clarity</th>
-                        <th>Damages</th>
+                        @foreach (var lvl in _levels)
+                        {
+                            <th>@lvl.DisplayName</th>
+                        }
                         <th class="text-end">Value of Sold Skins</th>
                         <th>Status</th>
                     </tr>
@@ -113,15 +108,10 @@ else
                         <tr>
                             <td>@lot.LotNumber</td>
                             <td>@lot.TotalSkins</td>
-                            <td>@lot.SalesType</td>
-                            <td>@lot.Gender</td>
-                            <td>@lot.Group</td>
-                            <td>@lot.Quality</td>
-                            <td>@lot.HairLength</td>
-                            <td>@lot.Size</td>
-                            <td>@lot.Color</td>
-                            <td>@lot.Clarity</td>
-                            <td>@lot.Damages</td>
+                            @foreach (var lvl in _levels)
+                            {
+                                <td>@(GetLotFieldByColumn(lot, lvl.ColumnName) ?? "")</td>
+                            }
                             <td class="text-end">@(lot.SoldValue.HasValue ? $"€{lot.SoldValue:N2}" : "-")</td>
                             <td><span class="badge @(lot.Status == "Sold" ? "bg-success" : "bg-secondary")">@lot.Status</span></td>
                         </tr>
@@ -142,14 +132,26 @@ else
     private int _soldSkins;
     private decimal _totalValue;
 
-    private static readonly string[] _levels = { "Type", "Gender", "Group", "Hair Length", "Size", "Quality", "Color", "Clarity", "Damages" };
-
+    private List<DrillLevel> _levels = new();
     private int _currentLevel;
-    private List<string> _breadcrumbs = new() { "Types" };
+    private List<string> _breadcrumbs = new() { "Overview" };
     private List<string?> _filters = new();
     private List<LotRow> _lots = new();
     private List<LotRow> _filteredLots = new();
     private List<GroupRow> _groupRows = new();
+
+    private static readonly Dictionary<string, string> _displayNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["SalesType"] = "Type",
+        ["Gender"] = "Gender",
+        ["Group"] = "Group",
+        ["HairLength"] = "Hair Length",
+        ["Size"] = "Size",
+        ["Quality"] = "Quality",
+        ["Color"] = "Color",
+        ["Clarity"] = "Clarity",
+        ["Damages"] = "Damages"
+    };
 
     protected override async Task OnInitializedAsync()
     {
@@ -159,6 +161,37 @@ else
         {
             Nav.NavigateTo("/");
             return;
+        }
+
+        // Load drill-down order from Sales Order Setup
+        try
+        {
+            var groupOrders = await Api.GetLotGroupOrdersAsync();
+            _levels = groupOrders
+                .OrderBy(g => g.GroupOrder)
+                .Select(g => new DrillLevel
+                {
+                    ColumnName = g.ColumnName,
+                    DisplayName = _displayNames.TryGetValue(g.ColumnName, out var dn) ? dn : g.ColumnName
+                })
+                .ToList();
+        }
+        catch { }
+
+        if (_levels.Count == 0)
+        {
+            _levels = new List<DrillLevel>
+            {
+                new() { ColumnName = "SalesType", DisplayName = "Type" },
+                new() { ColumnName = "Gender", DisplayName = "Gender" },
+                new() { ColumnName = "Group", DisplayName = "Group" },
+                new() { ColumnName = "HairLength", DisplayName = "Hair Length" },
+                new() { ColumnName = "Size", DisplayName = "Size" },
+                new() { ColumnName = "Quality", DisplayName = "Quality" },
+                new() { ColumnName = "Color", DisplayName = "Color" },
+                new() { ColumnName = "Clarity", DisplayName = "Clarity" },
+                new() { ColumnName = "Damages", DisplayName = "Damages" }
+            };
         }
 
         try
@@ -184,24 +217,30 @@ else
 
         _currentLevel = 0;
         _filters.Clear();
-        _breadcrumbs = new() { "Types" };
+        _breadcrumbs = new() { _levels.Count > 0 ? _levels[0].DisplayName + "s" : "Overview" };
         BuildGroupRows();
         _loading = false;
     }
 
-    private string? GetLotField(LotRow lot, int level) => level switch
+    private string? GetLotFieldByColumn(LotRow lot, string columnName) => columnName.ToLowerInvariant() switch
     {
-        0 => lot.SalesType,
-        1 => lot.Gender,
-        2 => lot.Group,
-        3 => lot.HairLength,
-        4 => lot.Size,
-        5 => lot.Quality,
-        6 => lot.Color,
-        7 => lot.Clarity,
-        8 => lot.Damages,
+        "salestype" => lot.SalesType,
+        "gender" => lot.Gender,
+        "group" => lot.Group,
+        "hairlength" => lot.HairLength,
+        "size" => lot.Size,
+        "quality" => lot.Quality,
+        "color" => lot.Color,
+        "clarity" => lot.Clarity,
+        "damages" => lot.Damages,
         _ => null
     };
+
+    private string? GetLotField(LotRow lot, int level)
+    {
+        if (level < 0 || level >= _levels.Count) return null;
+        return GetLotFieldByColumn(lot, _levels[level].ColumnName);
+    }
 
     private IEnumerable<LotRow> GetCurrentFiltered()
     {
@@ -219,7 +258,7 @@ else
     {
         var filtered = GetCurrentFiltered().ToList();
 
-        if (_currentLevel < _levels.Length)
+        if (_currentLevel < _levels.Count)
         {
             _groupRows = filtered
                 .GroupBy(l => GetLotField(l, _currentLevel) ?? "")
@@ -242,7 +281,9 @@ else
     {
         _filters.Add(key);
         _currentLevel++;
-        _breadcrumbs.Add(_currentLevel < _levels.Length ? $"{_levels[_currentLevel - 1]}: {(string.IsNullOrEmpty(key) ? "-" : key)}" : $"{_levels[_currentLevel - 1]}: {(string.IsNullOrEmpty(key) ? "-" : key)} — Lots");
+        var label = _levels[_currentLevel - 1].DisplayName + ": " + (string.IsNullOrEmpty(key) ? "-" : key);
+        if (_currentLevel >= _levels.Count) label += " — Lots";
+        _breadcrumbs.Add(label);
         BuildGroupRows();
         StateHasChanged();
     }
@@ -253,7 +294,7 @@ else
         {
             _currentLevel = 0;
             _filters.Clear();
-            _breadcrumbs = new() { "Types" };
+            _breadcrumbs = new() { _levels.Count > 0 ? _levels[0].DisplayName + "s" : "Overview" };
         }
         else
         {
@@ -284,6 +325,12 @@ else
     }
 
     private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNameCaseInsensitive = true };
+
+    private class DrillLevel
+    {
+        public string ColumnName { get; set; } = "";
+        public string DisplayName { get; set; } = "";
+    }
 
     private class GroupRow
     {
