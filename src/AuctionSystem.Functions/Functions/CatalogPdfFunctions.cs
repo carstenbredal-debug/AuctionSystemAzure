@@ -135,16 +135,24 @@ public class CatalogPdfFunctions
 
             // Filter by farmer if specified
             var farmerName = query["farmerName"];
-            if (!string.IsNullOrEmpty(farmerName))
+            var isFarmerCatalog = !string.IsNullOrEmpty(farmerName);
+            var lotSaleData = new Dictionary<int, LotSaleInfo>();
+
+            if (isFarmerCatalog)
             {
                 var auctionNumber = query["auctionNumber"];
                 if (!string.IsNullOrEmpty(auctionNumber))
                 {
                     var skinsTable = $"auction.[{auctionNumber}.Skins]";
                     var farmerBoxes = new HashSet<int>();
-                    var boxSql = $"SELECT DISTINCT BoxNumber FROM {skinsTable} WHERE Farmer = @Farmer";
-                    var boxRows = await connection.QueryAsync<int>(boxSql, new { Farmer = farmerName });
-                    foreach (var b in boxRows) farmerBoxes.Add(b);
+                    var farmerSkinsByBox = new Dictionary<int, int>();
+                    var boxSql = $"SELECT BoxNumber, COUNT(*) AS Cnt FROM {skinsTable} WHERE Farmer = @Farmer GROUP BY BoxNumber";
+                    var boxRows = await connection.QueryAsync<dynamic>(boxSql, new { Farmer = farmerName });
+                    foreach (var b in boxRows)
+                    {
+                        farmerBoxes.Add((int)b.BoxNumber);
+                        farmerSkinsByBox[(int)b.BoxNumber] = (int)b.Cnt;
+                    }
 
                     rows = rows.Where(r =>
                     {
@@ -152,6 +160,43 @@ public class CatalogPdfFunctions
                             .Select(b => int.TryParse(b.Trim(), out var n) ? n : 0).Where(n => n > 0);
                         return boxes.Any(b => farmerBoxes.Contains(b));
                     }).ToList();
+
+                    // Load sold lot info from AuctionResults
+                    var soldSql = @"SELECT ar.LotNumber, ar.PriceEur
+                        FROM dbo.AuctionResults ar
+                        INNER JOIN dbo.Lots l ON ar.LotNumber = l.LotNumber
+                        INNER JOIN dbo.Auctions a ON l.AuctionId = a.Id
+                        WHERE ar.SoldToBuyerId IS NOT NULL AND a.AuctionNumber = @AuctionNumber";
+                    var soldRows = await connection.QueryAsync<dynamic>(soldSql, new { AuctionNumber = auctionNumber });
+                    var soldByLot = new Dictionary<int, decimal>();
+                    foreach (var s in soldRows)
+                        soldByLot[(int)s.LotNumber] = (decimal)s.PriceEur;
+
+                    // Compute sale data per catalog lot
+                    foreach (var r in rows)
+                    {
+                        var boxes = (r.IncludedBoxNumbers ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries)
+                            .Select(b => int.TryParse(b.Trim(), out var n) ? n : 0).Where(n => n > 0).ToList();
+                        var isSold = soldByLot.ContainsKey(r.LotNumber);
+                        decimal value = 0;
+                        int farmerSkins = 0;
+                        foreach (var bn in boxes)
+                        {
+                            if (farmerSkinsByBox.TryGetValue(bn, out var cnt))
+                            {
+                                farmerSkins += cnt;
+                                if (isSold)
+                                    value += cnt * soldByLot[r.LotNumber];
+                            }
+                        }
+                        lotSaleData[r.LotNumber] = new LotSaleInfo
+                        {
+                            IsSold = isSold,
+                            PricePerSkin = isSold ? soldByLot[r.LotNumber] : 0,
+                            Value = value,
+                            FarmerSkins = farmerSkins
+                        };
+                    }
                 }
             }
 
@@ -196,25 +241,42 @@ public class CatalogPdfFunctions
                                 column.Item()
                                     .Table(table =>
                                     {
-                                        table.ColumnsDefinition(columns =>
+                                        if (isFarmerCatalog)
                                         {
-                                            columns.ConstantColumn(70);   // Lots
-                                            columns.ConstantColumn(55);   // Skins
-                                            columns.RelativeColumn();     // Description
-                                            columns.ConstantColumn(60);   // Price
-                                            columns.ConstantColumn(90);   // Comments
-                                        });
+                                            table.ColumnsDefinition(columns =>
+                                            {
+                                                columns.ConstantColumn(70);   // Lots
+                                                columns.ConstantColumn(55);   // Skins
+                                                columns.RelativeColumn();     // Description
+                                                columns.ConstantColumn(65);   // Price/Skin
+                                                columns.ConstantColumn(75);   // Value
+                                                columns.ConstantColumn(50);   // Status
+                                            });
+                                        }
+                                        else
+                                        {
+                                            table.ColumnsDefinition(columns =>
+                                            {
+                                                columns.ConstantColumn(70);   // Lots
+                                                columns.ConstantColumn(55);   // Skins
+                                                columns.RelativeColumn();     // Description
+                                                columns.ConstantColumn(60);   // Price
+                                                columns.ConstantColumn(90);   // Comments
+                                            });
+                                        }
+
+                                        var colSpan = isFarmerCatalog ? (uint)6 : (uint)5;
 
                                         table.Header(header =>
                                         {
                                             header.Cell()
-                                                .ColumnSpan(5)
+                                                .ColumnSpan(colSpan)
                                                 .Element(SectionCell)
                                                 .Text(section.Key)
                                                 .FontSize(11)
                                                 .Bold();
 
-                                            AddColumnHeader(header);
+                                            AddColumnHeader(header, isFarmerCatalog);
                                         });
 
                                         var sectionRows = section
@@ -238,7 +300,7 @@ public class CatalogPdfFunctions
                                                     groupRows.Add(sectionRows[j]);
                                                     j++;
                                                 }
-                                                AddStringGroup(table, groupRows);
+                                                AddStringGroup(table, groupRows, isFarmerCatalog, lotSaleData);
                                                 i = j;
                                             }
                                             else
@@ -246,7 +308,7 @@ public class CatalogPdfFunctions
                                                 bool nextIsStringStart = i + 1 < sectionRows.Count
                                                     && sectionRows[i + 1].IsMultiLotString
                                                     && sectionRows[i + 1].LotSequenceInString == 1;
-                                                AddCatalogRow(table, row, nextIsStringStart);
+                                                AddCatalogRow(table, row, nextIsStringStart, isFarmerCatalog, lotSaleData);
                                                 i++;
                                             }
                                         }
@@ -329,54 +391,116 @@ public class CatalogPdfFunctions
         }
     }
 
-    private static void AddColumnHeader(TableCellDescriptor table)
+    private static void AddColumnHeader(TableCellDescriptor table, bool isFarmerCatalog = false)
     {
         table.Cell().Element(HeaderCell).Text("Lots").Bold();
         table.Cell().Element(HeaderCell).Text("Skins").Bold();
         table.Cell().Element(HeaderCell).Text("Description").Bold();
-        table.Cell().Element(HeaderCell).Text("Price").Bold();
-        table.Cell().Element(HeaderCell).Text("Comments").Bold();
+        if (isFarmerCatalog)
+        {
+            table.Cell().Element(HeaderCell).Text("Price/Skin").Bold();
+            table.Cell().Element(HeaderCell).Text("Value").Bold();
+            table.Cell().Element(HeaderCell).Text("Status").Bold();
+        }
+        else
+        {
+            table.Cell().Element(HeaderCell).Text("Price").Bold();
+            table.Cell().Element(HeaderCell).Text("Comments").Bold();
+        }
     }
 
     private static void AddCatalogRow(
         TableDescriptor table,
         CatalogPdfRow row,
-        bool nextIsStringStart = false)
+        bool nextIsStringStart = false,
+        bool isFarmerCatalog = false,
+        Dictionary<int, LotSaleInfo>? lotSaleData = null)
     {
         IContainer CellStyle(IContainer c) => nextIsStringStart ? NoBorderCell(c) : NormalCell(c);
 
         table.Cell().Element(CellStyle).Text(BuildLotsText(row));
         table.Cell().Element(CellStyle).Text(BuildSkinsText(row));
         table.Cell().Element(CellStyle).Text(BuildDescriptionText(row));
-        table.Cell().Element(CellStyle).Text("");
-        table.Cell().Element(CellStyle).Text("");
+
+        if (isFarmerCatalog && lotSaleData != null && lotSaleData.TryGetValue(row.LotNumber, out var sale))
+        {
+            table.Cell().Element(CellStyle).AlignRight().Text(sale.IsSold ? $"\u20ac{sale.PricePerSkin:N2}" : "-");
+            table.Cell().Element(CellStyle).AlignRight().Text(sale.IsSold ? $"\u20ac{sale.Value:N2}" : "-");
+            table.Cell().Element(CellStyle).Text(sale.IsSold ? "Sold" : "").FontColor(sale.IsSold ? Colors.Green.Darken2 : Colors.Grey.Medium).Bold();
+        }
+        else if (isFarmerCatalog)
+        {
+            table.Cell().Element(CellStyle).Text("-");
+            table.Cell().Element(CellStyle).Text("-");
+            table.Cell().Element(CellStyle).Text("");
+        }
+        else
+        {
+            table.Cell().Element(CellStyle).Text("");
+            table.Cell().Element(CellStyle).Text("");
+        }
     }
 
     private static void AddStringGroup(
         TableDescriptor table,
-        List<CatalogPdfRow> groupRows)
+        List<CatalogPdfRow> groupRows,
+        bool isFarmerCatalog = false,
+        Dictionary<int, LotSaleInfo>? lotSaleData = null)
     {
-        table.Cell().ColumnSpan(5)
+        var colSpan = isFarmerCatalog ? (uint)6 : (uint)5;
+        table.Cell().ColumnSpan(colSpan)
             .Border(2f)
             .BorderColor(Colors.Black)
             .Table(innerTable =>
             {
-                innerTable.ColumnsDefinition(columns =>
+                if (isFarmerCatalog)
                 {
-                    columns.ConstantColumn(70);
-                    columns.ConstantColumn(55);
-                    columns.RelativeColumn();
-                    columns.ConstantColumn(60);
-                    columns.ConstantColumn(90);
-                });
+                    innerTable.ColumnsDefinition(columns =>
+                    {
+                        columns.ConstantColumn(70);
+                        columns.ConstantColumn(55);
+                        columns.RelativeColumn();
+                        columns.ConstantColumn(65);
+                        columns.ConstantColumn(75);
+                        columns.ConstantColumn(50);
+                    });
+                }
+                else
+                {
+                    innerTable.ColumnsDefinition(columns =>
+                    {
+                        columns.ConstantColumn(70);
+                        columns.ConstantColumn(55);
+                        columns.RelativeColumn();
+                        columns.ConstantColumn(60);
+                        columns.ConstantColumn(90);
+                    });
+                }
 
                 foreach (var row in groupRows)
                 {
-                    innerTable.Cell().Background(Colors.White).PaddingVertical(3).PaddingHorizontal(4).Text(BuildLotsText(row));
-                    innerTable.Cell().Background(Colors.White).PaddingVertical(3).PaddingHorizontal(4).Text(BuildSkinsText(row));
-                    innerTable.Cell().Background(Colors.White).PaddingVertical(3).PaddingHorizontal(4).Text(BuildDescriptionText(row));
-                    innerTable.Cell().Background(Colors.White).PaddingVertical(3).PaddingHorizontal(4).Text("");
-                    innerTable.Cell().Background(Colors.White).PaddingVertical(3).PaddingHorizontal(4).Text("");
+                    IContainer Cell() => innerTable.Cell().Background(Colors.White).PaddingVertical(3).PaddingHorizontal(4);
+                    Cell().Text(BuildLotsText(row));
+                    Cell().Text(BuildSkinsText(row));
+                    Cell().Text(BuildDescriptionText(row));
+
+                    if (isFarmerCatalog && lotSaleData != null && lotSaleData.TryGetValue(row.LotNumber, out var sale))
+                    {
+                        Cell().AlignRight().Text(sale.IsSold ? $"\u20ac{sale.PricePerSkin:N2}" : "-");
+                        Cell().AlignRight().Text(sale.IsSold ? $"\u20ac{sale.Value:N2}" : "-");
+                        Cell().Text(sale.IsSold ? "Sold" : "").FontColor(sale.IsSold ? Colors.Green.Darken2 : Colors.Grey.Medium).Bold();
+                    }
+                    else if (isFarmerCatalog)
+                    {
+                        Cell().Text("-");
+                        Cell().Text("-");
+                        Cell().Text("");
+                    }
+                    else
+                    {
+                        Cell().Text("");
+                        Cell().Text("");
+                    }
                 }
             });
     }
@@ -500,5 +624,13 @@ public class CatalogPdfFunctions
             .Background(Colors.Grey.Lighten2)
             .PaddingVertical(5)
             .PaddingHorizontal(4);
+    }
+
+    private class LotSaleInfo
+    {
+        public bool IsSold { get; set; }
+        public decimal PricePerSkin { get; set; }
+        public decimal Value { get; set; }
+        public int FarmerSkins { get; set; }
     }
 }
