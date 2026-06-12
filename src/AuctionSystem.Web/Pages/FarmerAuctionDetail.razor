@@ -39,27 +39,167 @@ else
             <div class="card text-bg-warning mb-3">
                 <div class="card-body text-center">
                     <h6 class="card-title">Total Value</h6>
-                    <p class="display-5 mb-0">@_totalValue.ToString("N2")</p>
+                    <p class="display-5 mb-0">€@_totalValue.ToString("N2")</p>
                 </div>
             </div>
         </div>
     </div>
+
+    @* Breadcrumb navigation *@
+    <nav class="mb-3" style="font-size:0.95rem;">
+        <a href="javascript:void(0)" @onclick="ShowLots" class="@(_view == "lots" ? "fw-bold" : "")">Lots</a>
+        @if (_view == "boxes" || _view == "skins")
+        {
+            <span class="mx-1">/</span>
+            <a href="javascript:void(0)" @onclick="ShowBoxes" class="@(_view == "boxes" ? "fw-bold" : "")">Lot @_selectedLotNumber — Boxes</a>
+        }
+        @if (_view == "skins")
+        {
+            <span class="mx-1">/</span>
+            <span class="fw-bold">Box @_selectedBoxNumber — Skins</span>
+        }
+    </nav>
+
+    @if (_drillLoading)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else if (_view == "lots")
+    {
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Lot</th>
+                        <th>Skins</th>
+                        <th>Boxes</th>
+                        <th>Type</th>
+                        <th>Gender</th>
+                        <th>Group</th>
+                        <th>Quality</th>
+                        <th>Size</th>
+                        <th>Color</th>
+                        <th>Status</th>
+                        <th class="text-end">Price/Skin</th>
+                        <th class="text-end">Hammer Price</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var lot in _lots)
+                    {
+                        <tr style="cursor:pointer" @onclick="() => DrillToBoxes(lot)">
+                            <td>@lot.LotNumber</td>
+                            <td>@lot.TotalSkins</td>
+                            <td>@lot.BoxCount</td>
+                            <td>@lot.SalesType</td>
+                            <td>@lot.Gender</td>
+                            <td>@lot.Group</td>
+                            <td>@lot.Quality</td>
+                            <td>@lot.Size</td>
+                            <td>@lot.Color</td>
+                            <td><span class="badge @(lot.Status == "Sold" ? "bg-success" : "bg-secondary")">@lot.Status</span></td>
+                            <td class="text-end">@(lot.PricePerSkin?.ToString("N2") ?? "-")</td>
+                            <td class="text-end">@(lot.HammerPrice?.ToString("N2") ?? "-")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else if (_view == "boxes")
+    {
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Box Number</th>
+                        <th>Box Type</th>
+                        <th>Skins</th>
+                        <th>Status</th>
+                        <th class="text-end">Price/Skin</th>
+                        <th class="text-end">Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var box in _boxes)
+                    {
+                        <tr style="cursor:pointer" @onclick="() => DrillToSkins(box)">
+                            <td>@box.BoxNumber</td>
+                            <td>@box.BoxType</td>
+                            <td>@box.SkinCount</td>
+                            <td><span class="badge @(box.Status == "Sold" ? "bg-success" : "bg-secondary")">@box.Status</span></td>
+                            <td class="text-end">@(box.PricePerSkin?.ToString("N2") ?? "-")</td>
+                            <td class="text-end">@(box.Value?.ToString("N2") ?? "-")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else if (_view == "skins")
+    {
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Barcode</th>
+                        <th>Type</th>
+                        <th>Gender</th>
+                        <th>Group</th>
+                        <th>Size</th>
+                        <th>Color</th>
+                        <th>Quality</th>
+                        <th>Clarity</th>
+                        <th>Hair Length</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var skin in _skins)
+                    {
+                        <tr>
+                            <td>@skin.Barcode</td>
+                            <td>@skin.SalesType</td>
+                            <td>@skin.Gender</td>
+                            <td>@skin.Group</td>
+                            <td>@skin.Size</td>
+                            <td>@skin.Color</td>
+                            <td>@skin.Quality</td>
+                            <td>@skin.Clarity</td>
+                            <td>@skin.HairLength</td>
+                            <td><span class="badge @(skin.Status == "Sold" ? "bg-success" : "bg-secondary")">@skin.Status</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
 }
 
 @code {
     [Parameter] public int AuctionId { get; set; }
 
     private bool _loading = true;
+    private bool _drillLoading;
     private string _auctionNumber = "";
+    private string _farmerName = "";
     private int _totalSkins;
     private int _soldSkins;
     private decimal _totalValue;
 
+    private string _view = "lots";
+    private int _selectedLotNumber;
+    private int _selectedBoxNumber;
+
+    private List<LotRow> _lots = new();
+    private List<BoxRow> _boxes = new();
+    private List<SkinRow> _skins = new();
+
     protected override async Task OnInitializedAsync()
     {
-        var farmerName = await ResolveFarmerNameAsync();
+        _farmerName = await ResolveFarmerNameAsync() ?? "";
 
-        if (string.IsNullOrEmpty(farmerName))
+        if (string.IsNullOrEmpty(_farmerName))
         {
             Nav.NavigateTo("/");
             return;
@@ -67,7 +207,7 @@ else
 
         try
         {
-            var url = $"api/skins/farmer-auction-detail?farmerName={Uri.EscapeDataString(farmerName)}&auctionId={AuctionId}";
+            var url = $"api/skins/farmer-auction-detail?farmerName={Uri.EscapeDataString(_farmerName)}&auctionId={AuctionId}";
             var json = await Http.GetStringAsync(url);
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
@@ -76,11 +216,73 @@ else
             _soldSkins = root.GetProperty("soldSkins").GetInt32();
             _totalValue = root.GetProperty("totalValue").GetDecimal();
         }
-        catch
-        {
-        }
+        catch { }
 
         _loading = false;
+        await LoadLots();
+    }
+
+    private async Task LoadLots()
+    {
+        _drillLoading = true;
+        _view = "lots";
+        StateHasChanged();
+
+        try
+        {
+            var url = $"api/skins/farmer-auction-lots?farmerName={Uri.EscapeDataString(_farmerName)}&auctionId={AuctionId}";
+            var json = await Http.GetStringAsync(url);
+            _lots = JsonSerializer.Deserialize<List<LotRow>>(json, JsonOpts) ?? new();
+        }
+        catch { _lots = new(); }
+
+        _drillLoading = false;
+    }
+
+    private void ShowLots()
+    {
+        _view = "lots";
+    }
+
+    private void ShowBoxes()
+    {
+        _view = "boxes";
+    }
+
+    private async Task DrillToBoxes(LotRow lot)
+    {
+        _selectedLotNumber = lot.LotNumber;
+        _drillLoading = true;
+        _view = "boxes";
+        StateHasChanged();
+
+        try
+        {
+            var url = $"api/skins/farmer-auction-boxes?farmerName={Uri.EscapeDataString(_farmerName)}&auctionId={AuctionId}&lotNumber={lot.LotNumber}";
+            var json = await Http.GetStringAsync(url);
+            _boxes = JsonSerializer.Deserialize<List<BoxRow>>(json, JsonOpts) ?? new();
+        }
+        catch { _boxes = new(); }
+
+        _drillLoading = false;
+    }
+
+    private async Task DrillToSkins(BoxRow box)
+    {
+        _selectedBoxNumber = box.BoxNumber;
+        _drillLoading = true;
+        _view = "skins";
+        StateHasChanged();
+
+        try
+        {
+            var url = $"api/skins/farmer-auction-skins?farmerName={Uri.EscapeDataString(_farmerName)}&auctionId={AuctionId}&boxNumber={box.BoxNumber}";
+            var json = await Http.GetStringAsync(url);
+            _skins = JsonSerializer.Deserialize<List<SkinRow>>(json, JsonOpts) ?? new();
+        }
+        catch { _skins = new(); }
+
+        _drillLoading = false;
     }
 
     private async Task<string?> ResolveFarmerNameAsync()
@@ -99,5 +301,50 @@ else
 
         var farmers = await Api.GetFarmersAsync();
         return farmers.FirstOrDefault(f => f.Id == user.FarmerId)?.Name;
+    }
+
+    private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNameCaseInsensitive = true };
+
+    private class LotRow
+    {
+        public int LotNumber { get; set; }
+        public int TotalSkins { get; set; }
+        public int BoxCount { get; set; }
+        public string? SalesType { get; set; }
+        public string? Gender { get; set; }
+        public string? Group { get; set; }
+        public string? Quality { get; set; }
+        public string? Size { get; set; }
+        public string? Color { get; set; }
+        public string? Clarity { get; set; }
+        public string Status { get; set; } = "";
+        public decimal? PricePerSkin { get; set; }
+        public decimal? HammerPrice { get; set; }
+    }
+
+    private class BoxRow
+    {
+        public int BoxNumber { get; set; }
+        public string? BoxType { get; set; }
+        public int SkinCount { get; set; }
+        public string Status { get; set; } = "";
+        public decimal? PricePerSkin { get; set; }
+        public decimal? Value { get; set; }
+    }
+
+    private class SkinRow
+    {
+        public long Barcode { get; set; }
+        public string? BoxType { get; set; }
+        public string? SalesType { get; set; }
+        public string? Gender { get; set; }
+        public string? Group { get; set; }
+        public string? Size { get; set; }
+        public string? Color { get; set; }
+        public string? Quality { get; set; }
+        public string? Clarity { get; set; }
+        public string? Damages { get; set; }
+        public string? HairLength { get; set; }
+        public string Status { get; set; } = "";
     }
 }

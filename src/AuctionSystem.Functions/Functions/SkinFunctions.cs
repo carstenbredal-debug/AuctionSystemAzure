@@ -234,27 +234,12 @@ public class SkinFunctions
         var connStr = _auctionDb.Database.GetConnectionString()!;
 
         int totalSkins = 0;
-        int totalRowsInTable = 0;
-        int distinctFarmers = 0;
         var skinsByBox = new Dictionary<int, int>(); // boxNumber → count
 
         await using (var conn = new SqlConnection(connStr))
         {
             await conn.OpenAsync();
 
-            // Debug: total rows in snapshot table
-            await using (var countCmd = new SqlCommand($"SELECT COUNT(*) FROM {skinsTable}", conn))
-            {
-                totalRowsInTable = (int)await countCmd.ExecuteScalarAsync();
-            }
-
-            // Debug: count of distinct farmers
-            await using (var farmerCmd = new SqlCommand($"SELECT COUNT(DISTINCT Farmer) FROM {skinsTable}", conn))
-            {
-                distinctFarmers = (int)await farmerCmd.ExecuteScalarAsync();
-            }
-
-            // Total skins for this farmer in the snapshot
             await using (var cmd = new SqlCommand($"SELECT BoxNumber, COUNT(*) AS Cnt FROM {skinsTable} WHERE Farmer = @farmer GROUP BY BoxNumber", conn))
             {
                 cmd.Parameters.AddWithValue("@farmer", farmerName);
@@ -290,13 +275,225 @@ public class SkinFunctions
             farmerName,
             totalSkins,
             soldSkins = soldSkinCount,
-            totalValue,
-            _debug = new { snapshotTable = skinsTable, totalRowsInTable, distinctFarmers, farmerBoxCount = skinsByBox.Count }
+            totalValue
         };
 
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
         await response.WriteStringAsync(JsonSerializer.Serialize(result, JsonOptions));
+        return response;
+    }
+
+    [Function("GetFarmerAuctionLots")]
+    public async Task<HttpResponseData> GetFarmerAuctionLots(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "skins/farmer-auction-lots")] HttpRequestData req)
+    {
+        var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+        var farmerName = query["farmerName"]?.Trim();
+        var auctionIdStr = query["auctionId"];
+        int? auctionId = int.TryParse(auctionIdStr, out var aid) ? aid : null;
+
+        if (string.IsNullOrEmpty(farmerName) || auctionId == null)
+            return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+
+        var auction = await _auctionDb.Auctions.FindAsync(auctionId.Value);
+        if (auction == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        var skinsTable = $"auction.[{auction.AuctionNumber}.Skins]";
+        var lotsTable = $"auction.[{auction.AuctionNumber}.Lots]";
+        var connStr = _auctionDb.Database.GetConnectionString()!;
+
+        var saleInfoByBox = await GetSoldBoxSaleInfoAsync(auctionId.Value);
+
+        var lots = new List<object>();
+        await using var conn = new SqlConnection(connStr);
+        await conn.OpenAsync();
+
+        // Get lots that contain this farmer's skins
+        await using var cmd = new SqlCommand($@"
+            SELECT l.LotNumber, l.IncludedBoxNumbers, l.TotalSkins, l.BoxCount,
+                   l.SalesType, l.Gender, l.[Group], l.Quality, l.Size, l.Color, l.Clarity
+            FROM {lotsTable} l
+            WHERE EXISTS (
+                SELECT 1 FROM {skinsTable} s
+                WHERE s.Farmer = @farmer
+                AND s.BoxNumber IN (
+                    SELECT CAST(LTRIM(RTRIM(value)) AS INT)
+                    FROM STRING_SPLIT(l.IncludedBoxNumbers, ',')
+                    WHERE ISNUMERIC(LTRIM(RTRIM(value))) = 1
+                )
+            )
+            ORDER BY l.LotNumber", conn);
+        cmd.Parameters.AddWithValue("@farmer", farmerName);
+
+        await using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            var lotNumber = reader.GetInt32(0);
+            var boxNumbersCsv = reader.IsDBNull(1) ? "" : reader.GetString(1);
+            var boxNumbers = boxNumbersCsv.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(b => int.TryParse(b.Trim(), out var n) ? n : 0).Where(n => n > 0).ToList();
+
+            var isSold = boxNumbers.Any(b => saleInfoByBox.ContainsKey(b));
+            var pricePerSkin = boxNumbers.Where(b => saleInfoByBox.ContainsKey(b))
+                .Select(b => saleInfoByBox[b].PriceEur).FirstOrDefault();
+
+            lots.Add(new
+            {
+                lotNumber,
+                totalSkins = reader.GetInt32(2),
+                boxCount = reader.GetInt32(3),
+                salesType = reader.IsDBNull(4) ? null : reader.GetString(4),
+                gender = reader.IsDBNull(5) ? null : reader.GetString(5),
+                group = reader.IsDBNull(6) ? null : reader.GetString(6),
+                quality = reader.IsDBNull(7) ? null : reader.GetString(7),
+                size = reader.IsDBNull(8) ? null : reader.GetString(8),
+                color = reader.IsDBNull(9) ? null : reader.GetString(9),
+                clarity = reader.IsDBNull(10) ? null : reader.GetString(10),
+                status = isSold ? "Sold" : "Auction",
+                pricePerSkin = isSold ? pricePerSkin : (decimal?)null,
+                hammerPrice = isSold ? reader.GetInt32(2) * pricePerSkin : (decimal?)null
+            });
+        }
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(lots, JsonOptions));
+        return response;
+    }
+
+    [Function("GetFarmerAuctionBoxes")]
+    public async Task<HttpResponseData> GetFarmerAuctionBoxes(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "skins/farmer-auction-boxes")] HttpRequestData req)
+    {
+        var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+        var farmerName = query["farmerName"]?.Trim();
+        var auctionIdStr = query["auctionId"];
+        var lotNumberStr = query["lotNumber"];
+        int? auctionId = int.TryParse(auctionIdStr, out var aid) ? aid : null;
+        int? lotNumber = int.TryParse(lotNumberStr, out var ln) ? ln : null;
+
+        if (string.IsNullOrEmpty(farmerName) || auctionId == null || lotNumber == null)
+            return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+
+        var auction = await _auctionDb.Auctions.FindAsync(auctionId.Value);
+        if (auction == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        var skinsTable = $"auction.[{auction.AuctionNumber}.Skins]";
+        var lotsTable = $"auction.[{auction.AuctionNumber}.Lots]";
+        var connStr = _auctionDb.Database.GetConnectionString()!;
+
+        var saleInfoByBox = await GetSoldBoxSaleInfoAsync(auctionId.Value);
+
+        // Get box numbers for this lot
+        await using var conn = new SqlConnection(connStr);
+        await conn.OpenAsync();
+
+        string? boxNumbersCsv = null;
+        await using (var lotCmd = new SqlCommand($"SELECT IncludedBoxNumbers FROM {lotsTable} WHERE LotNumber = @lot", conn))
+        {
+            lotCmd.Parameters.AddWithValue("@lot", lotNumber.Value);
+            boxNumbersCsv = (await lotCmd.ExecuteScalarAsync()) as string;
+        }
+
+        if (string.IsNullOrEmpty(boxNumbersCsv))
+            return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        var boxNumbers = boxNumbersCsv.Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(b => int.TryParse(b.Trim(), out var n) ? n : 0).Where(n => n > 0).ToList();
+
+        // Get skins per box for this farmer
+        var boxes = new List<object>();
+        await using var cmd = new SqlCommand($@"
+            SELECT BoxNumber, BoxType, COUNT(*) AS SkinCount
+            FROM {skinsTable}
+            WHERE Farmer = @farmer AND BoxNumber IN ({string.Join(",", boxNumbers)})
+            GROUP BY BoxNumber, BoxType
+            ORDER BY BoxNumber", conn);
+        cmd.Parameters.AddWithValue("@farmer", farmerName);
+
+        await using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            var boxNum = reader.GetInt32(0);
+            var isSold = saleInfoByBox.ContainsKey(boxNum);
+            var price = isSold ? saleInfoByBox[boxNum].PriceEur : 0;
+
+            boxes.Add(new
+            {
+                boxNumber = boxNum,
+                boxType = reader.IsDBNull(1) ? null : reader.GetString(1),
+                skinCount = reader.GetInt32(2),
+                status = isSold ? "Sold" : "Auction",
+                pricePerSkin = isSold ? price : (decimal?)null,
+                value = isSold ? reader.GetInt32(2) * price : (decimal?)null
+            });
+        }
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(boxes, JsonOptions));
+        return response;
+    }
+
+    [Function("GetFarmerAuctionSkins")]
+    public async Task<HttpResponseData> GetFarmerAuctionSkins(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "skins/farmer-auction-skins")] HttpRequestData req)
+    {
+        var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+        var farmerName = query["farmerName"]?.Trim();
+        var auctionIdStr = query["auctionId"];
+        var boxNumberStr = query["boxNumber"];
+        int? auctionId = int.TryParse(auctionIdStr, out var aid) ? aid : null;
+        int? boxNumber = int.TryParse(boxNumberStr, out var bn) ? bn : null;
+
+        if (string.IsNullOrEmpty(farmerName) || auctionId == null || boxNumber == null)
+            return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+
+        var auction = await _auctionDb.Auctions.FindAsync(auctionId.Value);
+        if (auction == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        var skinsTable = $"auction.[{auction.AuctionNumber}.Skins]";
+        var connStr = _auctionDb.Database.GetConnectionString()!;
+
+        var saleInfoByBox = await GetSoldBoxSaleInfoAsync(auctionId.Value);
+        var isSold = saleInfoByBox.ContainsKey(boxNumber.Value);
+
+        var skins = new List<object>();
+        await using var conn = new SqlConnection(connStr);
+        await conn.OpenAsync();
+
+        await using var cmd = new SqlCommand($@"
+            SELECT Barcode, BoxType, SalesType, Gender, [Group], Size, Color, Quality, Clarity, Damages, HairLength
+            FROM {skinsTable}
+            WHERE Farmer = @farmer AND BoxNumber = @box
+            ORDER BY Barcode", conn);
+        cmd.Parameters.AddWithValue("@farmer", farmerName);
+        cmd.Parameters.AddWithValue("@box", boxNumber.Value);
+
+        await using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            skins.Add(new
+            {
+                barcode = reader.GetInt64(0),
+                boxType = reader.IsDBNull(1) ? null : reader.GetString(1),
+                salesType = reader.IsDBNull(2) ? null : reader.GetString(2),
+                gender = reader.IsDBNull(3) ? null : reader.GetString(3),
+                group = reader.IsDBNull(4) ? null : reader.GetString(4),
+                size = reader.IsDBNull(5) ? null : reader.GetString(5),
+                color = reader.IsDBNull(6) ? null : reader.GetString(6),
+                quality = reader.IsDBNull(7) ? null : reader.GetString(7),
+                clarity = reader.IsDBNull(8) ? null : reader.GetString(8),
+                damages = reader.IsDBNull(9) ? null : reader.GetString(9),
+                hairLength = reader.IsDBNull(10) ? null : reader.GetString(10),
+                status = isSold ? "Sold" : "Auction"
+            });
+        }
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(skins, JsonOptions));
         return response;
     }
 
