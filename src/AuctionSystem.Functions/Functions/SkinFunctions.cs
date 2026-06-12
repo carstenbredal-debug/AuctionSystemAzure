@@ -309,9 +309,16 @@ public class SkinFunctions
         await using var conn = new SqlConnection(connStr);
         await conn.OpenAsync();
 
-        // Get lots that contain this farmer's skins
+        // Get lots that contain this farmer's skins, counting only farmer's skins per lot
         await using var cmd = new SqlCommand($@"
-            SELECT l.LotNumber, l.IncludedBoxNumbers, l.TotalSkins, l.BoxCount,
+            SELECT l.LotNumber, l.IncludedBoxNumbers,
+                   (SELECT COUNT(*) FROM {skinsTable} s
+                    WHERE s.Farmer = @farmer
+                    AND s.BoxNumber IN (
+                        SELECT CAST(LTRIM(RTRIM(value)) AS INT)
+                        FROM STRING_SPLIT(l.IncludedBoxNumbers, ',')
+                        WHERE ISNUMERIC(LTRIM(RTRIM(value))) = 1
+                    )) AS FarmerSkins,
                    l.SalesType, l.Gender, l.[Group], l.Quality, l.HairLength, l.Size, l.Color, l.Clarity, l.Damages
             FROM {lotsTable} l
             WHERE EXISTS (
@@ -331,6 +338,7 @@ public class SkinFunctions
         {
             var lotNumber = reader.GetInt32(0);
             var boxNumbersCsv = reader.IsDBNull(1) ? "" : reader.GetString(1);
+            var farmerSkins = reader.GetInt32(2);
             var boxNumbers = boxNumbersCsv.Split(',', StringSplitOptions.RemoveEmptyEntries)
                 .Select(b => int.TryParse(b.Trim(), out var n) ? n : 0).Where(n => n > 0).ToList();
 
@@ -341,20 +349,19 @@ public class SkinFunctions
             lots.Add(new
             {
                 lotNumber,
-                totalSkins = reader.GetInt32(2),
-                boxCount = reader.GetInt32(3),
-                salesType = reader.IsDBNull(4) ? null : reader.GetString(4),
-                gender = reader.IsDBNull(5) ? null : reader.GetString(5),
-                group = reader.IsDBNull(6) ? null : reader.GetString(6),
-                quality = reader.IsDBNull(7) ? null : reader.GetString(7),
-                hairLength = reader.IsDBNull(8) ? null : reader.GetString(8),
-                size = reader.IsDBNull(9) ? null : reader.GetString(9),
-                color = reader.IsDBNull(10) ? null : reader.GetString(10),
-                clarity = reader.IsDBNull(11) ? null : reader.GetString(11),
-                damages = reader.IsDBNull(12) ? null : reader.GetString(12),
+                totalSkins = farmerSkins,
+                salesType = reader.IsDBNull(3) ? null : reader.GetString(3),
+                gender = reader.IsDBNull(4) ? null : reader.GetString(4),
+                group = reader.IsDBNull(5) ? null : reader.GetString(5),
+                quality = reader.IsDBNull(6) ? null : reader.GetString(6),
+                hairLength = reader.IsDBNull(7) ? null : reader.GetString(7),
+                size = reader.IsDBNull(8) ? null : reader.GetString(8),
+                color = reader.IsDBNull(9) ? null : reader.GetString(9),
+                clarity = reader.IsDBNull(10) ? null : reader.GetString(10),
+                damages = reader.IsDBNull(11) ? null : reader.GetString(11),
                 status = isSold ? "Sold" : "Auction",
                 pricePerSkin = isSold ? pricePerSkin : (decimal?)null,
-                hammerPrice = isSold ? reader.GetInt32(2) * pricePerSkin : (decimal?)null
+                hammerPrice = isSold ? farmerSkins * pricePerSkin : (decimal?)null
             });
         }
 
