@@ -305,13 +305,15 @@ public class SkinFunctions
 
         var saleInfoByBox = await GetSoldBoxSaleInfoAsync(auctionId.Value);
 
-        // Pre-load released lot numbers (invoice is fully paid)
-        var releasedLotNumbers = await _auctionDb.Invoices
-            .Where(i => !i.IsCreditNote && i.Status == Domain.Enums.InvoiceStatus.Paid)
-            .SelectMany(i => i.Lines.Select(l => l.LotNumber))
-            .Distinct()
+        // Pre-load invoiced lot numbers (lot has an invoice line)
+        var invoicedLotNumbers = await _auctionDb.Invoices
+            .Where(i => !i.IsCreditNote)
+            .SelectMany(i => i.Lines.Select(l => new { l.LotNumber, i.Status }))
             .ToListAsync();
-        var releasedLots = new HashSet<int>(releasedLotNumbers);
+        var invoicedLots = new HashSet<int>(invoicedLotNumbers.Select(x => x.LotNumber));
+        var paidLots = new HashSet<int>(invoicedLotNumbers
+            .Where(x => x.Status == Domain.Enums.InvoiceStatus.Paid)
+            .Select(x => x.LotNumber));
 
         // Pre-load farmer's skin count per box from snapshot
         var farmerSkinsByBox = new Dictionary<int, int>();
@@ -374,8 +376,9 @@ public class SkinFunctions
                 ? Math.Round(soldValue / soldSkinCount, 2)
                 : null;
 
-            var isPaid = releasedLots.Contains(lotNumber);
-            string status = isPaid ? "Paid" : isSoldToBuyer ? "Sold" : hasResult ? "Hammer" : "Auction";
+            var isInvoiced = invoicedLots.Contains(lotNumber);
+            var isPaid = paidLots.Contains(lotNumber);
+            string status = isPaid ? "Paid" : isInvoiced ? "Sold" : hasResult ? "Hammer" : "Auction";
 
             lots.Add(new
             {
