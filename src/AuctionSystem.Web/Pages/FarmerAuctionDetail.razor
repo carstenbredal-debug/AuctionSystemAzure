@@ -26,10 +26,10 @@ else
                     <h6 class="card-title">Total Skins</h6>
                     <p class="display-5 mb-0">@_totalSkins.ToString("N0")</p>
                     <div class="mt-2" style="font-size:0.85rem;">
-                        <div><span class="badge bg-secondary">Auction</span> @_lots.Where(l => l.Status == "Auction").Sum(l => l.TotalSkins).ToString("N0")</div>
-                        <div><span class="badge bg-primary">Hammer</span> @_lots.Where(l => l.Status == "Hammer").Sum(l => l.TotalSkins).ToString("N0")</div>
-                        <div><span class="badge bg-success">Sold</span> @_lots.Where(l => l.Status == "Sold").Sum(l => l.TotalSkins).ToString("N0")</div>
-                        <div><span class="badge" style="background-color:#230A3C;color:white;">Paid</span> @_lots.Where(l => l.Status == "Paid").Sum(l => l.TotalSkins).ToString("N0")</div>
+                        <div class="d-flex justify-content-between"><span class="badge bg-secondary">Auction</span> <span>@_lots.Where(l => l.Status == "Auction").Sum(l => l.TotalSkins).ToString("N0")</span></div>
+                        <div class="d-flex justify-content-between"><span class="badge bg-primary">Hammer</span> <span>@_lots.Where(l => l.Status == "Hammer").Sum(l => l.TotalSkins).ToString("N0")</span></div>
+                        <div class="d-flex justify-content-between"><span class="badge bg-success">Sold</span> <span>@_lots.Where(l => l.Status == "Sold").Sum(l => l.TotalSkins).ToString("N0")</span></div>
+                        <div class="d-flex justify-content-between"><span class="badge" style="background-color:#230A3C;color:white;">Paid</span> <span>@_lots.Where(l => l.Status == "Paid").Sum(l => l.TotalSkins).ToString("N0")</span></div>
                     </div>
                 </div>
             </div>
@@ -40,10 +40,10 @@ else
                     <h6 class="card-title">Total Sold</h6>
                     <p class="display-5 mb-0">@_soldSkins.ToString("N0")</p>
                     <div class="mt-2" style="font-size:0.85rem;">
-                        <div><span class="badge bg-secondary">Auction</span> @_lots.Where(l => l.Status == "Auction").Sum(l => l.TotalSkins).ToString("N0")</div>
-                        <div><span class="badge bg-primary">Hammer</span> @_lots.Where(l => l.Status == "Hammer").Sum(l => l.TotalSkins).ToString("N0")</div>
-                        <div><span class="badge bg-success">Sold</span> @_lots.Where(l => l.Status == "Sold").Sum(l => l.TotalSkins).ToString("N0")</div>
-                        <div><span class="badge" style="background-color:#230A3C;color:white;">Paid</span> @_lots.Where(l => l.Status == "Paid").Sum(l => l.TotalSkins).ToString("N0")</div>
+                        <div class="d-flex justify-content-between"><span class="badge bg-secondary">Auction</span> <span>@_lots.Where(l => l.Status == "Auction").Sum(l => l.TotalSkins).ToString("N0")</span></div>
+                        <div class="d-flex justify-content-between"><span class="badge bg-primary">Hammer</span> <span>@_lots.Where(l => l.Status == "Hammer").Sum(l => l.TotalSkins).ToString("N0")</span></div>
+                        <div class="d-flex justify-content-between"><span class="badge bg-success">Sold</span> <span>@_lots.Where(l => l.Status == "Sold").Sum(l => l.TotalSkins).ToString("N0")</span></div>
+                        <div class="d-flex justify-content-between"><span class="badge" style="background-color:#230A3C;color:white;">Paid</span> <span>@_lots.Where(l => l.Status == "Paid").Sum(l => l.TotalSkins).ToString("N0")</span></div>
                     </div>
                 </div>
             </div>
@@ -54,10 +54,10 @@ else
                     <h6 class="card-title">Total Value</h6>
                     <p class="display-5 mb-0">€@_totalValue.ToString("N2")</p>
                     <div class="mt-2" style="font-size:0.85rem;">
-                        <div><span class="badge bg-secondary">Auction</span> €@_lots.Where(l => l.Status == "Auction").Sum(l => l.SoldValue ?? 0).ToString("N2")</div>
-                        <div><span class="badge bg-primary">Hammer</span> €@_lots.Where(l => l.Status == "Hammer").Sum(l => l.SoldValue ?? 0).ToString("N2")</div>
-                        <div><span class="badge bg-success">Sold</span> €@_lots.Where(l => l.Status == "Sold").Sum(l => l.SoldValue ?? 0).ToString("N2")</div>
-                        <div><span class="badge" style="background-color:#230A3C;color:white;">Paid</span> €@_lots.Where(l => l.Status == "Paid").Sum(l => l.SoldValue ?? 0).ToString("N2")</div>
+                        <div class="d-flex justify-content-between"><span class="badge bg-secondary">Auction</span> <span>€@_lots.Where(l => l.Status == "Auction").Sum(l => l.SoldValue ?? 0).ToString("N2")</span></div>
+                        <div class="d-flex justify-content-between"><span class="badge bg-primary">Hammer</span> <span>€@_lots.Where(l => l.Status == "Hammer").Sum(l => l.SoldValue ?? 0).ToString("N2")</span></div>
+                        <div class="d-flex justify-content-between"><span class="badge bg-success">Sold</span> <span>€@_lots.Where(l => l.Status == "Sold").Sum(l => l.SoldValue ?? 0).ToString("N2")</span></div>
+                        <div class="d-flex justify-content-between"><span class="badge" style="background-color:#230A3C;color:white;">Paid</span> <span>€@_lots.Where(l => l.Status == "Paid").Sum(l => l.SoldValue ?? 0).ToString("N2")</span></div>
                     </div>
                 </div>
             </div>
