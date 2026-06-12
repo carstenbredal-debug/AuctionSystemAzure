@@ -305,6 +305,14 @@ public class SkinFunctions
 
         var saleInfoByBox = await GetSoldBoxSaleInfoAsync(auctionId.Value);
 
+        // Pre-load released lot numbers (invoice is fully paid)
+        var releasedLotNumbers = await _auctionDb.Invoices
+            .Where(i => !i.IsCreditNote && i.Status == Domain.Enums.InvoiceStatus.Paid)
+            .SelectMany(i => i.Lines.Select(l => l.LotNumber))
+            .Distinct()
+            .ToListAsync();
+        var releasedLots = new HashSet<int>(releasedLotNumbers);
+
         // Pre-load farmer's skin count per box from snapshot
         var farmerSkinsByBox = new Dictionary<int, int>();
         await using (var preConn = new SqlConnection(connStr))
@@ -366,7 +374,8 @@ public class SkinFunctions
                 ? Math.Round(soldValue / soldSkinCount, 2)
                 : null;
 
-            string status = isSoldToBuyer ? "Sold" : hasResult ? "Hammer" : "Auction";
+            var isPaid = releasedLots.Contains(lotNumber);
+            string status = isPaid ? "Paid" : isSoldToBuyer ? "Sold" : hasResult ? "Hammer" : "Auction";
 
             lots.Add(new
             {
