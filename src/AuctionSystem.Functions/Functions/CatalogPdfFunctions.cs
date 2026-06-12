@@ -179,7 +179,9 @@ public class CatalogPdfFunctions
                         WHERE i.IsCreditNote = 0";
                     var invoicedRows = await connection.QueryAsync<dynamic>(invoicedSql);
                     var invoicedLotSet = new HashSet<int>(invoicedRows.Select(x => (int)x.LotNumber));
-                    var paidLotSet = new HashSet<int>(invoicedRows.Where(x => (int)x.Status == 4).Select(x => (int)x.LotNumber));
+                    // Paid = status 4 (Paid), 10 (ReleasedToShip), 11 (Packing)
+                    var paidStatusValues = new[] { 4, 10, 11 };
+                    var paidLotSet = new HashSet<int>(invoicedRows.Where(x => paidStatusValues.Contains((int)x.Status)).Select(x => (int)x.LotNumber));
 
                     // Compute sale data per catalog lot
                     foreach (var r in rows)

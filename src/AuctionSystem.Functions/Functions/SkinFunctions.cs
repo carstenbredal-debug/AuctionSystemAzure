@@ -306,13 +306,18 @@ public class SkinFunctions
         var saleInfoByBox = await GetSoldBoxSaleInfoAsync(auctionId.Value);
 
         // Pre-load invoiced lot numbers (lot has an invoice line)
+        var paidStatuses = new[] {
+            Domain.Enums.InvoiceStatus.Paid,
+            Domain.Enums.InvoiceStatus.ReleasedToShip,
+            Domain.Enums.InvoiceStatus.Packing
+        };
         var invoicedLotNumbers = await _auctionDb.Invoices
             .Where(i => !i.IsCreditNote)
             .SelectMany(i => i.Lines.Select(l => new { l.LotNumber, i.Status }))
             .ToListAsync();
         var invoicedLots = new HashSet<int>(invoicedLotNumbers.Select(x => x.LotNumber));
         var paidLots = new HashSet<int>(invoicedLotNumbers
-            .Where(x => x.Status == Domain.Enums.InvoiceStatus.Paid)
+            .Where(x => paidStatuses.Contains(x.Status))
             .Select(x => x.LotNumber));
 
         // Pre-load farmer's skin count per box from snapshot
