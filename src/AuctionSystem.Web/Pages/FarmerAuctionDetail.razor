@@ -58,6 +58,12 @@ else
 
     @if (_activeTab == "results")
     {
+        <div class="bg-white border rounded p-2 mb-3 d-flex gap-4" style="font-size:0.9rem;">
+            <span><span class="badge bg-primary">Hammer</span> Lot has hammer price</span>
+            <span><span class="badge bg-success">Sold</span> Invoiced</span>
+            <span><span class="badge bg-secondary">Auction</span> Still to be auctioned</span>
+        </div>
+
         @* Breadcrumb *@
         <nav class="mb-3" style="font-size:0.95rem;">
             @for (int i = 0; i < _breadcrumbs.Count; i++)
@@ -136,6 +142,12 @@ else
     }
     else if (_activeTab == "catalog")
     {
+        <div class="bg-white border rounded p-2 mb-3 d-flex gap-4" style="font-size:0.9rem;">
+            <span><span class="badge bg-primary">Hammer</span> Lot has hammer price</span>
+            <span><span class="badge bg-success">Sold</span> Invoiced</span>
+            <span><span class="badge bg-secondary">Auction</span> Still to be auctioned</span>
+        </div>
+
         <div class="mb-3">
             <button class="btn btn-primary" @onclick="DownloadCatalogPdf" disabled="@_downloadingPdf">
                 @if (_downloadingPdf)
