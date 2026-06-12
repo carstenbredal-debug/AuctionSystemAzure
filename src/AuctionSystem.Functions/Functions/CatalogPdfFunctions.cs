@@ -428,7 +428,7 @@ public class CatalogPdfFunctions
         {
             table.Cell().Element(CellStyle).AlignRight().Text(sale.HasResult ? $"\u20ac{sale.PricePerSkin:N2}" : "-");
             table.Cell().Element(CellStyle).AlignRight().Text(sale.HasResult ? $"\u20ac{sale.Value:N2}" : "-");
-            table.Cell().Element(CellStyle).Text(sale.HasResult ? sale.Status : "").FontColor(sale.IsSoldToBuyer ? Colors.Green.Darken2 : sale.HasResult ? Colors.Blue.Darken2 : Colors.Grey.Medium).Bold();
+            table.Cell().Element(CellStyle).Text(sale.PdfStatus).FontColor(sale.IsSoldToBuyer ? Colors.Green.Darken2 : sale.HasResult ? Colors.Blue.Darken2 : Colors.Grey.Medium).Bold();
         }
         else if (isFarmerCatalog)
         {
@@ -490,7 +490,7 @@ public class CatalogPdfFunctions
                     {
                         Cell().AlignRight().Text(sale.HasResult ? $"\u20ac{sale.PricePerSkin:N2}" : "-");
                         Cell().AlignRight().Text(sale.HasResult ? $"\u20ac{sale.Value:N2}" : "-");
-                        Cell().Text(sale.HasResult ? sale.Status : "").FontColor(sale.IsSoldToBuyer ? Colors.Green.Darken2 : sale.HasResult ? Colors.Blue.Darken2 : Colors.Grey.Medium).Bold();
+                        Cell().Text(sale.PdfStatus).FontColor(sale.IsSoldToBuyer ? Colors.Green.Darken2 : sale.HasResult ? Colors.Blue.Darken2 : Colors.Grey.Medium).Bold();
                     }
                     else if (isFarmerCatalog)
                     {
@@ -636,5 +636,6 @@ public class CatalogPdfFunctions
         public decimal Value { get; set; }
         public int FarmerSkins { get; set; }
         public string Status => IsSoldToBuyer ? "Sold" : HasResult ? "Hammer" : "Auction";
+        public string PdfStatus => IsSoldToBuyer ? "Sold" : HasResult ? "Hmr" : "";
     }
 }
