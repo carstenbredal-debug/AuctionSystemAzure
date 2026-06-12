@@ -71,6 +71,7 @@ else
                         <th>Gender</th>
                         <th>Group</th>
                         <th>Quality</th>
+                        <th>Hair Length</th>
                         <th>Size</th>
                         <th>Color</th>
                         <th>Clarity</th>
@@ -88,6 +89,7 @@ else
                             <td>@lot.Gender</td>
                             <td>@lot.Group</td>
                             <td>@lot.Quality</td>
+                            <td>@lot.HairLength</td>
                             <td>@lot.Size</td>
                             <td>@lot.Color</td>
                             <td>@lot.Clarity</td>
@@ -245,6 +247,7 @@ else
         public string? Size { get; set; }
         public string? Color { get; set; }
         public string? Clarity { get; set; }
+        public string? HairLength { get; set; }
         public string Status { get; set; } = "";
         public decimal? PricePerSkin { get; set; }
         public decimal? HammerPrice { get; set; }
