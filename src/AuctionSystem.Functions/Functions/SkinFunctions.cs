@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using AuctionSystem.Domain.Data;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace AuctionSystem.Functions.Functions;
@@ -220,61 +221,58 @@ public class SkinFunctions
             return badResponse;
         }
 
-        // Get all lot numbers for this auction from the Lots table
-        var auctionLotNumbers = await _auctionDb.Lots
-            .Where(l => l.AuctionId == auctionId.Value)
-            .Select(l => l.LotNumber)
-            .ToListAsync();
-
-        // Get catalog lots to find box numbers
-        var catalogLots = await _catalogDb.CatalogLots
-            .Where(cl => auctionLotNumbers.Contains(cl.LotNumber))
-            .ToListAsync();
-
-        var allBoxNumbers = catalogLots
-            .Where(cl => !string.IsNullOrEmpty(cl.IncludedBoxNumbers))
-            .SelectMany(cl => cl.IncludedBoxNumbers!.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                .Select(b => int.TryParse(b.Trim(), out var n) ? n : 0)
-                .Where(n => n > 0))
-            .Distinct()
-            .ToList();
-
-        // Count total skins for this farmer in this auction's boxes
-        var totalSkins = await _catalogDb.Skins
-            .CountAsync(s => s.IsActive && s.Farmer == farmerName && allBoxNumbers.Contains(s.BoxNumber));
-
-        // Get sold box info for this auction
-        var saleInfoByBox = await GetSoldBoxSaleInfoAsync(auctionId.Value);
-
-        // Count sold skins for this farmer
-        var soldBoxNumbers = allBoxNumbers.Where(b => saleInfoByBox.ContainsKey(b)).ToList();
-        var soldSkinCount = 0;
-        decimal totalValue = 0;
-
-        if (soldBoxNumbers.Count > 0)
+        var auction = await _auctionDb.Auctions.FindAsync(auctionId.Value);
+        if (auction == null)
         {
-            // Get farmer's skins in sold boxes, grouped by box
-            var farmerSoldSkins = await _catalogDb.Skins
-                .Where(s => s.IsActive && s.Farmer == farmerName && soldBoxNumbers.Contains(s.BoxNumber))
-                .GroupBy(s => s.BoxNumber)
-                .Select(g => new { BoxNumber = g.Key, Count = g.Count() })
-                .ToListAsync();
+            var notFound = req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+            await notFound.WriteStringAsync("Auction not found");
+            return notFound;
+        }
 
-            foreach (var boxGroup in farmerSoldSkins)
+        // Read from auction snapshot table: auction.[{auctionNumber}.Skins]
+        var skinsTable = $"auction.[{auction.AuctionNumber}.Skins]";
+        var connStr = _auctionDb.Database.GetConnectionString()!;
+
+        int totalSkins = 0;
+        var skinsByBox = new Dictionary<int, int>(); // boxNumber → count
+
+        await using (var conn = new SqlConnection(connStr))
+        {
+            await conn.OpenAsync();
+
+            // Total skins for this farmer in the snapshot
+            await using (var cmd = new SqlCommand($"SELECT BoxNumber, COUNT(*) AS Cnt FROM {skinsTable} WHERE IsActive = 1 AND Farmer = @farmer GROUP BY BoxNumber", conn))
             {
-                if (saleInfoByBox.TryGetValue(boxGroup.BoxNumber, out var info))
+                cmd.Parameters.AddWithValue("@farmer", farmerName);
+                await using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
                 {
-                    soldSkinCount += boxGroup.Count;
-                    totalValue += boxGroup.Count * info.PriceEur;
+                    var box = reader.GetInt32(0);
+                    var cnt = reader.GetInt32(1);
+                    skinsByBox[box] = cnt;
+                    totalSkins += cnt;
                 }
             }
         }
 
-        var auction = await _auctionDb.Auctions.FindAsync(auctionId.Value);
+        // Get sold box info for this auction
+        var saleInfoByBox = await GetSoldBoxSaleInfoAsync(auctionId.Value);
+
+        var soldSkinCount = 0;
+        decimal totalValue = 0;
+        foreach (var (box, count) in skinsByBox)
+        {
+            if (saleInfoByBox.TryGetValue(box, out var info))
+            {
+                soldSkinCount += count;
+                totalValue += count * info.PriceEur;
+            }
+        }
+
         var result = new
         {
             auctionId = auctionId.Value,
-            auctionNumber = auction?.AuctionNumber ?? $"{auctionId}",
+            auctionNumber = auction.AuctionNumber,
             farmerName,
             totalSkins,
             soldSkins = soldSkinCount,
@@ -301,45 +299,63 @@ public class SkinFunctions
             return badResponse;
         }
 
-        // Get all skins for this farmer grouped by auction
-        var farmerSkins = await _catalogDb.Skins
-            .Where(s => s.IsActive && s.Farmer == farmerName)
-            .GroupBy(s => s.Auction ?? "Unknown")
-            .Select(g => new
-            {
-                Auction = g.Key,
-                TotalSkins = g.Count(),
-                BoxNumbers = g.Select(s => s.BoxNumber).Distinct().ToList()
-            })
-            .ToListAsync();
+        // Get all auctions
+        var auctions = await _auctionDb.Auctions.ToListAsync();
+        var connStr = _auctionDb.Database.GetConnectionString()!;
+        var summaries = new List<object>();
 
-        // Get sold box info to determine which skins are sold and their value
-        var saleInfoByBox = await GetSoldBoxSaleInfoAsync();
-
-        var summaries = farmerSkins.Select(a =>
+        foreach (var auction in auctions)
         {
-            var soldBoxes = a.BoxNumbers.Where(b => saleInfoByBox.ContainsKey(b)).ToList();
-            // Count sold skins (skins in sold boxes)
-            var soldSkinCount = 0;
-            decimal totalValue = 0;
-            foreach (var box in soldBoxes)
+            var skinsTable = $"auction.[{auction.AuctionNumber}.Skins]";
+            var skinsByBox = new Dictionary<int, int>();
+            int totalSkins = 0;
+
+            try
             {
-                var info = saleInfoByBox[box];
-                // Count skins in this box belonging to this farmer
-                var skinsInBox = _catalogDb.Skins
-                    .Count(s => s.IsActive && s.BoxNumber == box && s.Farmer == farmerName);
-                soldSkinCount += skinsInBox;
-                totalValue += skinsInBox * info.PriceEur;
+                await using var conn = new SqlConnection(connStr);
+                await conn.OpenAsync();
+
+                await using var cmd = new SqlCommand($"SELECT BoxNumber, COUNT(*) AS Cnt FROM {skinsTable} WHERE IsActive = 1 AND Farmer = @farmer GROUP BY BoxNumber", conn);
+                cmd.Parameters.AddWithValue("@farmer", farmerName);
+                await using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    var box = reader.GetInt32(0);
+                    var cnt = reader.GetInt32(1);
+                    skinsByBox[box] = cnt;
+                    totalSkins += cnt;
+                }
+            }
+            catch
+            {
+                // Snapshot table may not exist for this auction
+                continue;
             }
 
-            return new
+            if (totalSkins == 0) continue;
+
+            var saleInfoByBox = await GetSoldBoxSaleInfoAsync(auction.Id);
+
+            var soldSkinCount = 0;
+            decimal totalValue = 0;
+            foreach (var (box, count) in skinsByBox)
             {
-                auction = a.Auction,
-                totalSkins = a.TotalSkins,
+                if (saleInfoByBox.TryGetValue(box, out var info))
+                {
+                    soldSkinCount += count;
+                    totalValue += count * info.PriceEur;
+                }
+            }
+
+            summaries.Add(new
+            {
+                auctionId = auction.Id,
+                auction = auction.AuctionNumber,
+                totalSkins,
                 soldSkins = soldSkinCount,
                 totalValue
-            };
-        }).ToList();
+            });
+        }
 
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
