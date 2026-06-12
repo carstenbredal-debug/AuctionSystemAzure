@@ -326,7 +326,7 @@ public class SkinFunctions
 
         await using var cmd = new SqlCommand($@"
             SELECT l.LotNumber, l.IncludedBoxNumbers,
-                   l.SalesType, l.Gender, l.[Group], l.Quality, l.HairLength, l.Size, l.Color, l.Clarity
+                   l.SalesType, l.Gender, l.[Group], l.Quality, l.HairLength, l.Size, l.Color, l.Clarity, l.Damages
             FROM {lotsTable} l
             ORDER BY l.LotNumber", conn);
         cmd.CommandTimeout = 60;
@@ -369,6 +369,7 @@ public class SkinFunctions
                 size = reader.IsDBNull(7) ? null : reader.GetString(7),
                 color = reader.IsDBNull(8) ? null : reader.GetString(8),
                 clarity = reader.IsDBNull(9) ? null : reader.GetString(9),
+                damages = reader.IsDBNull(10) ? null : reader.GetString(10),
                 status = isSold ? "Sold" : "Auction",
                 soldValue = soldValue > 0 ? soldValue : (decimal?)null
             });

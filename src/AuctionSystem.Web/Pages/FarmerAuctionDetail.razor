@@ -102,6 +102,7 @@ else
                         <th>Size</th>
                         <th>Color</th>
                         <th>Clarity</th>
+                        <th>Damages</th>
                         <th class="text-end">Value of Sold Skins</th>
                         <th>Status</th>
                     </tr>
@@ -120,6 +121,7 @@ else
                             <td>@lot.Size</td>
                             <td>@lot.Color</td>
                             <td>@lot.Clarity</td>
+                            <td>@lot.Damages</td>
                             <td class="text-end">@(lot.SoldValue.HasValue ? $"€{lot.SoldValue:N2}" : "-")</td>
                             <td><span class="badge @(lot.Status == "Sold" ? "bg-success" : "bg-secondary")">@lot.Status</span></td>
                         </tr>
@@ -140,7 +142,7 @@ else
     private int _soldSkins;
     private decimal _totalValue;
 
-    private static readonly string[] _levels = { "Type", "Gender", "Group", "Hair Length", "Size", "Quality", "Color", "Clarity" };
+    private static readonly string[] _levels = { "Type", "Gender", "Group", "Hair Length", "Size", "Quality", "Color", "Clarity", "Damages" };
 
     private int _currentLevel;
     private List<string> _breadcrumbs = new() { "Types" };
@@ -197,6 +199,7 @@ else
         5 => lot.Quality,
         6 => lot.Color,
         7 => lot.Clarity,
+        8 => lot.Damages,
         _ => null
     };
 
@@ -301,6 +304,7 @@ else
         public string? Size { get; set; }
         public string? Color { get; set; }
         public string? Clarity { get; set; }
+        public string? Damages { get; set; }
         public string Status { get; set; } = "";
         public decimal? SoldValue { get; set; }
     }
