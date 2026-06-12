@@ -317,42 +317,35 @@ public class SkinFunctions
                 farmerSkinsByBox[preReader.GetInt32(0)] = preReader.GetInt32(1);
         }
 
+        // Load all lots (fast, no correlated subquery)
         var lots = new List<object>();
+        var farmerBoxNumbers = new HashSet<int>(farmerSkinsByBox.Keys);
+
         await using var conn = new SqlConnection(connStr);
         await conn.OpenAsync();
 
-        // Get lots that contain this farmer's skins, counting only farmer's skins per lot
         await using var cmd = new SqlCommand($@"
             SELECT l.LotNumber, l.IncludedBoxNumbers,
-                   (SELECT COUNT(*) FROM {skinsTable} s
-                    WHERE s.Farmer = @farmer
-                    AND s.BoxNumber IN (
-                        SELECT CAST(LTRIM(RTRIM(value)) AS INT)
-                        FROM STRING_SPLIT(l.IncludedBoxNumbers, ',')
-                        WHERE ISNUMERIC(LTRIM(RTRIM(value))) = 1
-                    )) AS FarmerSkins,
-                   l.SalesType, l.Gender, l.[Group], l.Quality, l.HairLength, l.Size, l.Color, l.Clarity, l.Damages
+                   l.SalesType, l.Gender, l.[Group], l.Quality, l.HairLength, l.Size, l.Color, l.Clarity
             FROM {lotsTable} l
-            WHERE EXISTS (
-                SELECT 1 FROM {skinsTable} s
-                WHERE s.Farmer = @farmer
-                AND s.BoxNumber IN (
-                    SELECT CAST(LTRIM(RTRIM(value)) AS INT)
-                    FROM STRING_SPLIT(l.IncludedBoxNumbers, ',')
-                    WHERE ISNUMERIC(LTRIM(RTRIM(value))) = 1
-                )
-            )
             ORDER BY l.LotNumber", conn);
-        cmd.Parameters.AddWithValue("@farmer", farmerName);
+        cmd.CommandTimeout = 60;
 
         await using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {
             var lotNumber = reader.GetInt32(0);
             var boxNumbersCsv = reader.IsDBNull(1) ? "" : reader.GetString(1);
-            var farmerSkins = reader.GetInt32(2);
             var boxNumbers = boxNumbersCsv.Split(',', StringSplitOptions.RemoveEmptyEntries)
                 .Select(b => int.TryParse(b.Trim(), out var n) ? n : 0).Where(n => n > 0).ToList();
+
+            // Count only farmer's skins in this lot's boxes
+            var farmerSkins = 0;
+            foreach (var bn in boxNumbers)
+                if (farmerSkinsByBox.TryGetValue(bn, out var cnt))
+                    farmerSkins += cnt;
+
+            if (farmerSkins == 0) continue; // Skip lots with no farmer skins
 
             var isSold = boxNumbers.Any(b => saleInfoByBox.ContainsKey(b));
 
@@ -368,15 +361,14 @@ public class SkinFunctions
             {
                 lotNumber,
                 totalSkins = farmerSkins,
-                salesType = reader.IsDBNull(3) ? null : reader.GetString(3),
-                gender = reader.IsDBNull(4) ? null : reader.GetString(4),
-                group = reader.IsDBNull(5) ? null : reader.GetString(5),
-                quality = reader.IsDBNull(6) ? null : reader.GetString(6),
-                hairLength = reader.IsDBNull(7) ? null : reader.GetString(7),
-                size = reader.IsDBNull(8) ? null : reader.GetString(8),
-                color = reader.IsDBNull(9) ? null : reader.GetString(9),
-                clarity = reader.IsDBNull(10) ? null : reader.GetString(10),
-                damages = reader.IsDBNull(11) ? null : reader.GetString(11),
+                salesType = reader.IsDBNull(2) ? null : reader.GetString(2),
+                gender = reader.IsDBNull(3) ? null : reader.GetString(3),
+                group = reader.IsDBNull(4) ? null : reader.GetString(4),
+                quality = reader.IsDBNull(5) ? null : reader.GetString(5),
+                hairLength = reader.IsDBNull(6) ? null : reader.GetString(6),
+                size = reader.IsDBNull(7) ? null : reader.GetString(7),
+                color = reader.IsDBNull(8) ? null : reader.GetString(8),
+                clarity = reader.IsDBNull(9) ? null : reader.GetString(9),
                 status = isSold ? "Sold" : "Auction",
                 soldValue = soldValue > 0 ? soldValue : (decimal?)null
             });
