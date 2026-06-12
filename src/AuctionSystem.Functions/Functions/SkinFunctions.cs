@@ -312,7 +312,7 @@ public class SkinFunctions
         // Get lots that contain this farmer's skins
         await using var cmd = new SqlCommand($@"
             SELECT l.LotNumber, l.IncludedBoxNumbers, l.TotalSkins, l.BoxCount,
-                   l.SalesType, l.Gender, l.[Group], l.Quality, l.HairLength, l.Size, l.Color, l.Clarity
+                   l.SalesType, l.Gender, l.[Group], l.Quality, l.HairLength, l.Size, l.Color, l.Clarity, l.Damages
             FROM {lotsTable} l
             WHERE EXISTS (
                 SELECT 1 FROM {skinsTable} s
@@ -351,6 +351,7 @@ public class SkinFunctions
                 size = reader.IsDBNull(9) ? null : reader.GetString(9),
                 color = reader.IsDBNull(10) ? null : reader.GetString(10),
                 clarity = reader.IsDBNull(11) ? null : reader.GetString(11),
+                damages = reader.IsDBNull(12) ? null : reader.GetString(12),
                 status = isSold ? "Sold" : "Auction",
                 pricePerSkin = isSold ? pricePerSkin : (decimal?)null,
                 hammerPrice = isSold ? reader.GetInt32(2) * pricePerSkin : (decimal?)null
