@@ -133,6 +133,28 @@ public class CatalogPdfFunctions
 
             var rows = (await connection.QueryAsync<CatalogPdfRow>(sql, parameters)).ToList();
 
+            // Filter by farmer if specified
+            var farmerName = query["farmerName"];
+            if (!string.IsNullOrEmpty(farmerName))
+            {
+                var auctionNumber = query["auctionNumber"];
+                if (!string.IsNullOrEmpty(auctionNumber))
+                {
+                    var skinsTable = $"auction.[{auctionNumber}.Skins]";
+                    var farmerBoxes = new HashSet<int>();
+                    var boxSql = $"SELECT DISTINCT BoxNumber FROM {skinsTable} WHERE Farmer = @Farmer";
+                    var boxRows = await connection.QueryAsync<int>(boxSql, new { Farmer = farmerName });
+                    foreach (var b in boxRows) farmerBoxes.Add(b);
+
+                    rows = rows.Where(r =>
+                    {
+                        var boxes = (r.IncludedBoxNumbers ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries)
+                            .Select(b => int.TryParse(b.Trim(), out var n) ? n : 0).Where(n => n > 0);
+                        return boxes.Any(b => farmerBoxes.Contains(b));
+                    }).ToList();
+                }
+            }
+
             if (!rows.Any())
             {
                 var notFound = req.CreateResponse(HttpStatusCode.NotFound);

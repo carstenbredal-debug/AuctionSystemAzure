@@ -5,6 +5,7 @@
 @inject AuctionApiClient Api
 @inject NavigationManager Nav
 @inject AuthenticationStateProvider AuthState
+@inject IJSRuntime JS
 
 <PageTitle>Auction Detail - Farmer Portal</PageTitle>
 
@@ -45,75 +46,130 @@ else
         </div>
     </div>
 
-    @* Breadcrumb *@
-    <nav class="mb-3" style="font-size:0.95rem;">
-        @for (int i = 0; i < _breadcrumbs.Count; i++)
-        {
-            var idx = i;
-            @if (i > 0) { <span class="mx-1">/</span> }
-            @if (i < _breadcrumbs.Count - 1)
-            {
-                <a href="javascript:void(0)" @onclick="() => NavigateTo(idx)">@_breadcrumbs[idx]</a>
-            }
-            else
-            {
-                <span class="fw-bold">@_breadcrumbs[idx]</span>
-            }
-        }
-    </nav>
+    @* Tabs *@
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+            <a class="nav-link @(_activeTab == "results" ? "active" : "")" href="javascript:void(0)" @onclick='() => _activeTab = "results"'>Sales Results</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(_activeTab == "catalog" ? "active" : "")" href="javascript:void(0)" @onclick='() => _activeTab = "catalog"'>Farmer Catalog</a>
+        </li>
+    </ul>
 
-    @if (_currentLevel < _levels.Count)
+    @if (_activeTab == "results")
     {
-        <div class="table-responsive">
-            <table class="table table-striped table-hover">
-                <thead class="table-dark">
-                    <tr>
-                        <th>@_levels[_currentLevel].DisplayName</th>
-                        <th>Skins</th>
-                        <th class="text-end">Value of Sold Skins</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var row in _groupRows)
-                    {
-                        <tr style="cursor:pointer" @onclick="() => DrillDown(row.Key)">
-                            <td>@(string.IsNullOrEmpty(row.Key) ? "-" : row.Key)</td>
-                            <td>@row.SkinCount.ToString("N0")</td>
-                            <td class="text-end">@(row.SoldValue > 0 ? $"€{row.SoldValue:N2}" : "-")</td>
+        @* Breadcrumb *@
+        <nav class="mb-3" style="font-size:0.95rem;">
+            @for (int i = 0; i < _breadcrumbs.Count; i++)
+            {
+                var idx = i;
+                @if (i > 0) { <span class="mx-1">/</span> }
+                @if (i < _breadcrumbs.Count - 1)
+                {
+                    <a href="javascript:void(0)" @onclick="() => NavigateTo(idx)">@_breadcrumbs[idx]</a>
+                }
+                else
+                {
+                    <span class="fw-bold">@_breadcrumbs[idx]</span>
+                }
+            }
+        </nav>
+
+        @if (_currentLevel < _levels.Count)
+        {
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>@_levels[_currentLevel].DisplayName</th>
+                            <th>Skins</th>
+                            <th class="text-end">Value of Sold Skins</th>
                         </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _groupRows)
+                        {
+                            <tr style="cursor:pointer" @onclick="() => DrillDown(row.Key)">
+                                <td>@(string.IsNullOrEmpty(row.Key) ? "-" : row.Key)</td>
+                                <td>@row.SkinCount.ToString("N0")</td>
+                                <td class="text-end">@(row.SoldValue > 0 ? $"€{row.SoldValue:N2}" : "-")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Lot Number</th>
+                            <th>Skins</th>
+                            @foreach (var lvl in _levels)
+                            {
+                                <th>@lvl.DisplayName</th>
+                            }
+                            <th class="text-end">Value of Sold Skins</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var lot in _filteredLots)
+                        {
+                            <tr>
+                                <td>@lot.LotNumber</td>
+                                <td>@lot.TotalSkins</td>
+                                @foreach (var lvl in _levels)
+                                {
+                                    <td>@(GetLotFieldByColumn(lot, lvl.ColumnName) ?? "")</td>
+                                }
+                                <td class="text-end">@(lot.SoldValue.HasValue ? $"€{lot.SoldValue:N2}" : "-")</td>
+                                <td><span class="badge @(lot.Status == "Sold" ? "bg-success" : "bg-secondary")">@lot.Status</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
     }
-    else
+    else if (_activeTab == "catalog")
     {
+        <div class="mb-3">
+            <button class="btn btn-primary" @onclick="DownloadCatalogPdf" disabled="@_downloadingPdf">
+                @if (_downloadingPdf)
+                {
+                    <span class="spinner-border spinner-border-sm me-1"></span>
+                    <span>Generating PDF...</span>
+                }
+                else
+                {
+                    <i class="bi bi-file-earmark-pdf me-1"></i>
+                    <span>Download Catalog PDF</span>
+                }
+            </button>
+        </div>
+
+        @* Show lots in catalog format *@
         <div class="table-responsive">
             <table class="table table-striped">
                 <thead class="table-dark">
                     <tr>
-                        <th>Lot Number</th>
+                        <th>Lot</th>
                         <th>Skins</th>
-                        @foreach (var lvl in _levels)
-                        {
-                            <th>@lvl.DisplayName</th>
-                        }
-                        <th class="text-end">Value of Sold Skins</th>
-                        <th>Status</th>
+                        <th>Description</th>
+                        <th>Section</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var lot in _filteredLots)
+                    @foreach (var lot in _lots.OrderBy(l => l.LotNumber))
                     {
                         <tr>
                             <td>@lot.LotNumber</td>
                             <td>@lot.TotalSkins</td>
-                            @foreach (var lvl in _levels)
-                            {
-                                <td>@(GetLotFieldByColumn(lot, lvl.ColumnName) ?? "")</td>
-                            }
-                            <td class="text-end">@(lot.SoldValue.HasValue ? $"€{lot.SoldValue:N2}" : "-")</td>
-                            <td><span class="badge @(lot.Status == "Sold" ? "bg-success" : "bg-secondary")">@lot.Status</span></td>
+                            <td>@BuildDescription(lot)</td>
+                            <td>@lot.SalesType - @lot.Gender - @lot.Group</td>
                         </tr>
                     }
                 </tbody>
@@ -131,6 +187,8 @@ else
     private int _totalSkins;
     private int _soldSkins;
     private decimal _totalValue;
+    private string _activeTab = "results";
+    private bool _downloadingPdf;
 
     private List<DrillLevel> _levels = new();
     private int _currentLevel;
@@ -304,6 +362,31 @@ else
         }
         BuildGroupRows();
         StateHasChanged();
+    }
+
+    private async Task DownloadCatalogPdf()
+    {
+        _downloadingPdf = true;
+        StateHasChanged();
+
+        try
+        {
+            var pdfUrl = $"api/catalog/pdf?auctionNumber={Uri.EscapeDataString(_auctionNumber)}&farmerName={Uri.EscapeDataString(_farmerName)}";
+            await JS.InvokeVoidAsync("open", pdfUrl, "_blank");
+        }
+        finally
+        {
+            _downloadingPdf = false;
+            StateHasChanged();
+        }
+    }
+
+    private static string BuildDescription(LotRow lot)
+    {
+        var parts = new List<string?> { lot.HairLength, lot.Size, lot.Quality, lot.Color, lot.Clarity };
+        if (!string.IsNullOrWhiteSpace(lot.Damages) && !string.Equals(lot.Damages, "None", StringComparison.OrdinalIgnoreCase))
+            parts.Add(lot.Damages);
+        return string.Join(" / ", parts.Where(x => !string.IsNullOrWhiteSpace(x)));
     }
 
     private async Task<string?> ResolveFarmerNameAsync()
