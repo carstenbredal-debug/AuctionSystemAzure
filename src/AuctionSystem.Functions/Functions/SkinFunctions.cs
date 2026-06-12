@@ -351,11 +351,19 @@ public class SkinFunctions
 
             // Calculate value from farmer's skins in SOLD boxes only
             decimal soldValue = 0;
+            int soldSkinCount = 0;
             foreach (var bn in boxNumbers)
             {
                 if (saleInfoByBox.TryGetValue(bn, out var info) && farmerSkinsByBox.TryGetValue(bn, out var skinCount))
+                {
                     soldValue += skinCount * info.PriceEur;
+                    soldSkinCount += skinCount;
+                }
             }
+
+            decimal? pricePerSkin = isSold && soldSkinCount > 0
+                ? Math.Round(soldValue / soldSkinCount, 2)
+                : null;
 
             lots.Add(new
             {
@@ -371,7 +379,8 @@ public class SkinFunctions
                 clarity = reader.IsDBNull(9) ? null : reader.GetString(9),
                 damages = reader.IsDBNull(10) ? null : reader.GetString(10),
                 status = isSold ? "Sold" : "Auction",
-                soldValue = soldValue > 0 ? soldValue : (decimal?)null
+                soldValue = soldValue > 0 ? soldValue : (decimal?)null,
+                pricePerSkin
             });
         }
 
