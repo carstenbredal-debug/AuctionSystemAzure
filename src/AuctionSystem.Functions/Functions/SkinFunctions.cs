@@ -305,6 +305,18 @@ public class SkinFunctions
 
         var saleInfoByBox = await GetSoldBoxSaleInfoAsync(auctionId.Value);
 
+        // Pre-load farmer's skin count per box from snapshot
+        var farmerSkinsByBox = new Dictionary<int, int>();
+        await using (var preConn = new SqlConnection(connStr))
+        {
+            await preConn.OpenAsync();
+            await using var preCmd = new SqlCommand($"SELECT BoxNumber, COUNT(*) FROM {skinsTable} WHERE Farmer = @farmer GROUP BY BoxNumber", preConn);
+            preCmd.Parameters.AddWithValue("@farmer", farmerName);
+            await using var preReader = await preCmd.ExecuteReaderAsync();
+            while (await preReader.ReadAsync())
+                farmerSkinsByBox[preReader.GetInt32(0)] = preReader.GetInt32(1);
+        }
+
         var lots = new List<object>();
         await using var conn = new SqlConnection(connStr);
         await conn.OpenAsync();
@@ -343,8 +355,14 @@ public class SkinFunctions
                 .Select(b => int.TryParse(b.Trim(), out var n) ? n : 0).Where(n => n > 0).ToList();
 
             var isSold = boxNumbers.Any(b => saleInfoByBox.ContainsKey(b));
-            var pricePerSkin = boxNumbers.Where(b => saleInfoByBox.ContainsKey(b))
-                .Select(b => saleInfoByBox[b].PriceEur).FirstOrDefault();
+
+            // Calculate value from farmer's skins in SOLD boxes only
+            decimal soldValue = 0;
+            foreach (var bn in boxNumbers)
+            {
+                if (saleInfoByBox.TryGetValue(bn, out var info) && farmerSkinsByBox.TryGetValue(bn, out var skinCount))
+                    soldValue += skinCount * info.PriceEur;
+            }
 
             lots.Add(new
             {
@@ -360,8 +378,7 @@ public class SkinFunctions
                 clarity = reader.IsDBNull(10) ? null : reader.GetString(10),
                 damages = reader.IsDBNull(11) ? null : reader.GetString(11),
                 status = isSold ? "Sold" : "Auction",
-                pricePerSkin = isSold ? pricePerSkin : (decimal?)null,
-                hammerPrice = isSold ? farmerSkins * pricePerSkin : (decimal?)null
+                soldValue = soldValue > 0 ? soldValue : (decimal?)null
             });
         }
 

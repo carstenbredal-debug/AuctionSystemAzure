@@ -70,7 +70,7 @@ else
                     <tr>
                         <th>@_levels[_currentLevel]</th>
                         <th>Skins</th>
-                        <th class="text-end">Value</th>
+                        <th class="text-end">Value of Sold Skins</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -79,7 +79,7 @@ else
                         <tr style="cursor:pointer" @onclick="() => DrillDown(row.Key)">
                             <td>@(string.IsNullOrEmpty(row.Key) ? "-" : row.Key)</td>
                             <td>@row.SkinCount.ToString("N0")</td>
-                            <td class="text-end">@(row.TotalValue > 0 ? $"€{row.TotalValue:N2}" : "-")</td>
+                            <td class="text-end">@(row.SoldValue > 0 ? $"€{row.SoldValue:N2}" : "-")</td>
                         </tr>
                     }
                 </tbody>
@@ -103,7 +103,7 @@ else
                         <th>Color</th>
                         <th>Clarity</th>
                         <th>Damages</th>
-                        <th class="text-end">Value</th>
+                        <th class="text-end">Value of Sold Skins</th>
                         <th>Status</th>
                     </tr>
                 </thead>
@@ -122,7 +122,7 @@ else
                             <td>@lot.Color</td>
                             <td>@lot.Clarity</td>
                             <td>@lot.Damages</td>
-                            <td class="text-end">@(lot.HammerPrice.HasValue ? $"€{lot.HammerPrice:N2}" : "-")</td>
+                            <td class="text-end">@(lot.SoldValue.HasValue ? $"€{lot.SoldValue:N2}" : "-")</td>
                             <td><span class="badge @(lot.Status == "Sold" ? "bg-success" : "bg-secondary")">@lot.Status</span></td>
                         </tr>
                     }
@@ -227,7 +227,7 @@ else
                 {
                     Key = g.Key,
                     SkinCount = g.Sum(l => l.TotalSkins),
-                    TotalValue = g.Sum(l => l.HammerPrice ?? 0m)
+                    SoldValue = g.Sum(l => l.SoldValue ?? 0m)
                 })
                 .OrderByDescending(r => r.SkinCount)
                 .ToList();
@@ -289,7 +289,7 @@ else
     {
         public string Key { get; set; } = "";
         public int SkinCount { get; set; }
-        public decimal TotalValue { get; set; }
+        public decimal SoldValue { get; set; }
     }
 
     private class LotRow
@@ -306,7 +306,6 @@ else
         public string? Clarity { get; set; }
         public string? Damages { get; set; }
         public string Status { get; set; } = "";
-        public decimal? PricePerSkin { get; set; }
-        public decimal? HammerPrice { get; set; }
+        public decimal? SoldValue { get; set; }
     }
 }
