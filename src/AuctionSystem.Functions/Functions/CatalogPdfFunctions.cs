@@ -162,22 +162,23 @@ public class CatalogPdfFunctions
                     }).ToList();
 
                     // Load lot results from AuctionResults (any typist result = hammer price)
-                    var soldSql = @"SELECT ar.LotNumber, ar.PriceEur
+                    var soldSql = @"SELECT ar.LotNumber, ar.PriceEur, CASE WHEN ar.SoldToBuyerId IS NOT NULL THEN 1 ELSE 0 END AS IsSoldToBuyer
                         FROM auction.AuctionResults ar
                         INNER JOIN auction.Lots l ON ar.LotNumber = l.LotNumber
                         INNER JOIN auction.Auctions a ON l.AuctionId = a.Id
                         WHERE a.AuctionNumber = @AuctionNumber";
                     var soldRows = await connection.QueryAsync<dynamic>(soldSql, new { AuctionNumber = auctionNumber });
-                    var soldByLot = new Dictionary<int, decimal>();
+                    var resultByLot = new Dictionary<int, (decimal Price, bool IsSoldToBuyer)>();
                     foreach (var s in soldRows)
-                        soldByLot[(int)s.LotNumber] = (decimal)s.PriceEur;
+                        resultByLot[(int)s.LotNumber] = ((decimal)s.PriceEur, (int)s.IsSoldToBuyer == 1);
 
                     // Compute sale data per catalog lot
                     foreach (var r in rows)
                     {
                         var boxes = (r.IncludedBoxNumbers ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries)
                             .Select(b => int.TryParse(b.Trim(), out var n) ? n : 0).Where(n => n > 0).ToList();
-                        var isSold = soldByLot.ContainsKey(r.LotNumber);
+                        var hasResult = resultByLot.ContainsKey(r.LotNumber);
+                        var isSoldToBuyer = hasResult && resultByLot[r.LotNumber].IsSoldToBuyer;
                         decimal value = 0;
                         int farmerSkins = 0;
                         foreach (var bn in boxes)
@@ -185,14 +186,15 @@ public class CatalogPdfFunctions
                             if (farmerSkinsByBox.TryGetValue(bn, out var cnt))
                             {
                                 farmerSkins += cnt;
-                                if (isSold)
-                                    value += cnt * soldByLot[r.LotNumber];
+                                if (hasResult)
+                                    value += cnt * resultByLot[r.LotNumber].Price;
                             }
                         }
                         lotSaleData[r.LotNumber] = new LotSaleInfo
                         {
-                            IsSold = isSold,
-                            PricePerSkin = isSold ? soldByLot[r.LotNumber] : 0,
+                            HasResult = hasResult,
+                            IsSoldToBuyer = isSoldToBuyer,
+                            PricePerSkin = hasResult ? resultByLot[r.LotNumber].Price : 0,
                             Value = value,
                             FarmerSkins = farmerSkins
                         };
@@ -424,9 +426,9 @@ public class CatalogPdfFunctions
 
         if (isFarmerCatalog && lotSaleData != null && lotSaleData.TryGetValue(row.LotNumber, out var sale))
         {
-            table.Cell().Element(CellStyle).AlignRight().Text(sale.IsSold ? $"\u20ac{sale.PricePerSkin:N2}" : "-");
-            table.Cell().Element(CellStyle).AlignRight().Text(sale.IsSold ? $"\u20ac{sale.Value:N2}" : "-");
-            table.Cell().Element(CellStyle).Text(sale.IsSold ? "Hammer" : "").FontColor(sale.IsSold ? Colors.Green.Darken2 : Colors.Grey.Medium).Bold();
+            table.Cell().Element(CellStyle).AlignRight().Text(sale.HasResult ? $"\u20ac{sale.PricePerSkin:N2}" : "-");
+            table.Cell().Element(CellStyle).AlignRight().Text(sale.HasResult ? $"\u20ac{sale.Value:N2}" : "-");
+            table.Cell().Element(CellStyle).Text(sale.HasResult ? sale.Status : "").FontColor(sale.IsSoldToBuyer ? Colors.Green.Darken2 : sale.HasResult ? Colors.Blue.Darken2 : Colors.Grey.Medium).Bold();
         }
         else if (isFarmerCatalog)
         {
@@ -486,9 +488,9 @@ public class CatalogPdfFunctions
 
                     if (isFarmerCatalog && lotSaleData != null && lotSaleData.TryGetValue(row.LotNumber, out var sale))
                     {
-                        Cell().AlignRight().Text(sale.IsSold ? $"\u20ac{sale.PricePerSkin:N2}" : "-");
-                        Cell().AlignRight().Text(sale.IsSold ? $"\u20ac{sale.Value:N2}" : "-");
-                        Cell().Text(sale.IsSold ? "Hammer" : "").FontColor(sale.IsSold ? Colors.Green.Darken2 : Colors.Grey.Medium).Bold();
+                        Cell().AlignRight().Text(sale.HasResult ? $"\u20ac{sale.PricePerSkin:N2}" : "-");
+                        Cell().AlignRight().Text(sale.HasResult ? $"\u20ac{sale.Value:N2}" : "-");
+                        Cell().Text(sale.HasResult ? sale.Status : "").FontColor(sale.IsSoldToBuyer ? Colors.Green.Darken2 : sale.HasResult ? Colors.Blue.Darken2 : Colors.Grey.Medium).Bold();
                     }
                     else if (isFarmerCatalog)
                     {
@@ -628,9 +630,11 @@ public class CatalogPdfFunctions
 
     private class LotSaleInfo
     {
-        public bool IsSold { get; set; }
+        public bool HasResult { get; set; }
+        public bool IsSoldToBuyer { get; set; }
         public decimal PricePerSkin { get; set; }
         public decimal Value { get; set; }
         public int FarmerSkins { get; set; }
+        public string Status => IsSoldToBuyer ? "Sold" : HasResult ? "Hammer" : "Auction";
     }
 }

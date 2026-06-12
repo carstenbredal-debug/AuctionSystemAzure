@@ -347,9 +347,10 @@ public class SkinFunctions
 
             if (farmerSkins == 0) continue; // Skip lots with no farmer skins
 
-            var isSold = boxNumbers.Any(b => saleInfoByBox.ContainsKey(b));
+            var hasResult = boxNumbers.Any(b => saleInfoByBox.ContainsKey(b));
+            var isSoldToBuyer = boxNumbers.Any(b => saleInfoByBox.TryGetValue(b, out var si) && si.IsSoldToBuyer);
 
-            // Calculate value from farmer's skins in SOLD boxes only
+            // Calculate value from farmer's skins in boxes with results
             decimal soldValue = 0;
             int soldSkinCount = 0;
             foreach (var bn in boxNumbers)
@@ -361,9 +362,11 @@ public class SkinFunctions
                 }
             }
 
-            decimal? pricePerSkin = isSold && soldSkinCount > 0
+            decimal? pricePerSkin = hasResult && soldSkinCount > 0
                 ? Math.Round(soldValue / soldSkinCount, 2)
                 : null;
+
+            string status = isSoldToBuyer ? "Sold" : hasResult ? "Hammer" : "Auction";
 
             lots.Add(new
             {
@@ -378,7 +381,7 @@ public class SkinFunctions
                 color = reader.IsDBNull(8) ? null : reader.GetString(8),
                 clarity = reader.IsDBNull(9) ? null : reader.GetString(9),
                 damages = reader.IsDBNull(10) ? null : reader.GetString(10),
-                status = isSold ? "Hammer" : "Auction",
+                status,
                 soldValue = soldValue > 0 ? soldValue : (decimal?)null,
                 pricePerSkin
             });
@@ -444,17 +447,18 @@ public class SkinFunctions
         while (await reader.ReadAsync())
         {
             var boxNum = reader.GetInt32(0);
-            var isSold = saleInfoByBox.ContainsKey(boxNum);
-            var price = isSold ? saleInfoByBox[boxNum].PriceEur : 0;
+            var hasBoxResult = saleInfoByBox.ContainsKey(boxNum);
+            var boxSoldToBuyer = hasBoxResult && saleInfoByBox[boxNum].IsSoldToBuyer;
+            var price = hasBoxResult ? saleInfoByBox[boxNum].PriceEur : 0;
 
             boxes.Add(new
             {
                 boxNumber = boxNum,
                 boxType = reader.IsDBNull(1) ? null : reader.GetString(1),
                 skinCount = reader.GetInt32(2),
-                status = isSold ? "Hammer" : "Auction",
-                pricePerSkin = isSold ? price : (decimal?)null,
-                value = isSold ? reader.GetInt32(2) * price : (decimal?)null
+                status = boxSoldToBuyer ? "Sold" : hasBoxResult ? "Hammer" : "Auction",
+                pricePerSkin = hasBoxResult ? price : (decimal?)null,
+                value = hasBoxResult ? reader.GetInt32(2) * price : (decimal?)null
             });
         }
 
@@ -641,7 +645,8 @@ public class SkinFunctions
                 r.LotNumber,
                 r.PriceEur,
                 BrokerName = r.Broker.CompanyName,
-                BuyerName = r.SoldToBuyer != null ? r.SoldToBuyer.Name : ""
+                BuyerName = r.SoldToBuyer != null ? r.SoldToBuyer.Name : "",
+                IsSoldToBuyer = r.SoldToBuyerId != null
             })
             .ToListAsync();
 
@@ -674,7 +679,8 @@ public class SkinFunctions
                         BrokerName = sale.BrokerName,
                         BuyerName = sale.BuyerName,
                         PriceEur = sale.PriceEur,
-                        LotNumber = lot.LotNumber
+                        LotNumber = lot.LotNumber,
+                        IsSoldToBuyer = sale.IsSoldToBuyer
                     };
                 }
             }
@@ -689,6 +695,7 @@ public class SkinFunctions
         public string BuyerName { get; set; } = "";
         public decimal PriceEur { get; set; }
         public int LotNumber { get; set; }
+        public bool IsSoldToBuyer { get; set; }
     }
 }
 
