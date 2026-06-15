@@ -22,10 +22,34 @@ public class BusinessCentralSyncService
     private readonly BlobStorageService _blobStorage;
     private readonly ILogger<BusinessCentralSyncService> _logger;
 
-    // BC service item numbers (same across dev/test/prod)
+    // Default BC service item numbers, used when the matching SystemParameters row is unset.
     private const string LotSaleItemNo = "LOTSALE";
     private const string AuctionFeeItemNo = "AUCTFEE";
     private const string CommissionItemNo = "BROKERCOMM";
+
+    // SystemParameters keys for the (UI-editable) BC item numbers.
+    private const string LotSaleItemKey = "BcItem_LotSale";
+    private const string AuctionFeeItemKey = "BcItem_AuctionFee";
+    private const string CommissionItemKey = "BcItem_Commission";
+
+    private readonly record struct BcItemNumbers(string LotSale, string AuctionFee, string Commission);
+
+    // Resolve the BC item numbers from SystemParameters (admin-editable), falling back to defaults.
+    private async Task<BcItemNumbers> GetBcItemNumbersAsync()
+    {
+        var keys = new[] { LotSaleItemKey, AuctionFeeItemKey, CommissionItemKey };
+        var map = await _db.SystemParameters
+            .Where(p => keys.Contains(p.Key))
+            .ToDictionaryAsync(p => p.Key, p => p.Value);
+
+        string Val(string key, string fallback) =>
+            map.TryGetValue(key, out var v) && !string.IsNullOrWhiteSpace(v) ? v.Trim() : fallback;
+
+        return new BcItemNumbers(
+            Val(LotSaleItemKey, LotSaleItemNo),
+            Val(AuctionFeeItemKey, AuctionFeeItemNo),
+            Val(CommissionItemKey, CommissionItemNo));
+    }
 
     public BusinessCentralSyncService(
         BusinessCentralApiClient bcClient,
@@ -354,6 +378,7 @@ public class BusinessCentralSyncService
 
     private async Task AddInvoiceLinesToBcAsync(Guid companyId, Guid documentId, Invoice invoice)
     {
+        var items = await GetBcItemNumbersAsync();
         int seq = 10000;
         foreach (var line in invoice.Lines)
         {
@@ -362,7 +387,7 @@ public class BusinessCentralSyncService
                 DocumentId = documentId,
                 Sequence = seq,
                 LineType = "Item",
-                LineObjectNumber = LotSaleItemNo,
+                LineObjectNumber = items.LotSale,
                 Description = $"Lot {line.LotNumber}: {line.Description} ({line.Skins} skins)",
                 Quantity = line.Skins,
                 UnitPrice = line.PricePerSkin
@@ -376,7 +401,7 @@ public class BusinessCentralSyncService
             await _bcClient.CreateSalesInvoiceLineAsync(companyId, documentId, new BcSalesInvoiceLine
             {
                 DocumentId = documentId, Sequence = seq, LineType = "Item",
-                LineObjectNumber = AuctionFeeItemNo, Description = "Auction Fee", Quantity = 1, UnitPrice = invoice.AuctionFee
+                LineObjectNumber = items.AuctionFee, Description = "Auction Fee", Quantity = 1, UnitPrice = invoice.AuctionFee
             });
             seq += 10000;
         }
@@ -386,13 +411,14 @@ public class BusinessCentralSyncService
             await _bcClient.CreateSalesInvoiceLineAsync(companyId, documentId, new BcSalesInvoiceLine
             {
                 DocumentId = documentId, Sequence = seq, LineType = "Item",
-                LineObjectNumber = CommissionItemNo, Description = "Commission", Quantity = 1, UnitPrice = invoice.Commission
+                LineObjectNumber = items.Commission, Description = "Commission", Quantity = 1, UnitPrice = invoice.Commission
             });
         }
     }
 
     private async Task AddCreditMemoLinesToBcAsync(Guid companyId, Guid documentId, Invoice creditNote)
     {
+        var items = await GetBcItemNumbersAsync();
         int seq = 10000;
         foreach (var line in creditNote.Lines)
         {
@@ -401,7 +427,7 @@ public class BusinessCentralSyncService
                 DocumentId = documentId,
                 Sequence = seq,
                 LineType = "Item",
-                LineObjectNumber = LotSaleItemNo,
+                LineObjectNumber = items.LotSale,
                 Description = $"Lot {line.LotNumber}: {line.Description} ({Math.Abs(line.Skins)} skins)",
                 Quantity = Math.Abs(line.Skins),
                 UnitPrice = Math.Abs(line.PricePerSkin)
@@ -415,7 +441,7 @@ public class BusinessCentralSyncService
             await _bcClient.CreateSalesCreditMemoLineAsync(companyId, documentId, new BcSalesCreditMemoLine
             {
                 DocumentId = documentId, Sequence = seq, LineType = "Item",
-                LineObjectNumber = AuctionFeeItemNo, Description = "Auction Fee", Quantity = 1, UnitPrice = Math.Abs(creditNote.AuctionFee)
+                LineObjectNumber = items.AuctionFee, Description = "Auction Fee", Quantity = 1, UnitPrice = Math.Abs(creditNote.AuctionFee)
             });
             seq += 10000;
         }
@@ -425,7 +451,7 @@ public class BusinessCentralSyncService
             await _bcClient.CreateSalesCreditMemoLineAsync(companyId, documentId, new BcSalesCreditMemoLine
             {
                 DocumentId = documentId, Sequence = seq, LineType = "Item",
-                LineObjectNumber = CommissionItemNo, Description = "Commission", Quantity = 1, UnitPrice = Math.Abs(creditNote.Commission)
+                LineObjectNumber = items.Commission, Description = "Commission", Quantity = 1, UnitPrice = Math.Abs(creditNote.Commission)
             });
         }
     }

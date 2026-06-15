@@ -513,6 +513,18 @@ using (var scope = host.Services.CreateScope())
                 INSERT INTO auction.SystemParameters ([Key], Value, Description, DataType, UpdatedAt)
                 VALUES ('BoxTareWeight_Small', '1.5', 'Tare weight (kg) for Small box type', 'decimal', GETUTCDATE());
         ");
+        // BC item numbers used on invoice/credit-memo lines — admin-editable in the Parameters page.
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM auction.SystemParameters WHERE [Key] = 'BcItem_LotSale')
+                INSERT INTO auction.SystemParameters ([Key], Value, Description, DataType, UpdatedAt)
+                VALUES ('BcItem_LotSale', 'LOTSALE', 'BC item number for lot sale invoice/credit lines', 'string', GETUTCDATE());
+            IF NOT EXISTS (SELECT 1 FROM auction.SystemParameters WHERE [Key] = 'BcItem_AuctionFee')
+                INSERT INTO auction.SystemParameters ([Key], Value, Description, DataType, UpdatedAt)
+                VALUES ('BcItem_AuctionFee', 'AUCTFEE', 'BC item number for the auction fee line', 'string', GETUTCDATE());
+            IF NOT EXISTS (SELECT 1 FROM auction.SystemParameters WHERE [Key] = 'BcItem_Commission')
+                INSERT INTO auction.SystemParameters ([Key], Value, Description, DataType, UpdatedAt)
+                VALUES ('BcItem_Commission', 'BROKERCOMM', 'BC item number for the commission line', 'string', GETUTCDATE());
+        ");
         // Add PackingListPdfUrl column to Shipments if missing
         db.Database.ExecuteSqlRaw(@"
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Shipments') AND name = 'PackingListPdfUrl')
