@@ -91,12 +91,17 @@ public class TypistEntryFunctions
         _db.TypistEntries.Add(entry);
         await _db.SaveChangesAsync();
 
-        // If both entries exist, compare them
-        if (slot == 2)
-        {
-            var otherEntry = existingEntries[0];
+        // Compare once BOTH typists have entered. Re-query AFTER our insert (not the pre-insert slot
+        // count) so two simultaneous first entries can't both get "slot 1" and miss the comparison;
+        // only the higher-Id entry compares, so concurrent requests can't double-resolve.
+        var otherEntry = await _db.TypistEntries
+            .Where(e => e.LotNumber == body.LotNumber && e.TypistUserId != entry.TypistUserId
+                        && !e.IsResolved && !e.IsDisagreement && !e.IsMatched)
+            .OrderByDescending(e => e.Id)
+            .FirstOrDefaultAsync();
+
+        if (otherEntry != null && entry.Id > otherEntry.Id)
             await CompareEntries(entry, otherEntry);
-        }
 
         return await CreateJsonResponse(req, new
         {
@@ -160,21 +165,27 @@ public class TypistEntryFunctions
         _db.TypistEntries.Add(entry);
         await _db.SaveChangesAsync();
 
-        // Only compare and resolve when BOTH typists have re-entered
-        if (slot == 2)
+        // Resolve when re-entries exist from BOTH typists. Re-query AFTER our insert instead of
+        // trusting the pre-insert slot count — otherwise two simultaneous re-entries both see zero
+        // existing and both get "slot 1", so neither triggers the comparison and the lot gets stuck.
+        // Only the higher-Id entry resolves, so concurrent requests can't double-resolve.
+        var otherTypistEntry = await _db.TypistEntries
+            .Where(e => e.LotNumber == body.LotNumber && e.TypistUserId != entry.TypistUserId
+                        && !e.IsResolved && !e.IsDisagreement && !e.IsMatched)
+            .OrderByDescending(e => e.Id)
+            .FirstOrDefaultAsync();
+
+        if (otherTypistEntry != null && entry.Id > otherTypistEntry.Id)
         {
-            // Now mark old disagreement entries as resolved
+            // Mark the old disagreement rows resolved (single writer — only this request gets here).
             var oldEntries = await _db.TypistEntries
                 .Where(e => e.LotNumber == body.LotNumber && e.IsDisagreement && !e.IsResolved)
                 .ToListAsync();
-
             foreach (var old in oldEntries)
                 old.IsResolved = true;
-
             await _db.SaveChangesAsync();
 
-            var otherEntry = existingReentries[0];
-            await CompareEntries(entry, otherEntry);
+            await CompareEntries(entry, otherTypistEntry);
         }
 
         return await CreateJsonResponse(req, new
