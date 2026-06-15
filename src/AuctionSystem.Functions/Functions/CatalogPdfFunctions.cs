@@ -19,6 +19,11 @@ public class CatalogPdfFunctions
     private const string FontName = "PPPangramSans";
     private static bool _fontsRegistered;
 
+    // One consistent rule weight/colour for every data-row line (single rows and multi-lot group
+    // boxes) so the catalogue doesn't mix heavy black boxes with faint grey row separators.
+    private const float RowLineWidth = 0.75f;
+    private static readonly Color RowLineColor = Colors.Grey.Medium;
+
     public CatalogPdfFunctions(
         IConfiguration configuration,
         ILogger<CatalogPdfFunctions> logger)
@@ -467,7 +472,6 @@ public class CatalogPdfFunctions
         // of a nested sub-table. A nested table was inset by its own border, so its columns no
         // longer lined up with the single-lot rows and its narrower Description column wrapped to an
         // extra line \u2014 making those rows look a different size.
-        const float box = 1.5f;
         var lastColIndex = isFarmerCatalog ? 5 : 4;
 
         for (var k = 0; k < groupRows.Count; k++)
@@ -483,11 +487,11 @@ public class CatalogPdfFunctions
                 return table.Cell().Element(c =>
                 {
                     c = c.Background(Colors.White);
-                    if (isFirst) c = c.BorderTop(box);
-                    if (isLast) c = c.BorderBottom(box);
-                    if (ci == 0) c = c.BorderLeft(box);
-                    if (ci == lastColIndex) c = c.BorderRight(box);
-                    return c.BorderColor(Colors.Black).PaddingVertical(3).PaddingHorizontal(4);
+                    if (isFirst) c = c.BorderTop(RowLineWidth);
+                    if (isLast) c = c.BorderBottom(RowLineWidth);
+                    if (ci == 0) c = c.BorderLeft(RowLineWidth);
+                    if (ci == lastColIndex) c = c.BorderRight(RowLineWidth);
+                    return c.BorderColor(RowLineColor).PaddingVertical(3).PaddingHorizontal(4);
                 });
             }
 
@@ -601,8 +605,8 @@ public class CatalogPdfFunctions
     private static IContainer NormalCell(IContainer container)
     {
         return container
-            .BorderBottom(0.5f)
-            .BorderColor(Colors.Grey.Lighten1)
+            .BorderBottom(RowLineWidth)
+            .BorderColor(RowLineColor)
             .Background(Colors.White)
             .PaddingVertical(3)
             .PaddingHorizontal(4);
