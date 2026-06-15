@@ -979,7 +979,9 @@ public class BusinessCentralSyncService
             PhoneNumber = Truncate(buyer.ContactPhone, 30),
             Email = Truncate(buyer.ContactEmail, 80),
             Website = Truncate(buyer.HomePage, 80),
-            CurrencyCode = buyer.Currency == "EUR" ? "" : buyer.Currency,
+            // Send the currency explicitly (like brokers/farmers); previously EUR was blanked,
+            // so EUR buyers showed no currency code in BC.
+            CurrencyCode = buyer.Currency == "EUR" ? "EUR" : buyer.Currency,
             CreditLimit = buyer.CreditLimit,
             Blocked = string.IsNullOrEmpty(buyer.Blocked) ? "_x0020_" : buyer.Blocked,
             GenBusPostingGroup = !string.IsNullOrEmpty(buyer.GenBusPostingGroup) ? buyer.GenBusPostingGroup : existing?.GenBusPostingGroup ?? string.Empty,
