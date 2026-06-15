@@ -144,7 +144,8 @@ public class BrokerFunctions
     {
         var buyer = await req.ReadFromJsonAsync<Buyer>();
         if (buyer == null) return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
-        buyer.BrokerId = brokerId > 0 ? brokerId : null;
+        // Only link to the broker if it actually exists (avoids a FK-constraint 500).
+        buyer.BrokerId = brokerId > 0 && await _db.Brokers.AnyAsync(b => b.Id == brokerId) ? brokerId : null;
         _db.Buyers.Add(buyer);
         await _db.SaveChangesAsync();
         await TryPushBuyerToBcAsync(buyer);
@@ -241,7 +242,11 @@ public class BrokerFunctions
         buyer.GenBusPostingGroup = dto.GenBusPostingGroup;
         buyer.VatBusPostingGroup = dto.VatBusPostingGroup;
         buyer.CustomerPostingGroup = dto.CustomerPostingGroup;
-        buyer.BrokerId = dto.BrokerId;
+        // Guard the BrokerId foreign key: a stale link to a deleted broker would fail the FK
+        // constraint on save (500). Keep it only if the broker still exists, else unlink (null).
+        buyer.BrokerId = dto.BrokerId.HasValue && await _db.Brokers.AnyAsync(b => b.Id == dto.BrokerId.Value)
+            ? dto.BrokerId
+            : null;
         await _db.SaveChangesAsync();
         await TryPushBuyerToBcAsync(buyer);
         return await CreateJsonResponse(req, buyer);
