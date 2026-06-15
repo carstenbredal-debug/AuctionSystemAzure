@@ -34,6 +34,72 @@ else
         </div>
     }
 
+    @if (_showResultModal)
+    {
+        var totalFailed = _modalResults.Sum(r => r.Failed < 0 ? 0 : r.Failed);
+        var allGood = !_modalServerError && _modalResults.Any() && totalFailed == 0;
+        <div class="modal fade show" style="display:block;" tabindex="-1">
+            <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header @(allGood ? "bg-success" : "bg-danger") text-white">
+                        <h5 class="modal-title">
+                            @if (allGood)
+                            {
+                                <span>✓ All Good — Fully Synced</span>
+                            }
+                            else if (_modalServerError)
+                            {
+                                <span>@_modalLabel — sync did not complete</span>
+                            }
+                            else
+                            {
+                                <span>@_modalLabel — @totalFailed record(s) failed</span>
+                            }
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" @onclick="() => _showResultModal = false"></button>
+                    </div>
+                    <div class="modal-body">
+                        @if (_modalServerError)
+                        {
+                            <p class="mb-0">No response from the sync service for <strong>@_modalLabel</strong>. The sync may still be running on the server — wait a moment, then check the status cards.</p>
+                        }
+                        else
+                        {
+                            @foreach (var r in _modalResults)
+                            {
+                                var ok = r.Created + r.Updated;
+                                <div class="mb-3">
+                                    <h6 class="mb-1">@r.EntityType</h6>
+                                    <div class="small mb-1">
+                                        <span class="text-success">@ok succeeded</span>
+                                        <span class="text-muted">(@r.Created created, @r.Updated updated@(r.Skipped > 0 ? $", {r.Skipped} skipped" : ""))</span>
+                                        @if (r.Failed > 0)
+                                        {
+                                            <span class="text-danger fw-bold ms-1">· @r.Failed failed</span>
+                                        }
+                                    </div>
+                                    @if (r.Errors?.Count > 0)
+                                    {
+                                        <ul class="small text-danger mb-0" style="max-height:220px; overflow:auto;">
+                                            @foreach (var e in r.Errors)
+                                            {
+                                                <li>@CleanError(e)</li>
+                                            }
+                                        </ul>
+                                    }
+                                </div>
+                            }
+                        }
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn @(allGood ? "btn-success" : "btn-secondary")" @onclick="() => _showResultModal = false">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-backdrop fade show"></div>
+    }
+
     <!-- Sync Status Cards -->
     <div class="row mb-4">
         <div class="col-md-3">
@@ -458,6 +524,50 @@ else
     private List<InvoiceSummaryDto> _unpushedCreditNotes = new();
     private bool _loadingUnpushedCN;
 
+    // Result popup
+    private bool _showResultModal;
+    private List<BcSyncResultDto> _modalResults = new();
+    private bool _modalServerError;
+    private string _modalLabel = "";
+
+    // Show a popup after a sync: "All Good" on full success, or the failed records + reasons on error.
+    private void FinishSync(List<BcSyncResultDto>? results, string label)
+    {
+        _modalLabel = label;
+        if (results is null || results.Count == 0)
+        {
+            _modalResults = new();
+            _modalServerError = true;
+            _message = $"{label}: no response from the sync service (it may still be running).";
+            _messageIsError = true;
+        }
+        else
+        {
+            _syncResults.InsertRange(0, results);
+            _modalResults = results;
+            _modalServerError = false;
+            var failed = results.Sum(r => r.Failed);
+            _message = failed > 0 ? $"{label}: {failed} record(s) failed" : $"{label}: all synced";
+            _messageIsError = failed > 0;
+        }
+        _showResultModal = true;
+    }
+
+    // Strip the HTTP/BC boilerplate so the popup shows just "Record: <BC message>".
+    private static string CleanError(string e)
+    {
+        if (string.IsNullOrWhiteSpace(e)) return e;
+        var who = e.Contains(':') ? e.Substring(0, e.IndexOf(':')) : "";
+        var m = System.Text.RegularExpressions.Regex.Match(e, "message\\\"?\\s*:\\s*\\\"?(.*?)(?:CorrelationId|\\\"\\}|$)",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (m.Success)
+        {
+            var msg = m.Groups[1].Value.Trim().TrimEnd('\\', '"', ' ', '.');
+            return string.IsNullOrEmpty(who) ? msg : $"{who} — {msg}";
+        }
+        return e;
+    }
+
     protected override async Task OnInitializedAsync()
     {
         await LoadStatus();
@@ -478,17 +588,7 @@ else
         StateHasChanged();
 
         var result = await Api.SyncBrokersAsync();
-        if (result is not null)
-        {
-            _syncResults.Insert(0, result);
-            _message = $"Brokers synced: {result.Created} created, {result.Updated} updated, {result.Failed} failed";
-            _messageIsError = result.Failed > 0;
-        }
-        else
-        {
-            _message = "Failed to sync brokers";
-            _messageIsError = true;
-        }
+        FinishSync(result is null ? null : new List<BcSyncResultDto> { result }, "Brokers");
 
         await LoadStatus();
         _syncing = false;
@@ -502,17 +602,7 @@ else
         StateHasChanged();
 
         var result = await Api.SyncFarmersAsync();
-        if (result is not null)
-        {
-            _syncResults.Insert(0, result);
-            _message = $"Farmers synced: {result.Created} created, {result.Updated} updated, {result.Failed} failed";
-            _messageIsError = result.Failed > 0;
-        }
-        else
-        {
-            _message = "Failed to sync farmers";
-            _messageIsError = true;
-        }
+        FinishSync(result is null ? null : new List<BcSyncResultDto> { result }, "Farmers");
 
         await LoadStatus();
         _syncing = false;
@@ -526,17 +616,7 @@ else
         StateHasChanged();
 
         var result = await Api.SyncBuyersAsync();
-        if (result is not null)
-        {
-            _syncResults.Insert(0, result);
-            _message = $"Buyers synced: {result.Created} created, {result.Updated} updated, {result.Failed} failed";
-            _messageIsError = result.Failed > 0;
-        }
-        else
-        {
-            _message = "Failed to sync buyers";
-            _messageIsError = true;
-        }
+        FinishSync(result is null ? null : new List<BcSyncResultDto> { result }, "Buyers");
 
         await LoadStatus();
         _syncing = false;
@@ -550,17 +630,7 @@ else
         StateHasChanged();
 
         var result = await Api.SyncInvoicesAsync();
-        if (result is not null)
-        {
-            _syncResults.Insert(0, result);
-            _message = $"Invoices synced: {result.Created} created, {result.Skipped} skipped, {result.Failed} failed";
-            _messageIsError = result.Failed > 0;
-        }
-        else
-        {
-            _message = "Failed to sync invoices";
-            _messageIsError = true;
-        }
+        FinishSync(result is null ? null : new List<BcSyncResultDto> { result }, "Invoices");
 
         await LoadStatus();
         _syncing = false;
@@ -574,17 +644,7 @@ else
         StateHasChanged();
 
         var result = await Api.SyncCreditNotesAsync();
-        if (result is not null)
-        {
-            _syncResults.Insert(0, result);
-            _message = $"Credit notes synced: {result.Created} created, {result.Failed} failed";
-            _messageIsError = result.Failed > 0;
-        }
-        else
-        {
-            _message = "Failed to sync credit notes";
-            _messageIsError = true;
-        }
+        FinishSync(result is null ? null : new List<BcSyncResultDto> { result }, "Credit Notes");
 
         await LoadStatus();
         _syncing = false;
@@ -598,19 +658,7 @@ else
         StateHasChanged();
 
         var results = await Api.SyncAllAsync();
-        if (results is not null)
-        {
-            _syncResults.InsertRange(0, results);
-            var totalCreated = results.Sum(r => r.Created);
-            var totalFailed = results.Sum(r => r.Failed);
-            _message = $"Full sync complete: {totalCreated} created, {totalFailed} failed";
-            _messageIsError = totalFailed > 0;
-        }
-        else
-        {
-            _message = "Failed to run full sync";
-            _messageIsError = true;
-        }
+        FinishSync(results, "Full Sync");
 
         await LoadStatus();
         _syncing = false;
@@ -662,17 +710,7 @@ else
         StateHasChanged();
 
         var result = await Api.SyncInvoicesAsync();
-        if (result is not null)
-        {
-            _syncResults.Insert(0, result);
-            _message = $"Invoices pushed: {result.Created} created, {result.Skipped} skipped, {result.Failed} failed";
-            _messageIsError = result.Failed > 0;
-        }
-        else
-        {
-            _message = "Failed to push invoices";
-            _messageIsError = true;
-        }
+        FinishSync(result is null ? null : new List<BcSyncResultDto> { result }, "Invoices");
 
         await LoadStatus();
         await LoadUnpushedInvoices();
@@ -697,17 +735,7 @@ else
         StateHasChanged();
 
         var result = await Api.SyncCreditNotesAsync();
-        if (result is not null)
-        {
-            _syncResults.Insert(0, result);
-            _message = $"Credit notes pushed: {result.Created} created, {result.Failed} failed";
-            _messageIsError = result.Failed > 0;
-        }
-        else
-        {
-            _message = "Failed to push credit notes";
-            _messageIsError = true;
-        }
+        FinishSync(result is null ? null : new List<BcSyncResultDto> { result }, "Credit Notes");
 
         await LoadStatus();
         await LoadUnpushedCreditNotes();
