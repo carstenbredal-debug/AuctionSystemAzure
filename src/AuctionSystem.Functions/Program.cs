@@ -14,6 +14,8 @@ using Microsoft.Extensions.Logging;
 var host = new HostBuilder()
     .ConfigureFunctionsWebApplication(worker =>
     {
+        // Outermost: turn unhandled exceptions into a 500 carrying the root-cause message.
+        worker.UseMiddleware<AuctionSystem.Functions.Auth.ExceptionHandlingMiddleware>();
         // Authenticate/authorize every HTTP function (default: authenticated; see attributes).
         worker.UseMiddleware<AuctionSystem.Functions.Auth.AuthenticationMiddleware>();
     })
