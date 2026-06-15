@@ -260,6 +260,14 @@ public class BusinessCentralSyncService
         await TryApplyCreditMemoToInvoiceAsync(companyId, creditNote, buyer.Value.BuyerNumber);
     }
 
+    // External-document keys the invoice push uses, in priority order. The stable AUC-{Id}
+    // fallback is what makes idempotency work while InvoiceNumber is still "".
+    private static IEnumerable<string> BcInvoiceExternalDocs(Invoice invoice)
+    {
+        if (!string.IsNullOrEmpty(invoice.InvoiceNumber)) yield return invoice.InvoiceNumber;
+        yield return $"AUC-{invoice.Id}";
+    }
+
     private async Task<bool> SkipAlreadyPushedInvoiceAsync(Guid companyId, Invoice invoice)
     {
         if (!string.IsNullOrEmpty(invoice.BcInvoiceNumber))
@@ -268,19 +276,31 @@ public class BusinessCentralSyncService
             return true;
         }
 
-        if (!string.IsNullOrEmpty(invoice.InvoiceNumber))
+        // Idempotency: look BC up by the SAME external-doc keys the push uses (the real number if
+        // set, plus the stable AUC-{Id} fallback) against POSTED *and* draft invoices. A crash
+        // between BC create/post and the local SaveChanges otherwise causes a duplicate on retry,
+        // because the push posts with AUC-{Id} while InvoiceNumber is still "".
+        foreach (var extDoc in BcInvoiceExternalDocs(invoice))
         {
-            var existing = await _bcClient.GetSalesInvoiceByExternalDocAsync(companyId, invoice.InvoiceNumber);
-            if (existing is not null)
+            var posted = await _bcClient.GetPostedSalesInvoiceByExternalDocAsync(companyId, extDoc);
+            if (posted is not null)
             {
-                invoice.BcInvoiceNumber = existing.Number;
-                invoice.BcInvoiceId = existing.Id;
+                invoice.BcInvoiceNumber = posted.Number;
+                invoice.BcInvoiceId = posted.Id;
+                if (string.IsNullOrEmpty(invoice.InvoiceNumber)) invoice.InvoiceNumber = posted.Number;
                 await _db.SaveChangesAsync();
-                _logger.LogInformation("Invoice {Id} already exists in BC as {Number}", invoice.Id, existing.Number);
+                _logger.LogInformation("Invoice {Id} already POSTED in BC as {Number} (extDoc {Ext}); recording, not re-posting",
+                    invoice.Id, posted.Number, extDoc);
                 return true;
             }
         }
         return false;
+    }
+
+    private static IEnumerable<string> BcCreditMemoExternalDocs(Invoice creditNote)
+    {
+        if (!string.IsNullOrEmpty(creditNote.InvoiceNumber)) yield return creditNote.InvoiceNumber;
+        yield return $"CN-{creditNote.Id}";
     }
 
     private async Task<bool> SkipAlreadyPushedCreditNoteAsync(Guid companyId, Invoice creditNote)
@@ -291,16 +311,20 @@ public class BusinessCentralSyncService
             return true;
         }
 
-        if (!string.IsNullOrEmpty(creditNote.InvoiceNumber))
+        // Idempotency by the same external-doc keys the push uses (real number if set, plus the
+        // stable CN-{Id} fallback), against POSTED and draft credit memos — prevents a duplicate
+        // on retry after a crash between BC create/post and the local SaveChanges.
+        foreach (var extDoc in BcCreditMemoExternalDocs(creditNote))
         {
-            var existing = await _bcClient.GetSalesCreditMemoByExternalDocAsync(companyId, creditNote.InvoiceNumber);
-            if (existing is not null)
+            var posted = await _bcClient.GetPostedSalesCreditMemoByExternalDocAsync(companyId, extDoc);
+            if (posted is not null)
             {
-                creditNote.BcInvoiceNumber = existing.Number;
-                creditNote.BcInvoiceId = existing.Id;
-                creditNote.InvoiceNumber = existing.Number;
+                creditNote.BcInvoiceNumber = posted.Number;
+                creditNote.BcInvoiceId = posted.Id;
+                if (string.IsNullOrEmpty(creditNote.InvoiceNumber)) creditNote.InvoiceNumber = posted.Number;
                 await _db.SaveChangesAsync();
-                _logger.LogInformation("Credit note {Id} already exists in BC as {Number}", creditNote.Id, existing.Number);
+                _logger.LogInformation("Credit note {Id} already POSTED in BC as {Number} (extDoc {Ext}); recording, not re-posting",
+                    creditNote.Id, posted.Number, extDoc);
                 return true;
             }
         }

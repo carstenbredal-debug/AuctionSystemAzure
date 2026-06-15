@@ -311,6 +311,14 @@ public class BusinessCentralApiClient
         return invoices.FirstOrDefault();
     }
 
+    /// <summary>Posted sales invoice matching an external document number (used for idempotency on retry).</summary>
+    public async Task<BcSalesInvoice?> GetPostedSalesInvoiceByExternalDocAsync(Guid companyId, string externalDocNumber)
+    {
+        var url = $"{_options.BaseUrl}/companies({companyId})/postedSalesInvoices?$filter=externalDocumentNumber eq '{externalDocNumber}'";
+        var invoices = await GetListAsync<BcSalesInvoice>(url);
+        return invoices.FirstOrDefault();
+    }
+
     public async Task<BcSalesInvoice> CreateSalesInvoiceAsync(Guid companyId, BcSalesInvoice invoice)
     {
         var url = $"{_options.BaseUrl}/companies({companyId})/salesInvoices";
@@ -617,6 +625,14 @@ public class BusinessCentralApiClient
     public async Task<BcSalesCreditMemo?> GetSalesCreditMemoByExternalDocAsync(Guid companyId, string externalDocNumber)
     {
         var url = $"{_options.BaseUrl}/companies({companyId})/salesCreditMemos?$filter=externalDocumentNumber eq '{externalDocNumber}'";
+        var items = await GetListAsync<BcSalesCreditMemo>(url);
+        return items.FirstOrDefault();
+    }
+
+    /// <summary>Posted sales credit memo matching an external document number (used for idempotency on retry).</summary>
+    public async Task<BcSalesCreditMemo?> GetPostedSalesCreditMemoByExternalDocAsync(Guid companyId, string externalDocNumber)
+    {
+        var url = $"{_options.BaseUrl}/companies({companyId})/postedSalesCreditMemos?$filter=externalDocumentNumber eq '{externalDocNumber}'";
         var items = await GetListAsync<BcSalesCreditMemo>(url);
         return items.FirstOrDefault();
     }
