@@ -773,6 +773,54 @@ public class BusinessCentralSyncService
         };
     }
 
+    /// <summary>
+    /// Reconcile the local BcSyncedAt flags against BC reality: mark an entity synced if its number
+    /// exists in BC, clear it if it doesn't. Keeps the sync-status counts accurate even if data
+    /// drifts (e.g. a vendor/customer deleted directly in BC). Bulk-pulls vendors/customers once
+    /// rather than calling BC per entity. Returns the number of flags corrected.
+    /// </summary>
+    public async Task<int> ReconcileSyncStatusAsync()
+    {
+        var companyId = await _bcClient.ResolveCompanyIdAsync();
+
+        var vendorNumbers = (await _bcClient.GetVendorsAsync(companyId))
+            .Select(v => v.Number).Where(n => !string.IsNullOrWhiteSpace(n))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var customerNumbers = (await _bcClient.GetCustomersAsync(companyId))
+            .Select(c => c.Number).Where(n => !string.IsNullOrWhiteSpace(n))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var changed = 0;
+
+        static bool Apply(bool inBc, ref DateTime? flag)
+        {
+            if (inBc && flag == null) { flag = DateTime.UtcNow; return true; }
+            if (!inBc && flag != null) { flag = null; return true; }
+            return false;
+        }
+
+        foreach (var b in await _db.Set<Broker>().Where(b => b.IsActive).ToListAsync())
+        {
+            var f = b.BcSyncedAt;
+            if (Apply(vendorNumbers.Contains(b.BrokerNumber), ref f)) { b.BcSyncedAt = f; changed++; }
+        }
+        foreach (var fa in await _db.Set<Farmer>().Where(f => f.IsActive).ToListAsync())
+        {
+            var f = fa.BcSyncedAt;
+            if (Apply(vendorNumbers.Contains(fa.FarmerNumber), ref f)) { fa.BcSyncedAt = f; changed++; }
+        }
+        foreach (var bu in await _db.Set<Buyer>().Where(b => b.IsActive).ToListAsync())
+        {
+            var f = bu.BcSyncedAt;
+            if (Apply(customerNumbers.Contains(bu.BuyerNumber), ref f)) { bu.BcSyncedAt = f; changed++; }
+        }
+
+        if (changed > 0) await _db.SaveChangesAsync();
+        _logger.LogInformation("BC sync-status reconcile: corrected {Changed} flag(s) ({Vendors} BC vendors, {Customers} BC customers)",
+            changed, vendorNumbers.Count, customerNumbers.Count);
+        return changed;
+    }
+
     // ── Single-entity push (called on create/update) ─────────
 
     public async Task PushSingleBrokerAsync(Broker broker)
