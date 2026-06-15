@@ -172,6 +172,19 @@ using (var scope = host.Services.CreateScope())
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Farmers') AND name = 'BcSyncedAt')
                 ALTER TABLE auction.Farmers ADD BcSyncedAt datetime2 NULL;
         ");
+        // Make Invoices.InvoiceNumber unique index FILTERED: invoices/credit notes are created with
+        // InvoiceNumber = '' until BC assigns the real number, and a plain unique index allows only
+        // one '' row — so concurrent invoicing collides on a duplicate-key error. Enforce uniqueness
+        // only on real (non-empty) numbers. Idempotent (rebuilds only while the index is unfiltered).
+        db.Database.ExecuteSqlRaw(@"
+            IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Invoices_InvoiceNumber'
+                       AND object_id = OBJECT_ID('auction.Invoices') AND has_filter = 0)
+            BEGIN
+                DROP INDEX IX_Invoices_InvoiceNumber ON auction.Invoices;
+                CREATE UNIQUE INDEX IX_Invoices_InvoiceNumber ON auction.Invoices(InvoiceNumber)
+                    WHERE InvoiceNumber <> '';
+            END
+        ");
         // Invoice BC columns
         db.Database.ExecuteSqlRaw(@"
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Invoices') AND name = 'BcInvoiceNumber')

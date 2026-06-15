@@ -111,7 +111,10 @@ public class AuctionDbContext : DbContext
         modelBuilder.Entity<Invoice>(e =>
         {
             e.HasKey(i => i.Id);
-            e.HasIndex(i => i.InvoiceNumber).IsUnique();
+            // Filtered: invoices/credit notes are created with InvoiceNumber = "" until BC assigns
+            // the real number. A plain unique index allows only ONE empty row, so concurrent
+            // invoicing collides. Enforce uniqueness only on real (non-empty) numbers.
+            e.HasIndex(i => i.InvoiceNumber).IsUnique().HasFilter("[InvoiceNumber] <> ''");
             e.HasOne(i => i.Broker).WithMany(b => b.Invoices).HasForeignKey(i => i.BrokerId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(i => i.Buyer).WithMany().HasForeignKey(i => i.BuyerId).OnDelete(DeleteBehavior.Restrict);
             e.HasIndex(i => i.BrokerId);
