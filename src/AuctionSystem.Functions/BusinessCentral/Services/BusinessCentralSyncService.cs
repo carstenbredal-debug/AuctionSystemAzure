@@ -748,11 +748,13 @@ public class BusinessCentralSyncService
     {
         var brokers = await _db.Set<Broker>().Where(b => b.IsActive).ToListAsync();
         var buyers = await _db.Set<Buyer>().Where(b => b.IsActive).ToListAsync();
+        var farmers = await _db.Set<Farmer>().Where(f => f.IsActive).ToListAsync();
         var invoices = await _db.Set<Invoice>().Where(i => !i.IsCreditNote).CountAsync();
         var creditNotes = await _db.Set<Invoice>().Where(i => i.IsCreditNote).CountAsync();
 
         var brokersSynced = brokers.Count(b => b.BcSyncedAt.HasValue);
         var buyersSynced = buyers.Count(b => b.BcSyncedAt.HasValue);
+        var farmersSynced = farmers.Count(f => f.BcSyncedAt.HasValue);
 
         return new
         {
@@ -767,6 +769,12 @@ public class BusinessCentralSyncService
                 Total = buyers.Count,
                 Synced = buyersSynced,
                 Unsynced = buyers.Count - buyersSynced
+            },
+            Farmers = new
+            {
+                Total = farmers.Count,
+                Synced = farmersSynced,
+                Unsynced = farmers.Count - farmersSynced
             },
             Invoices = invoices,
             CreditNotes = creditNotes

@@ -461,6 +461,13 @@ public class AuctionApiClient
         return await resp.Content.ReadFromJsonAsync<BcSyncResultDto>();
     }
 
+    public async Task<BcSyncResultDto?> SyncFarmersAsync()
+    {
+        var resp = await _http.PostAsync("api/bc/sync/farmers", null);
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<BcSyncResultDto>();
+    }
+
     public async Task<BcSyncResultDto?> SyncBuyersAsync()
     {
         var resp = await _http.PostAsync("api/bc/sync/buyers", null);

@@ -501,6 +501,7 @@ public class BcSyncStatusDto
 {
     public BcEntityCountDto Brokers { get; set; } = new();
     public BcEntityCountDto Buyers { get; set; } = new();
+    public BcEntityCountDto Farmers { get; set; } = new();
     public int Invoices { get; set; }
     public int CreditNotes { get; set; }
 }
