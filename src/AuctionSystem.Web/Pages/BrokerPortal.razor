@@ -175,7 +175,8 @@
 
     private async Task AllocateLot()
     {
-        await Api.AllocateLotAsync(allocLotId, selectedBrokerId, allocBuyerId, allocQty, allocPrice);
+        var ok = await Api.AllocateLotAsync(allocLotId, selectedBrokerId, allocBuyerId, allocQty, allocPrice);
+        if (!ok) bidMessage = $"Allocation failed: {Api.LastError}";
         await LoadBrokerData();
     }
 

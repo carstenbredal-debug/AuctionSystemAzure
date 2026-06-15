@@ -443,7 +443,8 @@ else
             var newBox = boxes.LastOrDefault();
             if (newBox != null && newBox.Status == "Packed")
             {
-                await Api.ApprovePackedBoxAsync(newBox.Id);
+                if (!await Api.ApprovePackedBoxAsync(newBox.Id))
+                    _packError = $"Approve failed: {Api.LastError}";
             }
 
             // Refresh
@@ -460,7 +461,8 @@ else
 
     private async Task ApproveBox(PackedBoxDto box)
     {
-        await Api.ApprovePackedBoxAsync(box.Id);
+        if (!await Api.ApprovePackedBoxAsync(box.Id))
+        { _packError = $"Approve failed: {Api.LastError}"; return; }
         // Refresh packed boxes for this order
         var po = _orders.FirstOrDefault(o => _packedBoxes.ContainsKey(o.Id) && _packedBoxes[o.Id].Any(b => b.Id == box.Id));
         if (po != null)

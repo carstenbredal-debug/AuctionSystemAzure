@@ -142,8 +142,11 @@ public class AuctionApiClient
     public async Task<List<BidDto>> GetBidsByBrokerAsync(int brokerId)
         => await _http.GetFromJsonAsync<List<BidDto>>($"api/bids/broker/{brokerId}") ?? new();
 
-    public async Task AllocateLotAsync(int lotId, int brokerId, int buyerId, int quantity, decimal pricePerUnit)
-        => await _http.PostAsJsonAsync("api/bids/allocate", new { lotId, brokerId, buyerId, quantity, pricePerUnit });
+    public async Task<bool> AllocateLotAsync(int lotId, int brokerId, int buyerId, int quantity, decimal pricePerUnit)
+    {
+        var resp = await _http.PostAsJsonAsync("api/bids/allocate", new { lotId, brokerId, buyerId, quantity, pricePerUnit });
+        return await OkAsync(resp);
+    }
 
     public async Task<List<LotAllocationDto>> GetAllocationsByBrokerAsync(int brokerId)
         => await _http.GetFromJsonAsync<List<LotAllocationDto>>($"api/bids/allocations/broker/{brokerId}") ?? new();

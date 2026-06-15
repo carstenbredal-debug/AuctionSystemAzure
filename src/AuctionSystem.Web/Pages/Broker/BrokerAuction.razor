@@ -214,9 +214,9 @@ else
 
     private async Task AllocateLot()
     {
-        await Api.AllocateLotAsync(_allocLotId, _brokerId, _allocBuyerId, _allocQty, _allocPrice);
-        _message = "Lot allocated successfully.";
-        _messageIsError = false;
+        var ok = await Api.AllocateLotAsync(_allocLotId, _brokerId, _allocBuyerId, _allocQty, _allocPrice);
+        _message = ok ? "Lot allocated successfully." : $"Allocation failed: {Api.LastError}";
+        _messageIsError = !ok;
         await LoadData();
     }
 
