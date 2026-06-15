@@ -353,6 +353,26 @@ h3 {
     color: #230A3C;
 }
 
+/* Pills (auction sub-navigation) use the brand orange when active instead of Bootstrap blue */
+.nav-pills .nav-link {
+    color: #95958F;
+    font-weight: 500;
+}
+
+.nav-pills .nav-link.active {
+    background-color: #F15A31;
+    color: #FFFFFF;
+    font-weight: 700;
+}
+
+.nav-pills .nav-link:hover {
+    color: #230A3C;
+}
+
+.nav-pills .nav-link.active:hover {
+    color: #FFFFFF;
+}
+
 /* ===== Text Utilities ===== */
 .text-muted {
     color: #95958F !important;

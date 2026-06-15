@@ -1,18 +1,61 @@
 @page "/"
 @attribute [Authorize]
 @inject AuctionApiClient Api
+@inject AuthenticationStateProvider AuthState
+@inject NavigationManager Nav
 
 <PageTitle>Dashboard - Auction System</PageTitle>
-
-<h1>Auction System Dashboard</h1>
-<p class="text-muted">Connected to Azure SQL Server</p>
 
 @if (loading)
 {
     <p>Loading...</p>
 }
+else if (_isBroker)
+{
+    <h1>Dashboard</h1>
+    @if (_activeAuction == null)
+    {
+        <p class="text-muted">No active auction at the moment.</p>
+    }
+    else
+    {
+        <p class="text-muted">@_activeAuction.AuctionNumber - @_activeAuction.Title</p>
+
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="summary-card">
+                    <div class="card-title">Total Purchase</div>
+                    <div class="card-value">€@_brokerResults.Sum(r => r.TotalSkins * r.PriceEur).ToString("N2")</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="summary-card">
+                    <div class="card-title">Invoiced</div>
+                    <div class="card-value">€@_brokerResults.Where(r => r.SoldToBuyerId != null).Sum(r => r.TotalSkins * r.PriceEur).ToString("N2")</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="summary-card">
+                    <div class="card-title">Un-Invoiced</div>
+                    <div class="card-value">€@_brokerResults.Where(r => r.SoldToBuyerId == null).Sum(r => r.TotalSkins * r.PriceEur).ToString("N2")</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="summary-card">
+                    <div class="card-title">Total Auction Fees</div>
+                    <div class="card-value">€@_brokerResults.Sum(r => CalcAuctionFee(r.TotalSkins, r.PriceEur)).ToString("N2")</div>
+                </div>
+            </div>
+        </div>
+
+        <button class="btn btn-primary" @onclick='() => Nav.NavigateTo("broker/lots")'>Go to Lots</button>
+    }
+}
 else
 {
+    <h1>Auction System Dashboard</h1>
+    <p class="text-muted">Connected to Azure SQL Server</p>
+
     <div class="row mt-4">
         <div class="col-md-12">
             <div class="section-container">
@@ -35,7 +78,6 @@ else
                 </div>
             </div>
         </div>
-
     </div>
 }
 
@@ -43,10 +85,61 @@ else
     private bool loading = true;
     private DashboardStats stats = new();
 
+    private bool _isBroker;
+    private AuctionDto? _activeAuction;
+    private List<AuctionResultDto> _brokerResults = new();
+    private decimal _auctionFeePercent;
+    private decimal _handlingFeePerSkin;
+
     protected override async Task OnInitializedAsync()
     {
-        stats = await Api.GetDashboardAsync();
+        var auth = await AuthState.GetAuthenticationStateAsync();
+        _isBroker = auth.User.IsInRole("Broker");
+
+        if (_isBroker)
+        {
+            await LoadBrokerDashboard(auth);
+        }
+        else
+        {
+            stats = await Api.GetDashboardAsync();
+        }
+
         loading = false;
+    }
+
+    private async Task LoadBrokerDashboard(Microsoft.AspNetCore.Components.Authorization.AuthenticationState auth)
+    {
+        var oid = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (oid == null) return;
+
+        var user = await Api.GetCurrentUserAsync(oid);
+        if (user?.BrokerId == null) return;
+
+        // Only ever one active auction; show the broker's cards for it directly.
+        var auctions = await Api.GetAuctionsAsync();
+        _activeAuction = auctions.FirstOrDefault(a => a.Status == AuctionStatus.Active);
+        if (_activeAuction == null) return;
+
+        var allResults = await Api.GetAuctionResultsByBrokerAsync(user.BrokerId.Value);
+        _brokerResults = allResults.Where(r => r.AuctionId == _activeAuction.Id).ToList();
+        await LoadFeeParameters();
+    }
+
+    private async Task LoadFeeParameters()
+    {
+        var parameters = await Api.GetParametersAsync();
+        var auctionFee = parameters.FirstOrDefault(p => p.Key == "AuctionFee");
+        var handlingFee = parameters.FirstOrDefault(p => p.Key == "HandlingFee");
+        if (auctionFee != null) decimal.TryParse(auctionFee.Value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _auctionFeePercent);
+        if (handlingFee != null) decimal.TryParse(handlingFee.Value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _handlingFeePerSkin);
+    }
+
+    private decimal CalcAuctionFee(int skins, decimal priceEur)
+    {
+        var hammerPrice = skins * priceEur;
+        var handlingFee = skins * _handlingFeePerSkin;
+        return (hammerPrice + handlingFee) * _auctionFeePercent / 100m;
     }
 
     private string GetStatusColor(AuctionStatus status) => status switch

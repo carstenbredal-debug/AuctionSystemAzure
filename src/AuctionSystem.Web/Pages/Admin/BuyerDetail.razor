@@ -40,22 +40,47 @@ else
                 Broker Relations <span class="badge bg-secondary ms-1">@_buyer.Brokers.Count</span>
             </button>
         </li>
-        <li class="nav-item">
-            <button class="nav-link @(_activeTab == "purchases" ? "active" : "")" @onclick='() => _activeTab = "purchases"'>
-                Purchases <span class="badge bg-secondary ms-1">@_purchases.Count</span>
-            </button>
-        </li>
-        <li class="nav-item">
-            <button class="nav-link @(_activeTab == "takeback" ? "active" : "")" @onclick='() => _activeTab = "takeback"'>
-                Re-Invoice <span class="badge bg-@(_takebackRequests.Count(t => t.Status == CustomerRequestStatus.Pending) > 0 ? "warning" : "secondary") ms-1">@_takebackRequests.Count</span>
-            </button>
-        </li>
+        @if (_buyerAuctions.Any())
+        {
+            <li class="nav-item">
+                <button class="nav-link @(_activeTab == "auction" ? "active" : "")" @onclick="OpenAuctionTab">
+                    Auction <span class="badge bg-secondary ms-1">@_buyerAuctions.Count</span>
+                </button>
+            </li>
+        }
         <li class="nav-item">
             <button class="nav-link @(_activeTab == "financial" ? "active" : "")" @onclick='() => _activeTab = "financial"'>
                 Financial <span class="badge bg-secondary ms-1">@_buyerInvoices.Count</span>
             </button>
         </li>
     </ul>
+
+    @if (_activeTab == "auction")
+    {
+        <div class="row mb-3">
+            <div class="col-md-4">
+                <label class="form-label fw-bold">Auction</label>
+                <select class="form-select" @bind="_selectedAuctionId" @bind:after="OnAuctionChanged">
+                    @foreach (var a in _buyerAuctions)
+                    {
+                        <option value="@a.Id">@a.AuctionNumber - @a.Title</option>
+                    }
+                </select>
+            </div>
+        </div>
+        <ul class="nav nav-pills mb-3">
+            <li class="nav-item">
+                <button class="nav-link @(_lotSubTab == "purchases" ? "active" : "")" @onclick='() => _lotSubTab = "purchases"'>
+                    Purchases <span class="badge bg-secondary ms-1">@GetPurchases().Count</span>
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link @(_lotSubTab == "takeback" ? "active" : "")" @onclick='() => _lotSubTab = "takeback"'>
+                    Re-Invoice <span class="badge bg-@(GetTakebacks().Count(t => t.Status == CustomerRequestStatus.Pending) > 0 ? "warning" : "secondary") ms-1">@GetTakebacks().Count</span>
+                </button>
+            </li>
+        </ul>
+    }
 
     @if (_activeTab == "info")
     {
@@ -300,43 +325,43 @@ else
         </div>
     }
 
-    @if (_activeTab == "purchases")
+    @if (_activeTab == "auction" && _lotSubTab == "purchases")
     {
         <div class="row mb-3">
             <div class="col-md-2">
                 <div class="card text-center"><div class="section-body p-3">
                     <h5 class="card-title text-muted">Total Lots</h5>
-                    <h2>@_purchases.Count</h2>
+                    <h2>@GetPurchases().Count</h2>
                 </div></div>
             </div>
             <div class="col-md-2">
                 <div class="card text-center"><div class="section-body p-3">
                     <h5 class="card-title text-muted">Total Skins</h5>
-                    <h2>@_purchases.Sum(p => p.TotalSkins).ToString("N0")</h2>
+                    <h2>@GetPurchases().Sum(p => p.TotalSkins).ToString("N0")</h2>
                 </div></div>
             </div>
             <div class="col-md-2">
                 <div class="card text-center"><div class="section-body p-3">
                     <h5 class="card-title text-muted">Hammer Price</h5>
-                    <h2>€@_purchases.Sum(p => p.TotalSkins * p.PriceEur).ToString("N2")</h2>
+                    <h2>€@GetPurchases().Sum(p => p.TotalSkins * p.PriceEur).ToString("N2")</h2>
                 </div></div>
             </div>
             <div class="col-md-2">
                 <div class="card text-center"><div class="section-body p-3">
                     <h5 class="card-title text-muted">Auction Fees</h5>
-                    <h2>€@_purchases.Sum(p => CalcAuctionFee(p.TotalSkins, p.PriceEur)).ToString("N2")</h2>
+                    <h2>€@GetPurchases().Sum(p => CalcAuctionFee(p.TotalSkins, p.PriceEur)).ToString("N2")</h2>
                 </div></div>
             </div>
             <div class="col-md-2">
                 <div class="card text-center"><div class="section-body p-3">
                     <h5 class="card-title text-muted">Commission</h5>
-                    <h2>€@_purchases.Sum(p => p.CommissionAmount ?? 0).ToString("N2")</h2>
+                    <h2>€@GetPurchases().Sum(p => p.CommissionAmount ?? 0).ToString("N2")</h2>
                 </div></div>
             </div>
             <div class="col-md-2">
                 <div class="card text-center"><div class="section-body p-3">
                     <h5 class="card-title text-muted">Total Value</h5>
-                    <h2>€@((_purchases.Sum(p => p.TotalSkins * p.PriceEur) + _purchases.Sum(p => CalcAuctionFee(p.TotalSkins, p.PriceEur)) + _purchases.Sum(p => p.CommissionAmount ?? 0)).ToString("N2"))</h2>
+                    <h2>€@((GetPurchases().Sum(p => p.TotalSkins * p.PriceEur) + GetPurchases().Sum(p => CalcAuctionFee(p.TotalSkins, p.PriceEur)) + GetPurchases().Sum(p => p.CommissionAmount ?? 0)).ToString("N2"))</h2>
                 </div></div>
             </div>
         </div>
@@ -348,7 +373,7 @@ else
                 <button type="button" class="btn-close" @onclick="() => _returnMessage = null"></button>
             </div>
         }
-        @if (_purchases.Any())
+        @if (GetPurchases().Any())
         {
             <div class="section-container mb-3">
                 <div class="card-body d-flex align-items-center gap-3">
@@ -371,9 +396,9 @@ else
                         </tr>
                     </thead>
                     <tbody>
-                        @if (_purchases.Count == 0)
+                        @if (GetPurchases().Count == 0)
                         { <tr><td colspan="13" class="text-center text-muted py-4">No purchases yet.</td></tr> }
-                        @foreach (var p in _purchases)
+                        @foreach (var p in GetPurchases())
                         {
                             <tr>
                                 <td><input type="checkbox" checked="@_selectedPurchaseIds.Contains(p.Id)" @onchange="() => TogglePurchaseSelection(p.Id)" /></td>
@@ -487,7 +512,7 @@ else
         </div>
     }
 
-    @if (_activeTab == "takeback")
+    @if (_activeTab == "auction" && _lotSubTab == "takeback")
     {
         @if (!string.IsNullOrEmpty(_takebackMessage))
         {
@@ -505,9 +530,9 @@ else
                         </tr>
                     </thead>
                     <tbody>
-                        @if (_takebackRequests.Count == 0)
+                        @if (GetTakebacks().Count == 0)
                         { <tr><td colspan="11" class="text-center text-muted py-4">No takeback requests.</td></tr> }
-                        @foreach (var t in _takebackRequests)
+                        @foreach (var t in GetTakebacks())
                         {
                             <tr>
                                 <td><strong>@t.LotNumber</strong></td>
@@ -544,11 +569,34 @@ else
     private List<AuctionResultDto> _purchases = new();
     private List<TakebackRequestDto> _takebackRequests = new();
     private List<BrokerDto> _allBrokers = new();
+    private List<AuctionDto> _buyerAuctions = new();
+    private int _selectedAuctionId;
+    private string _lotSubTab = "purchases";
     private int _linkBrokerId;
     private decimal _auctionFeePercent;
     private decimal _handlingFeePerSkin;
     private HashSet<int> _selectedPurchaseIds = new();
-    private bool _allPurchasesSelected => _purchases.Count > 0 && _purchases.All(p => _selectedPurchaseIds.Contains(p.Id));
+    private bool _allPurchasesSelected => GetPurchases().Count > 0 && GetPurchases().All(p => _selectedPurchaseIds.Contains(p.Id));
+
+    // Purchases and Re-Invoice are scoped to the selected auction tab, mirroring the broker page.
+    // Takeback rows carry only an AuctionResultId, so map back to the auction via the purchase rows.
+    private List<AuctionResultDto> GetPurchases() => _purchases.Where(p => p.AuctionId == _selectedAuctionId).ToList();
+    private int ResultAuctionId(int resultId) => _purchases.FirstOrDefault(p => p.Id == resultId)?.AuctionId ?? 0;
+    private List<TakebackRequestDto> GetTakebacks() => _takebackRequests.Where(t => ResultAuctionId(t.AuctionResultId) == _selectedAuctionId).ToList();
+
+    private void OpenAuctionTab()
+    {
+        _activeTab = "auction";
+        if (_selectedAuctionId == 0 || _buyerAuctions.All(a => a.Id != _selectedAuctionId))
+            _selectedAuctionId = _buyerAuctions.FirstOrDefault()?.Id ?? 0;
+        _lotSubTab = "purchases";
+    }
+
+    private void OnAuctionChanged()
+    {
+        _lotSubTab = "purchases";
+        _selectedPurchaseIds.Clear();
+    }
     private bool _requestingReturn;
     private string? _returnMessage;
     private bool _returnMessageIsError;
@@ -582,6 +630,7 @@ else
             _purchases = await Api.GetAuctionResultsByBuyerAsync(BuyerId);
             _takebackRequests = await Api.GetTakebackRequestsByBuyerAsync(BuyerId);
             _buyerInvoices = await Api.GetInvoicesByBuyerAsync(BuyerId);
+            await LoadBuyerAuctions();
             await LoadFeeParameters();
             InitEditDto();
         }
@@ -591,6 +640,20 @@ else
         _bcVatBusPostingGroups = await Api.GetBcVatBusPostingGroupsAsync();
         _bcCustomerPostingGroups = await Api.GetBcCustomerPostingGroupsAsync();
         _bcPaymentTerms = await Api.GetBcPaymentTermsAsync();
+    }
+
+    private async Task LoadBuyerAuctions()
+    {
+        // One tab per auction the buyer actually has purchases in, newest first.
+        var auctionIds = _purchases.Select(p => p.AuctionId).Distinct().ToHashSet();
+        var allAuctions = await Api.GetAuctionsAsync();
+        _buyerAuctions = allAuctions
+            .Where(a => auctionIds.Contains(a.Id))
+            .OrderByDescending(a => a.ScheduledDate)
+            .ToList();
+        // Keep the current selection if it's still valid; otherwise default to the newest auction.
+        if (_selectedAuctionId == 0 || !auctionIds.Contains(_selectedAuctionId))
+            _selectedAuctionId = _buyerAuctions.FirstOrDefault()?.Id ?? 0;
     }
 
     private async Task LoadFeeParameters()
@@ -617,7 +680,7 @@ else
     private void ToggleAllPurchases(ChangeEventArgs e)
     {
         if ((bool)(e.Value ?? false))
-            _selectedPurchaseIds = _purchases.Select(p => p.Id).ToHashSet();
+            _selectedPurchaseIds = GetPurchases().Select(p => p.Id).ToHashSet();
         else
             _selectedPurchaseIds.Clear();
     }
