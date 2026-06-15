@@ -266,6 +266,7 @@ public class BusinessCentralSyncService
             CurrencyCode = ""
         };
 
+        await DeleteStaleDraftCreditMemoAsync(companyId, extDocNumber);
         var created = await _bcClient.CreateSalesCreditMemoAsync(companyId, bcCreditMemo);
         await AddCreditMemoLinesToBcAsync(companyId, created.Id, creditNote);
 
@@ -310,6 +311,44 @@ public class BusinessCentralSyncService
               AND BcInvoiceNumber IS NULL
               AND (BcPushStartedAt IS NULL OR BcPushStartedAt < DATEADD(MINUTE, -5, SYSUTCDATETIME()))");
         return rows > 0;
+    }
+
+    // Delete a leftover draft (from a prior interrupted push) so we can recreate it cleanly.
+    // Best-effort: failure here must not block the push.
+    private async Task DeleteStaleDraftInvoiceAsync(Guid companyId, string extDocRef)
+    {
+        try
+        {
+            var draft = await _bcClient.GetSalesInvoiceByExternalDocAsync(companyId, extDocRef);
+            if (draft is not null)
+            {
+                _logger.LogWarning("Deleting stale BC draft invoice {Id} (extDoc {Ext}) left by a prior interrupted push",
+                    draft.Id, extDocRef);
+                await _bcClient.DeleteSalesInvoiceAsync(companyId, draft.Id);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not clean up stale BC draft invoice for extDoc {Ext}", extDocRef);
+        }
+    }
+
+    private async Task DeleteStaleDraftCreditMemoAsync(Guid companyId, string extDocRef)
+    {
+        try
+        {
+            var draft = await _bcClient.GetSalesCreditMemoByExternalDocAsync(companyId, extDocRef);
+            if (draft is not null)
+            {
+                _logger.LogWarning("Deleting stale BC draft credit memo {Id} (extDoc {Ext}) left by a prior interrupted push",
+                    draft.Id, extDocRef);
+                await _bcClient.DeleteSalesCreditMemoAsync(companyId, draft.Id);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not clean up stale BC draft credit memo for extDoc {Ext}", extDocRef);
+        }
     }
 
     private async Task<bool> SkipAlreadyPushedInvoiceAsync(Guid companyId, Invoice invoice)
@@ -583,6 +622,10 @@ public class BusinessCentralSyncService
             CurrencyCode = ""
         };
 
+        // Remove any stale draft from a prior interrupted push (half-built lines / never posted)
+        // before creating a fresh one. It isn't posted — the idempotency check ran first — so it's
+        // safe to delete, and this avoids orphaned drafts and partial-line leftovers.
+        await DeleteStaleDraftInvoiceAsync(companyId, extDocRef);
         var created = await _bcClient.CreateSalesInvoiceAsync(companyId, bcInvoice);
         await AddInvoiceLinesToBcAsync(companyId, created.Id, invoice);
 
