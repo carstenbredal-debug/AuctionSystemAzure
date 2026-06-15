@@ -40,27 +40,52 @@ else
                 Customers <span class="badge bg-secondary ms-1">@_linkedBuyers.Count</span>
             </button>
         </li>
-        <li class="nav-item">
-            <button class="nav-link @(_activeTab == "purchased" ? "active" : "")" @onclick='() => _activeTab = "purchased"'>
-                Purchased Lots <span class="badge bg-secondary ms-1">@_allResults.Count</span>
-            </button>
-        </li>
-        <li class="nav-item">
-            <button class="nav-link @(_activeTab == "sold" ? "active" : "")" @onclick='() => _activeTab = "sold"'>
-                Invoiced Lots <span class="badge bg-secondary ms-1">@GetSoldLots().Count</span>
-            </button>
-        </li>
-        <li class="nav-item">
-            <button class="nav-link @(_activeTab == "unsold" ? "active" : "")" @onclick='() => _activeTab = "unsold"'>
-                Un-Invoiced Lots <span class="badge bg-secondary ms-1">@GetUnsoldLots().Count</span>
-            </button>
-        </li>
-        <li class="nav-item">
-            <button class="nav-link @(_activeTab == "takeback" ? "active" : "")" @onclick='() => _activeTab = "takeback"'>
-                Re-Invoice <span class="badge bg-@(_takebackRequests.Count(t => t.Status == CustomerRequestStatus.Pending) > 0 ? "warning" : "secondary") ms-1">@_takebackRequests.Count</span>
-            </button>
-        </li>
+        @if (_brokerAuctions.Any())
+        {
+            <li class="nav-item">
+                <button class="nav-link @(_activeTab == "auction" ? "active" : "")" @onclick="OpenAuctionTab">
+                    Auction <span class="badge bg-secondary ms-1">@_brokerAuctions.Count</span>
+                </button>
+            </li>
+        }
     </ul>
+
+    @if (_activeTab == "auction")
+    {
+        <div class="row mb-3">
+            <div class="col-md-4">
+                <label class="form-label fw-bold">Auction</label>
+                <select class="form-select" @bind="_selectedAuctionId" @bind:after="OnAuctionChanged">
+                    @foreach (var a in _brokerAuctions)
+                    {
+                        <option value="@a.Id">@a.AuctionNumber - @a.Title</option>
+                    }
+                </select>
+            </div>
+        </div>
+        <ul class="nav nav-pills mb-3">
+            <li class="nav-item">
+                <button class="nav-link @(_lotSubTab == "purchased" ? "active" : "")" @onclick='() => _lotSubTab = "purchased"'>
+                    Purchased Lots <span class="badge bg-secondary ms-1">@AuctionResults(_selectedAuctionId).Count</span>
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link @(_lotSubTab == "sold" ? "active" : "")" @onclick='() => _lotSubTab = "sold"'>
+                    Invoiced Lots <span class="badge bg-secondary ms-1">@GetSoldLots().Count</span>
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link @(_lotSubTab == "unsold" ? "active" : "")" @onclick='() => _lotSubTab = "unsold"'>
+                    Un-Invoiced Lots <span class="badge bg-secondary ms-1">@GetUnsoldLots().Count</span>
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link @(_lotSubTab == "takeback" ? "active" : "")" @onclick='() => _lotSubTab = "takeback"'>
+                    Re-Invoice <span class="badge bg-@(GetTakebacks().Count(t => t.Status == CustomerRequestStatus.Pending) > 0 ? "warning" : "secondary") ms-1">@GetTakebacks().Count</span>
+                </button>
+            </li>
+        </ul>
+    }
 
     @if (_activeTab == "info")
     {
@@ -276,13 +301,13 @@ else
         </div>
     }
 
-    @if (_activeTab == "purchased")
+    @if (_activeTab == "auction" && _lotSubTab == "purchased")
     {
         <div class="row mb-3">
             <div class="col-md-3">
                 <div class="card text-center"><div class="section-body p-3">
                     <h5 class="card-title text-muted">Total Purchase</h5>
-                    <h2>€@_allResults.Sum(r => r.TotalSkins * r.PriceEur).ToString("N2")</h2>
+                    <h2>€@AuctionResults(_selectedAuctionId).Sum(r => r.TotalSkins * r.PriceEur).ToString("N2")</h2>
                 </div></div>
             </div>
             <div class="col-md-3">
@@ -300,7 +325,7 @@ else
             <div class="col-md-3">
                 <div class="card text-center"><div class="section-body p-3">
                     <h5 class="card-title text-muted">Total Auction Fees</h5>
-                    <h2>€@_allResults.Sum(r => CalcAuctionFee(r.TotalSkins, r.PriceEur)).ToString("N2")</h2>
+                    <h2>€@AuctionResults(_selectedAuctionId).Sum(r => CalcAuctionFee(r.TotalSkins, r.PriceEur)).ToString("N2")</h2>
                 </div></div>
             </div>
         </div>
@@ -313,9 +338,9 @@ else
                         </tr>
                     </thead>
                     <tbody>
-                        @if (_allResults.Count == 0)
+                        @if (AuctionResults(_selectedAuctionId).Count == 0)
                         { <tr><td colspan="11" class="text-center text-muted py-4">No lots.</td></tr> }
-                        @foreach (var r in _allResults)
+                        @foreach (var r in AuctionResults(_selectedAuctionId))
                         {
                             <tr>
                                 <td><strong>@r.LotNumber</strong></td>
@@ -330,7 +355,7 @@ else
         </div>
     }
 
-    @if (_activeTab == "sold")
+    @if (_activeTab == "auction" && _lotSubTab == "sold")
     {
         @if (!string.IsNullOrEmpty(_takebackMessage))
         {
@@ -380,7 +405,7 @@ else
         </div>
     }
 
-    @if (_activeTab == "unsold")
+    @if (_activeTab == "auction" && _lotSubTab == "unsold")
     {
         @if (!string.IsNullOrEmpty(_unsoldMessage))
         {
@@ -430,7 +455,7 @@ else
         </div>
     }
 
-    @if (_activeTab == "takeback")
+    @if (_activeTab == "auction" && _lotSubTab == "takeback")
     {
         @if (!string.IsNullOrEmpty(_brokerTakebackMessage))
         {
@@ -448,9 +473,9 @@ else
                         </tr>
                     </thead>
                     <tbody>
-                        @if (_takebackRequests.Count == 0)
+                        @if (GetTakebacks().Count == 0)
                         { <tr><td colspan="12" class="text-center text-muted py-4">No takeback requests.</td></tr> }
-                        @foreach (var t in _takebackRequests)
+                        @foreach (var t in GetTakebacks())
                         {
                             <tr>
                                 <td><strong>@t.LotNumber</strong></td>
@@ -486,8 +511,34 @@ else
     private BrokerDto? _broker;
     private List<BuyerDto> _linkedBuyers = new();
     private List<AuctionResultDto> _allResults = new();
-    private List<AuctionResultDto> GetSoldLots() => _allResults.Where(r => r.SoldToBuyerId != null).ToList();
-    private List<AuctionResultDto> GetUnsoldLots() => _allResults.Where(r => r.SoldToBuyerId == null).ToList();
+    private List<AuctionDto> _brokerAuctions = new();
+    private int _selectedAuctionId;
+    private string _lotSubTab = "purchased";
+
+    // The four lot views are scoped to the currently-selected auction tab so the admin counts
+    // line up with the broker portal (which is auction-scoped). Takeback rows carry only an
+    // AuctionResultId, so map back to the auction via the result rows.
+    private List<AuctionResultDto> AuctionResults(int auctionId) => _allResults.Where(r => r.AuctionId == auctionId).ToList();
+    private List<AuctionResultDto> GetSoldLots() => _allResults.Where(r => r.AuctionId == _selectedAuctionId && r.SoldToBuyerId != null).ToList();
+    private List<AuctionResultDto> GetUnsoldLots() => _allResults.Where(r => r.AuctionId == _selectedAuctionId && r.SoldToBuyerId == null).ToList();
+    private int ResultAuctionId(int resultId) => _allResults.FirstOrDefault(r => r.Id == resultId)?.AuctionId ?? 0;
+    private List<TakebackRequestDto> GetTakebacks() => _takebackRequests.Where(t => ResultAuctionId(t.AuctionResultId) == _selectedAuctionId).ToList();
+
+    private void OpenAuctionTab()
+    {
+        _activeTab = "auction";
+        if (_selectedAuctionId == 0 || _brokerAuctions.All(a => a.Id != _selectedAuctionId))
+            _selectedAuctionId = _brokerAuctions.FirstOrDefault()?.Id ?? 0;
+        _lotSubTab = "purchased";
+    }
+
+    private void OnAuctionChanged()
+    {
+        _lotSubTab = "purchased";
+        _selectedSoldIds.Clear();
+        _selectedUnsoldIds.Clear();
+    }
+
     private List<TakebackRequestDto> _takebackRequests = new();
     private decimal _auctionFeePercent;
     private decimal _handlingFeePerSkin;
@@ -530,6 +581,7 @@ else
             _linkedBuyers = await Api.GetBuyersByBrokerAsync(BrokerId);
             _allResults = await Api.GetAuctionResultsByBrokerAsync(BrokerId);
             _takebackRequests = await Api.GetTakebackRequestsByBrokerAsync(BrokerId);
+            await LoadBrokerAuctions();
             await LoadFeeParameters();
             InitEditDto();
         }
@@ -539,6 +591,20 @@ else
         _bcVatBusPostingGroups = await Api.GetBcVatBusPostingGroupsAsync();
         _bcVendorPostingGroups = await Api.GetBcVendorPostingGroupsAsync();
         _bcPaymentTerms = await Api.GetBcPaymentTermsAsync();
+    }
+
+    private async Task LoadBrokerAuctions()
+    {
+        // One tab per auction the broker actually has lots in, newest first.
+        var auctionIds = _allResults.Select(r => r.AuctionId).Distinct().ToHashSet();
+        var allAuctions = await Api.GetAuctionsAsync();
+        _brokerAuctions = allAuctions
+            .Where(a => auctionIds.Contains(a.Id))
+            .OrderByDescending(a => a.ScheduledDate)
+            .ToList();
+        // Keep the current selection if it's still valid; otherwise default to the newest auction.
+        if (_selectedAuctionId == 0 || !auctionIds.Contains(_selectedAuctionId))
+            _selectedAuctionId = _brokerAuctions.FirstOrDefault()?.Id ?? 0;
     }
 
     private async Task LoadFeeParameters()
