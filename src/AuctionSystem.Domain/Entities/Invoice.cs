@@ -34,6 +34,11 @@ public class Invoice
     public string? BcInvoiceNumber { get; set; }
     public Guid? BcInvoiceId { get; set; }
 
+    // Claim timestamp: set atomically before a BC push so two concurrent pushes of the same
+    // invoice can't both create a document in BC. A stale claim (older than a few minutes) is
+    // reclaimable so a crashed push can be retried.
+    public DateTime? BcPushStartedAt { get; set; }
+
     public string? ShippingStatus { get; set; }
     public decimal? DownpaymentAmount { get; set; }
     public decimal? DownpaymentPercentage { get; set; }

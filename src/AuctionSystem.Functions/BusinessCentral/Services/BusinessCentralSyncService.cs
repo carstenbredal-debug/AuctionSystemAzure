@@ -248,6 +248,12 @@ public class BusinessCentralSyncService
 
         if (await SkipAlreadyPushedCreditNoteAsync(companyId, creditNote)) return;
 
+        if (!await TryClaimForBcPushAsync(creditNote.Id))
+        {
+            _logger.LogWarning("Credit note {Id} is already being pushed to BC (claim held); skipping this push", creditNote.Id);
+            return;
+        }
+
         var buyer = await ResolveBuyerAsBcCustomerAsync(companyId, creditNote.Id, creditNote.BuyerId, creditNote.Buyer);
         if (buyer == null) return;
 
@@ -290,6 +296,20 @@ public class BusinessCentralSyncService
     {
         if (!string.IsNullOrEmpty(invoice.InvoiceNumber)) yield return invoice.InvoiceNumber;
         yield return $"AUC-{invoice.Id}";
+    }
+
+    // Atomically claim an invoice/credit note for a BC push so two concurrent pushes of the same
+    // document can't both create one in BC. Succeeds only if it isn't already pushed and isn't
+    // currently claimed (a claim older than 5 minutes is treated as stale so a crashed push retries).
+    private async Task<bool> TryClaimForBcPushAsync(int invoiceId)
+    {
+        var rows = await _db.Database.ExecuteSqlInterpolatedAsync($@"
+            UPDATE auction.Invoices
+            SET BcPushStartedAt = SYSUTCDATETIME()
+            WHERE Id = {invoiceId}
+              AND BcInvoiceNumber IS NULL
+              AND (BcPushStartedAt IS NULL OR BcPushStartedAt < DATEADD(MINUTE, -5, SYSUTCDATETIME()))");
+        return rows > 0;
     }
 
     private async Task<bool> SkipAlreadyPushedInvoiceAsync(Guid companyId, Invoice invoice)
@@ -542,6 +562,12 @@ public class BusinessCentralSyncService
         var companyId = await _bcClient.ResolveCompanyIdAsync();
 
         if (await SkipAlreadyPushedInvoiceAsync(companyId, invoice)) return;
+
+        if (!await TryClaimForBcPushAsync(invoice.Id))
+        {
+            _logger.LogWarning("Invoice {Id} is already being pushed to BC (claim held); skipping this push", invoice.Id);
+            return;
+        }
 
         var buyer = await ResolveBuyerAsBcCustomerAsync(companyId, invoice.Id, invoice.BuyerId, invoice.Buyer);
         if (buyer == null) return;
