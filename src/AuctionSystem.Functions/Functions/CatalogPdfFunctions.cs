@@ -462,62 +462,57 @@ public class CatalogPdfFunctions
         bool isFarmerCatalog = false,
         Dictionary<int, LotSaleInfo>? lotSaleData = null)
     {
-        var colSpan = isFarmerCatalog ? (uint)6 : (uint)5;
-        table.Cell().ColumnSpan(colSpan)
-            .Border(2f)
-            .BorderColor(Colors.Black)
-            .Table(innerTable =>
+        // Render the multi-lot string as flat rows in the SAME section table (identical column
+        // widths as single-lot rows) and draw the group "box" with borders on those cells, instead
+        // of a nested sub-table. A nested table was inset by its own border, so its columns no
+        // longer lined up with the single-lot rows and its narrower Description column wrapped to an
+        // extra line \u2014 making those rows look a different size.
+        const float box = 1.5f;
+        var lastColIndex = isFarmerCatalog ? 5 : 4;
+
+        for (var k = 0; k < groupRows.Count; k++)
+        {
+            var row = groupRows[k];
+            var isFirst = k == 0;
+            var isLast = k == groupRows.Count - 1;
+            var colIndex = 0;
+
+            IContainer Cell()
             {
-                if (isFarmerCatalog)
+                var ci = colIndex++;
+                return table.Cell().Element(c =>
                 {
-                    innerTable.ColumnsDefinition(columns =>
-                    {
-                        columns.ConstantColumn(70);
-                        columns.ConstantColumn(55);
-                        columns.RelativeColumn();
-                        columns.ConstantColumn(65);
-                        columns.ConstantColumn(75);
-                        columns.ConstantColumn(50);
-                    });
-                }
-                else
-                {
-                    innerTable.ColumnsDefinition(columns =>
-                    {
-                        columns.ConstantColumn(70);
-                        columns.ConstantColumn(55);
-                        columns.RelativeColumn();
-                        columns.ConstantColumn(60);
-                        columns.ConstantColumn(90);
-                    });
-                }
+                    c = c.Background(Colors.White);
+                    if (isFirst) c = c.BorderTop(box);
+                    if (isLast) c = c.BorderBottom(box);
+                    if (ci == 0) c = c.BorderLeft(box);
+                    if (ci == lastColIndex) c = c.BorderRight(box);
+                    return c.BorderColor(Colors.Black).PaddingVertical(3).PaddingHorizontal(4);
+                });
+            }
 
-                foreach (var row in groupRows)
-                {
-                    IContainer Cell() => innerTable.Cell().Background(Colors.White).PaddingVertical(3).PaddingHorizontal(4);
-                    Cell().Text(BuildLotsText(row));
-                    Cell().Text(BuildSkinsText(row));
-                    Cell().Text(BuildDescriptionText(row));
+            Cell().Text(BuildLotsText(row));
+            Cell().Text(BuildSkinsText(row));
+            Cell().Text(BuildDescriptionText(row));
 
-                    if (isFarmerCatalog && lotSaleData != null && lotSaleData.TryGetValue(row.LotNumber, out var sale))
-                    {
-                        Cell().AlignRight().Text(sale.HasResult ? $"\u20ac{sale.PricePerSkin:N2}" : "-");
-                        Cell().AlignRight().Text(sale.HasResult ? $"\u20ac{sale.Value:N2}" : "-");
-                        Cell().Text(sale.PdfStatus).FontColor(sale.IsPaid ? Color.FromHex("#230A3C") : sale.IsInvoiced ? Colors.Green.Darken2 : sale.HasResult ? Colors.Blue.Darken2 : Colors.Grey.Medium).Bold();
-                    }
-                    else if (isFarmerCatalog)
-                    {
-                        Cell().Text("-");
-                        Cell().Text("-");
-                        Cell().Text("");
-                    }
-                    else
-                    {
-                        Cell().Text("");
-                        Cell().Text("");
-                    }
-                }
-            });
+            if (isFarmerCatalog && lotSaleData != null && lotSaleData.TryGetValue(row.LotNumber, out var sale))
+            {
+                Cell().AlignRight().Text(sale.HasResult ? $"\u20ac{sale.PricePerSkin:N2}" : "-");
+                Cell().AlignRight().Text(sale.HasResult ? $"\u20ac{sale.Value:N2}" : "-");
+                Cell().Text(sale.PdfStatus).FontColor(sale.IsPaid ? Color.FromHex("#230A3C") : sale.IsInvoiced ? Colors.Green.Darken2 : sale.HasResult ? Colors.Blue.Darken2 : Colors.Grey.Medium).Bold();
+            }
+            else if (isFarmerCatalog)
+            {
+                Cell().Text("-");
+                Cell().Text("-");
+                Cell().Text("");
+            }
+            else
+            {
+                Cell().Text("");
+                Cell().Text("");
+            }
+        }
     }
 
     private static void ComposeHeader(IContainer container, string logoPath)
