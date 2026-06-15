@@ -137,9 +137,19 @@ public class TypistEntryFunctions
 
         var slot = existingReentries.Count == 0 ? 1 : 2;
 
+        // The reentry request doesn't carry the auction; inherit it from the most recent prior
+        // entry for this lot that has one set. Without this the resolved AuctionResult would be
+        // created with AuctionId = 0 and never appear under its auction in the broker/buyer views.
+        var auctionId = await _db.TypistEntries
+            .Where(e => e.LotNumber == body.LotNumber && e.AuctionId > 0)
+            .OrderByDescending(e => e.Id)
+            .Select(e => e.AuctionId)
+            .FirstOrDefaultAsync();
+
         var entry = new TypistEntry
         {
             LotNumber = body.LotNumber,
+            AuctionId = auctionId,
             BrokerId = body.BrokerId,
             PriceEur = body.PriceEur,
             TypistUserId = body.TypistUserId,
