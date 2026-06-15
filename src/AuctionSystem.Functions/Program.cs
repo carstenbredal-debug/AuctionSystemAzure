@@ -68,7 +68,9 @@ var host = new HostBuilder()
         if (!string.IsNullOrEmpty(bcTenantId))
         {
             services.AddSingleton<BusinessCentralAuthService>();
-            services.AddHttpClient<BusinessCentralApiClient>();
+            services.AddTransient<AuctionSystem.Functions.BusinessCentral.Services.BcRetryHandler>();
+            services.AddHttpClient<BusinessCentralApiClient>()
+                .AddHttpMessageHandler<AuctionSystem.Functions.BusinessCentral.Services.BcRetryHandler>();
             services.AddScoped<BusinessCentralSyncService>();
         }
 
