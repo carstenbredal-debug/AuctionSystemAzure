@@ -119,7 +119,7 @@ else
                     <p class="mt-2 mb-0 text-muted"><small>Total: @_status.Status?.Brokers.Total</small></p>
                 </div>
                 <div class="card-footer">
-                    <button class="btn btn-sm btn-primary w-100" @onclick="SyncBrokers" disabled="@_syncing">
+                    <button class="btn btn-sm btn-sync w-100 @(_syncingType == "brokers" ? "syncing" : "")" @onclick="SyncBrokers" disabled="@_syncing">
                         @if (_syncingType == "brokers") { <span class="spinner-border spinner-border-sm me-1"></span> }
                         Sync Brokers
                     </button>
@@ -143,7 +143,7 @@ else
                     <p class="mt-2 mb-0 text-muted"><small>Total: @_status.Status?.Buyers.Total</small></p>
                 </div>
                 <div class="card-footer">
-                    <button class="btn btn-sm btn-primary w-100" @onclick="SyncBuyers" disabled="@_syncing">
+                    <button class="btn btn-sm btn-sync w-100 @(_syncingType == "buyers" ? "syncing" : "")" @onclick="SyncBuyers" disabled="@_syncing">
                         @if (_syncingType == "buyers") { <span class="spinner-border spinner-border-sm me-1"></span> }
                         Sync Buyers
                     </button>
@@ -167,7 +167,7 @@ else
                     <p class="mt-2 mb-0 text-muted"><small>Total: @_status.Status?.Farmers.Total</small></p>
                 </div>
                 <div class="card-footer">
-                    <button class="btn btn-sm btn-primary w-100" @onclick="SyncFarmers" disabled="@_syncing">
+                    <button class="btn btn-sm btn-sync w-100 @(_syncingType == "farmers" ? "syncing" : "")" @onclick="SyncFarmers" disabled="@_syncing">
                         @if (_syncingType == "farmers") { <span class="spinner-border spinner-border-sm me-1"></span> }
                         Sync Farmers
                     </button>
@@ -182,7 +182,7 @@ else
                     <p class="mt-2 mb-0 text-muted"><small>Total invoices</small></p>
                 </div>
                 <div class="card-footer">
-                    <button class="btn btn-sm btn-primary w-100" @onclick="SyncInvoices" disabled="@_syncing">
+                    <button class="btn btn-sm btn-sync w-100 @(_syncingType == "invoices" ? "syncing" : "")" @onclick="SyncInvoices" disabled="@_syncing">
                         @if (_syncingType == "invoices") { <span class="spinner-border spinner-border-sm me-1"></span> }
                         Sync Invoices
                     </button>
@@ -197,7 +197,7 @@ else
                     <p class="mt-2 mb-0 text-muted"><small>Total credit notes</small></p>
                 </div>
                 <div class="card-footer">
-                    <button class="btn btn-sm btn-primary w-100" @onclick="SyncCreditNotes" disabled="@_syncing">
+                    <button class="btn btn-sm btn-sync w-100 @(_syncingType == "credit-notes" ? "syncing" : "")" @onclick="SyncCreditNotes" disabled="@_syncing">
                         @if (_syncingType == "credit-notes") { <span class="spinner-border spinner-border-sm me-1"></span> }
                         Sync Credit Notes
                     </button>
@@ -213,7 +213,7 @@ else
                 <strong>Full Sync</strong>
                 <p class="mb-0 text-muted">Push all brokers, farmers, buyers, invoices, and credit notes to Business Central in one operation.</p>
             </div>
-            <button class="btn btn-lg btn-success" @onclick="SyncAll" disabled="@_syncing">
+            <button class="btn btn-lg btn-success @(_syncingType == "all" ? "syncing" : "")" @onclick="SyncAll" disabled="@_syncing">
                 @if (_syncingType == "all") { <span class="spinner-border spinner-border-sm me-1"></span> }
                 Sync All to BC
             </button>
@@ -231,7 +231,7 @@ else
                 </button>
                 @if (_unpushedInvoices.Count > 0)
                 {
-                    <button class="btn btn-sm btn-success" @onclick="PushAllUnpushed" disabled="@_syncing">
+                    <button class="btn btn-sm btn-success @(_syncingType == "push-unpushed" ? "syncing" : "")" @onclick="PushAllUnpushed" disabled="@_syncing">
                         @if (_syncingType == "push-unpushed") { <span class="spinner-border spinner-border-sm me-1"></span> }
                         Push All to BC
                     </button>
@@ -288,7 +288,7 @@ else
                 </button>
                 @if (_unpushedCreditNotes.Count > 0)
                 {
-                    <button class="btn btn-sm btn-success" @onclick="PushAllUnpushedCreditNotes" disabled="@_syncing">
+                    <button class="btn btn-sm btn-success @(_syncingType == "push-unpushed-cn" ? "syncing" : "")" @onclick="PushAllUnpushedCreditNotes" disabled="@_syncing">
                         @if (_syncingType == "push-unpushed-cn") { <span class="spinner-border spinner-border-sm me-1"></span> }
                         Push All to BC
                     </button>
