@@ -757,7 +757,12 @@ else
         if (string.IsNullOrWhiteSpace(_editDto.BuyerNumber) || string.IsNullOrWhiteSpace(_editDto.Name))
         { _message = "Buyer Number and Name are required."; _messageIsError = true; return; }
 
-        await Api.UpdateBuyerAsync(_editDto.Id, _editDto);
+        var saved = await Api.UpdateBuyerAsync(_editDto.Id, _editDto);
+        if (saved == null)
+        {
+            _message = $"Save failed: {Api.LastError ?? "the server rejected the update."}"; _messageIsError = true;
+            return;
+        }
         _message = "Buyer updated."; _messageIsError = false;
         await LoadData();
     }

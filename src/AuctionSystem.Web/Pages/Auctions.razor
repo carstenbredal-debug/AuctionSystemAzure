@@ -855,7 +855,8 @@ else
         var confirmed = await JS.InvokeAsync<bool>("confirm", "Are you sure you want to set this auction to Active? This cannot be undone — you will not be able to go back to Draft.");
         if (!confirmed) return;
         changingStatus = true;
-        await Api.UpdateAuctionStatusAsync(Id!.Value, AuctionStatus.Active);
+        var ok = await Api.UpdateAuctionStatusAsync(Id!.Value, AuctionStatus.Active);
+        if (!ok) await JS.InvokeVoidAsync("alert", $"Failed to activate auction: {Api.LastError}");
         selectedAuction = await Api.GetAuctionAsync(Id.Value);
         changingStatus = false;
     }
@@ -865,7 +866,8 @@ else
         var confirmed = await JS.InvokeAsync<bool>("confirm", "Are you sure you want to close this auction? This cannot be undone.");
         if (!confirmed) return;
         changingStatus = true;
-        await Api.UpdateAuctionStatusAsync(Id!.Value, AuctionStatus.Closed);
+        var ok = await Api.UpdateAuctionStatusAsync(Id!.Value, AuctionStatus.Closed);
+        if (!ok) await JS.InvokeVoidAsync("alert", $"Failed to close auction: {Api.LastError}");
         selectedAuction = await Api.GetAuctionAsync(Id.Value);
         changingStatus = false;
     }

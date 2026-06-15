@@ -11,6 +11,19 @@ public class AuctionApiClient
 
     public string BaseUrl => _http.BaseAddress?.ToString().TrimEnd('/') ?? "";
 
+    /// <summary>Detail of the last failed mutation (HTTP status + response body), for the UI to show.</summary>
+    public string? LastError { get; private set; }
+
+    private async Task<bool> OkAsync(HttpResponseMessage resp)
+    {
+        if (resp.IsSuccessStatusCode) { LastError = null; return true; }
+        var body = await resp.Content.ReadAsStringAsync();
+        if (body.Length > 300) body = body[..300];
+        LastError = $"{(int)resp.StatusCode} {resp.ReasonPhrase}".Trim()
+            + (string.IsNullOrWhiteSpace(body) ? "" : $" — {body}");
+        return false;
+    }
+
     // Dashboard
     public async Task<DashboardStats> GetDashboardAsync()
         => await _http.GetFromJsonAsync<DashboardStats>("api/dashboard") ?? new();
@@ -28,8 +41,11 @@ public class AuctionApiClient
     public async Task<List<LotDto>> GetLotsByAuctionAsync(int auctionId)
         => await _http.GetFromJsonAsync<List<LotDto>>($"api/auctions/{auctionId}/lots") ?? new();
 
-    public async Task UpdateAuctionStatusAsync(int id, AuctionStatus status)
-        => await _http.PutAsJsonAsync($"api/auctions/{id}/status", status);
+    public async Task<bool> UpdateAuctionStatusAsync(int id, AuctionStatus status)
+    {
+        var resp = await _http.PutAsJsonAsync($"api/auctions/{id}/status", status);
+        return await OkAsync(resp);
+    }
 
     public async Task<bool> DeleteAuctionAsync(int id)
     {
@@ -54,7 +70,7 @@ public class AuctionApiClient
     public async Task<BrokerDto?> UpdateBrokerAsync(int id, BrokerDto broker)
     {
         var resp = await _http.PutAsJsonAsync($"api/brokers/{id}", broker);
-        if (!resp.IsSuccessStatusCode) return null;
+        if (!await OkAsync(resp)) return null;
         return await resp.Content.ReadFromJsonAsync<BrokerDto>();
     }
 
@@ -75,7 +91,7 @@ public class AuctionApiClient
     public async Task<FarmerDto?> UpdateFarmerAsync(int id, FarmerDto farmer)
     {
         var resp = await _http.PutAsJsonAsync($"api/farmers/{id}", farmer);
-        if (!resp.IsSuccessStatusCode) return null;
+        if (!await OkAsync(resp)) return null;
         return await resp.Content.ReadFromJsonAsync<FarmerDto>();
     }
 
@@ -101,14 +117,14 @@ public class AuctionApiClient
     public async Task<BuyerDto?> CreateBuyerAsync(int brokerId, BuyerDto buyer)
     {
         var resp = await _http.PostAsJsonAsync($"api/brokers/{brokerId}/buyers/add", buyer);
-        if (!resp.IsSuccessStatusCode) return null;
+        if (!await OkAsync(resp)) return null;
         return await resp.Content.ReadFromJsonAsync<BuyerDto>();
     }
 
     public async Task<BuyerDto?> UpdateBuyerAsync(int id, BuyerDto buyer)
     {
         var resp = await _http.PutAsJsonAsync($"api/buyers/{id}", buyer);
-        if (!resp.IsSuccessStatusCode) return null;
+        if (!await OkAsync(resp)) return null;
         return await resp.Content.ReadFromJsonAsync<BuyerDto>();
     }
 
@@ -306,14 +322,14 @@ public class AuctionApiClient
     public async Task<SystemParameterDto?> CreateParameterAsync(SystemParameterDto param)
     {
         var resp = await _http.PostAsJsonAsync("api/parameters", param);
-        if (!resp.IsSuccessStatusCode) return null;
+        if (!await OkAsync(resp)) return null;
         return await resp.Content.ReadFromJsonAsync<SystemParameterDto>();
     }
 
     public async Task<SystemParameterDto?> UpdateParameterAsync(int id, SystemParameterDto param)
     {
         var resp = await _http.PutAsJsonAsync($"api/parameters/{id}", param);
-        if (!resp.IsSuccessStatusCode) return null;
+        if (!await OkAsync(resp)) return null;
         return await resp.Content.ReadFromJsonAsync<SystemParameterDto>();
     }
 

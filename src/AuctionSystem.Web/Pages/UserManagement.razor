@@ -951,7 +951,7 @@ else
         if (string.IsNullOrWhiteSpace(_buyerForm.BuyerNumber) || string.IsNullOrWhiteSpace(_buyerForm.Name))
         { SetError("Buyer Number and Name are required."); return false; }
         var buyer = await Api.CreateBuyerAsync(0, _buyerForm);
-        if (buyer == null) { SetError("Failed to create buyer."); return false; }
+        if (buyer == null) { SetError($"Failed to create buyer: {Api.LastError}"); return false; }
         _editingUser!.BuyerId = buyer.Id;
         return true;
     }

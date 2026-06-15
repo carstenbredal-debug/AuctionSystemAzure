@@ -160,6 +160,16 @@ using (var scope = host.Services.CreateScope())
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Farmers') AND name = 'VendorPostingGroup')
                 ALTER TABLE auction.Farmers ADD VendorPostingGroup nvarchar(max) NOT NULL DEFAULT '';
         ");
+        // BcSyncedAt: entity property (Broker/Buyer/Farmer) mapped by convention but missing from
+        // the DB, which made every full-entity load/save fail with 'Invalid column name BcSyncedAt'.
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Brokers') AND name = 'BcSyncedAt')
+                ALTER TABLE auction.Brokers ADD BcSyncedAt datetime2 NULL;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Buyers') AND name = 'BcSyncedAt')
+                ALTER TABLE auction.Buyers ADD BcSyncedAt datetime2 NULL;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Farmers') AND name = 'BcSyncedAt')
+                ALTER TABLE auction.Farmers ADD BcSyncedAt datetime2 NULL;
+        ");
         // Invoice BC columns
         db.Database.ExecuteSqlRaw(@"
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Invoices') AND name = 'BcInvoiceNumber')
