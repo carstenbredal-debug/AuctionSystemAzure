@@ -121,6 +121,7 @@ public class AuctionFunctions
         return await CreateJsonResponse(req, lot);
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
     [Function("SeedDatabase")]
     public async Task<HttpResponseData> Seed(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "seed")] HttpRequestData req)
@@ -261,6 +262,7 @@ public class AuctionFunctions
         return result != null ? Convert.ToInt32(result) : 0;
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
     [Function("DeleteAuction")]
     public async Task<HttpResponseData> DeleteAuction(
         [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "auctions/{auctionId:int}")] HttpRequestData req, int auctionId)
@@ -331,6 +333,7 @@ public class AuctionFunctions
         }
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
     [Function("ResetAllData")]
     public async Task<HttpResponseData> ResetAllData(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "system/reset-all")] HttpRequestData req)

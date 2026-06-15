@@ -12,7 +12,11 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 var host = new HostBuilder()
-    .ConfigureFunctionsWebApplication()
+    .ConfigureFunctionsWebApplication(worker =>
+    {
+        // Authenticate/authorize every HTTP function (default: authenticated; see attributes).
+        worker.UseMiddleware<AuctionSystem.Functions.Auth.AuthenticationMiddleware>();
+    })
     .ConfigureServices((context, services) =>
     {
         var connectionString = context.Configuration["SqlConnectionString"]

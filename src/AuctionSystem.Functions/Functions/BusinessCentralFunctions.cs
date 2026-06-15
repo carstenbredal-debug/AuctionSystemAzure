@@ -281,6 +281,7 @@ public class BusinessCentralFunctions
         return company?.Name ?? companies.First().Name;
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
     [Function("BcResetInvoices")]
     public async Task<HttpResponseData> ResetInvoices(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "bc/reset-invoices")] HttpRequestData req)

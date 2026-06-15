@@ -504,6 +504,7 @@ public class TypistEntryFunctions
         return await CreateJsonResponse(req, recentLots);
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
     [Function("ResetTypistLot")]
     public async Task<HttpResponseData> ResetLot(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "typist-entries/reset-lot/{lotNumber:int}")] HttpRequestData req,

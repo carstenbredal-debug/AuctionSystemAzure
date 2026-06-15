@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using AuctionSystem.Domain.Data;
 using AuctionSystem.Domain.Entities;
 using AuctionSystem.Domain.Enums;
+using AuctionSystem.Functions.Auth;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.EntityFrameworkCore;
@@ -28,10 +29,16 @@ public class UserFunctions
     public async Task<HttpResponseData> GetCurrentUser(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "users/me/{objectId}")] HttpRequestData req, string objectId)
     {
-        var user = await _db.AppUsers.FirstOrDefaultAsync(u => u.AzureAdObjectId == objectId && u.IsActive);
+        // Identify the caller from the authenticated principal, NOT the route param (which a
+        // caller could set to impersonate anyone). Fall back to the route only pre-enforcement.
+        var principal = req.FunctionContext.GetClientPrincipal();
+        var oid = principal?.ObjectId ?? objectId;
+        var email = principal?.Email ?? objectId;
+
+        var user = await _db.AppUsers.FirstOrDefaultAsync(u => u.AzureAdObjectId == oid && u.IsActive);
         // Fallback: try matching by email for External ID users
         if (user == null)
-            user = await _db.AppUsers.FirstOrDefaultAsync(u => u.Email == objectId && u.IsActive);
+            user = await _db.AppUsers.FirstOrDefaultAsync(u => u.Email == email && u.IsActive);
         if (user == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
         return await CreateJsonResponse(req, user);
     }
@@ -49,6 +56,7 @@ public class UserFunctions
         return await CreateJsonResponse(req, users);
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
     [Function("CreateUser")]
     public async Task<HttpResponseData> Create(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "users")] HttpRequestData req)
@@ -159,6 +167,7 @@ public class UserFunctions
         return await CreateJsonResponse(req, user);
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
     [Function("DeleteUser")]
     public async Task<HttpResponseData> Delete(
         [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "users/{id:int}")] HttpRequestData req, int id)
