@@ -533,9 +533,18 @@ public class AuctionResultFunctions
             _db.Invoices.Add(invoice);
             await _db.SaveChangesAsync();
 
-            await _bcSyncService!.PushInvoiceToBcAsync(invoice);
+            var outcome = await _bcSyncService!.PushInvoiceToBcAsync(invoice);
             invoice.InvoiceNumber = invoice.BcInvoiceNumber ?? "";
             await _db.SaveChangesAsync();
+
+            // The invoice exists locally regardless — return its id so sales history still links.
+            // If BC didn't actually take it (e.g. buyer not in BC), surface the reason instead of
+            // a silent success so it can be corrected and re-pushed.
+            if (outcome.Outcome == BcPushOutcome.NotPushed)
+            {
+                _logger.LogWarning("Invoice {Id} not pushed to BC: {Reason}", invoice.Id, outcome.Reason);
+                return (invoice.Id, outcome.Reason);
+            }
 
             _logger.LogInformation("Invoice {Number} created and posted in BC", invoice.InvoiceNumber);
             return (invoice.Id, null);

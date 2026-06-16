@@ -188,8 +188,23 @@ public class BusinessCentralSyncService
                     continue;
                 }
 
-                await PushInvoiceToBcAsync(invoice);
-                result.Created++;
+                var outcome = await PushInvoiceToBcAsync(invoice);
+                var docRef = string.IsNullOrEmpty(invoice.InvoiceNumber) ? $"AUC-{invoice.Id}" : invoice.InvoiceNumber;
+                switch (outcome.Outcome)
+                {
+                    case BcPushOutcome.Posted:
+                        result.Created++;
+                        break;
+                    case BcPushOutcome.AlreadyPushed:
+                    case BcPushOutcome.Concurrent:
+                        result.Skipped++;
+                        break;
+                    case BcPushOutcome.NotPushed:
+                        result.Failed++;
+                        result.Errors.Add($"Invoice {docRef}: {outcome.Reason}");
+                        _logger.LogWarning("Invoice {DocRef} not pushed: {Reason}", docRef, outcome.Reason);
+                        break;
+                }
             }
             catch (Exception ex)
             {
@@ -223,8 +238,23 @@ public class BusinessCentralSyncService
         {
             try
             {
-                await PushCreditNoteToBcAsync(cn);
-                result.Created++;
+                var outcome = await PushCreditNoteToBcAsync(cn);
+                var docRef = string.IsNullOrEmpty(cn.InvoiceNumber) ? $"CN-{cn.Id}" : cn.InvoiceNumber;
+                switch (outcome.Outcome)
+                {
+                    case BcPushOutcome.Posted:
+                        result.Created++;
+                        break;
+                    case BcPushOutcome.AlreadyPushed:
+                    case BcPushOutcome.Concurrent:
+                        result.Skipped++;
+                        break;
+                    case BcPushOutcome.NotPushed:
+                        result.Failed++;
+                        result.Errors.Add($"Credit Note {docRef}: {outcome.Reason}");
+                        _logger.LogWarning("Credit note {DocRef} not pushed: {Reason}", docRef, outcome.Reason);
+                        break;
+                }
             }
             catch (Exception ex)
             {
@@ -242,20 +272,21 @@ public class BusinessCentralSyncService
     /// BC assigns the number from the credit memo number series.
     /// PDF is fetched from BC and stored in blob storage.
     /// </summary>
-    public async Task PushCreditNoteToBcAsync(Invoice creditNote)
+    public async Task<BcPushResult> PushCreditNoteToBcAsync(Invoice creditNote)
     {
         var companyId = await _bcClient.ResolveCompanyIdAsync();
 
-        if (await SkipAlreadyPushedCreditNoteAsync(companyId, creditNote)) return;
+        if (await SkipAlreadyPushedCreditNoteAsync(companyId, creditNote)) return BcPushResult.AlreadyPushed;
 
         if (!await TryClaimForBcPushAsync(creditNote.Id))
         {
             _logger.LogWarning("Credit note {Id} is already being pushed to BC (claim held); skipping this push", creditNote.Id);
-            return;
+            return BcPushResult.Concurrent;
         }
 
         var buyer = await ResolveBuyerAsBcCustomerAsync(companyId, creditNote.Id, creditNote.BuyerId, creditNote.Buyer);
-        if (buyer == null) return;
+        if (buyer == null)
+            return BcPushResult.NotPushed($"Buyer {creditNote.Buyer?.BuyerNumber ?? creditNote.BuyerId.ToString()} is not a customer in BC");
 
         var extDocNumber = !string.IsNullOrEmpty(creditNote.InvoiceNumber) ? creditNote.InvoiceNumber : $"CN-{creditNote.Id}";
         var bcCreditMemo = new BcSalesCreditMemo
@@ -289,6 +320,8 @@ public class BusinessCentralSyncService
 
         // Apply credit memo against original invoice in BC
         await TryApplyCreditMemoToInvoiceAsync(companyId, creditNote, buyer.Value.BuyerNumber);
+
+        return BcPushResult.Posted;
     }
 
     // External-document keys the invoice push uses, in priority order. The stable AUC-{Id}
@@ -596,20 +629,21 @@ public class BusinessCentralSyncService
     /// BC assigns the invoice number from the SALESINV number series.
     /// PDF is fetched from BC and stored in blob storage.
     /// </summary>
-    public async Task PushInvoiceToBcAsync(Invoice invoice)
+    public async Task<BcPushResult> PushInvoiceToBcAsync(Invoice invoice)
     {
         var companyId = await _bcClient.ResolveCompanyIdAsync();
 
-        if (await SkipAlreadyPushedInvoiceAsync(companyId, invoice)) return;
+        if (await SkipAlreadyPushedInvoiceAsync(companyId, invoice)) return BcPushResult.AlreadyPushed;
 
         if (!await TryClaimForBcPushAsync(invoice.Id))
         {
             _logger.LogWarning("Invoice {Id} is already being pushed to BC (claim held); skipping this push", invoice.Id);
-            return;
+            return BcPushResult.Concurrent;
         }
 
         var buyer = await ResolveBuyerAsBcCustomerAsync(companyId, invoice.Id, invoice.BuyerId, invoice.Buyer);
-        if (buyer == null) return;
+        if (buyer == null)
+            return BcPushResult.NotPushed($"Buyer {invoice.Buyer?.BuyerNumber ?? invoice.BuyerId.ToString()} is not a customer in BC");
 
         var extDocRef = !string.IsNullOrEmpty(invoice.InvoiceNumber) ? invoice.InvoiceNumber : $"AUC-{invoice.Id}";
         var postingDate = DateTime.UtcNow;
@@ -645,6 +679,8 @@ public class BusinessCentralSyncService
 
         _logger.LogInformation("Created and posted BC sales invoice {BcNumber} (customer={Customer})",
             invoice.InvoiceNumber, buyer.Value.BuyerNumber);
+
+        return BcPushResult.Posted;
     }
 
     /// <summary>
