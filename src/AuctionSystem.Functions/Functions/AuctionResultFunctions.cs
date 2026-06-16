@@ -383,6 +383,26 @@ public class AuctionResultFunctions
             .Where(r => body.AuctionResultIds.Contains(r.Id) && r.SoldToBuyerId == null)
             .ToListAsync();
 
+        // Bulletproof: a lot may only be sold to a customer LINKED to that lot's broker
+        // (the BrokerBuyers junction). Enforced server-side so a tampered/stale client can't
+        // sell to a non-linked buyer even if the dropdown were bypassed.
+        var brokerIds = results.Select(r => r.BrokerId).Distinct().ToList();
+        if (brokerIds.Count > 0)
+        {
+            var linkedBrokerIds = await _db.BrokerBuyers
+                .Where(bb => bb.BuyerId == body.BuyerId && brokerIds.Contains(bb.BrokerId))
+                .Select(bb => bb.BrokerId)
+                .Distinct()
+                .ToListAsync();
+            if (brokerIds.Except(linkedBrokerIds).Any())
+            {
+                var resp = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+                resp.Headers.Add("Content-Type", "application/json");
+                await resp.WriteStringAsync(JsonSerializer.Serialize(new { error = "Buyer is not a linked customer of the broker for one or more of these lots." }, JsonOptions));
+                return resp;
+            }
+        }
+
         foreach (var result in results)
         {
             result.SoldToBuyerId = body.BuyerId;

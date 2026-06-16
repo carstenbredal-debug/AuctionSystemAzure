@@ -726,19 +726,9 @@ else if (_activeTab == "takeback")
                 if (_auctions.Any())
                     _selectedAuctionId = _auctions.First().Id;
                 _allResults = await Api.GetAuctionResultsByBrokerAsync(_brokerId);
-                // Get buyers from junction table (direct links) + customer requests
-                var linkedBuyers = await Api.GetBrokerLinkedBuyersAsync(_brokerId);
-                var allRequests = await Api.GetCustomerRequestsByBrokerAsync(_brokerId);
-                var approvedBuyerIds = allRequests
-                    .Where(r => r.Status == CustomerRequestStatus.Approved)
-                    .Select(r => r.BuyerId)
-                    .ToHashSet();
-                var allBuyers = await Api.GetAllBuyersAsync();
-                var requestBuyers = allBuyers.Where(b => approvedBuyerIds.Contains(b.Id)).ToList();
-                var linkedBuyerIds = linkedBuyers.Select(b => b.Id).ToHashSet();
-                _buyers = linkedBuyers
-                    .Concat(requestBuyers.Where(b => !linkedBuyerIds.Contains(b.Id)))
-                    .ToList();
+                // Sell dropdown must be ONLY the broker's linked customers (the BrokerBuyers
+                // junction). No customer-request fallback — a non-linked buyer can never appear.
+                _buyers = await Api.GetBrokerLinkedBuyersAsync(_brokerId);
                 _pendingTakebacks = await Api.GetTakebackRequestsByBrokerAsync(_brokerId);
                 _invoiceLinks = await Api.GetInvoiceLinksForBrokerAsync(_brokerId);
                 await LoadFeeParameters();
