@@ -494,7 +494,7 @@ else if (_activeTab == "takeback")
                     </div>
                     <div class="mb-3">
                         <label class="form-label">@(_commissionType == "percentage" ? "Commission (%)" : "Commission Amount (€)")</label>
-                        <input type="number" class="form-control" step="0.01" @bind="_commissionValue" @onkeydown="HandleCommissionKeydown" />
+                        <input type="number" class="form-control" step="0.01" min="0" @bind="_commissionValue" @onkeydown="HandleCommissionKeydown" />
                     </div>
                     @if (_commissionType == "percentage" && _commissionValue > 0)
                     {
@@ -521,6 +521,26 @@ else if (_activeTab == "takeback")
                         @if (_selling) { <span class="spinner-border spinner-border-sm me-1"></span> }
                         Confirm Sale
                     </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* Invalid Amount Popup - shown on top of the commission modal, OK returns to it *@
+@if (_showInvalidAmountPopup)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5); z-index: 1060;">
+        <div class="modal-dialog modal-dialog-centered modal-sm">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Invalid amount</h5>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-0">@_invalidAmountMessage</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary" @onclick="() => _showInvalidAmountPopup = false">OK</button>
                 </div>
             </div>
         </div>
@@ -688,6 +708,8 @@ else if (_activeTab == "takeback")
     private bool _showCommissionModal;
     private string _commissionType = "percentage";
     private decimal _commissionValue;
+    private bool _showInvalidAmountPopup;
+    private string _invalidAmountMessage = "";
     private bool _requestingTakeback;
     private string _activeTab = "purchased";
     private string? _message;
@@ -788,6 +810,7 @@ else if (_activeTab == "takeback")
     {
         _commissionType = "percentage";
         _commissionValue = 0;
+        _showInvalidAmountPopup = false;
         _showCommissionModal = true;
     }
 
@@ -810,6 +833,7 @@ else if (_activeTab == "takeback")
         _showInitialsModal = false;
         _commissionType = "percentage";
         _commissionValue = 0;
+        _showInvalidAmountPopup = false;
         _showCommissionModal = true;
     }
 
@@ -857,6 +881,17 @@ else if (_activeTab == "takeback")
     {
         _message = null;
         if (_selectedIds.Count == 0 || _selectedBuyerId <= 0) return;
+
+        // Commission can never be negative. Show the popup; OK dismisses it and leaves the
+        // commission modal open underneath so the user can correct the value.
+        if (_commissionValue < 0)
+        {
+            _invalidAmountMessage = _commissionType == "percentage"
+                ? "Commission percentage cannot be negative."
+                : "Commission amount cannot be negative.";
+            _showInvalidAmountPopup = true;
+            return;
+        }
 
         _selling = true;
         try

@@ -383,6 +383,16 @@ public class AuctionResultFunctions
         if (body == null || body.AuctionResultIds == null || body.AuctionResultIds.Count == 0 || body.BuyerId <= 0)
             return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
 
+        // Commission (percentage or fixed amount) can never be negative — reject server-side so a
+        // tampered or stale client can't push a negative that would credit the buyer.
+        if (body.CommissionValue.HasValue && body.CommissionValue.Value < 0)
+        {
+            var resp = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+            resp.Headers.Add("Content-Type", "application/json");
+            await resp.WriteStringAsync(JsonSerializer.Serialize(new { error = "Commission cannot be negative." }, JsonOptions));
+            return resp;
+        }
+
         var buyer = await _db.Buyers.FindAsync(body.BuyerId);
         if (buyer == null)
         {
@@ -668,38 +678,56 @@ public class AuctionResultFunctions
             r.LastModifiedAt = DateTime.UtcNow;
         }
 
-        var (created, takenBackResultIds, takebackBuyerId) = await ProcessBrokerTakebacksAsync(results);
+        var (created, takenBackResultIds, _) = await ProcessBrokerTakebacksAsync(results);
         await _db.SaveChangesAsync();
 
-        var (creditNoteId, creditNotePdfUrl) = await TryGenerateCreditNoteForTakebackAsync(takenBackResultIds, takebackBuyerId);
-
-        // Record re-invoice history
-        string? creditNoteNumber = null;
-        if (creditNoteId != null)
+        // Issue one credit note per buyer/original invoice for the taken-back lots.
+        var creditNotes = new List<Invoice>();
+        try
         {
-            var cn = await _db.Invoices.FindAsync(creditNoteId);
-            creditNoteNumber = cn?.InvoiceNumber ?? cn?.BcInvoiceNumber;
+            creditNotes = await GenerateCreditNotesAsync(takenBackResultIds);
         }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to generate credit notes for takeback");
+        }
+
+        // Map each taken-back auction result to the credit note that actually covers it,
+        // so history is attributed to the lot's own buyer — not the first buyer in the batch.
+        var creditNoteByResultId = new Dictionary<int, Invoice>();
+        foreach (var cn in creditNotes)
+            foreach (var line in cn.Lines)
+                creditNoteByResultId[line.AuctionResultId] = cn;
+
+        // Record re-invoice history per lot
         foreach (var r in results)
         {
+            creditNoteByResultId.TryGetValue(r.Id, out var cn);
             _db.LotSalesHistories.Add(new LotSalesHistory
             {
                 LotNumber = r.LotNumber,
                 AuctionResultId = r.Id,
                 ActionType = "Re-Invoice",
                 Initials = body.Initials,
-                BuyerId = takebackBuyerId,
-                InvoiceId = creditNoteId,
-                InvoiceNumber = creditNoteNumber,
+                BuyerId = cn?.BuyerId,
+                InvoiceId = cn?.Id,
+                InvoiceNumber = cn?.InvoiceNumber ?? cn?.BcInvoiceNumber,
                 Amount = r.TotalSkins * r.PriceEur,
                 CreatedAt = DateTime.UtcNow
             });
         }
         await _db.SaveChangesAsync();
 
+        var firstCreditNote = creditNotes.FirstOrDefault();
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
-        await response.WriteStringAsync(JsonSerializer.Serialize(new { requestCount = created.Count, creditNoteId, creditNotePdfUrl }, JsonOptions));
+        await response.WriteStringAsync(JsonSerializer.Serialize(new
+        {
+            requestCount = created.Count,
+            creditNoteId = firstCreditNote?.Id,
+            creditNotePdfUrl = firstCreditNote?.PdfUrl,
+            creditNoteIds = creditNotes.Select(c => c.Id).ToList()
+        }, JsonOptions));
         return response;
     }
 
@@ -928,7 +956,8 @@ public class AuctionResultFunctions
         {
             try
             {
-                creditNoteId = await GenerateCreditNoteAsync(new List<int> { takebackReq.AuctionResultId });
+                var creditNotes = await GenerateCreditNotesAsync(new List<int> { takebackReq.AuctionResultId });
+                creditNoteId = creditNotes.Count > 0 ? creditNotes[0].Id : (int?)null;
             }
             catch (Exception ex)
             {
@@ -1041,39 +1070,17 @@ public class AuctionResultFunctions
         return created;
     }
 
-    private async Task<(int? CreditNoteId, string? CreditNotePdfUrl)> TryGenerateCreditNoteForTakebackAsync(
-        List<int> takenBackResultIds, int? buyerId)
+    // Issue credit notes for the given auction results. Lines are grouped by their ORIGINAL
+    // invoice, so taking back lots that were sold to several buyers produces one credit note
+    // per buyer/invoice — not a single credit note lumped onto the first buyer (which left the
+    // other buyers charged but never credited). Returns the created credit notes.
+    private async Task<List<Invoice>> GenerateCreditNotesAsync(List<int> auctionResultIds)
     {
-        if (takenBackResultIds.Count == 0) return (null, null);
-
-        try
-        {
-            var creditNoteId = await GenerateCreditNoteAsync(takenBackResultIds, buyerId);
-            if (creditNoteId != null)
-            {
-                var cn = await _db.Invoices.FindAsync(creditNoteId.Value);
-                return (creditNoteId, cn?.PdfUrl);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to generate credit note");
-        }
-        return (null, null);
-    }
-
-    private async Task<int?> GenerateCreditNoteAsync(List<int> auctionResultIds, int? buyerId = null)
-    {
-        var query = _db.Set<InvoiceLine>()
+        var allInvoiceLines = await _db.Set<InvoiceLine>()
             .Include(l => l.Invoice).ThenInclude(i => i.Buyer)
             .Include(l => l.Invoice).ThenInclude(i => i.Broker)
-            .Where(l => auctionResultIds.Contains(l.AuctionResultId) && !l.Invoice.IsCreditNote);
-
-        // Only credit lines from invoices belonging to the specific buyer
-        if (buyerId.HasValue)
-            query = query.Where(l => l.Invoice.BuyerId == buyerId.Value);
-
-        var allInvoiceLines = await query.ToListAsync();
+            .Where(l => auctionResultIds.Contains(l.AuctionResultId) && !l.Invoice.IsCreditNote)
+            .ToListAsync();
 
         // Only use the most recent invoice line per auction result to avoid double crediting
         var invoiceLines = allInvoiceLines
@@ -1081,81 +1088,88 @@ public class AuctionResultFunctions
             .Select(g => g.OrderByDescending(l => l.Invoice.InvoiceDate).First())
             .ToList();
 
-        if (invoiceLines.Count == 0) return null;
-
-        var originalInvoice = invoiceLines.First().Invoice;
-
-        // Use auction result's broker to ensure credit note belongs to the correct broker
-        var firstResult = await _db.AuctionResults.FindAsync(invoiceLines.First().AuctionResultId);
-        var brokerId = firstResult?.BrokerId ?? originalInvoice.BrokerId;
+        if (invoiceLines.Count == 0) return new List<Invoice>();
 
         var auctionFeeParam = await _db.SystemParameters.FirstOrDefaultAsync(p => p.Key == "AuctionFee");
         var handlingFeeParam = await _db.SystemParameters.FirstOrDefaultAsync(p => p.Key == "HandlingFee");
         var auctionFeePercent = auctionFeeParam != null ? decimal.Parse(auctionFeeParam.Value, CultureInfo.InvariantCulture) : 0m;
         var handlingFeePerSkin = handlingFeeParam != null ? decimal.Parse(handlingFeeParam.Value, CultureInfo.InvariantCulture) : 0m;
 
-        var creditNote = new Invoice
+        var createdCreditNotes = new List<Invoice>();
+
+        // One credit note per original invoice → the correct buyer + OriginalInvoiceId for each.
+        foreach (var grp in invoiceLines.GroupBy(l => l.InvoiceId))
         {
-            InvoiceNumber = "",
-            InvoiceDate = DateTime.UtcNow,
-            BrokerId = brokerId,
-            BuyerId = originalInvoice.BuyerId,
-            IsCreditNote = true,
-            OriginalInvoiceId = originalInvoice.Id,
-            Status = InvoiceStatus.Issued
-        };
+            var originalInvoice = grp.First().Invoice;
 
-        decimal subTotal = 0;
-        decimal totalAuctionFee = 0;
-        decimal totalCommission = 0;
-
-        foreach (var line in invoiceLines)
-        {
-            var handlingFee = line.Skins * handlingFeePerSkin;
-            var lotAuctionFee = (line.HammerPrice + handlingFee) * auctionFeePercent / 100m;
-
-            creditNote.Lines.Add(new InvoiceLine
+            var creditNote = new Invoice
             {
-                LotNumber = line.LotNumber,
-                Description = line.Description,
-                Skins = -line.Skins,
-                PricePerSkin = line.PricePerSkin,
-                HammerPrice = -line.HammerPrice,
-                AuctionResultId = line.AuctionResultId
-            });
+                InvoiceNumber = "",
+                InvoiceDate = DateTime.UtcNow,
+                BrokerId = originalInvoice.BrokerId,
+                BuyerId = originalInvoice.BuyerId,
+                IsCreditNote = true,
+                OriginalInvoiceId = originalInvoice.Id,
+                Status = InvoiceStatus.Issued
+            };
 
-            subTotal -= line.HammerPrice;
-            totalAuctionFee -= lotAuctionFee;
+            decimal subTotal = 0;
+            decimal totalAuctionFee = 0;
+            decimal totalCommission = 0;
 
-            var result = await _db.AuctionResults.FindAsync(line.AuctionResultId);
-            totalCommission -= result?.CommissionAmount ?? 0;
+            foreach (var line in grp)
+            {
+                var handlingFee = line.Skins * handlingFeePerSkin;
+                var lotAuctionFee = (line.HammerPrice + handlingFee) * auctionFeePercent / 100m;
+
+                creditNote.Lines.Add(new InvoiceLine
+                {
+                    LotNumber = line.LotNumber,
+                    Description = line.Description,
+                    Skins = -line.Skins,
+                    PricePerSkin = line.PricePerSkin,
+                    HammerPrice = -line.HammerPrice,
+                    AuctionResultId = line.AuctionResultId
+                });
+
+                subTotal -= line.HammerPrice;
+                totalAuctionFee -= lotAuctionFee;
+
+                var result = await _db.AuctionResults.FindAsync(line.AuctionResultId);
+                totalCommission -= result?.CommissionAmount ?? 0;
+            }
+
+            creditNote.SubTotal = subTotal;
+            creditNote.AuctionFee = totalAuctionFee;
+            creditNote.Commission = totalCommission;
+            creditNote.TotalAmount = subTotal + totalAuctionFee + totalCommission;
+
+            creditNote.Buyer = originalInvoice.Buyer;
+            creditNote.OriginalInvoice = originalInvoice;
+
+            _db.Invoices.Add(creditNote);
+            createdCreditNotes.Add(creditNote);
         }
 
-        creditNote.SubTotal = subTotal;
-        creditNote.AuctionFee = totalAuctionFee;
-        creditNote.Commission = totalCommission;
-        creditNote.TotalAmount = subTotal + totalAuctionFee + totalCommission;
-
-        creditNote.Buyer = originalInvoice.Buyer;
-        creditNote.OriginalInvoice = originalInvoice;
-
-        _db.Invoices.Add(creditNote);
         await _db.SaveChangesAsync();
 
-        // Push to BC as Sales Credit Memo
+        // Push each credit note to BC as a Sales Credit Memo (one per buyer/original invoice).
         if (_bcSyncService != null)
         {
-            try
+            foreach (var cn in createdCreditNotes)
             {
-                await _bcSyncService.PushCreditNoteToBcAsync(creditNote);
-            }
-            catch (Exception bcEx)
-            {
-                _logger.LogError(bcEx, "Failed to push credit note to BC");
+                try
+                {
+                    await _bcSyncService.PushCreditNoteToBcAsync(cn);
+                }
+                catch (Exception bcEx)
+                {
+                    _logger.LogError(bcEx, "Failed to push credit note {Id} to BC", cn.Id);
+                }
             }
         }
 
-        return creditNote.Id;
+        return createdCreditNotes;
     }
 
     [Function("DiagBlobStorage")]
