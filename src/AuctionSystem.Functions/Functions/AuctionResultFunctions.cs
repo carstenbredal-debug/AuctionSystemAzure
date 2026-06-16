@@ -416,27 +416,60 @@ public class AuctionResultFunctions
             }
         }
 
+        // Atomically claim each still-unsold lot for this buyer. The guard "WHERE SoldToBuyerId
+        // IS NULL" makes the write itself the gate: if two requests (e.g. the same broker logged
+        // in twice) try to sell the same lot to different buyers at the same time, exactly one
+        // UPDATE matches and the other affects 0 rows — so a lot can never be sold, or invoiced,
+        // twice. Only the rows we actually won proceed to history + invoicing below.
+        var now = DateTime.UtcNow;
+        var claimedResults = new List<AuctionResult>();
         foreach (var result in results)
         {
-            result.SoldToBuyerId = body.BuyerId;
-            result.SoldAt = DateTime.UtcNow;
-            result.CommissionType = body.CommissionType;
-            result.CommissionValue = body.CommissionValue;
-            result.LastModifiedBy = body.Initials;
-            result.LastModifiedAt = DateTime.UtcNow;
+            decimal? commissionAmount = null;
             if (body.CommissionType == "percentage" && body.CommissionValue.HasValue)
-            {
-                var hammerPrice = result.TotalSkins * result.PriceEur;
-                result.CommissionAmount = hammerPrice * body.CommissionValue.Value / 100m;
-            }
+                commissionAmount = (result.TotalSkins * result.PriceEur) * body.CommissionValue.Value / 100m;
             else if (body.CommissionType == "amount" && body.CommissionValue.HasValue)
+                commissionAmount = body.CommissionValue.Value;
+
+            var claimed = await _db.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE auction.AuctionResults
+                SET SoldToBuyerId = {body.BuyerId},
+                    SoldAt = {now},
+                    CommissionType = {body.CommissionType},
+                    CommissionValue = {body.CommissionValue},
+                    CommissionAmount = {commissionAmount},
+                    LastModifiedBy = {body.Initials},
+                    LastModifiedAt = {now}
+                WHERE Id = {result.Id} AND SoldToBuyerId IS NULL");
+
+            if (claimed == 1)
             {
-                result.CommissionAmount = body.CommissionValue.Value;
+                // Mirror the authoritative DB values onto the tracked entity so downstream history
+                // and invoicing see the sale, then mark it Unchanged so SaveChanges doesn't re-issue
+                // the write without the IS NULL guard.
+                result.SoldToBuyerId = body.BuyerId;
+                result.SoldAt = now;
+                result.CommissionType = body.CommissionType;
+                result.CommissionValue = body.CommissionValue;
+                result.CommissionAmount = commissionAmount;
+                result.LastModifiedBy = body.Initials;
+                result.LastModifiedAt = now;
+                _db.Entry(result).State = EntityState.Unchanged;
+                claimedResults.Add(result);
             }
         }
 
-        // Update lot status to Sold
-        var lotNumbers = results.Select(r => r.LotNumber).ToList();
+        // Every requested lot was already sold by a concurrent request — nothing to do.
+        if (claimedResults.Count == 0)
+        {
+            var conflict = req.CreateResponse(System.Net.HttpStatusCode.Conflict);
+            conflict.Headers.Add("Content-Type", "application/json");
+            await conflict.WriteStringAsync(JsonSerializer.Serialize(new { error = "These lots were just sold by someone else. Please refresh." }, JsonOptions));
+            return conflict;
+        }
+
+        // Update lot status to Sold (only for lots we actually claimed)
+        var lotNumbers = claimedResults.Select(r => r.LotNumber).ToList();
         var lots = await _db.Lots.Where(l => lotNumbers.Contains(l.LotNumber)).ToListAsync();
         foreach (var lot in lots)
         {
@@ -446,7 +479,7 @@ public class AuctionResultFunctions
         await _db.SaveChangesAsync();
 
         // Record sales history
-        foreach (var result in results)
+        foreach (var result in claimedResults)
         {
             var hammerPrice = result.TotalSkins * result.PriceEur;
             _db.LotSalesHistories.Add(new LotSalesHistory
@@ -464,8 +497,8 @@ public class AuctionResultFunctions
 
         int? invoiceId = null;
         string? bcError = null;
-        if (results.Count > 0 && _bcSyncService != null)
-            (invoiceId, bcError) = await CreateAndPushInvoiceAsync(results, body.BuyerId, buyer);
+        if (claimedResults.Count > 0 && _bcSyncService != null)
+            (invoiceId, bcError) = await CreateAndPushInvoiceAsync(claimedResults, body.BuyerId, buyer);
 
         string? pdfUrl = null;
         if (invoiceId != null)
@@ -473,7 +506,7 @@ public class AuctionResultFunctions
             var inv = await _db.Invoices.FindAsync(invoiceId);
             pdfUrl = inv?.PdfUrl;
             // Update sales history with invoice info
-            var lotNums = results.Select(r => r.LotNumber).ToList();
+            var lotNums = claimedResults.Select(r => r.LotNumber).ToList();
             var historyEntries = await _db.LotSalesHistories
                 .Where(h => lotNums.Contains(h.LotNumber) && h.InvoiceId == null && h.ActionType == "Sold")
                 .OrderByDescending(h => h.CreatedAt)
@@ -488,7 +521,7 @@ public class AuctionResultFunctions
 
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
-        await response.WriteStringAsync(JsonSerializer.Serialize(new { soldCount = results.Count, invoiceId, pdfUrl, bcError }, JsonOptions));
+        await response.WriteStringAsync(JsonSerializer.Serialize(new { soldCount = claimedResults.Count, invoiceId, pdfUrl, bcError }, JsonOptions));
         return response;
     }
 
