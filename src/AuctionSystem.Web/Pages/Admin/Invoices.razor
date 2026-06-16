@@ -176,7 +176,14 @@ else
                                 @{
                                     var creditStatus = GetCreditStatus(inv);
                                 }
-                                <span class="badge bg-@GetStatusColor(creditStatus)">@creditStatus</span>
+                                @if (!inv.IsCreditNote && string.IsNullOrEmpty(inv.BcInvoiceNumber))
+                                {
+                                    <span class="badge bg-warning text-dark" title="Invoice has not posted to Business Central yet">Not Posted</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-@GetStatusColor(creditStatus)">@creditStatus</span>
+                                }
                             </td>
                             <td>
                                 @{

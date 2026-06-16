@@ -320,6 +320,18 @@ public class AuctionResultFunctions
         var lotNumbers = results.Select(r => r.LotNumber).Distinct().ToList();
         var lotShipmentStatus = await GetLotShipmentStatusAsync(lotNumbers);
 
+        // A lot only counts as truly "Invoiced" once its invoice actually posted to BC (has a BC
+        // number). Sold lots whose invoice hasn't posted are surfaced as "Not Posted", so a failed
+        // BC push never looks like a completed invoice.
+        var resultIds = results.Select(r => r.Id).ToList();
+        var postedResultIds = (await _db.InvoiceLines
+            .Where(l => resultIds.Contains(l.AuctionResultId)
+                        && !l.Invoice.IsCreditNote
+                        && l.Invoice.BcInvoiceNumber != null && l.Invoice.BcInvoiceNumber != "")
+            .Select(l => l.AuctionResultId)
+            .Distinct()
+            .ToListAsync()).ToHashSet();
+
         var enriched = results.Select(r => new
         {
             r.Id, r.AuctionId, r.LotNumber, r.BrokerId,
@@ -330,7 +342,8 @@ public class AuctionResultFunctions
             r.SoldToBuyerId, r.soldToBuyerName, r.soldToBuyerNumber,
             r.SoldAt, r.CommissionType, r.CommissionValue, r.CommissionAmount,
             r.LastModifiedBy, r.LastModifiedAt,
-            ShippingStatus = lotShipmentStatus.GetValueOrDefault(r.LotNumber)
+            ShippingStatus = lotShipmentStatus.GetValueOrDefault(r.LotNumber),
+            InvoicePosted = postedResultIds.Contains(r.Id)
         });
 
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);

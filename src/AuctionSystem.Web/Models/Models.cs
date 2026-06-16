@@ -348,6 +348,7 @@ public class AuctionResultDto
     public DateTime? LastModifiedAt { get; set; }
     public int AuctionId { get; set; }
     public string? ShippingStatus { get; set; }
+    public bool InvoicePosted { get; set; }
 }
 
 public class LotSalesHistoryDto
@@ -412,6 +413,7 @@ public class InvoiceSummaryDto
     public decimal TotalAmount { get; set; }
     public string Currency { get; set; } = "EUR";
     public string Status { get; set; } = "";
+    public string? BcInvoiceNumber { get; set; }
     public string? BrokerName { get; set; }
     public string? BuyerName { get; set; }
     public string? BuyerNumber { get; set; }

@@ -147,9 +147,13 @@ else if (_activeTab == "purchased")
                                 {
                                     <span class="badge bg-secondary">@r.ShippingStatus</span>
                                 }
-                                else if (r.SoldToBuyerId != null)
+                                else if (r.SoldToBuyerId != null && r.InvoicePosted)
                                 {
                                     <span class="badge bg-success">Invoiced</span>
+                                }
+                                else if (r.SoldToBuyerId != null)
+                                {
+                                    <span class="badge bg-warning text-dark">Not Posted</span>
                                 }
                                 else
                                 {
@@ -659,7 +663,7 @@ else if (_activeTab == "takeback")
             "HammerPrice" => r => r.TotalSkins * r.PriceEur,
             "AuctionFee" => r => CalcAuctionFee(r.TotalSkins, r.PriceEur),
             "Commission" => r => r.CommissionAmount ?? 0m,
-            "Status" => r => !string.IsNullOrEmpty(r.ShippingStatus) ? r.ShippingStatus : (r.SoldToBuyerId != null ? "Invoiced" : "Un-Invoiced"),
+            "Status" => r => !string.IsNullOrEmpty(r.ShippingStatus) ? r.ShippingStatus : (r.SoldToBuyerId == null ? "Un-Invoiced" : (r.InvoicePosted ? "Invoiced" : "Not Posted")),
             "SoldTo" => r => r.SoldToBuyerNumber ?? "",
             "SoldDate" => r => r.SoldAt ?? DateTime.MinValue,
             "InitiatedBy" => r => r.LastModifiedBy ?? "",
@@ -1056,7 +1060,7 @@ else if (_activeTab == "takeback")
             r.TotalSkins * r.PriceEur,
             CalcAuctionFee(r.TotalSkins, r.PriceEur),
             r.CommissionAmount ?? 0m,
-            !string.IsNullOrEmpty(r.ShippingStatus) ? r.ShippingStatus : (r.SoldToBuyerId != null ? "Invoiced" : "Un-Invoiced")
+            !string.IsNullOrEmpty(r.ShippingStatus) ? r.ShippingStatus : (r.SoldToBuyerId == null ? "Un-Invoiced" : (r.InvoicePosted ? "Invoiced" : "Not Posted"))
         }).ToArray();
 
         await JS.InvokeVoidAsync("exportToExcel", $"PurchasedLots_{DateTime.Now:yyyyMMdd}.xlsx", "Purchased Lots", headers, rows);
