@@ -284,44 +284,59 @@ public class BusinessCentralSyncService
             return BcPushResult.Concurrent;
         }
 
-        var buyer = await ResolveBuyerAsBcCustomerAsync(companyId, creditNote.Id, creditNote.BuyerId, creditNote.Buyer);
-        if (buyer == null)
-            return BcPushResult.NotPushed($"Buyer {creditNote.Buyer?.BuyerNumber ?? creditNote.BuyerId.ToString()} is not a customer in BC");
-
-        var extDocNumber = !string.IsNullOrEmpty(creditNote.InvoiceNumber) ? creditNote.InvoiceNumber : $"CN-{creditNote.Id}";
-        var bcCreditMemo = new BcSalesCreditMemo
+        try
         {
-            ExternalDocumentNumber = extDocNumber,
-            CreditMemoDate = DateTime.UtcNow.ToString("yyyy-MM-dd"),
-            CustomerId = buyer.Value.BcCustomerId,
-            CurrencyCode = "EUR"
-        };
+            var buyer = await ResolveBuyerAsBcCustomerAsync(companyId, creditNote.Id, creditNote.BuyerId, creditNote.Buyer);
+            if (buyer == null)
+            {
+                // Did not post — free the claim so the next retry isn't skipped for 5 minutes.
+                await ReleaseBcPushClaimAsync(creditNote.Id);
+                return BcPushResult.NotPushed($"Buyer {creditNote.Buyer?.BuyerNumber ?? creditNote.BuyerId.ToString()} is not a customer in BC");
+            }
 
-        await DeleteStaleDraftCreditMemoAsync(companyId, extDocNumber);
-        var created = await _bcClient.CreateSalesCreditMemoAsync(companyId, bcCreditMemo);
-        await AddCreditMemoLinesToBcAsync(companyId, created.Id, creditNote);
+            var extDocNumber = !string.IsNullOrEmpty(creditNote.InvoiceNumber) ? creditNote.InvoiceNumber : $"CN-{creditNote.Id}";
+            var bcCreditMemo = new BcSalesCreditMemo
+            {
+                ExternalDocumentNumber = extDocNumber,
+                CreditMemoDate = DateTime.UtcNow.ToString("yyyy-MM-dd"),
+                CustomerId = buyer.Value.BcCustomerId,
+                CurrencyCode = "EUR"
+            };
 
-        var posted = await _bcClient.PostSalesCreditMemoAsync(companyId, created.Id, bcCreditMemo.ExternalDocumentNumber);
-        var finalNumber = posted?.Number ?? created.Number;
-        var finalId = posted?.Id ?? created.Id;
+            await DeleteStaleDraftCreditMemoAsync(companyId, extDocNumber);
+            var created = await _bcClient.CreateSalesCreditMemoAsync(companyId, bcCreditMemo);
+            await AddCreditMemoLinesToBcAsync(companyId, created.Id, creditNote);
 
-        creditNote.BcInvoiceNumber = finalNumber;
-        creditNote.BcInvoiceId = finalId;
-        creditNote.InvoiceNumber = finalNumber;
+            var posted = await _bcClient.PostSalesCreditMemoAsync(companyId, created.Id, bcCreditMemo.ExternalDocumentNumber);
+            var finalNumber = posted?.Number ?? created.Number;
+            var finalId = posted?.Id ?? created.Id;
 
-        _logger.LogInformation("Posted credit memo: finalNumber={FinalNumber}, finalId={FinalId}, postedWasNull={PostedNull}",
-            finalNumber, finalId, posted == null);
+            creditNote.BcInvoiceNumber = finalNumber;
+            creditNote.BcInvoiceId = finalId;
+            creditNote.InvoiceNumber = finalNumber;
 
-        await TryFetchAndStoreCreditMemoPdfAsync(companyId, finalId, creditNote);
-        await _db.SaveChangesAsync();
+            _logger.LogInformation("Posted credit memo: finalNumber={FinalNumber}, finalId={FinalId}, postedWasNull={PostedNull}",
+                finalNumber, finalId, posted == null);
 
-        _logger.LogInformation("Created and posted BC sales credit memo {BcNumber} (customer={Customer})",
-            creditNote.InvoiceNumber, buyer.Value.BuyerNumber);
+            await TryFetchAndStoreCreditMemoPdfAsync(companyId, finalId, creditNote);
+            await _db.SaveChangesAsync();
 
-        // Apply credit memo against original invoice in BC
-        await TryApplyCreditMemoToInvoiceAsync(companyId, creditNote, buyer.Value.BuyerNumber);
+            _logger.LogInformation("Created and posted BC sales credit memo {BcNumber} (customer={Customer})",
+                creditNote.InvoiceNumber, buyer.Value.BuyerNumber);
 
-        return BcPushResult.Posted;
+            // Apply credit memo against original invoice in BC
+            await TryApplyCreditMemoToInvoiceAsync(companyId, creditNote, buyer.Value.BuyerNumber);
+
+            return BcPushResult.Posted;
+        }
+        catch
+        {
+            // The push threw before the credit memo posted (BcInvoiceNumber not set). Release the
+            // claim so the next retry can run instead of being skipped as "concurrent". If BC
+            // actually posted but the local save failed, the idempotency check recovers it on retry.
+            await ReleaseBcPushClaimAsync(creditNote.Id);
+            throw;
+        }
     }
 
     // External-document keys the invoice push uses, in priority order. The stable AUC-{Id}
@@ -344,6 +359,19 @@ public class BusinessCentralSyncService
               AND BcInvoiceNumber IS NULL
               AND (BcPushStartedAt IS NULL OR BcPushStartedAt < DATEADD(MINUTE, -5, SYSUTCDATETIME()))");
         return rows > 0;
+    }
+
+    // Release a BC-push claim taken by TryClaimForBcPushAsync when the push did NOT post the
+    // document, so an immediate manual retry isn't blocked for 5 minutes as "concurrent".
+    // Guarded on BcInvoiceNumber IS NULL so it can never wipe the lock on a doc that actually
+    // posted (in which case BcInvoiceNumber, not the claim, is what guards against re-push).
+    private async Task ReleaseBcPushClaimAsync(int invoiceId)
+    {
+        await _db.Database.ExecuteSqlInterpolatedAsync($@"
+            UPDATE auction.Invoices
+            SET BcPushStartedAt = NULL
+            WHERE Id = {invoiceId}
+              AND BcInvoiceNumber IS NULL");
     }
 
     // Delete a leftover draft (from a prior interrupted push) so we can recreate it cleanly.
@@ -641,46 +669,61 @@ public class BusinessCentralSyncService
             return BcPushResult.Concurrent;
         }
 
-        var buyer = await ResolveBuyerAsBcCustomerAsync(companyId, invoice.Id, invoice.BuyerId, invoice.Buyer);
-        if (buyer == null)
-            return BcPushResult.NotPushed($"Buyer {invoice.Buyer?.BuyerNumber ?? invoice.BuyerId.ToString()} is not a customer in BC");
-
-        var extDocRef = !string.IsNullOrEmpty(invoice.InvoiceNumber) ? invoice.InvoiceNumber : $"AUC-{invoice.Id}";
-        var postingDate = DateTime.UtcNow;
-        var bcInvoice = new BcSalesInvoice
+        try
         {
-            ExternalDocumentNumber = extDocRef,
-            InvoiceDate = postingDate.ToString("yyyy-MM-dd"),
-            DueDate = (invoice.PromptDate ?? postingDate.AddDays(30)).ToString("yyyy-MM-dd"),
-            CustomerId = buyer.Value.BcCustomerId,
-            CurrencyCode = "EUR"
-        };
+            var buyer = await ResolveBuyerAsBcCustomerAsync(companyId, invoice.Id, invoice.BuyerId, invoice.Buyer);
+            if (buyer == null)
+            {
+                // Did not post — free the claim so the next retry isn't skipped for 5 minutes.
+                await ReleaseBcPushClaimAsync(invoice.Id);
+                return BcPushResult.NotPushed($"Buyer {invoice.Buyer?.BuyerNumber ?? invoice.BuyerId.ToString()} is not a customer in BC");
+            }
 
-        // Remove any stale draft from a prior interrupted push (half-built lines / never posted)
-        // before creating a fresh one. It isn't posted — the idempotency check ran first — so it's
-        // safe to delete, and this avoids orphaned drafts and partial-line leftovers.
-        await DeleteStaleDraftInvoiceAsync(companyId, extDocRef);
-        var created = await _bcClient.CreateSalesInvoiceAsync(companyId, bcInvoice);
-        await AddInvoiceLinesToBcAsync(companyId, created.Id, invoice);
+            var extDocRef = !string.IsNullOrEmpty(invoice.InvoiceNumber) ? invoice.InvoiceNumber : $"AUC-{invoice.Id}";
+            var postingDate = DateTime.UtcNow;
+            var bcInvoice = new BcSalesInvoice
+            {
+                ExternalDocumentNumber = extDocRef,
+                InvoiceDate = postingDate.ToString("yyyy-MM-dd"),
+                DueDate = (invoice.PromptDate ?? postingDate.AddDays(30)).ToString("yyyy-MM-dd"),
+                CustomerId = buyer.Value.BcCustomerId,
+                CurrencyCode = "EUR"
+            };
 
-        var posted = await _bcClient.PostSalesInvoiceAsync(companyId, created.Id, bcInvoice.ExternalDocumentNumber);
-        var finalNumber = posted?.Number ?? created.Number;
-        var finalId = posted?.Id ?? created.Id;
+            // Remove any stale draft from a prior interrupted push (half-built lines / never posted)
+            // before creating a fresh one. It isn't posted — the idempotency check ran first — so it's
+            // safe to delete, and this avoids orphaned drafts and partial-line leftovers.
+            await DeleteStaleDraftInvoiceAsync(companyId, extDocRef);
+            var created = await _bcClient.CreateSalesInvoiceAsync(companyId, bcInvoice);
+            await AddInvoiceLinesToBcAsync(companyId, created.Id, invoice);
 
-        invoice.BcInvoiceNumber = finalNumber;
-        invoice.BcInvoiceId = finalId;
-        invoice.InvoiceNumber = finalNumber;
+            var posted = await _bcClient.PostSalesInvoiceAsync(companyId, created.Id, bcInvoice.ExternalDocumentNumber);
+            var finalNumber = posted?.Number ?? created.Number;
+            var finalId = posted?.Id ?? created.Id;
 
-        _logger.LogInformation("Posted invoice: finalNumber={FinalNumber}, finalId={FinalId}, postedWasNull={PostedNull}",
-            finalNumber, finalId, posted == null);
+            invoice.BcInvoiceNumber = finalNumber;
+            invoice.BcInvoiceId = finalId;
+            invoice.InvoiceNumber = finalNumber;
 
-        await TryFetchAndStorePdfAsync(companyId, finalId, invoice);
-        await _db.SaveChangesAsync();
+            _logger.LogInformation("Posted invoice: finalNumber={FinalNumber}, finalId={FinalId}, postedWasNull={PostedNull}",
+                finalNumber, finalId, posted == null);
 
-        _logger.LogInformation("Created and posted BC sales invoice {BcNumber} (customer={Customer})",
-            invoice.InvoiceNumber, buyer.Value.BuyerNumber);
+            await TryFetchAndStorePdfAsync(companyId, finalId, invoice);
+            await _db.SaveChangesAsync();
 
-        return BcPushResult.Posted;
+            _logger.LogInformation("Created and posted BC sales invoice {BcNumber} (customer={Customer})",
+                invoice.InvoiceNumber, buyer.Value.BuyerNumber);
+
+            return BcPushResult.Posted;
+        }
+        catch
+        {
+            // The push threw before the invoice posted (BcInvoiceNumber not set). Release the claim
+            // so the next retry can run instead of being skipped as "concurrent". If BC actually
+            // posted but the local save failed, the idempotency check recovers it on retry.
+            await ReleaseBcPushClaimAsync(invoice.Id);
+            throw;
+        }
     }
 
     /// <summary>
