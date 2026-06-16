@@ -197,6 +197,20 @@ public class ShipmentFunctions
             .Where(x => body.LotNumbers.Contains(x.LotNumber))
             .ToDictionaryAsync(x => x.LotNumber, x => x.InvoiceId);
 
+        // A lot can only be shipped if it has a released invoice — reject clearly rather than
+        // creating a shipment line with an invalid invoice reference.
+        var notInvoiced = body.LotNumbers.Where(ln => !lotInvoiceMap.ContainsKey(ln)).ToList();
+        if (notInvoiced.Any())
+        {
+            var bad = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+            bad.Headers.Add("Content-Type", "application/json");
+            await bad.WriteStringAsync(JsonSerializer.Serialize(new
+            {
+                error = $"These lots have no invoice released for shipping and cannot be shipped: {string.Join(", ", notInvoiced)}"
+            }, JsonOptions));
+            return bad;
+        }
+
         var shipment = new Shipment
         {
             ShipmentNumber = $"SH{nextNum:D5}",
@@ -213,7 +227,8 @@ public class ShipmentFunctions
             shipment.Lines.Add(new ShipmentLine
             {
                 LotNumber = lotNumber,
-                InvoiceId = lotInvoiceMap.GetValueOrDefault(lotNumber)
+                // Guaranteed present — the not-invoiced lots were rejected above.
+                InvoiceId = lotInvoiceMap[lotNumber]
             });
         }
 
