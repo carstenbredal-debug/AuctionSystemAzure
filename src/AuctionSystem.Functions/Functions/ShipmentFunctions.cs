@@ -284,6 +284,15 @@ public class ShipmentFunctions
         }
         allBoxNumbers = allBoxNumbers.Distinct().ToList();
 
+        // Box-level shipping: if specific boxes were selected, pack ONLY those (a subset of the
+        // lots' boxes). Everything downstream — packing orders, packing list, show-lot detection,
+        // weights — flows from allBoxNumbers, so filtering here scopes the whole shipment.
+        if (body.BoxNumbers != null && body.BoxNumbers.Count > 0)
+        {
+            var requested = body.BoxNumbers.ToHashSet();
+            allBoxNumbers = allBoxNumbers.Where(b => requested.Contains(b)).ToList();
+        }
+
         var hasShowLot = false;
         if (allBoxNumbers.Count > 0)
         {
@@ -297,13 +306,9 @@ public class ShipmentFunctions
         if (hasShowLot)
             shipment.Status = "ShowLot Packing";
 
-        // Update invoice shipping status for affected invoices
+        // Affected invoices — their shipping status is recomputed AFTER the packing orders are
+        // saved (below), so a partial (box-level) shipment keeps the invoice shippable.
         var invoiceIds = lotInvoiceMap.Values.Distinct().ToList();
-        var invoices = await _db.Invoices.Where(i => invoiceIds.Contains(i.Id)).ToListAsync();
-        foreach (var inv in invoices)
-        {
-            inv.ShippingStatus = "InShipment";
-        }
 
         await _db.SaveChangesAsync();
 
@@ -456,6 +461,11 @@ public class ShipmentFunctions
             }
         }
 
+        // Now that this shipment's packing orders are persisted, recompute each affected invoice's
+        // shipping status: InShipment only when ALL its (uncredited) boxes are shipped, otherwise
+        // leave it Released so the remaining boxes stay shippable.
+        await RefreshInvoiceShippingStatusAsync(invoiceIds, useSnapshot ? snapshotLotsTable : null);
+
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
         await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true, id = shipment.Id, shipmentNumber = shipment.ShipmentNumber }, JsonOptions));
@@ -469,6 +479,72 @@ public class ShipmentFunctions
             await err.WriteStringAsync(JsonSerializer.Serialize(new { error = ex.Message, stack = ex.StackTrace?.Substring(0, Math.Min(ex.StackTrace.Length, 500)) }, JsonOptions));
             return err;
         }
+    }
+
+    // Recompute shipping status for the given invoices: an invoice becomes "InShipment" only when
+    // every one of its uncredited boxes is on a shipment's packing order; otherwise it stays
+    // "Released" so its still-unshipped boxes remain selectable for a later shipment.
+    private async Task RefreshInvoiceShippingStatusAsync(List<int> invoiceIds, string? snapshotLotsTable)
+    {
+        if (invoiceIds.Count == 0) return;
+
+        var invoices = await _db.Invoices.Include(i => i.Lines)
+            .Where(i => invoiceIds.Contains(i.Id)).ToListAsync();
+
+        // Credited lots never ship — exclude their boxes from the "fully shipped" test.
+        var creditNotes = await _db.Invoices.Include(i => i.Lines)
+            .Where(i => i.IsCreditNote && i.OriginalInvoiceId != null && invoiceIds.Contains(i.OriginalInvoiceId.Value))
+            .ToListAsync();
+        var creditedByInvoice = creditNotes
+            .GroupBy(cn => cn.OriginalInvoiceId!.Value)
+            .ToDictionary(g => g.Key, g => g.SelectMany(cn => cn.Lines.Select(l => l.LotNumber)).ToHashSet());
+
+        var lotNumbers = invoices
+            .SelectMany(i => i.Lines
+                .Where(l => !(creditedByInvoice.GetValueOrDefault(i.Id)?.Contains(l.LotNumber) ?? false))
+                .Select(l => l.LotNumber))
+            .Distinct().ToList();
+        if (lotNumbers.Count == 0) return;
+
+        // Boxes per lot — from the auction snapshot if present, otherwise the live catalog.
+        List<CatalogLotResult> catalogLots;
+        if (snapshotLotsTable != null)
+            catalogLots = await _catalogDb.Database
+                .SqlQueryRaw<CatalogLotResult>($"SELECT LotNumber, IncludedBoxNumbers FROM {snapshotLotsTable} WHERE LotNumber IN (" +
+                    string.Join(",", lotNumbers) + ")")
+                .ToListAsync();
+        else
+            catalogLots = await _catalogDb.CatalogLots
+                .Where(cl => lotNumbers.Contains(cl.LotNumber))
+                .Select(cl => new CatalogLotResult { LotNumber = cl.LotNumber, IncludedBoxNumbers = cl.IncludedBoxNumbers ?? "" })
+                .ToListAsync();
+        var boxesByLot = catalogLots.ToDictionary(c => c.LotNumber, c => ParseBoxNumbers(c.IncludedBoxNumbers));
+
+        // Every box currently on a shipment's packing order (includes the shipment just created).
+        var shippedBoxes = (await _db.Set<PackingOrderLine>().Select(l => l.BoxNumber).ToListAsync()).ToHashSet();
+
+        foreach (var inv in invoices)
+        {
+            var credited = creditedByInvoice.GetValueOrDefault(inv.Id) ?? new HashSet<int>();
+            var invBoxes = inv.Lines
+                .Where(l => !credited.Contains(l.LotNumber))
+                .SelectMany(l => boxesByLot.GetValueOrDefault(l.LotNumber) ?? new List<int>())
+                .Distinct().ToList();
+
+            inv.ShippingStatus = invBoxes.Count > 0 && invBoxes.All(b => shippedBoxes.Contains(b))
+                ? "InShipment"
+                : "Released";
+        }
+        await _db.SaveChangesAsync();
+    }
+
+    private static List<int> ParseBoxNumbers(string? included)
+    {
+        var list = new List<int>();
+        if (string.IsNullOrEmpty(included)) return list;
+        foreach (var s in included.Split(',', StringSplitOptions.RemoveEmptyEntries))
+            if (int.TryParse(s.Trim(), out var n) && n > 0) list.Add(n);
+        return list;
     }
 
     private static string GeneratePackingOrderXml(PackingOrder packingOrder, Shipment shipment)
@@ -1870,6 +1946,9 @@ public class CreateShipmentDto
     public string? TrackingNumber { get; set; }
     public string? Notes { get; set; }
     public List<int> LotNumbers { get; set; } = new();
+    // Box-level shipping: when supplied, only these boxes are packed/shipped (a subset of the
+    // lots' boxes). When null/empty, all of the lots' boxes are shipped (legacy behaviour).
+    public List<int>? BoxNumbers { get; set; }
 }
 
 public class UpdateShipmentStatusDto

@@ -458,7 +458,11 @@ public class SettlementFunctions
 
         var boxStagingLookup = await FetchBoxStagingAsync(catalogLots, useSnapshot ? snapshotBoxesTable : null);
 
-        var shippingBoxes = BuildShippingBoxList(catalogLots, lotInvoiceMap, boxInfo, dimLookup, boxStagingLookup);
+        // Boxes already on a shipment's packing order must not appear as available — this is what
+        // keeps a partially-shipped invoice's remaining boxes (and only those) selectable.
+        var shippedBoxes = (await _db.Set<PackingOrderLine>().Select(l => l.BoxNumber).ToListAsync()).ToHashSet();
+
+        var shippingBoxes = BuildShippingBoxList(catalogLots, lotInvoiceMap, boxInfo, dimLookup, boxStagingLookup, shippedBoxes);
         return await CreateJsonResponse(req, shippingBoxes);
     }
 
@@ -567,7 +571,7 @@ public class SettlementFunctions
     }
 
     private static List<object> BuildShippingBoxList(
-        List<CatalogLotInfo> catalogLots, Dictionary<int, (Invoice Inv, InvoiceLine Line)> lotInvoiceMap, Dictionary<int, BoxViewInfo> boxInfo, Dictionary<string, BoxTypeDimension> dimLookup, Dictionary<int, BoxStagingInfo> boxStagingLookup)
+        List<CatalogLotInfo> catalogLots, Dictionary<int, (Invoice Inv, InvoiceLine Line)> lotInvoiceMap, Dictionary<int, BoxViewInfo> boxInfo, Dictionary<string, BoxTypeDimension> dimLookup, Dictionary<int, BoxStagingInfo> boxStagingLookup, HashSet<int> shippedBoxes)
     {
         var shippingBoxes = new List<object>();
         foreach (var cl in catalogLots)
@@ -578,6 +582,8 @@ public class SettlementFunctions
             foreach (var boxStr in cl.IncludedBoxNumbers.Split(',', StringSplitOptions.RemoveEmptyEntries))
             {
                 if (!int.TryParse(boxStr.Trim(), out var boxNumber) || boxNumber <= 0) continue;
+                // Skip boxes already shipped on a prior shipment.
+                if (shippedBoxes.Contains(boxNumber)) continue;
                 var bi = boxInfo.GetValueOrDefault(boxNumber);
                 var boxType = bi?.BoxType ?? "";
                 var dim = !string.IsNullOrEmpty(boxType) && dimLookup.TryGetValue(boxType, out var d) ? d : null;

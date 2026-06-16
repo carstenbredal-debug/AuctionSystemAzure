@@ -217,7 +217,8 @@ else
             shippingAddressId = _selectedAddressId > 0 ? (int?)_selectedAddressId : null,
             trackingNumber = "",
             notes = "",
-            lotNumbers
+            lotNumbers,
+            boxNumbers = _selectedBoxNumbers.ToList()
         };
 
         try
