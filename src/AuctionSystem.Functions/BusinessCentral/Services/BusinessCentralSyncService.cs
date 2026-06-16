@@ -263,7 +263,7 @@ public class BusinessCentralSyncService
             ExternalDocumentNumber = extDocNumber,
             CreditMemoDate = DateTime.UtcNow.ToString("yyyy-MM-dd"),
             CustomerId = buyer.Value.BcCustomerId,
-            CurrencyCode = ""
+            CurrencyCode = "EUR"
         };
 
         await DeleteStaleDraftCreditMemoAsync(companyId, extDocNumber);
@@ -619,7 +619,7 @@ public class BusinessCentralSyncService
             InvoiceDate = postingDate.ToString("yyyy-MM-dd"),
             DueDate = (invoice.PromptDate ?? postingDate.AddDays(30)).ToString("yyyy-MM-dd"),
             CustomerId = buyer.Value.BcCustomerId,
-            CurrencyCode = ""
+            CurrencyCode = "EUR"
         };
 
         // Remove any stale draft from a prior interrupted push (half-built lines / never posted)
