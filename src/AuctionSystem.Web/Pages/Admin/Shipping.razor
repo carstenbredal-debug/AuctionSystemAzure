@@ -28,7 +28,17 @@ else
 {
     <div class="row mb-3">
         <div class="col-md-3">
-            <label class="form-label fw-bold">Filter by Customer</label>
+            <label class="form-label fw-bold">Shipper</label>
+            <select class="form-select" @bind="_selectedShipperId">
+                <option value="0">— Select Shipper —</option>
+                @foreach (var sh in _shippers)
+                {
+                    <option value="@sh.Id">@sh.Code - @sh.Name</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label fw-bold">Customer</label>
             <select class="form-select" @bind="_selectedBuyer">
                 <option value="">All Customers</option>
                 @foreach (var buyer in _buyerNames)
@@ -37,8 +47,8 @@ else
                 }
             </select>
         </div>
-        <div class="col-md-3">
-            <label class="form-label fw-bold">Filter by Invoice</label>
+        <div class="col-md-2">
+            <label class="form-label fw-bold">Invoice</label>
             <select class="form-select" @bind="_selectedInvoice">
                 <option value="">All Invoices</option>
                 @foreach (var inv in _invoiceNumbers)
@@ -57,9 +67,9 @@ else
                 }
             </select>
         </div>
-        <div class="col-md-3 d-flex align-items-end">
-            <button class="btn btn-primary" @onclick="CreateShipmentFromSelected" disabled="@(_creating || _selectedBoxNumbers.Count == 0 || _selectedAddressId == 0)">
-                @(_creating ? "Creating..." : $"Create Shipment ({_selectedBoxNumbers.Count} boxes)")
+        <div class="col-md-2 d-flex align-items-end">
+            <button class="btn btn-primary w-100" @onclick="CreateShipmentFromSelected" disabled="@(_creating || _selectedBoxNumbers.Count == 0 || _selectedAddressId == 0 || _selectedShipperId == 0)">
+                @(_creating ? "Creating..." : $"Create ({_selectedBoxNumbers.Count})")
             </button>
         </div>
     </div>
@@ -148,6 +158,8 @@ else
     private string _selectedBuyer = "";
     private string _selectedInvoice = "";
     private int _selectedAddressId;
+    private List<ShipperListDto> _shippers = new();
+    private int _selectedShipperId;
     private List<string> _buyerNames = new();
     private List<string> _invoiceNumbers = new();
     private HashSet<int> _selectedBoxNumbers = new();
@@ -168,6 +180,7 @@ else
     {
         _boxes = await Api.GetShippingBoxesAsync();
         _addresses = await Api.GetShippingAddressesAsync();
+        _shippers = await Api.GetShippersAsync();
         _buyerNames = _boxes.Select(b => b.BuyerName ?? "—").Distinct().OrderBy(n => n).ToList();
         _invoiceNumbers = _boxes.Select(b => b.InvoiceNumber ?? "—").Distinct().OrderBy(n => n).ToList();
         var defaultAddr = _addresses.FirstOrDefault(a => a.IsDefault);
@@ -200,12 +213,10 @@ else
         var lotNumbers = selectedBoxes.Select(b => b.LotNumber).Distinct().ToList();
         var buyerId = selectedBoxes.Select(b => b.BuyerId).FirstOrDefault();
 
-        // Need a shipper — use first available or default
-        var shippers = await Api.GetShippersAsync();
-        var shipperId = shippers.FirstOrDefault()?.Id ?? 0;
+        var shipperId = _selectedShipperId;
         if (shipperId == 0)
         {
-            _error = "No shippers configured. Please add a shipper first.";
+            _error = "Please select a shipper.";
             _creating = false;
             return;
         }
