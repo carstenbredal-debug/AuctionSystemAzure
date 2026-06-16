@@ -1,8 +1,8 @@
 # Security rollout — close the public API exposure (SWA-linked-backend auth)
 
-**Status:** STAGED on branch `security/swa-auth-rollout`. Do NOT merge to `dev` until the
-Azure steps below are done in order — deploying the config change before the Function App is
-linked as the SWA backend will 404 every API call and take the app down.
+**Status:** STAGED on branch `security/swa-auth-rollout`. The backend is already linked (verified),
+so deploying this branch is safe — the app will route through SWA. Then do the two Azure settings
+(steps 2-3 below). Roll out in order and verify with the curl checks.
 
 ## Why
 The Blazor WASM app was calling the Function App **directly** at its `azurewebsites.net` URL,
@@ -14,20 +14,28 @@ The fix routes the browser through SWA (`/api/*` on the app's own origin). SWA v
 logged-in user and injects a **trusted, un-forgeable** `x-ms-client-principal` header; the Function
 App is no longer reachable directly.
 
-## The staged code change (this branch)
-`src/AuctionSystem.Web/wwwroot/appsettings.json`: `ApiBaseUrl` set to `""`.
-With it empty, `Program.cs` falls back to the app's own origin, so API calls go to `/api/...`
-through the SWA proxy instead of the Function App's public URL.
+## Confirmed live state (probed 2026-06-16)
+- SWA `AuctionSystem` (Standard) at `https://icy-beach-06b561303.7.azurestaticapps.net` serves the app.
+- The Function App **is already linked** as the SWA backend — `…azurestaticapps.net/api/brokers`
+  proxies to it. So "link the backend" is already done.
+- BUT `…/api/brokers` returned full data with **no login**, because (a) `staticwebapp.config.json`
+  had **no rule protecting `/api/*`**, (b) `AUTH_ENFORCE=false` on the Function App, and (c) the
+  Function App's own `*.azurewebsites.net` URL is reachable directly.
+
+## The staged code changes (this branch)
+1. `src/AuctionSystem.Web/wwwroot/staticwebapp.config.json`: added route rule
+   `{ "route": "/api/*", "allowedRoles": ["authenticated"] }` — SWA now returns 401 for
+   unauthenticated `/api` calls and injects a validated identity header for authenticated ones.
+2. `src/AuctionSystem.Web/wwwroot/appsettings.json`: `ApiBaseUrl` set to `""` — the WASM app calls
+   `/api/...` on its own SWA origin (through the proxy) instead of the Function App's public URL.
 
 ## Rollout order (do not reorder)
-1. **Link the backend.** Azure Portal → Static Web App → **APIs** → link the Function App as the
-   backend. Requires SWA **Standard** tier. (If already linked, confirm it points at this Function App.)
-2. **Deploy this branch** (merge `security/swa-auth-rollout` → `dev`, or your normal deploy).
-   The WASM app now calls `/api/*` on the SWA origin.
-3. **Lock the Function App.** Disable/restrict its public network access so the
-   `*.azurewebsites.net` URL cannot be hit directly (only the SWA linked backend reaches it).
-4. **Enforce auth.** Function App → Configuration → set `AUTH_ENFORCE=true` (or remove it; default
-   enforces). Save (restarts the app).
+1. **Deploy this branch** (merge `security/swa-auth-rollout` → the branch the SWA deploys from).
+   After this the app calls the API through SWA, and SWA blocks anonymous `/api` calls.
+2. **Enforce auth.** Function App → Configuration / Environment variables → set `AUTH_ENFORCE=true`
+   (or delete it; default enforces). Save (restarts the app).
+3. **Lock the Function App's public access** so its `*.azurewebsites.net` URL can't be hit directly
+   (Networking → public access → restrict / disable). Closes the bypass route.
 
 ## Verification (must all pass)
 - Direct call is now **blocked**:
