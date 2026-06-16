@@ -24,6 +24,18 @@
     </div>
 }
 
+@if (!_loading && _disagreements.Count > 0)
+{
+    <div class="input-group input-group-sm mb-3" style="max-width: 360px;">
+        <span class="input-group-text">Jump to lot</span>
+        <input type="number" class="form-control" @bind="_jumpLotNumber" placeholder="Lot #" />
+        @if (_jumpLotNumber != null)
+        {
+            <button class="btn btn-outline-secondary" @onclick="() => _jumpLotNumber = null">Show all</button>
+        }
+    </div>
+}
+
 @if (_loading)
 {
     <div class="text-center py-4">
@@ -37,7 +49,16 @@ else if (_disagreements.Count == 0)
 }
 else
 {
-    @foreach (var group in _disagreements)
+    var shown = _jumpLotNumber is > 0
+        ? _disagreements.Where(d => d.LotNumber == _jumpLotNumber).ToList()
+        : _disagreements;
+
+    if (shown.Count == 0)
+    {
+        <div class="alert alert-warning">Lot @_jumpLotNumber is not in disagreement.</div>
+    }
+
+    @foreach (var group in shown)
     {
         <div class="section-container mb-4">
             <div class="section-header">
@@ -123,6 +144,7 @@ else
     private AppUserDto? _currentUser;
     private bool _loading = true;
     private bool _submitting;
+    private int? _jumpLotNumber;
     private string? _successMessage;
     private string? _errorMessage;
     private Dictionary<int, ReentryState> _reentryStates = new();

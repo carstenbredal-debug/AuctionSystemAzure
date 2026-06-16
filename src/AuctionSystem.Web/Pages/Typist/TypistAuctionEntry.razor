@@ -69,6 +69,12 @@ else
                     {
                         <div class="form-control-plaintext text-muted">No unsold lots available.</div>
                     }
+                    <div class="input-group input-group-sm mt-2">
+                        <span class="input-group-text">Jump to lot</span>
+                        <input type="number" class="form-control" @bind="_jumpLotNumber" placeholder="Lot #" @onkeydown="JumpKeydown" />
+                        <button class="btn btn-outline-primary" @onclick="JumpToLot">Go</button>
+                        <button class="btn btn-outline-secondary" @onclick="ResumeNextLot" title="Back to next in sequence">↻ Next</button>
+                    </div>
                 </div>
 
                 <div class="mb-3">
@@ -168,6 +174,7 @@ else
     private AppUserDto? _currentUser;
     private int _selectedBrokerId;
     private decimal _priceEur;
+    private int? _jumpLotNumber;
     private bool _submitting;
     private string? _successMessage;
     private string? _errorMessage;
@@ -210,6 +217,34 @@ else
             _nextLot = await Api.GetNextUnsoldLotForTypistAsync(_currentUser?.Id, _selectedAuctionId);
             _pollTimer = new System.Threading.Timer(async _ => await PollForUpdates(), null, 3000, 3000);
         }
+    }
+
+    private async Task JumpToLot()
+    {
+        _successMessage = null;
+        _errorMessage = null;
+        if (_jumpLotNumber is null or <= 0)
+        {
+            _errorMessage = "Enter a lot number to jump to.";
+            return;
+        }
+        var (lot, error) = await Api.GetTypistLotAsync(_jumpLotNumber.Value, _currentUser?.Id, _selectedAuctionId);
+        if (lot != null)
+            _nextLot = lot;
+        else
+            _errorMessage = error;
+    }
+
+    private async Task JumpKeydown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await JumpToLot();
+    }
+
+    private async Task ResumeNextLot()
+    {
+        _jumpLotNumber = null;
+        _errorMessage = null;
+        _nextLot = await Api.GetNextUnsoldLotForTypistAsync(_currentUser?.Id, _selectedAuctionId);
     }
 
     private async Task PollForUpdates()
@@ -281,6 +316,7 @@ else
                 _successMessage = $"Entry recorded for Lot {lotNum}.";
                 _priceEur = 0;
                 _selectedBrokerId = 0;
+                _jumpLotNumber = null;
 
                 _nextLot = await Api.GetNextUnsoldLotForTypistAsync(_currentUser.Id, _selectedAuctionId);
                 _recentEntries = await Api.GetRecentTypistEntriesAsync(_selectedAuctionId);

@@ -493,6 +493,43 @@ public class TypistEntryFunctions
         return await CreateJsonResponse(req, nextLot);
     }
 
+    [Function("GetTypistLot")]
+    public async Task<HttpResponseData> GetTypistLot(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "typist-entries/lot/{lotNumber:int}")] HttpRequestData req, int lotNumber)
+    {
+        var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+        int.TryParse(query["auctionId"], out var auctionId);
+        int.TryParse(query["typistUserId"], out var typistUserId);
+
+        // Lot must exist in this auction
+        var lotQuery = _db.Lots.Where(l => l.LotNumber == lotNumber);
+        if (auctionId > 0) lotQuery = lotQuery.Where(l => l.AuctionId == auctionId);
+        var lot = await lotQuery.OrderBy(l => l.AuctionId).FirstOrDefaultAsync();
+        if (lot == null)
+            return await CreateJsonResponse(req, new { error = $"Lot {lotNumber} isn't in this auction." }, System.Net.HttpStatusCode.NotFound);
+
+        // Already sold
+        if (lot.Status == LotStatus.Sold)
+            return await CreateJsonResponse(req, new { error = $"Lot {lotNumber} is already sold." }, System.Net.HttpStatusCode.Conflict);
+
+        // Already matched (recorded) — same skip rule as the auto-feed
+        var matchedQuery = _db.TypistEntries.Where(e => e.LotNumber == lotNumber && e.IsMatched);
+        if (auctionId > 0) matchedQuery = matchedQuery.Where(e => e.AuctionId == auctionId);
+        if (await matchedQuery.AnyAsync())
+            return await CreateJsonResponse(req, new { error = $"Lot {lotNumber} is already recorded." }, System.Net.HttpStatusCode.Conflict);
+
+        // Already entered (still active) by THIS typist — the other typist's pending entry is fine (double-entry)
+        if (typistUserId > 0)
+        {
+            var mineQuery = _db.TypistEntries.Where(e => e.LotNumber == lotNumber && e.TypistUserId == typistUserId && !e.IsResolved);
+            if (auctionId > 0) mineQuery = mineQuery.Where(e => e.AuctionId == auctionId);
+            if (await mineQuery.AnyAsync())
+                return await CreateJsonResponse(req, new { error = $"You have already entered Lot {lotNumber}." }, System.Net.HttpStatusCode.Conflict);
+        }
+
+        return await CreateJsonResponse(req, new { lot.LotNumber, lot.Description, lot.Category, lot.Quantity, lot.Unit });
+    }
+
     [Function("GetRecentMatchedEntries")]
     public async Task<HttpResponseData> GetRecentMatched(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "typist-entries/recent")] HttpRequestData req)

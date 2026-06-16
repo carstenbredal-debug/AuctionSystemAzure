@@ -685,6 +685,23 @@ public class AuctionApiClient
         catch { return null; }
     }
 
+    public async Task<(NextUnsoldLotDto? Lot, string? Error)> GetTypistLotAsync(int lotNumber, int? typistUserId = null, int auctionId = 0)
+    {
+        try
+        {
+            var url = $"api/typist-entries/lot/{lotNumber}";
+            var sep = '?';
+            if (typistUserId.HasValue) { url += $"{sep}typistUserId={typistUserId.Value}"; sep = '&'; }
+            if (auctionId > 0) url += $"{sep}auctionId={auctionId}";
+            var resp = await _http.GetAsync(url);
+            if (resp.IsSuccessStatusCode)
+                return (await resp.Content.ReadFromJsonAsync<NextUnsoldLotDto>(), null);
+            var err = await resp.Content.ReadFromJsonAsync<Dictionary<string, string>>();
+            return (null, err != null && err.TryGetValue("error", out var msg) ? msg : "Could not load that lot.");
+        }
+        catch (Exception ex) { return (null, $"Error: {ex.Message}"); }
+    }
+
     public async Task<List<TypistEntryDto>> GetRecentTypistEntriesAsync(int auctionId = 0)
     {
         var url = "api/typist-entries/recent";
