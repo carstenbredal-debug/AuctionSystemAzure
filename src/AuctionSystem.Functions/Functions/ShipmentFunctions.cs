@@ -734,6 +734,11 @@ public class ShipmentFunctions
         // Collect lot numbers directly from shipment lines
         var lotNumbers = shipment.Lines.Select(l => l.LotNumber).Distinct().ToList();
 
+        // Box-level shipping: show only the boxes actually in this shipment's packing orders, not
+        // every box of the lots. Empty => legacy shipment with no packing-order lines; show all.
+        var shipmentBoxes = (await _db.PackingOrders.Where(p => p.ShipmentId == id)
+            .SelectMany(p => p.Lines).Select(l => l.BoxNumber).Distinct().ToListAsync()).ToHashSet();
+
         // Determine auction number for snapshot tables
         var plAuctionNum = await _db.Lots
             .Where(l => lotNumbers.Contains(l.LotNumber))
@@ -773,6 +778,7 @@ public class ShipmentFunctions
             .Where(cl => !string.IsNullOrEmpty(cl.IncludedBoxNumbers))
             .SelectMany(cl => cl.IncludedBoxNumbers!.Split(',', StringSplitOptions.RemoveEmptyEntries)
                 .Select(b => int.TryParse(b.Trim(), out var n) ? n : 0).Where(n => n > 0))
+            .Where(n => shipmentBoxes.Count == 0 || shipmentBoxes.Contains(n))
             .Distinct().ToList();
 
         // Get box info (skins, box type) from snapshot or live
@@ -839,6 +845,7 @@ public class ShipmentFunctions
             foreach (var boxStr in cl.IncludedBoxNumbers.Split(',', StringSplitOptions.RemoveEmptyEntries))
             {
                 if (!int.TryParse(boxStr.Trim(), out var boxNumber) || boxNumber <= 0) continue;
+                if (shipmentBoxes.Count > 0 && !shipmentBoxes.Contains(boxNumber)) continue;
                 var bi = boxInfo.GetValueOrDefault(boxNumber);
                 var boxType = bi.BoxType ?? "";
                 var dim = !string.IsNullOrEmpty(boxType) && dimLookup.TryGetValue(boxType, out var d) ? d : null;
@@ -1000,6 +1007,12 @@ public class ShipmentFunctions
         // Collect lot numbers from shipment lines
         var pdfLotNumbers = shipment.Lines.Select(l => l.LotNumber).Distinct().ToList();
 
+        // Box-level shipping: restrict the document to the boxes actually in this shipment's
+        // packing orders, not every box of the lots. Empty => legacy shipment with no packing-order
+        // lines; fall back to all lot boxes.
+        var pdfShipmentBoxes = (await _db.PackingOrders.Where(p => p.ShipmentId == id)
+            .SelectMany(p => p.Lines).Select(l => l.BoxNumber).Distinct().ToListAsync()).ToHashSet();
+
         // Lookup HammerPrice per lot (for shipping invoice)
         var pdfLotPrices = new Dictionary<int, decimal>();
         if (isShippingInvoice && pdfLotNumbers.Count > 0)
@@ -1051,6 +1064,7 @@ public class ShipmentFunctions
             .Where(cl => !string.IsNullOrEmpty(cl.IncludedBoxNumbers))
             .SelectMany(cl => cl.IncludedBoxNumbers!.Split(',', StringSplitOptions.RemoveEmptyEntries)
                 .Select(b => int.TryParse(b.Trim(), out var n) ? n : 0).Where(n => n > 0))
+            .Where(n => pdfShipmentBoxes.Count == 0 || pdfShipmentBoxes.Contains(n))
             .Distinct().ToList();
 
         // Get box info (skins, type)
@@ -1143,6 +1157,7 @@ public class ShipmentFunctions
             foreach (var boxStr in cl.IncludedBoxNumbers.Split(',', StringSplitOptions.RemoveEmptyEntries))
             {
                 if (!int.TryParse(boxStr.Trim(), out var boxNum) || boxNum <= 0) continue;
+                if (pdfShipmentBoxes.Count > 0 && !pdfShipmentBoxes.Contains(boxNum)) continue;
                 var bi = pdfBoxInfo.GetValueOrDefault(boxNum);
                 var boxType = bi.BoxType ?? "";
                 var dim = !string.IsNullOrEmpty(boxType) && pdfDimLookup.TryGetValue(boxType, out var d) ? d : null;
