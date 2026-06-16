@@ -314,10 +314,19 @@ public class BusinessCentralApiClient
     /// <summary>Posted sales invoice matching an external document number (used for idempotency on retry).</summary>
     public async Task<BcSalesInvoice?> GetPostedSalesInvoiceByExternalDocAsync(Guid companyId, string externalDocNumber)
     {
-        var url = $"{_options.BaseUrl}/companies({companyId})/postedSalesInvoices?$filter=externalDocumentNumber eq '{externalDocNumber}'";
+        // Standard api/v2.0 has no `postedSalesInvoices` resource (it 404s, and a recreated company
+        // won't expose a custom one). Posted invoices stay in `salesInvoices` with a non-Draft
+        // status — the same source PostSalesInvoiceAsync re-reads them from — so look them up there.
+        var url = $"{_options.BaseUrl}/companies({companyId})/salesInvoices?$filter=externalDocumentNumber eq '{externalDocNumber}'";
         var invoices = await GetListAsync<BcSalesInvoice>(url);
-        return invoices.FirstOrDefault();
+        return invoices.FirstOrDefault(i => IsPostedStatus(i.Status));
     }
+
+    /// <summary>A BC sales document status other than Draft/In Review means it has been posted.</summary>
+    private static bool IsPostedStatus(string? status) =>
+        !string.IsNullOrEmpty(status)
+        && !status.Equals("Draft", StringComparison.OrdinalIgnoreCase)
+        && !status.Equals("In Review", StringComparison.OrdinalIgnoreCase);
 
     public async Task<BcSalesInvoice> CreateSalesInvoiceAsync(Guid companyId, BcSalesInvoice invoice)
     {
@@ -644,9 +653,11 @@ public class BusinessCentralApiClient
     /// <summary>Posted sales credit memo matching an external document number (used for idempotency on retry).</summary>
     public async Task<BcSalesCreditMemo?> GetPostedSalesCreditMemoByExternalDocAsync(Guid companyId, string externalDocNumber)
     {
-        var url = $"{_options.BaseUrl}/companies({companyId})/postedSalesCreditMemos?$filter=externalDocumentNumber eq '{externalDocNumber}'";
+        // As with invoices: no `postedSalesCreditMemos` resource in standard api/v2.0. Posted credit
+        // memos remain in `salesCreditMemos` with a non-Draft status.
+        var url = $"{_options.BaseUrl}/companies({companyId})/salesCreditMemos?$filter=externalDocumentNumber eq '{externalDocNumber}'";
         var items = await GetListAsync<BcSalesCreditMemo>(url);
-        return items.FirstOrDefault();
+        return items.FirstOrDefault(c => IsPostedStatus(c.Status));
     }
 
     public async Task<byte[]?> GetSalesCreditMemoPdfAsync(Guid companyId, Guid creditMemoId)
