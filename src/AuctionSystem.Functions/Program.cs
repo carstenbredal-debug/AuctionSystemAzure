@@ -61,6 +61,16 @@ var host = new HostBuilder()
                 ?? context.Configuration["Values:BC_COMPANY_ID"] ?? "";
             opts.CompanyName = context.Configuration["BC_COMPANY_NAME"]
                 ?? context.Configuration["Values:BC_COMPANY_NAME"] ?? "Lot Test 3";
+
+            // Dimension systemIds — per-company. Default to the Lot Test 3 ids so existing config keeps
+            // working; override per environment via these settings (read them with GET /api/bc/dimensions).
+            Guid Dim(string key, string fallback) =>
+                Guid.TryParse(context.Configuration[key] ?? context.Configuration[$"Values:{key}"], out var g) ? g : Guid.Parse(fallback);
+            opts.VendorTypeDimensionId    = Dim("BC_DIM_VENDORTYPE_ID",               "0288ef73-a554-f111-a820-7c1e5271a821");
+            opts.VendorTypeBrokerValueId  = Dim("BC_DIM_VENDORTYPE_BROKER_VALUE_ID",  "728c715d-be54-f111-a820-7c1e5271a821");
+            opts.VendorTypeFarmerValueId  = Dim("BC_DIM_VENDORTYPE_FARMER_VALUE_ID",  "0688ef73-a554-f111-a820-7c1e5271a821");
+            opts.CustomerTypeDimensionId  = Dim("BC_DIM_CUSTOMERTYPE_ID",             "0188ef73-a554-f111-a820-7c1e5271a821");
+            opts.CustomerTypeBuyerValueId = Dim("BC_DIM_CUSTOMERTYPE_BUYER_VALUE_ID", "a807e197-f55a-f111-a820-70a8a55fc40b");
         });
 
         var bcTenantId = context.Configuration["BC_TENANT_ID"]

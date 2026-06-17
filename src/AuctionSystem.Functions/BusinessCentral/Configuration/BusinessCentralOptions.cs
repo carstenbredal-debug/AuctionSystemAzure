@@ -11,6 +11,16 @@ public class BusinessCentralOptions
     public string CompanyId { get; set; } = string.Empty;
     public string CompanyName { get; set; } = string.Empty;
 
+    // BC Dimension systemIds used to tag synced master records (VENDORTYPE=BROKER/FARMER on vendors,
+    // CUSTOMERTYPE=BUYER on customers). These are unique per BC company, so they must be set per
+    // environment/company. Defaults are the "Lot Test 3" company's ids (see Program.cs); read the
+    // right values for a new company via GET /api/bc/dimensions.
+    public Guid VendorTypeDimensionId { get; set; }
+    public Guid VendorTypeBrokerValueId { get; set; }
+    public Guid VendorTypeFarmerValueId { get; set; }
+    public Guid CustomerTypeDimensionId { get; set; }
+    public Guid CustomerTypeBuyerValueId { get; set; }
+
     public string BaseUrl =>
         $"https://api.businesscentral.dynamics.com/v2.0/{TenantId}/{Environment}/api/v2.0";
 

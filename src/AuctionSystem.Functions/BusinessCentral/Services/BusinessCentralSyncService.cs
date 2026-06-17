@@ -3,19 +3,22 @@ using Microsoft.Extensions.Logging;
 using AuctionSystem.Domain.Data;
 using AuctionSystem.Domain.Entities;
 using AuctionSystem.Domain.Enums;
+using AuctionSystem.Functions.BusinessCentral.Configuration;
 using AuctionSystem.Functions.BusinessCentral.Models;
 using AuctionSystem.Functions.Services;
+using Microsoft.Extensions.Options;
 
 namespace AuctionSystem.Functions.BusinessCentral.Services;
 
 public class BusinessCentralSyncService
 {
-    // BC dimension IDs for Lot Test 3
-    private static readonly Guid VendorTypeDimensionId = Guid.Parse("0288ef73-a554-f111-a820-7c1e5271a821");
-    private static readonly Guid VendorTypeBrokerValueId = Guid.Parse("728c715d-be54-f111-a820-7c1e5271a821");
-    private static readonly Guid VendorTypeFarmerValueId = Guid.Parse("0688ef73-a554-f111-a820-7c1e5271a821");
-    private static readonly Guid CustomerTypeDimensionId = Guid.Parse("0188ef73-a554-f111-a820-7c1e5271a821");
-    private static readonly Guid CustomerTypeBuyerValueId = Guid.Parse("a807e197-f55a-f111-a820-70a8a55fc40b");
+    // BC dimension systemIds (VENDORTYPE=BROKER/FARMER, CUSTOMERTYPE=BUYER) — per BC company, sourced
+    // from BusinessCentralOptions (config) so a new company / TEST / PROD is a settings change.
+    private readonly Guid VendorTypeDimensionId;
+    private readonly Guid VendorTypeBrokerValueId;
+    private readonly Guid VendorTypeFarmerValueId;
+    private readonly Guid CustomerTypeDimensionId;
+    private readonly Guid CustomerTypeBuyerValueId;
 
     private readonly BusinessCentralApiClient _bcClient;
     private readonly AuctionDbContext _db;
@@ -55,12 +58,20 @@ public class BusinessCentralSyncService
         BusinessCentralApiClient bcClient,
         AuctionDbContext db,
         BlobStorageService blobStorage,
-        ILogger<BusinessCentralSyncService> logger)
+        ILogger<BusinessCentralSyncService> logger,
+        IOptions<BusinessCentralOptions> options)
     {
         _bcClient = bcClient;
         _db = db;
         _blobStorage = blobStorage;
         _logger = logger;
+
+        var o = options.Value;
+        VendorTypeDimensionId = o.VendorTypeDimensionId;
+        VendorTypeBrokerValueId = o.VendorTypeBrokerValueId;
+        VendorTypeFarmerValueId = o.VendorTypeFarmerValueId;
+        CustomerTypeDimensionId = o.CustomerTypeDimensionId;
+        CustomerTypeBuyerValueId = o.CustomerTypeBuyerValueId;
     }
 
     /// <summary>

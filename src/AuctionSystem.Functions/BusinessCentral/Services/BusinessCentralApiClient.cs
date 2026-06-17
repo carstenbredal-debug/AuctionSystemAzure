@@ -207,6 +207,12 @@ public class BusinessCentralApiClient
 
     // ── Countries/Regions ─────────────────────────────────────
 
+    public async Task<List<BcDimension>> GetDimensionsAsync(Guid companyId)
+    {
+        var url = $"{_options.BaseUrl}/companies({companyId})/dimensions?$expand=dimensionValues";
+        return await GetListAsync<BcDimension>(url);
+    }
+
     public async Task<List<BcCountryRegion>> GetCountriesRegionsAsync(Guid companyId)
     {
         var url = $"{_options.BaseUrl}/companies({companyId})/countriesRegions?$top=500";

@@ -121,6 +121,41 @@ public class BusinessCentralFunctions
         return await JsonResponse(req, currencies);
     }
 
+    [Function("BcGetDimensions")]
+    public async Task<HttpResponseData> GetDimensions(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "bc/dimensions")] HttpRequestData req)
+    {
+        if (!EnsureConfigured(out var error))
+            return await JsonResponse(req, error!, HttpStatusCode.BadRequest);
+
+        var companyId = await _bcClient!.ResolveCompanyIdAsync();
+        var dims = await _bcClient.GetDimensionsAsync(companyId);
+
+        // Map the codes this app relies on to their systemIds, ready to paste into the BC_DIM_* settings.
+        var vendorType = dims.FirstOrDefault(d => string.Equals(d.Code, "VENDORTYPE", StringComparison.OrdinalIgnoreCase));
+        var customerType = dims.FirstOrDefault(d => string.Equals(d.Code, "CUSTOMERTYPE", StringComparison.OrdinalIgnoreCase));
+        Guid? ValId(BcDimension? d, string code) =>
+            d?.DimensionValues.FirstOrDefault(v => string.Equals(v.Code, code, StringComparison.OrdinalIgnoreCase))?.Id;
+
+        var suggestedSettings = new Dictionary<string, Guid?>
+        {
+            ["BC_DIM_VENDORTYPE_ID"] = vendorType?.Id,
+            ["BC_DIM_VENDORTYPE_BROKER_VALUE_ID"] = ValId(vendorType, "BROKER"),
+            ["BC_DIM_VENDORTYPE_FARMER_VALUE_ID"] = ValId(vendorType, "FARMER"),
+            ["BC_DIM_CUSTOMERTYPE_ID"] = customerType?.Id,
+            ["BC_DIM_CUSTOMERTYPE_BUYER_VALUE_ID"] = ValId(customerType, "BUYER")
+        };
+        var missing = suggestedSettings.Where(kv => kv.Value == null).Select(kv => kv.Key).ToList();
+
+        return await JsonResponse(req, new
+        {
+            companyId,
+            suggestedSettings,
+            missing = missing.Count > 0 ? (object)missing : null,
+            dimensions = dims
+        });
+    }
+
     [Function("BcGetGenBusPostingGroups")]
     public async Task<HttpResponseData> GetGenBusPostingGroups(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "bc/gen-bus-posting-groups")] HttpRequestData req)
