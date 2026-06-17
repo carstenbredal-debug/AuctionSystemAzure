@@ -1,0 +1,182 @@
+@page "/admin/typist-simulator"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
+@inject AuctionApiClient Api
+@using System.Text.Json
+
+<h3>Typist Simulator</h3>
+<p class="text-muted">
+    Types an auction's unsold lots as two typists and drives the real matching — matched lots become
+    auction results (and the lots are recorded); a configurable share is sent to the disagreement queue.
+    Admin test tool. Needs two <strong>Typist</strong> users and at least one active broker.
+</p>
+
+@if (_auctions == null)
+{
+    <p><em>Loading…</em></p>
+}
+else
+{
+    <div class="row g-3" style="max-width:760px">
+        <div class="col-md-6">
+            <label class="form-label">Auction</label>
+            <select class="form-select" @bind="_auctionId">
+                <option value="0">— select —</option>
+                @foreach (var a in _auctions)
+                {
+                    <option value="@a.Id">@a.AuctionNumber — @a.Title (@a.Status)</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Disagreement %</label>
+            <input type="number" min="0" max="100" class="form-control" @bind="_disagreementPercent" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Max lots <span class="text-muted">(blank = all)</span></label>
+            <input type="number" min="1" class="form-control" @bind="_maxLots" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Min price (€)</label>
+            <input type="number" min="0" step="0.01" class="form-control" @bind="_minPrice" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Max price (€)</label>
+            <input type="number" min="0" step="0.01" class="form-control" @bind="_maxPrice" />
+        </div>
+        <div class="col-md-6">
+            <label class="form-label">Disagreement type</label>
+            <select class="form-select" @bind="_disagreementType">
+                <option value="mixed">Mixed (price or broker)</option>
+                <option value="price">Price only</option>
+                <option value="broker">Broker only</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="mt-3 d-flex gap-2">
+        <button class="btn btn-primary" @onclick="Run" disabled="@(_running || _auctionId <= 0)">
+            @if (_running && !_resolving)
+            {
+                <span class="spinner-border spinner-border-sm me-1"></span>
+            }
+            Simulate
+        </button>
+        <button class="btn btn-outline-secondary" @onclick="ResolveDisagreements" disabled="@(_running || _auctionId <= 0)">
+            @if (_resolving)
+            {
+                <span class="spinner-border spinner-border-sm me-1"></span>
+            }
+            Clear disagreements
+        </button>
+    </div>
+
+    @if (_message != null)
+    {
+        <div class="alert @(_error ? "alert-danger" : "alert-success") mt-3" style="max-width:760px">@_message</div>
+    }
+}
+
+@code {
+    private List<AuctionDto>? _auctions;
+    private int _auctionId;
+    private int _disagreementPercent;
+    private int? _maxLots;
+    private decimal _minPrice = 50;
+    private decimal _maxPrice = 500;
+    private string _disagreementType = "mixed";
+    private bool _running;
+    private bool _resolving;
+    private string? _message;
+    private bool _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _auctions = await Api.GetAuctionsAsync();
+    }
+
+    private async Task Run()
+    {
+        if (_auctionId <= 0) return;
+        _running = true;
+        _message = null;
+        try
+        {
+            var resp = await Api.SimulateTypistEntriesAsync(_auctionId, _disagreementPercent, _maxLots, _minPrice, _maxPrice, _disagreementType);
+            var json = await resp.Content.ReadAsStringAsync();
+            if (resp.IsSuccessStatusCode)
+            {
+                var root = JsonDocument.Parse(json).RootElement;
+                if (root.TryGetProperty("error", out var errEl) && errEl.ValueKind == JsonValueKind.String)
+                {
+                    _message = errEl.GetString();
+                    _error = true;
+                }
+                else
+                {
+                    int Get(string p) => root.TryGetProperty(p, out var e) && e.ValueKind == JsonValueKind.Number ? e.GetInt32() : 0;
+                    var note = root.TryGetProperty("message", out var m) && m.ValueKind == JsonValueKind.String ? m.GetString() : null;
+                    _message = note ?? $"Done — {Get("lotsProcessed")} lot(s) typed: {Get("matched")} matched, {Get("disagreements")} disagreement(s), {Get("errors")} error(s).";
+                    _error = false;
+                }
+            }
+            else
+            {
+                _message = $"Failed: {(int)resp.StatusCode} {resp.ReasonPhrase}. {json}";
+                _error = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"Error: {ex.Message}";
+            _error = true;
+        }
+        finally
+        {
+            _running = false;
+        }
+    }
+
+    private async Task ResolveDisagreements()
+    {
+        if (_auctionId <= 0) return;
+        _running = true;
+        _resolving = true;
+        _message = null;
+        try
+        {
+            var resp = await Api.ResolveTypistDisagreementsAsync(_auctionId);
+            var json = await resp.Content.ReadAsStringAsync();
+            if (resp.IsSuccessStatusCode)
+            {
+                var root = JsonDocument.Parse(json).RootElement;
+                if (root.TryGetProperty("error", out var errEl) && errEl.ValueKind == JsonValueKind.String)
+                {
+                    _message = errEl.GetString();
+                    _error = true;
+                }
+                else
+                {
+                    int Get(string p) => root.TryGetProperty(p, out var e) && e.ValueKind == JsonValueKind.Number ? e.GetInt32() : 0;
+                    var note = root.TryGetProperty("message", out var m) && m.ValueKind == JsonValueKind.String ? m.GetString() : null;
+                    _message = note ?? $"Cleared {Get("resolved")} disagreement(s) ({Get("errors")} error(s)).";
+                    _error = false;
+                }
+            }
+            else
+            {
+                _message = $"Failed: {(int)resp.StatusCode} {resp.ReasonPhrase}. {json}";
+                _error = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"Error: {ex.Message}";
+            _error = true;
+        }
+        finally
+        {
+            _running = false;
+            _resolving = false;
+        }
+    }
+}

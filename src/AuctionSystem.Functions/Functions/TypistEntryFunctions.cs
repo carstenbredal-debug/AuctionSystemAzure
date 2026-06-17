@@ -214,6 +214,178 @@ public class TypistEntryFunctions
         });
     }
 
+    private record SimulateRequest(int AuctionId, int? DisagreementPercent, int? MaxLots,
+        int? TypistUserId1, int? TypistUserId2, decimal? MinPrice, decimal? MaxPrice, string? DisagreementType);
+
+    // The two typist users a simulate/resolve run acts as: the supplied pair, else the first two active
+    // Typist users. Null if fewer than two are available.
+    private async Task<(AppUser A, AppUser B)?> ResolveSimTypistsAsync(int? id1, int? id2)
+    {
+        List<AppUser> typists;
+        if (id1 is int t1 && id2 is int t2 && t1 != t2)
+            typists = await _db.AppUsers.Where(u => u.Id == t1 || u.Id == t2).ToListAsync();
+        else
+            typists = await _db.AppUsers.Where(u => u.IsActive && u.Role == "Typist")
+                .OrderBy(u => u.Id).Take(2).ToListAsync();
+        return typists.Count >= 2 ? (typists[0], typists[1]) : null;
+    }
+
+    // TEST TOOL (admin-only): simulate a full typist pass for an auction — types each unsold lot as
+    // two typists and drives the real matching (CompareEntries), so matched lots create AuctionResults
+    // and a configurable share land in the disagreement queue. Bypasses the auth-derived TypistUserId
+    // of SubmitTypistEntry because it must act as two users at once.
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [Function("SimulateTypistEntries")]
+    public async Task<HttpResponseData> Simulate(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "typist-entries/simulate")] HttpRequestData req)
+    {
+        var body = await req.ReadFromJsonAsync<SimulateRequest>();
+        if (body == null || body.AuctionId <= 0)
+            return await CreateErrorResponse(req, "auctionId is required");
+
+        var pair = await ResolveSimTypistsAsync(body.TypistUserId1, body.TypistUserId2);
+        if (pair == null)
+            return await CreateErrorResponse(req, "Need two Typist users (seed two, or pass typistUserId1/2).");
+        var (typistA, typistB) = pair.Value;
+
+        var brokerIds = await _db.Brokers.Where(b => b.IsActive).Select(b => b.Id).ToListAsync();
+        if (brokerIds.Count == 0)
+            return await CreateErrorResponse(req, "No active brokers to assign as the winning broker.");
+
+        // Unsold lots in this auction that aren't already recorded by a prior match.
+        var matchedLots = await _db.TypistEntries
+            .Where(e => e.AuctionId == body.AuctionId && e.IsMatched)
+            .Select(e => e.LotNumber).Distinct().ToListAsync();
+        var lotNumbers = await _db.Lots
+            .Where(l => l.AuctionId == body.AuctionId && l.Status != LotStatus.Sold && !matchedLots.Contains(l.LotNumber))
+            .OrderBy(l => l.LotNumber).Select(l => l.LotNumber).ToListAsync();
+        if (body.MaxLots is int max && max > 0) lotNumbers = lotNumbers.Take(max).ToList();
+        if (lotNumbers.Count == 0)
+            return await CreateJsonResponse(req, new { auctionId = body.AuctionId, lotsProcessed = 0, matched = 0, disagreements = 0, errors = 0, message = "No unsold lots to type in this auction." });
+
+        var rnd = new Random();
+        var disagreePct = Math.Clamp(body.DisagreementPercent ?? 0, 0, 100);
+        var minP = Math.Max(0.01m, body.MinPrice ?? 50m);
+        var maxP = Math.Max(minP, body.MaxPrice ?? 500m);
+        decimal RandomPrice() => Math.Round(minP + (decimal)rnd.NextDouble() * (maxP - minP), 2);
+        var disType = (body.DisagreementType ?? "mixed").ToLowerInvariant(); // price | broker | mixed
+        int matched = 0, disagreements = 0, errors = 0;
+
+        foreach (var lotNumber in lotNumbers)
+        {
+            try
+            {
+                var brokerId = brokerIds[rnd.Next(brokerIds.Count)];
+                var price = RandomPrice();
+                var broker2 = brokerId;
+                var price2 = price;
+
+                if (rnd.Next(100) < disagreePct)
+                {
+                    // A match needs SAME broker AND price; differ on one to force a disagreement.
+                    var kind = disType switch
+                    {
+                        "broker" => "broker",
+                        "price" => "price",
+                        _ => rnd.Next(2) == 0 ? "price" : "broker"   // mixed
+                    };
+                    if (kind == "broker" && brokerIds.Count > 1)
+                        broker2 = brokerIds.Where(b => b != brokerId).ElementAt(rnd.Next(brokerIds.Count - 1));
+                    else // price disagreement (and broker fallback when only one broker exists)
+                    {
+                        price2 = RandomPrice();
+                        if (price2 == price) price2 += 1m;
+                    }
+                }
+
+                var e1 = new TypistEntry { LotNumber = lotNumber, AuctionId = body.AuctionId, BrokerId = brokerId, PriceEur = price, TypistUserId = typistA.Id, TypistSlot = 1, EnteredAt = DateTime.UtcNow };
+                _db.TypistEntries.Add(e1);
+                await _db.SaveChangesAsync();
+
+                var e2 = new TypistEntry { LotNumber = lotNumber, AuctionId = body.AuctionId, BrokerId = broker2, PriceEur = price2, TypistUserId = typistB.Id, TypistSlot = 2, EnteredAt = DateTime.UtcNow };
+                _db.TypistEntries.Add(e2);
+                await _db.SaveChangesAsync();
+
+                await CompareEntries(e2, e1);
+                if (e2.IsMatched) matched++; else if (e2.IsDisagreement) disagreements++;
+            }
+            catch (Exception ex)
+            {
+                errors++;
+                _logger.LogError(ex, "Simulate typist failed for lot {Lot}", lotNumber);
+            }
+        }
+
+        return await CreateJsonResponse(req, new
+        {
+            auctionId = body.AuctionId,
+            typists = new[] { typistA.DisplayName ?? typistA.Email, typistB.DisplayName ?? typistB.Email },
+            lotsProcessed = lotNumbers.Count,
+            matched,
+            disagreements,
+            errors
+        });
+    }
+
+    // TEST TOOL (admin-only): clear an auction's disagreement queue by re-entering matching values as
+    // both typists (the real reentry path: mark the disagreement rows resolved, then CompareEntries →
+    // matched + AuctionResult). Resolves to the slot-1 entry's broker/price.
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [Function("ResolveTypistDisagreements")]
+    public async Task<HttpResponseData> ResolveDisagreements(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "typist-entries/resolve-disagreements")] HttpRequestData req)
+    {
+        var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+        int.TryParse(query["auctionId"], out var auctionId);
+        if (auctionId <= 0) return await CreateErrorResponse(req, "auctionId is required");
+
+        int.TryParse(query["typistUserId1"], out var qt1);
+        int.TryParse(query["typistUserId2"], out var qt2);
+        var pair = await ResolveSimTypistsAsync(qt1 > 0 ? qt1 : (int?)null, qt2 > 0 ? qt2 : (int?)null);
+        if (pair == null) return await CreateErrorResponse(req, "Need two Typist users.");
+        var (typistA, typistB) = pair.Value;
+
+        var disEntries = await _db.TypistEntries
+            .Where(e => e.AuctionId == auctionId && e.IsDisagreement && !e.IsResolved)
+            .ToListAsync();
+        var lots = disEntries.GroupBy(e => e.LotNumber).ToList();
+        if (lots.Count == 0)
+            return await CreateJsonResponse(req, new { auctionId, resolved = 0, errors = 0, message = "No pending disagreements." });
+
+        int resolved = 0, errors = 0;
+        foreach (var grp in lots)
+        {
+            try
+            {
+                var lotNumber = grp.Key;
+                var src = grp.OrderBy(e => e.TypistSlot).First();
+                var brokerId = src.BrokerId;
+                var price = src.PriceEur;
+
+                foreach (var old in grp) old.IsResolved = true;
+                await _db.SaveChangesAsync();
+
+                var r1 = new TypistEntry { LotNumber = lotNumber, AuctionId = auctionId, BrokerId = brokerId, PriceEur = price, TypistUserId = typistA.Id, TypistSlot = 1, EnteredAt = DateTime.UtcNow };
+                _db.TypistEntries.Add(r1);
+                await _db.SaveChangesAsync();
+
+                var r2 = new TypistEntry { LotNumber = lotNumber, AuctionId = auctionId, BrokerId = brokerId, PriceEur = price, TypistUserId = typistB.Id, TypistSlot = 2, EnteredAt = DateTime.UtcNow };
+                _db.TypistEntries.Add(r2);
+                await _db.SaveChangesAsync();
+
+                await CompareEntries(r2, r1);
+                if (r2.IsMatched) resolved++;
+            }
+            catch (Exception ex)
+            {
+                errors++;
+                _logger.LogError(ex, "Resolve disagreement failed for lot {Lot}", grp.Key);
+            }
+        }
+
+        return await CreateJsonResponse(req, new { auctionId, resolved, errors });
+    }
+
     private async Task CompareEntries(TypistEntry entry1, TypistEntry entry2)
     {
         if (entry1.BrokerId == entry2.BrokerId && entry1.PriceEur == entry2.PriceEur)

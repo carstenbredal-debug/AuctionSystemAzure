@@ -759,6 +759,14 @@ public class AuctionApiClient
         catch { return null; }
     }
 
+    // Admin test tool: simulate a full typist pass for an auction.
+    public async Task<HttpResponseMessage> SimulateTypistEntriesAsync(int auctionId, int disagreementPercent, int? maxLots, decimal minPrice, decimal maxPrice, string disagreementType)
+        => await _http.PostAsJsonAsync("api/typist-entries/simulate", new { auctionId, disagreementPercent, maxLots, minPrice, maxPrice, disagreementType });
+
+    // Admin test tool: clear an auction's disagreement queue (re-enter matching values to resolve).
+    public async Task<HttpResponseMessage> ResolveTypistDisagreementsAsync(int auctionId)
+        => await _http.PostAsync($"api/typist-entries/resolve-disagreements?auctionId={auctionId}", null);
+
     public async Task<bool> ResetTypistLotAsync(int lotNumber)
     {
         var resp = await _http.PostAsync($"api/typist-entries/reset-lot/{lotNumber}", null);
