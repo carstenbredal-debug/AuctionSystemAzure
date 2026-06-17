@@ -769,8 +769,8 @@ public class AuctionApiClient
 
     // Admin test tool: sell an auction's recorded lots to linked buyers (real sell path -> invoices/BC),
     // optionally taking back + re-selling a % of them (credit-note / re-invoice path).
-    public async Task<HttpResponseMessage> SimulateSellLotsAsync(int auctionId, int? count, decimal minCommission, decimal maxCommission, List<int>? buyerIds, int reinvoicePercent)
-        => await _http.PostAsJsonAsync("api/auction-results/simulate-sell", new { auctionId, count, minCommission, maxCommission, buyerIds, reinvoicePercent });
+    public async Task<HttpResponseMessage> SimulateSellLotsAsync(int auctionId, int? count, decimal minCommission, decimal maxCommission, List<int>? buyerIds, int reinvoicePercent, int maxLotsPerInvoice)
+        => await _http.PostAsJsonAsync("api/auction-results/simulate-sell", new { auctionId, count, minCommission, maxCommission, buyerIds, reinvoicePercent, maxLotsPerInvoice });
 
     public async Task<bool> ResetTypistLotAsync(int lotNumber)
     {

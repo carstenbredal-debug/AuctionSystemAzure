@@ -117,6 +117,10 @@ else
             <label class="form-label">Re-invoice % <span class="text-muted">(of sold lots)</span></label>
             <input type="number" min="0" max="100" class="form-control" @bind="_sellReinvoicePct" />
         </div>
+        <div class="col-md-4">
+            <label class="form-label">Max lots / invoice <span class="text-muted">(random 1..n)</span></label>
+            <input type="number" min="1" max="100" class="form-control" @bind="_sellMaxLotsPerInvoice" />
+        </div>
         <div class="col-12">
             <label class="form-label">Buyer numbers <span class="text-muted">(comma-separated; empty = random linked buyer per lot)</span></label>
             <input class="form-control" @bind="_sellBuyerNumbersInput" placeholder="e.g. 5112, 8446" />
@@ -159,6 +163,7 @@ else
     private int? _sellCount;
     private decimal _sellCommission = 1.5m;
     private int _sellReinvoicePct;
+    private int _sellMaxLotsPerInvoice = 5;
     private string _sellBuyerNumbersInput = "";
     private bool _selling;
     private string? _sellMessage;
@@ -363,7 +368,7 @@ else
         _sellMessage = null;
         try
         {
-            var resp = await Api.SimulateSellLotsAsync(_auctionId, _sellCount, _sellCommission, _sellCommission, buyerIds, _sellReinvoicePct);
+            var resp = await Api.SimulateSellLotsAsync(_auctionId, _sellCount, _sellCommission, _sellCommission, buyerIds, _sellReinvoicePct, _sellMaxLotsPerInvoice);
             var json = await resp.Content.ReadAsStringAsync();
             if (resp.IsSuccessStatusCode)
             {

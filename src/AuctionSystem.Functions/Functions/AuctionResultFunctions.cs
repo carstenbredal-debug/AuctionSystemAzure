@@ -630,7 +630,7 @@ public class AuctionResultFunctions
         }
     }
 
-    private record SimulateSellRequest(int AuctionId, int? Count, decimal? MinCommission, decimal? MaxCommission, List<int>? BuyerIds, int? ReinvoicePercent);
+    private record SimulateSellRequest(int AuctionId, int? Count, decimal? MinCommission, decimal? MaxCommission, List<int>? BuyerIds, int? ReinvoicePercent, int? MaxLotsPerInvoice);
 
     // TEST TOOL (admin only). Sells an auction's recorded-but-unsold lots through the real sell path
     // (atomic claim + commission + invoice + background BC push) so the whole sell -> invoice -> BC ->
@@ -648,6 +648,7 @@ public class AuctionResultFunctions
 
         var minC = Math.Max(0m, body.MinCommission ?? 0m);
         var maxC = Math.Max(minC, body.MaxCommission ?? minC);
+        var maxPerInvoice = Math.Clamp(body.MaxLotsPerInvoice ?? 5, 1, 100);
 
         var results = await _db.AuctionResults
             .Where(r => r.AuctionId == body.AuctionId && r.SoldToBuyerId == null)
@@ -671,7 +672,7 @@ public class AuctionResultFunctions
         var buyers = await _db.Buyers.Where(b => allBuyerIds.Contains(b.Id)).ToDictionaryAsync(b => b.Id);
 
         var rnd = new Random();
-        var (soldIds, invoices, skipped) = await SimSellBatchAsync(results, buyersByBroker, buyers, minC, maxC, rnd);
+        var (soldIds, invoices, skipped) = await SimSellBatchAsync(results, buyersByBroker, buyers, minC, maxC, maxPerInvoice, rnd);
         if (soldIds.Count == 0)
             return await SimJson(req, System.Net.HttpStatusCode.OK, new { auctionId = body.AuctionId, sold = 0, invoices = 0, skipped, reinvoiced = 0, creditNotes = 0,
                 message = skipped > 0 ? "No lots sold — the winning brokers have no linked buyer in the selected set. Link customers first." : "No lots sold." });
@@ -695,7 +696,7 @@ public class AuctionResultFunctions
                 reinvoiced = takenBackIds.Count;
 
                 var reSell = await _db.AuctionResults.Where(r => takenBackIds.Contains(r.Id) && r.SoldToBuyerId == null).ToListAsync();
-                var (_, inv2, _) = await SimSellBatchAsync(reSell, buyersByBroker, buyers, minC, maxC, rnd);
+                var (_, inv2, _) = await SimSellBatchAsync(reSell, buyersByBroker, buyers, minC, maxC, maxPerInvoice, rnd);
                 reinvoiceInvoices = inv2;
             }
         }
@@ -707,7 +708,7 @@ public class AuctionResultFunctions
     // count, and how many were skipped for lack of an eligible linked buyer.
     private async Task<(List<int> SoldIds, int Invoices, int Skipped)> SimSellBatchAsync(
         List<AuctionResult> results, Dictionary<int, List<int>> buyersByBroker, Dictionary<int, Buyer> buyers,
-        decimal minC, decimal maxC, Random rnd)
+        decimal minC, decimal maxC, int maxPerInvoice, Random rnd)
     {
         var now = DateTime.UtcNow;
         decimal RandPct() => maxC <= minC ? minC : Math.Round(minC + (decimal)rnd.NextDouble() * (maxC - minC), 2);
@@ -753,12 +754,23 @@ public class AuctionResultFunctions
         }
         await _db.SaveChangesAsync();
 
+        // Split each (broker, buyer) group into invoices of a RANDOM number of lots (1..maxPerInvoice)
+        // so the test data has realistically varied invoice sizes rather than one invoice per buyer.
         int invoices = 0;
         if (_bcSyncService != null)
             foreach (var grp in claimed.GroupBy(r => new { r.BrokerId, BuyerId = r.SoldToBuyerId!.Value }))
             {
-                var (invId, _) = await CreateInvoiceAndQueuePushAsync(grp.ToList(), grp.Key.BuyerId, buyers[grp.Key.BuyerId]);
-                if (invId != null) invoices++;
+                var groupLots = grp.ToList();
+                int idx = 0;
+                while (idx < groupLots.Count)
+                {
+                    var remaining = groupLots.Count - idx;
+                    var chunkSize = maxPerInvoice <= 1 ? 1 : rnd.Next(1, Math.Min(maxPerInvoice, remaining) + 1);
+                    var chunk = groupLots.GetRange(idx, chunkSize);
+                    idx += chunkSize;
+                    var (invId, _) = await CreateInvoiceAndQueuePushAsync(chunk, grp.Key.BuyerId, buyers[grp.Key.BuyerId]);
+                    if (invId != null) invoices++;
+                }
             }
 
         return (claimed.Select(r => r.Id).ToList(), invoices, skipped);
