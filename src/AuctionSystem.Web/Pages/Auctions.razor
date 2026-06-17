@@ -810,13 +810,21 @@ else
                     .Select(c => c.LotNumber)
                     .ToList();
                 var snapshotResp = await Api.ImportLotsSnapshotAsync(Id!.Value, lotNumbers);
-                var snapshotOk = snapshotResp.IsSuccessStatusCode;
-
-                importMessage = snapshotOk
-                    ? $"Imported {selectedCatalogLotIds.Count} lots + snapshot tables created."
-                    : $"Imported {selectedCatalogLotIds.Count} lots but snapshot failed. Check logs.";
-                importIsError = !snapshotOk;
+                var count = selectedCatalogLotIds.Count;
                 selectedCatalogLotIds.Clear();
+                if (snapshotResp.IsSuccessStatusCode)
+                {
+                    // The snapshot build now runs in the background (a full catalog ~50s would time out
+                    // the request and report a false failure). Poll SnapshotStatus and report when done.
+                    importMessage = $"Imported {count} lots. Building snapshot in the background…";
+                    importIsError = false;
+                    _ = PollSnapshotAsync(Id!.Value);
+                }
+                else
+                {
+                    importMessage = $"Imported {count} lots, but the snapshot couldn't be queued. Check logs.";
+                    importIsError = true;
+                }
             }
             else
             {
@@ -830,6 +838,31 @@ else
             importIsError = true;
         }
         importing = false;
+    }
+
+    // Poll the auction's background snapshot build until it reports Done/Failed (best-effort; the
+    // auction also shows SnapshotStatus, so a missed poll isn't fatal).
+    private async Task PollSnapshotAsync(int auctionId)
+    {
+        try
+        {
+            for (var i = 0; i < 120; i++) // ~6 min cap (120 × 3s)
+            {
+                await Task.Delay(3000);
+                var status = (await Api.GetAuctionAsync(auctionId))?.SnapshotStatus;
+                if (string.IsNullOrEmpty(status) || status == "Queued") continue;
+
+                var done = status.StartsWith("Done");
+                var failed = status.StartsWith("Failed");
+                importMessage = done ? $"Snapshot ready — {status[5..].Trim()}."
+                    : failed ? $"Snapshot build failed: {status[7..].Trim()}"
+                    : "Building snapshot in the background…";
+                importIsError = failed;
+                await InvokeAsync(StateHasChanged);
+                if (done || failed) break;
+            }
+        }
+        catch { /* best-effort */ }
     }
 
     private async Task DeleteAuction()

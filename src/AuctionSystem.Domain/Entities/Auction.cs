@@ -15,5 +15,12 @@ public class Auction
     public AuctionStatus Status { get; set; } = AuctionStatus.Draft;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    // Background snapshot-build status. The per-auction Lots/Boxes/Skins snapshot tables are built off
+    // the request thread (a large import takes ~50s and would time out the HTTP request). Null = not
+    // started; otherwise "Queued" / "Building" / "Done: N lots, N boxes, N skins" / "Failed: <reason>".
+    // Columns added via the Program.cs startup raw-SQL block (this project patches schema there).
+    public string? SnapshotStatus { get; set; }
+    public DateTime? SnapshotBuiltAt { get; set; }
+
     public ICollection<Lot> Lots { get; set; } = new List<Lot>();
 }

@@ -19,6 +19,8 @@ public class AuctionDto
     public DateTime? CompletedAt { get; set; }
     public AuctionStatus Status { get; set; }
     public DateTime CreatedAt { get; set; }
+    public string? SnapshotStatus { get; set; }
+    public DateTime? SnapshotBuiltAt { get; set; }
     public List<LotDto> Lots { get; set; } = new();
     public int LotCount { get; set; }
 }

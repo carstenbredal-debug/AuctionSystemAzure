@@ -17,6 +17,7 @@ public class AuctionService
             {
                 a.Id, a.AuctionNumber, a.Title, a.Description, a.Location,
                 a.ScheduledDate, a.StartedAt, a.CompletedAt, a.Status, a.CreatedAt,
+                a.SnapshotStatus, a.SnapshotBuiltAt,
                 LotCount = a.Lots.Count
             }).ToListAsync();
 

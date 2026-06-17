@@ -4,6 +4,7 @@ using AuctionSystem.Domain.Data;
 using AuctionSystem.Domain.Entities;
 using AuctionSystem.Domain.Enums;
 using AuctionSystem.Domain.Services;
+using AuctionSystem.Functions.Services;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.EntityFrameworkCore;
@@ -17,6 +18,7 @@ public class AuctionFunctions
     private readonly AuctionDbContext _db;
     private readonly CatalogDbContext _catalogDb;
     private readonly ILogger<AuctionFunctions> _logger;
+    private readonly SnapshotBuildQueue _snapshotQueue;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -24,12 +26,13 @@ public class AuctionFunctions
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public AuctionFunctions(AuctionService service, AuctionDbContext db, CatalogDbContext catalogDb, ILogger<AuctionFunctions> logger)
+    public AuctionFunctions(AuctionService service, AuctionDbContext db, CatalogDbContext catalogDb, ILogger<AuctionFunctions> logger, SnapshotBuildQueue snapshotQueue)
     {
         _service = service;
         _db = db;
         _catalogDb = catalogDb;
         _logger = logger;
+        _snapshotQueue = snapshotQueue;
     }
 
     [Function("GetAuctions")]
@@ -168,83 +171,130 @@ public class AuctionFunctions
             return resp400;
         }
 
-        var auctionNum = auction.AuctionNumber;
-        var lotsCsv = string.Join(",", body.LotNumbers);
+        // A full-catalog snapshot (~50s for 4788 lots) overruns the gateway timeout and surfaces as a
+        // false failure even though it succeeds. Queue it and return immediately; the worker builds it
+        // and updates SnapshotStatus (which the UI polls). Synchronous fallback when no queue (local dev).
+        if (_snapshotQueue.IsConfigured)
+        {
+            auction.SnapshotStatus = "Queued";
+            auction.SnapshotBuiltAt = null;
+            await _db.SaveChangesAsync();
+            await _snapshotQueue.EnqueueAsync(auctionId);
+            return await CreateJsonResponse(req, new
+            {
+                queued = true,
+                message = "Snapshot build queued. Watch the auction's snapshotStatus for progress."
+            }, System.Net.HttpStatusCode.Accepted);
+        }
 
         try
         {
-            var conn = _catalogDb.Database.GetConnectionString();
-            using var sqlConn = new Microsoft.Data.SqlClient.SqlConnection(conn);
-            await sqlConn.OpenAsync();
-
-            // 1. Create auction.["261.Lots"] — full copy of dbo.CatalogLots for selected lots
-            var lotsTable = $"{auctionNum}.Lots";
-            await ExecuteSql(sqlConn, $@"
-                IF OBJECT_ID('auction.[{lotsTable}]', 'U') IS NOT NULL DROP TABLE auction.[{lotsTable}];
-                SELECT * INTO auction.[{lotsTable}] FROM auction.cataloglots WHERE LotNumber IN ({lotsCsv});
-            ");
-
-            // 2. Get all box numbers from the imported lots
-            var boxNumbersSql = $@"
-                SELECT DISTINCT value AS BoxNumber
-                FROM auction.[{lotsTable}]
-                CROSS APPLY STRING_SPLIT(IncludedBoxNumbers, ',')
-                WHERE ISNUMERIC(LTRIM(RTRIM(value))) = 1 AND CAST(LTRIM(RTRIM(value)) AS INT) > 0
-            ";
-
-            // 3. Create auction.["261.Skins"] — full copy of dbo.SkinTable for boxes in those lots
-            var skinsTable = $"{auctionNum}.Skins";
-            await ExecuteSql(sqlConn, $@"
-                IF OBJECT_ID('auction.[{skinsTable}]', 'U') IS NOT NULL DROP TABLE auction.[{skinsTable}];
-                SELECT s.* INTO auction.[{skinsTable}]
-                FROM dbo.SkinTable s
-                WHERE s.BoxNumber IN (
-                    SELECT CAST(LTRIM(RTRIM(value)) AS INT)
-                    FROM auction.[{lotsTable}]
-                    CROSS APPLY STRING_SPLIT(IncludedBoxNumbers, ',')
-                    WHERE ISNUMERIC(LTRIM(RTRIM(value))) = 1 AND CAST(LTRIM(RTRIM(value)) AS INT) > 0
-                );
-            ");
-
-            // 4. Create auction.["261.Boxes"] — aggregated box view + location + weight from boxstatingfromkphg
-            var boxesTable = $"{auctionNum}.Boxes";
-            await ExecuteSql(sqlConn, $@"
-                IF OBJECT_ID('auction.[{boxesTable}]', 'U') IS NOT NULL DROP TABLE auction.[{boxesTable}];
-                SELECT
-                    s.BoxNumber, s.BoxType, s.BoxStatus, s.SalesType, s.[Group], s.Gender,
-                    s.Size, s.HairLength, s.Color, s.Quality, s.Clarity, s.Damages,
-                    COUNT(*) AS Skins,
-                    ISNULL(b.BoxLocation, '') AS BoxLocation,
-                    CAST(ISNULL(b.Weight, 0) AS DECIMAL(18,2)) AS BoxWeight
-                INTO auction.[{boxesTable}]
-                FROM auction.[{skinsTable}] s
-                LEFT JOIN dbo.boxstatingfromkphg b ON b.BoxNumber = s.BoxNumber
-                GROUP BY s.BoxNumber, s.BoxType, s.BoxStatus, s.SalesType, s.[Group], s.Gender,
-                    s.Size, s.HairLength, s.Color, s.Quality, s.Clarity, s.Damages,
-                    b.BoxLocation, b.Weight;
-            ");
-
-            // Get counts
-            var lotCount = await GetScalar(sqlConn, $"SELECT COUNT(*) FROM auction.[{lotsTable}]");
-            var boxCount = await GetScalar(sqlConn, $"SELECT COUNT(*) FROM auction.[{boxesTable}]");
-            var skinCount = await GetScalar(sqlConn, $"SELECT COUNT(*) FROM auction.[{skinsTable}]");
-
-            _logger.LogInformation("Imported lots for auction {AuctionNum}: {Lots} lots, {Boxes} boxes, {Skins} skins",
-                auctionNum, lotCount, boxCount, skinCount);
-
-            return await CreateJsonResponse(req, new
-            {
-                success = true,
-                auctionNumber = auctionNum,
-                tables = new { lots = lotsTable, boxes = boxesTable, skins = skinsTable },
-                counts = new { lots = lotCount, boxes = boxCount, skins = skinCount }
-            });
+            var (lots, boxes, skins) = await BuildSnapshotAsync(auctionId, body.LotNumbers);
+            auction.SnapshotStatus = $"Done: {lots} lots, {boxes} boxes, {skins} skins";
+            auction.SnapshotBuiltAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+            return await CreateJsonResponse(req, new { success = true, counts = new { lots, boxes, skins } });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to import lots for auction {AuctionId}", auctionId);
+            auction.SnapshotStatus = $"Failed: {SnapshotErr(ex)}";
+            await _db.SaveChangesAsync();
             return await CreateJsonResponse(req, new { error = ex.Message }, System.Net.HttpStatusCode.InternalServerError);
         }
+    }
+
+    // Builds the per-auction snapshot off the request thread so a big import never times out the caller.
+    [Function("SnapshotBuildWorker")]
+    public async Task SnapshotBuildWorker(
+        [QueueTrigger(SnapshotBuildQueue.QueueName, Connection = "AzureWebJobsStorage")] string message)
+    {
+        if (!int.TryParse(message, out var auctionId)) { _logger.LogWarning("Bad snapshot-build message: {Msg}", message); return; }
+        var auction = await _db.Auctions.FindAsync(auctionId);
+        if (auction == null) { _logger.LogWarning("Snapshot build: auction {Id} not found", auctionId); return; }
+
+        var lotNumbers = await _db.Lots.Where(l => l.AuctionId == auctionId).Select(l => l.LotNumber).ToListAsync();
+        auction.SnapshotStatus = "Building";
+        await _db.SaveChangesAsync();
+        try
+        {
+            var (lots, boxes, skins) = await BuildSnapshotAsync(auctionId, lotNumbers);
+            auction.SnapshotStatus = $"Done: {lots} lots, {boxes} boxes, {skins} skins";
+            auction.SnapshotBuiltAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Snapshot build failed for auction {Id}", auctionId);
+            auction.SnapshotStatus = $"Failed: {SnapshotErr(ex)}";
+            await _db.SaveChangesAsync();
+            // Don't rethrow: a deterministic failure shouldn't retry the 50s build 5x and then poison.
+        }
+    }
+
+    private static string SnapshotErr(Exception ex) => ex.Message.Length > 300 ? ex.Message[..300] : ex.Message;
+
+    // Build the per-auction Lots/Boxes/Skins snapshot tables for the given lots. Returns the row counts.
+    private async Task<(int Lots, int Boxes, int Skins)> BuildSnapshotAsync(int auctionId, List<int> lotNumbers)
+    {
+        var auction = await _db.Auctions.FindAsync(auctionId)
+            ?? throw new InvalidOperationException($"Auction {auctionId} not found");
+        var auctionNum = auction.AuctionNumber;
+        var lotsCsv = string.Join(",", lotNumbers);
+
+        var conn = _catalogDb.Database.GetConnectionString();
+        using var sqlConn = new Microsoft.Data.SqlClient.SqlConnection(conn);
+        await sqlConn.OpenAsync();
+
+        // 1. Lots snapshot — full copy of cataloglots for the selected lots.
+        var lotsTable = $"{auctionNum}.Lots";
+        await ExecuteSql(sqlConn, $@"
+            IF OBJECT_ID('auction.[{lotsTable}]', 'U') IS NOT NULL DROP TABLE auction.[{lotsTable}];
+            SELECT * INTO auction.[{lotsTable}] FROM auction.cataloglots WHERE LotNumber IN ({lotsCsv});
+        ");
+
+        // 2. Skins snapshot — TRY_CAST (not ISNUMERIC + CAST): ISNUMERIC is loose and SQL Server may
+        // run the CAST before the ISNUMERIC filter, so one bad IncludedBoxNumbers value aborts the whole
+        // statement. TRY_CAST yields NULL for those and is filtered out.
+        var skinsTable = $"{auctionNum}.Skins";
+        await ExecuteSql(sqlConn, $@"
+            IF OBJECT_ID('auction.[{skinsTable}]', 'U') IS NOT NULL DROP TABLE auction.[{skinsTable}];
+            SELECT s.* INTO auction.[{skinsTable}]
+            FROM dbo.SkinTable s
+            WHERE s.BoxNumber IN (
+                SELECT TRY_CAST(LTRIM(RTRIM(value)) AS INT)
+                FROM auction.[{lotsTable}]
+                CROSS APPLY STRING_SPLIT(IncludedBoxNumbers, ',')
+                WHERE TRY_CAST(LTRIM(RTRIM(value)) AS INT) > 0
+            );
+        ");
+
+        // 3. Boxes snapshot — aggregated view + location/weight from boxstatingfromkphg.
+        var boxesTable = $"{auctionNum}.Boxes";
+        await ExecuteSql(sqlConn, $@"
+            IF OBJECT_ID('auction.[{boxesTable}]', 'U') IS NOT NULL DROP TABLE auction.[{boxesTable}];
+            SELECT
+                s.BoxNumber, s.BoxType, s.BoxStatus, s.SalesType, s.[Group], s.Gender,
+                s.Size, s.HairLength, s.Color, s.Quality, s.Clarity, s.Damages,
+                COUNT(*) AS Skins,
+                ISNULL(b.BoxLocation, '') AS BoxLocation,
+                CAST(ISNULL(b.Weight, 0) AS DECIMAL(18,2)) AS BoxWeight
+            INTO auction.[{boxesTable}]
+            FROM auction.[{skinsTable}] s
+            LEFT JOIN dbo.boxstatingfromkphg b ON b.BoxNumber = s.BoxNumber
+            GROUP BY s.BoxNumber, s.BoxType, s.BoxStatus, s.SalesType, s.[Group], s.Gender,
+                s.Size, s.HairLength, s.Color, s.Quality, s.Clarity, s.Damages,
+                b.BoxLocation, b.Weight;
+        ");
+
+        var lotCount = await GetScalar(sqlConn, $"SELECT COUNT(*) FROM auction.[{lotsTable}]");
+        var boxCount = await GetScalar(sqlConn, $"SELECT COUNT(*) FROM auction.[{boxesTable}]");
+        var skinCount = await GetScalar(sqlConn, $"SELECT COUNT(*) FROM auction.[{skinsTable}]");
+
+        _logger.LogInformation("Built snapshot for auction {AuctionNum}: {Lots} lots, {Boxes} boxes, {Skins} skins",
+            auctionNum, lotCount, boxCount, skinCount);
+
+        return (lotCount, boxCount, skinCount);
     }
 
     private static async Task ExecuteSql(Microsoft.Data.SqlClient.SqlConnection conn, string sql)

@@ -103,6 +103,11 @@ var host = new HostBuilder()
         services.AddSingleton(sp => new AuctionSystem.Functions.BusinessCentral.Services.BcPushQueue(
             storageConnectionString,
             sp.GetRequiredService<ILogger<AuctionSystem.Functions.BusinessCentral.Services.BcPushQueue>>()));
+
+        // Background snapshot-build queue (large auction imports). Synchronous fallback if unconfigured.
+        services.AddSingleton(sp => new AuctionSystem.Functions.Services.SnapshotBuildQueue(
+            storageConnectionString,
+            sp.GetRequiredService<ILogger<AuctionSystem.Functions.Services.SnapshotBuildQueue>>()));
     })
     .Build();
 
@@ -222,6 +227,13 @@ using (var scope = host.Services.CreateScope())
                 ALTER TABLE auction.Invoices ADD BcSyncError nvarchar(1000) NULL;
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Invoices') AND name = 'BcSyncErrorAt')
                 ALTER TABLE auction.Invoices ADD BcSyncErrorAt datetime2 NULL;
+        ");
+        // Auction snapshot-build status columns (background import)
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Auctions') AND name = 'SnapshotStatus')
+                ALTER TABLE auction.Auctions ADD SnapshotStatus nvarchar(400) NULL;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Auctions') AND name = 'SnapshotBuiltAt')
+                ALTER TABLE auction.Auctions ADD SnapshotBuiltAt datetime2 NULL;
         ");
         // TypistEntries table
         db.Database.ExecuteSqlRaw(@"
