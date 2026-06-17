@@ -467,9 +467,6 @@ public class AuctionResultFunctions
                     LastModifiedAt = {now}
                 WHERE Id = {result.Id} AND SoldToBuyerId IS NULL");
 
-            _logger.LogInformation("COMMDIAG sell: result={Id} type={Type} value={Value} computed={Computed} claimed={Claimed}",
-                result.Id, body.CommissionType, body.CommissionValue, commissionAmount, claimed);
-
             if (claimed == 1)
             {
                 // Mirror the authoritative DB values onto the tracked entity so downstream history
@@ -606,15 +603,12 @@ public class AuctionResultFunctions
                 subTotal += hammerPrice;
                 totalAuctionFee += lotAuctionFee;
                 totalCommission += r.CommissionAmount ?? 0;
-                _logger.LogInformation("COMMDIAG invoice-src: result={Id} CommissionAmount={Amount}", r.Id, r.CommissionAmount);
             }
 
             invoice.SubTotal = subTotal;
             invoice.AuctionFee = totalAuctionFee;
             invoice.Commission = totalCommission;
             invoice.TotalAmount = subTotal + totalAuctionFee + totalCommission;
-            _logger.LogInformation("COMMDIAG invoice-totals: subTotal={S} auctionFee={F} commission={C} resultCount={N}",
-                subTotal, totalAuctionFee, totalCommission, results.Count);
             invoice.Buyer = buyer;
 
             _db.Invoices.Add(invoice);
