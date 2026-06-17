@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using AuctionSystem.Domain.Data;
 using AuctionSystem.Domain.Entities;
 using AuctionSystem.Domain.Services;
+using AuctionSystem.Functions.Auth;
 using AuctionSystem.Functions.BusinessCentral.Services;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
@@ -125,6 +126,9 @@ public class FarmerFunctions
     public async Task<HttpResponseData> GetLots(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "farmers/{farmerId:int}/lots")] HttpRequestData req, int farmerId)
     {
+        if (!req.FunctionContext.CanAccessFarmer(farmerId))
+            return req.CreateResponse(System.Net.HttpStatusCode.Forbidden);
+
         var lots = await _auctionService.GetLotsByFarmerAsync(farmerId);
         return await CreateJsonResponse(req, lots);
     }

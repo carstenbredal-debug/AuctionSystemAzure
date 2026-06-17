@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using AuctionSystem.Domain.Data;
 using AuctionSystem.Domain.Entities;
+using AuctionSystem.Functions.Auth;
 using AuctionSystem.Functions.BusinessCentral.Services;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
@@ -129,6 +130,9 @@ public class BrokerFunctions
     public async Task<HttpResponseData> GetBuyers(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "brokers/{brokerId:int}/buyers")] HttpRequestData req, int brokerId)
     {
+        if (!req.FunctionContext.CanAccessBroker(brokerId))
+            return req.CreateResponse(System.Net.HttpStatusCode.Forbidden);
+
         var buyers = await _db.BrokerBuyers
             .Where(bb => bb.BrokerId == brokerId)
             .Include(bb => bb.Buyer)

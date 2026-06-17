@@ -141,4 +141,32 @@ public static class FunctionContextAuthExtensions
 
     public static ClientPrincipal? GetClientPrincipal(this FunctionContext context) =>
         context.Items.TryGetValue(AuthenticationMiddleware.PrincipalKey, out var p) ? p as ClientPrincipal : null;
+
+    /// <summary>True if the authenticated caller has the Admin role.</summary>
+    public static bool IsAdmin(this FunctionContext context) =>
+        string.Equals(context.GetAppUser()?.Role, "Admin", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Ownership gate: the caller may access this broker's data only if they ARE that broker
+    /// (their AppUser.BrokerId matches) or they are an Admin. Denies if no user is resolved.
+    /// </summary>
+    public static bool CanAccessBroker(this FunctionContext context, int brokerId)
+    {
+        var u = context.GetAppUser();
+        return u != null && (string.Equals(u.Role, "Admin", StringComparison.OrdinalIgnoreCase) || u.BrokerId == brokerId);
+    }
+
+    /// <summary>Ownership gate for buyer-scoped data (own BuyerId or Admin).</summary>
+    public static bool CanAccessBuyer(this FunctionContext context, int buyerId)
+    {
+        var u = context.GetAppUser();
+        return u != null && (string.Equals(u.Role, "Admin", StringComparison.OrdinalIgnoreCase) || u.BuyerId == buyerId);
+    }
+
+    /// <summary>Ownership gate for farmer-scoped data (own FarmerId or Admin).</summary>
+    public static bool CanAccessFarmer(this FunctionContext context, int farmerId)
+    {
+        var u = context.GetAppUser();
+        return u != null && (string.Equals(u.Role, "Admin", StringComparison.OrdinalIgnoreCase) || u.FarmerId == farmerId);
+    }
 }

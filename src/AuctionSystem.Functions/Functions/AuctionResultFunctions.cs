@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using AuctionSystem.Domain.Data;
 using AuctionSystem.Domain.Entities;
 using AuctionSystem.Domain.Enums;
+using AuctionSystem.Functions.Auth;
 using AuctionSystem.Functions.BusinessCentral.Services;
 using AuctionSystem.Functions.Services;
 using Microsoft.Azure.Functions.Worker;
@@ -297,6 +298,9 @@ public class AuctionResultFunctions
     public async Task<HttpResponseData> GetByBroker(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "auction-results/broker/{brokerId:int}")] HttpRequestData req, int brokerId)
     {
+        if (!req.FunctionContext.CanAccessBroker(brokerId))
+            return req.CreateResponse(System.Net.HttpStatusCode.Forbidden);
+
         var results = await _db.AuctionResults
             .Where(r => r.BrokerId == brokerId)
             .OrderByDescending(r => r.ReceivedAt)
@@ -410,6 +414,9 @@ public class AuctionResultFunctions
         // (the BrokerBuyers junction). Enforced server-side so a tampered/stale client can't
         // sell to a non-linked buyer even if the dropdown were bypassed.
         var brokerIds = results.Select(r => r.BrokerId).Distinct().ToList();
+        // Ownership: a broker may only sell their own lots (admins bypass).
+        if (brokerIds.Any(bid => !req.FunctionContext.CanAccessBroker(bid)))
+            return req.CreateResponse(System.Net.HttpStatusCode.Forbidden);
         if (brokerIds.Count > 0)
         {
             var linkedBrokerIds = await _db.BrokerBuyers
@@ -616,6 +623,9 @@ public class AuctionResultFunctions
     public async Task<HttpResponseData> GetByBuyer(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "auction-results/buyer/{buyerId:int}")] HttpRequestData req, int buyerId)
     {
+        if (!req.FunctionContext.CanAccessBuyer(buyerId))
+            return req.CreateResponse(System.Net.HttpStatusCode.Forbidden);
+
         var results = await _db.AuctionResults
             .Where(r => r.SoldToBuyerId == buyerId)
             .OrderByDescending(r => r.SoldAt)
@@ -667,6 +677,10 @@ public class AuctionResultFunctions
         var results = await _db.AuctionResults
             .Where(r => body.AuctionResultIds.Contains(r.Id) && r.SoldToBuyerId != null)
             .ToListAsync();
+
+        // Ownership: a broker may only take back their own lots (admins bypass).
+        if (results.Select(r => r.BrokerId).Distinct().Any(bid => !req.FunctionContext.CanAccessBroker(bid)))
+            return req.CreateResponse(System.Net.HttpStatusCode.Forbidden);
 
         var shippingError = await CheckShippedLotsAsync(results, req, "Cannot take back");
         if (shippingError != null) return shippingError;
@@ -765,6 +779,10 @@ public class AuctionResultFunctions
             .Where(r => body.AuctionResultIds.Contains(r.Id) && r.SoldToBuyerId != null)
             .ToListAsync();
 
+        // Ownership: a buyer may only request return of their own purchases (admins bypass).
+        if (results.Select(r => r.SoldToBuyerId!.Value).Distinct().Any(bid => !req.FunctionContext.CanAccessBuyer(bid)))
+            return req.CreateResponse(System.Net.HttpStatusCode.Forbidden);
+
         var shippingError = await CheckShippedLotsAsync(results, req, "Cannot request return for");
         if (shippingError != null) return shippingError;
 
@@ -849,6 +867,9 @@ public class AuctionResultFunctions
     public async Task<HttpResponseData> GetTakebacksByBuyer(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "takeback-requests/buyer/{buyerId:int}")] HttpRequestData req, int buyerId)
     {
+        if (!req.FunctionContext.CanAccessBuyer(buyerId))
+            return req.CreateResponse(System.Net.HttpStatusCode.Forbidden);
+
         var requests = await _db.TakebackRequests
             .Include(t => t.AuctionResult)
             .Include(t => t.Broker)
@@ -882,6 +903,9 @@ public class AuctionResultFunctions
     public async Task<HttpResponseData> GetTakebacksByBroker(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "takeback-requests/broker/{brokerId:int}")] HttpRequestData req, int brokerId)
     {
+        if (!req.FunctionContext.CanAccessBroker(brokerId))
+            return req.CreateResponse(System.Net.HttpStatusCode.Forbidden);
+
         var requests = await _db.TakebackRequests
             .Include(t => t.AuctionResult).ThenInclude(a => a.SoldToBuyer)
             .Include(t => t.Broker)
@@ -927,6 +951,10 @@ public class AuctionResultFunctions
 
         if (takebackReq == null)
             return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        // Ownership: only the owning broker, the owning buyer, or an admin may respond.
+        if (!req.FunctionContext.CanAccessBroker(takebackReq.BrokerId) && !req.FunctionContext.CanAccessBuyer(takebackReq.BuyerId))
+            return req.CreateResponse(System.Net.HttpStatusCode.Forbidden);
 
         if (takebackReq.Status != CustomerRequestStatus.Pending)
         {

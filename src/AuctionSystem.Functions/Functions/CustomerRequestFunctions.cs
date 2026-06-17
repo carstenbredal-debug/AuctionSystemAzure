@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using AuctionSystem.Domain.Data;
 using AuctionSystem.Domain.Entities;
 using AuctionSystem.Domain.Enums;
+using AuctionSystem.Functions.Auth;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.EntityFrameworkCore;
@@ -31,6 +32,9 @@ public class CustomerRequestFunctions
     public async Task<HttpResponseData> GetByBroker(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "brokers/{brokerId:int}/customer-requests")] HttpRequestData req, int brokerId)
     {
+        if (!req.FunctionContext.CanAccessBroker(brokerId))
+            return req.CreateResponse(System.Net.HttpStatusCode.Forbidden);
+
         var requests = await _db.BrokerCustomerRequests
             .Include(r => r.Buyer)
             .Where(r => r.BrokerId == brokerId)
@@ -43,6 +47,9 @@ public class CustomerRequestFunctions
     public async Task<HttpResponseData> GetByBuyer(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "buyers/{buyerId:int}/customer-requests")] HttpRequestData req, int buyerId)
     {
+        if (!req.FunctionContext.CanAccessBuyer(buyerId))
+            return req.CreateResponse(System.Net.HttpStatusCode.Forbidden);
+
         var requests = await _db.BrokerCustomerRequests
             .Include(r => r.Broker)
             .Where(r => r.BuyerId == buyerId)
@@ -55,6 +62,9 @@ public class CustomerRequestFunctions
     public async Task<HttpResponseData> Create(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "brokers/{brokerId:int}/customer-requests")] HttpRequestData req, int brokerId)
     {
+        if (!req.FunctionContext.CanAccessBroker(brokerId))
+            return req.CreateResponse(System.Net.HttpStatusCode.Forbidden);
+
         var dto = await req.ReadFromJsonAsync<CustomerRequestDto>();
         if (dto == null) return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
 
@@ -141,6 +151,9 @@ public class CustomerRequestFunctions
     public async Task<HttpResponseData> CreateByBuyer(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "buyers/{buyerId:int}/customer-requests")] HttpRequestData req, int buyerId)
     {
+        if (!req.FunctionContext.CanAccessBuyer(buyerId))
+            return req.CreateResponse(System.Net.HttpStatusCode.Forbidden);
+
         var dto = await req.ReadFromJsonAsync<BuyerRequestDto>();
         if (dto == null) return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
 

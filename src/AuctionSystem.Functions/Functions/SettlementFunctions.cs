@@ -4,6 +4,7 @@ using AuctionSystem.Domain.Data;
 using AuctionSystem.Domain.Entities;
 using AuctionSystem.Domain.Enums;
 using AuctionSystem.Domain.Services;
+using AuctionSystem.Functions.Auth;
 using AuctionSystem.Functions.BusinessCentral.Models;
 using AuctionSystem.Functions.BusinessCentral.Services;
 using Microsoft.EntityFrameworkCore;
@@ -40,6 +41,9 @@ public class SettlementFunctions
     public async Task<HttpResponseData> GetInvoicesByBroker(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements/invoices/broker/{brokerId:int}")] HttpRequestData req, int brokerId)
     {
+        if (!req.FunctionContext.CanAccessBroker(brokerId))
+            return req.CreateResponse(System.Net.HttpStatusCode.Forbidden);
+
         var invoices = await _service.GetInvoicesByBrokerAsync(brokerId);
         return await CreateJsonResponse(req, invoices.Select(i => new
         {
@@ -631,6 +635,9 @@ public class SettlementFunctions
     public async Task<HttpResponseData> GetByFarmer(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements/farmer/{farmerId:int}")] HttpRequestData req, int farmerId)
     {
+        if (!req.FunctionContext.CanAccessFarmer(farmerId))
+            return req.CreateResponse(System.Net.HttpStatusCode.Forbidden);
+
         var settlements = await _service.GetSettlementsByFarmerAsync(farmerId);
         return await CreateJsonResponse(req, settlements);
     }
@@ -654,6 +661,9 @@ public class SettlementFunctions
     public async Task<HttpResponseData> GetInvoicesByBuyer(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements/invoices/buyer/{buyerId:int}")] HttpRequestData req, int buyerId)
     {
+        if (!req.FunctionContext.CanAccessBuyer(buyerId))
+            return req.CreateResponse(System.Net.HttpStatusCode.Forbidden);
+
         var invoices = await _db.Invoices.Where(i => i.BuyerId == buyerId)
             .OrderByDescending(i => i.InvoiceDate)
             .Select(i => new
@@ -887,6 +897,10 @@ public class SettlementFunctions
     public async Task<HttpResponseData> GetInvoicesByBrokerAndBuyer(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements/invoices/broker/{brokerId:int}/buyer/{buyerId:int}")] HttpRequestData req, int brokerId, int buyerId)
     {
+        // Either the owning broker or the owning buyer (or an admin) may view this pair.
+        if (!req.FunctionContext.CanAccessBroker(brokerId) && !req.FunctionContext.CanAccessBuyer(buyerId))
+            return req.CreateResponse(System.Net.HttpStatusCode.Forbidden);
+
         var invoices = await _db.Invoices
             .Where(i => i.BrokerId == brokerId && i.BuyerId == buyerId)
             .OrderByDescending(i => i.InvoiceDate)
@@ -937,6 +951,9 @@ public class SettlementFunctions
     public async Task<HttpResponseData> GetInvoiceLinksForResults(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements/invoice-links/broker/{brokerId:int}")] HttpRequestData req, int brokerId)
     {
+        if (!req.FunctionContext.CanAccessBroker(brokerId))
+            return req.CreateResponse(System.Net.HttpStatusCode.Forbidden);
+
         // Get auction result IDs for this broker
         var brokerResultIds = await _db.AuctionResults
             .Where(r => r.BrokerId == brokerId)
