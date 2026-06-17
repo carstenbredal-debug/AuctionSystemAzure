@@ -632,8 +632,13 @@ public class AuctionResultFunctions
         if (!req.FunctionContext.CanAccessBuyer(buyerId))
             return req.CreateResponse(System.Net.HttpStatusCode.Forbidden);
 
+        // Optional auction scope (?auctionId=N): the buyer purchases page defaults to one auction
+        // so it no longer pulls the buyer's entire purchase history into the browser.
+        var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+        int? auctionId = int.TryParse(query["auctionId"], out var aid) ? aid : null;
+
         var results = await _db.AuctionResults
-            .Where(r => r.SoldToBuyerId == buyerId)
+            .Where(r => r.SoldToBuyerId == buyerId && (auctionId == null || r.AuctionId == auctionId.Value))
             .OrderByDescending(r => r.SoldAt)
             .Select(r => new
             {

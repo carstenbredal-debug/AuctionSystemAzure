@@ -18,6 +18,19 @@ else if (_buyerId == 0)
 }
 else
 {
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <label class="form-label fw-bold">Auction</label>
+            <select class="form-select" @bind="_selectedAuctionId" @bind:after="OnAuctionFilterChanged">
+                <option value="0">All auctions</option>
+                @foreach (var a in _auctions)
+                {
+                    <option value="@a.Id">@a.AuctionNumber - @a.Title</option>
+                }
+            </select>
+        </div>
+    </div>
+
     <div class="row mb-4">
         <div class="col-md-2">
             <div class="summary-card">
@@ -212,6 +225,8 @@ else
     private int _buyerId;
     private bool _loading = true;
     private List<AuctionResultDto> _purchases = new();
+    private List<AuctionDto> _auctions = new();
+    private int _selectedAuctionId; // 0 = All auctions
     private List<TakebackRequestDto> _pendingTakebacks = new();
     private decimal _auctionFeePercent;
     private decimal _handlingFeePerSkin;
@@ -227,15 +242,30 @@ else
     {
         _buyerId = await ResolveBuyerId();
         if (_buyerId > 0)
+        {
+            _auctions = (await Api.GetAuctionsAsync())
+                .Where(a => a.Status == AuctionStatus.Active || a.Status == AuctionStatus.Closed)
+                .ToList();
+            if (_auctions.Any())
+                _selectedAuctionId = _auctions.First().Id;
             await LoadData();
+        }
         _loading = false;
     }
 
     private async Task LoadData()
     {
-        _purchases = await Api.GetAuctionResultsByBuyerAsync(_buyerId);
+        // Default to the selected auction; _selectedAuctionId == 0 means "All auctions".
+        _purchases = await Api.GetAuctionResultsByBuyerAsync(
+            _buyerId, _selectedAuctionId > 0 ? _selectedAuctionId : (int?)null);
         _pendingTakebacks = await Api.GetTakebackRequestsByBuyerAsync(_buyerId);
         await LoadFeeParameters();
+    }
+
+    private async Task OnAuctionFilterChanged()
+    {
+        _selectedPurchaseIds.Clear();
+        await LoadData();
     }
 
     private async Task LoadFeeParameters()
