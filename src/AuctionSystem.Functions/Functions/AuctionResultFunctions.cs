@@ -21,6 +21,7 @@ public class AuctionResultFunctions
     private readonly ILogger<AuctionResultFunctions> _logger;
     private readonly BlobStorageService? _blobStorage;
     private readonly BusinessCentralSyncService? _bcSyncService;
+    private readonly BcPushQueue? _bcPushQueue;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -28,13 +29,14 @@ public class AuctionResultFunctions
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public AuctionResultFunctions(AuctionDbContext db, CatalogDbContext catalogDb, ILogger<AuctionResultFunctions> logger, BlobStorageService? blobStorage = null, BusinessCentralSyncService? bcSyncService = null)
+    public AuctionResultFunctions(AuctionDbContext db, CatalogDbContext catalogDb, ILogger<AuctionResultFunctions> logger, BlobStorageService? blobStorage = null, BusinessCentralSyncService? bcSyncService = null, BcPushQueue? bcPushQueue = null)
     {
         _db = db;
         _catalogDb = catalogDb;
         _logger = logger;
         _blobStorage = blobStorage;
         _bcSyncService = bcSyncService;
+        _bcPushQueue = bcPushQueue;
     }
 
     [Function("SubmitAuctionResult")]
@@ -1232,20 +1234,13 @@ public class AuctionResultFunctions
 
         await _db.SaveChangesAsync();
 
-        // Push each credit note to BC as a Sales Credit Memo (one per buyer/original invoice).
-        if (_bcSyncService != null)
+        // Hand the BC push to the background queue instead of pushing inline. A slow/timing-out BC
+        // here previously hung the request, which led to re-clicks and duplicate credit notes. The
+        // queue worker pushes with the same idempotent method, and the timer sweep is the safety net.
+        if (_bcSyncService != null && _bcPushQueue != null)
         {
             foreach (var cn in createdCreditNotes)
-            {
-                try
-                {
-                    await _bcSyncService.PushCreditNoteToBcAsync(cn);
-                }
-                catch (Exception bcEx)
-                {
-                    _logger.LogError(bcEx, "Failed to push credit note {Id} to BC", cn.Id);
-                }
-            }
+                await _bcPushQueue.EnqueueAsync(BcPushQueue.CreditNote, cn.Id);
         }
 
         return createdCreditNotes;

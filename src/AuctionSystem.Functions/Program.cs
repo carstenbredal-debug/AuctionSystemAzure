@@ -88,6 +88,11 @@ var host = new HostBuilder()
                 storageConnectionString,
                 sp.GetRequiredService<ILogger<BlobStorageService>>()));
         }
+
+        // Background BC push queue (enqueue side). No-ops if storage is unconfigured.
+        services.AddSingleton(sp => new AuctionSystem.Functions.BusinessCentral.Services.BcPushQueue(
+            storageConnectionString,
+            sp.GetRequiredService<ILogger<AuctionSystem.Functions.BusinessCentral.Services.BcPushQueue>>()));
     })
     .Build();
 
