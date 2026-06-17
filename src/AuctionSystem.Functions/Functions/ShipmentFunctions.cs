@@ -1318,7 +1318,7 @@ public class ShipmentFunctions
             InvoiceAccount = shipment.Buyer?.BuyerNumber ?? "",
             AwbNumber = shipment.TrackingNumber ?? "",
             Date = shipment.CreatedAt.ToString("dd/MM/yyyy"),
-            Destination = shipment.ShippingAddress?.City ?? "",
+            Destination = shipment.ShippingAddress?.Country ?? "",
             Marking = "",
             BuyerName = shipment.Buyer?.Name ?? "",
             BuyerAddressLines = buyerAddrLines,
