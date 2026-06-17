@@ -557,6 +557,16 @@ public class AuctionResultFunctions
     {
         try
         {
+            // The sell path writes the sale (incl. CommissionAmount) via a raw SQL UPDATE and then
+            // marks the tracked entities Unchanged. That can leave CommissionAmount stale (null) on
+            // the in-memory objects even though the DB row is correct — which silently dropped the
+            // commission line from the invoice. Re-read the authoritative values (AsNoTracking, so we
+            // bypass the stale tracked instances) and build the invoice from those.
+            var resultIds = results.Select(r => r.Id).ToList();
+            results = await _db.AuctionResults.AsNoTracking()
+                .Where(r => resultIds.Contains(r.Id))
+                .ToListAsync();
+
             var brokerId = results.First().BrokerId;
             var auctionFeeParam = await _db.SystemParameters.FirstOrDefaultAsync(p => p.Key == "AuctionFee");
             var handlingFeeParam = await _db.SystemParameters.FirstOrDefaultAsync(p => p.Key == "HandlingFee");
