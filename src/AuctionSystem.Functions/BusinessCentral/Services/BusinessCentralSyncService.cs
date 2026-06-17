@@ -306,11 +306,7 @@ public class BusinessCentralSyncService
     /// PDF is fetched from BC and stored in blob storage.
     /// </summary>
     public async Task<BcPushResult> PushCreditNoteToBcAsync(Invoice creditNote)
-    {
-        await BcPushGate.WaitAsync();
-        try { return await PushCreditNoteToBcCoreAsync(creditNote); }
-        finally { BcPushGate.Release(); }
-    }
+        => await WithPushLockAsync(() => PushCreditNoteToBcCoreAsync(creditNote));
 
     private async Task<BcPushResult> PushCreditNoteToBcCoreAsync(Invoice creditNote)
     {
@@ -733,10 +729,34 @@ public class BusinessCentralSyncService
     /// PDF is fetched from BC and stored in blob storage.
     /// </summary>
     public async Task<BcPushResult> PushInvoiceToBcAsync(Invoice invoice)
+        => await WithPushLockAsync(() => PushInvoiceToBcCoreAsync(invoice));
+
+    // Serialize every BC document push across ALL function instances. The per-process SemaphoreSlim is
+    // the cheap first gate; a SQL application lock (held on the shared DB) is the cross-instance gate —
+    // under load the queue scales out and a per-process lock alone can't stop two instances pushing at
+    // once, which deadlocks BC's Sales Line table (and leaves rolled-back/empty posts). The Session-
+    // scoped applock is held on a dedicated connection for the whole push and released when it closes.
+    private async Task<BcPushResult> WithPushLockAsync(Func<Task<BcPushResult>> push)
     {
         await BcPushGate.WaitAsync();
-        try { return await PushInvoiceToBcCoreAsync(invoice); }
-        finally { BcPushGate.Release(); }
+        var conn = new Microsoft.Data.SqlClient.SqlConnection(_db.Database.GetConnectionString());
+        try
+        {
+            await conn.OpenAsync();
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "DECLARE @r int; EXEC @r = sp_getapplock @Resource = N'BcDocumentPush', @LockMode = N'Exclusive', @LockOwner = N'Session', @LockTimeout = 120000; SELECT @r;";
+                cmd.CommandTimeout = 150;
+                var rc = (int)(await cmd.ExecuteScalarAsync() ?? -999);
+                if (rc < 0) _logger.LogWarning("BC push applock not acquired (rc={Rc}); proceeding without cross-instance lock", rc);
+            }
+            return await push();
+        }
+        finally
+        {
+            await conn.DisposeAsync(); // closing the connection releases the Session-scoped applock
+            BcPushGate.Release();
+        }
     }
 
     private async Task<BcPushResult> PushInvoiceToBcCoreAsync(Invoice invoice)
