@@ -81,7 +81,112 @@
     }
 }
 
+<hr class="my-4" />
+
+<div class="card border-danger">
+    <div class="card-header bg-danger text-white"><strong>⚠ Danger Zone — System Reset</strong></div>
+    <div class="card-body">
+        <p class="mb-2">
+            Deletes <strong>all auctions and transaction data</strong> (lots, results, invoices, credit notes,
+            settlements, shipments, packing, typist entries, sales history) and drops the per-auction snapshot
+            tables. <strong>Keeps</strong> brokers, buyers, farmers, shippers, addresses, broker-buyer links,
+            users and system parameters. <strong>This cannot be undone — back up the database first.</strong>
+        </p>
+
+        @if (!_showResetConfirm && !_resetDone)
+        {
+            <button class="btn btn-outline-danger" @onclick="() => _showResetConfirm = true" disabled="@_resetting">
+                Reset Transaction Data…
+            </button>
+        }
+
+        @if (_showResetConfirm && !_resetDone)
+        {
+            <div class="border border-danger rounded p-3 mt-2">
+                <p class="mb-2">Type <code>RESET</code> to confirm:</p>
+                <input class="form-control mb-2" style="max-width:220px" @bind="_resetConfirmText" @bind:event="oninput" placeholder="RESET" />
+                <button class="btn btn-danger me-2" @onclick="DoReset" disabled="@(_resetting || _resetConfirmText != "RESET")">
+                    @if (_resetting) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                    Yes, reset now
+                </button>
+                <button class="btn btn-secondary" @onclick="CancelReset" disabled="@_resetting">Cancel</button>
+            </div>
+        }
+
+        @if (_resetMessage != null)
+        {
+            <div class="alert @(_resetError ? "alert-danger" : "alert-success") mt-3 mb-0">
+                <div>@_resetMessage</div>
+                @if (_resetRemaining != null)
+                {
+                    <ul class="mb-0 mt-2 small">
+                        @foreach (var kv in _resetRemaining)
+                        {
+                            <li>@kv.Key: <strong>@kv.Value</strong></li>
+                        }
+                    </ul>
+                }
+            </div>
+        }
+    </div>
+</div>
+
 @code {
+    private bool _showResetConfirm;
+    private bool _resetting;
+    private bool _resetDone;
+    private string _resetConfirmText = string.Empty;
+    private string? _resetMessage;
+    private bool _resetError;
+    private Dictionary<string, JsonElement>? _resetRemaining;
+
+    private void CancelReset()
+    {
+        _showResetConfirm = false;
+        _resetConfirmText = string.Empty;
+    }
+
+    private async Task DoReset()
+    {
+        if (_resetConfirmText != "RESET") return;
+        _resetting = true;
+        _resetMessage = null;
+        StateHasChanged();
+        try
+        {
+            // keepEntities=true: wipe transactions/auctions, keep brokers/buyers/farmers/shippers/
+            // addresses/broker-buyer links/users/parameters. Admin-only endpoint.
+            var response = await Http.PostAsync("api/system/reset-all?keepEntities=true", null);
+            var json = await response.Content.ReadAsStringAsync();
+            if (response.IsSuccessStatusCode)
+            {
+                var doc = JsonDocument.Parse(json);
+                _resetMessage = doc.RootElement.TryGetProperty("message", out var m) ? m.GetString() : "Reset complete.";
+                if (doc.RootElement.TryGetProperty("remaining", out var rem))
+                    _resetRemaining = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(rem.GetRawText());
+                _resetError = false;
+                _resetDone = true;
+                _showResetConfirm = false;
+            }
+            else
+            {
+                _resetMessage = $"Reset failed: {(int)response.StatusCode} {response.ReasonPhrase}. {json}";
+                _resetError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            _resetMessage = $"Reset failed: {ex.Message}";
+            _resetError = true;
+        }
+        finally
+        {
+            _resetting = false;
+            _resetConfirmText = string.Empty;
+            StateHasChanged();
+        }
+    }
+
     private bool _checking;
     private bool _hasResult;
     private string _message = "";

@@ -1069,11 +1069,15 @@ else if (_activeTab == "takeback")
             var resp = await Api.RespondTakebackAsync(requestId, approve);
             if (resp.IsSuccessStatusCode)
             {
-                _brokerTakebackMessage = approve ? "Return approved. Lot moved back to un-invoiced." : "Return request declined.";
+                _brokerTakebackMessage = approve
+                    ? "Return approved. Lot moved back to un-invoiced. Credit note posting to Business Central; it will appear shortly."
+                    : "Return request declined.";
                 _brokerTakebackMessageIsError = false;
                 await LoadResults();
                 _pendingTakebacks = await Api.GetTakebackRequestsByBrokerAsync(_brokerId);
                 _invoiceLinks = await Api.GetInvoiceLinksForBrokerAsync(_brokerId);
+                // Approving generates a credit note whose BC post runs in the background; refresh so it appears.
+                if (approve) _ = RefreshAfterBcPostAsync();
             }
             else
             {
