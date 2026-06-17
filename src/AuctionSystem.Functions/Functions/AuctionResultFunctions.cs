@@ -523,7 +523,7 @@ public class AuctionResultFunctions
         int? invoiceId = null;
         string? bcError = null;
         if (claimedResults.Count > 0 && _bcSyncService != null)
-            (invoiceId, bcError) = await CreateAndPushInvoiceAsync(claimedResults, body.BuyerId, buyer);
+            (invoiceId, bcError) = await CreateInvoiceAndQueuePushAsync(claimedResults, body.BuyerId, buyer);
 
         string? pdfUrl = null;
         if (invoiceId != null)
@@ -550,7 +550,7 @@ public class AuctionResultFunctions
         return response;
     }
 
-    private async Task<(int? InvoiceId, string? BcError)> CreateAndPushInvoiceAsync(List<AuctionResult> results, int buyerId, Buyer buyer)
+    private async Task<(int? InvoiceId, string? BcError)> CreateInvoiceAndQueuePushAsync(List<AuctionResult> results, int buyerId, Buyer buyer)
     {
         try
         {
@@ -604,20 +604,13 @@ public class AuctionResultFunctions
             _db.Invoices.Add(invoice);
             await _db.SaveChangesAsync();
 
-            var outcome = await _bcSyncService!.PushInvoiceToBcAsync(invoice);
-            invoice.InvoiceNumber = invoice.BcInvoiceNumber ?? "";
-            await _db.SaveChangesAsync();
+            // Hand the BC push to the background queue (same as credit notes) so a slow/timing-out BC
+            // can't hang the sale. The invoice exists locally now; the queue worker posts it and the
+            // status badge surfaces progress ("Not Posted" -> "Invoiced") or any "buyer not in BC"
+            // reason ("Push Failed"). The timer sweep is the safety net.
+            if (_bcPushQueue != null)
+                await _bcPushQueue.EnqueueAsync(BcPushQueue.Invoice, invoice.Id);
 
-            // The invoice exists locally regardless — return its id so sales history still links.
-            // If BC didn't actually take it (e.g. buyer not in BC), surface the reason instead of
-            // a silent success so it can be corrected and re-pushed.
-            if (outcome.Outcome == BcPushOutcome.NotPushed)
-            {
-                _logger.LogWarning("Invoice {Id} not pushed to BC: {Reason}", invoice.Id, outcome.Reason);
-                return (invoice.Id, outcome.Reason);
-            }
-
-            _logger.LogInformation("Invoice {Number} created and posted in BC", invoice.InvoiceNumber);
             return (invoice.Id, null);
         }
         catch (Exception ex)
