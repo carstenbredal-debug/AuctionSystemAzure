@@ -980,8 +980,18 @@ public class AuctionResultFunctions
         takebackReq.RespondedAt = DateTime.UtcNow;
 
         int? creditNoteId = null;
+        var resultClaimed = false;
         if (body.Approve)
         {
+            // Atomically take the result back. Only the responder that flips SoldToBuyerId
+            // (NOT NULL -> NULL) credits it, so two concurrent approves — or a broker re-invoice
+            // racing this — can't both generate a credit note for the same result.
+            var claimed = await _db.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE auction.AuctionResults
+                SET SoldToBuyerId = NULL, SoldAt = NULL
+                WHERE Id = {takebackReq.AuctionResultId} AND SoldToBuyerId IS NOT NULL");
+            resultClaimed = claimed > 0;
+
             takebackReq.AuctionResult.SoldToBuyerId = null;
             takebackReq.AuctionResult.SoldAt = null;
 
@@ -992,7 +1002,7 @@ public class AuctionResultFunctions
 
         await _db.SaveChangesAsync();
 
-        if (body.Approve)
+        if (body.Approve && resultClaimed)
         {
             try
             {
@@ -1003,6 +1013,11 @@ public class AuctionResultFunctions
             {
                 _logger.LogError(ex, "Failed to generate credit note for takeback approval");
             }
+        }
+        else if (body.Approve)
+        {
+            _logger.LogWarning("Takeback {Id}: result {ResultId} was already taken back by a concurrent request; skipping duplicate credit note",
+                takebackReq.Id, takebackReq.AuctionResultId);
         }
 
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
@@ -1060,6 +1075,16 @@ public class AuctionResultFunctions
                 .FirstOrDefaultAsync(t => t.AuctionResultId == result.Id && t.Status == CustomerRequestStatus.Pending);
             if (existing != null) continue;
 
+            // Atomically take the result back: only the request that actually flips SoldToBuyerId
+            // (NOT NULL -> NULL) proceeds to credit it. The previous tracked-entity null-out let two
+            // concurrent re-invoices of the same lot both pass the "is sold" check and both generate
+            // a credit note (duplicate credit). The loser here gets 0 rows and skips.
+            var claimed = await _db.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE auction.AuctionResults
+                SET SoldToBuyerId = NULL, SoldAt = NULL
+                WHERE Id = {result.Id} AND SoldToBuyerId IS NOT NULL");
+            if (claimed == 0) continue;
+
             takebackBuyerId ??= result.SoldToBuyerId;
 
             var takebackReq = new TakebackRequest
@@ -1076,6 +1101,7 @@ public class AuctionResultFunctions
             created.Add(takebackReq);
             takenBackResultIds.Add(result.Id);
 
+            // Keep the tracked entity consistent with the row we just nulled in the DB.
             result.SoldToBuyerId = null;
             result.SoldAt = null;
 
@@ -1116,6 +1142,19 @@ public class AuctionResultFunctions
     // other buyers charged but never credited). Returns the created credit notes.
     private async Task<List<Invoice>> GenerateCreditNotesAsync(List<int> auctionResultIds)
     {
+        // Idempotency guard: never credit an auction result that already has a credit-note line.
+        // The atomic take-back claim in the callers is the primary defence against the concurrent
+        // double-submit that produced duplicate credit notes; this is a second line that also covers
+        // any future caller and a sequential re-credit.
+        var alreadyCredited = await _db.Set<InvoiceLine>()
+            .Where(l => auctionResultIds.Contains(l.AuctionResultId) && l.Invoice.IsCreditNote)
+            .Select(l => l.AuctionResultId)
+            .Distinct()
+            .ToListAsync();
+        if (alreadyCredited.Count > 0)
+            auctionResultIds = auctionResultIds.Except(alreadyCredited).ToList();
+        if (auctionResultIds.Count == 0) return new List<Invoice>();
+
         var allInvoiceLines = await _db.Set<InvoiceLine>()
             .Include(l => l.Invoice).ThenInclude(i => i.Buyer)
             .Include(l => l.Invoice).ThenInclude(i => i.Broker)
