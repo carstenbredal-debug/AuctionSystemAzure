@@ -25,19 +25,16 @@ public class BusinessCentralSyncService
     private readonly BlobStorageService _blobStorage;
     private readonly ILogger<BusinessCentralSyncService> _logger;
 
-    // Default BC service item numbers, used when the matching SystemParameters row is unset.
-    private const string LotSaleItemNo = "LOTSALE";
-    private const string AuctionFeeItemNo = "AUCTFEE";
-    private const string CommissionItemNo = "BROKERCOMM";
-
-    // SystemParameters keys for the (UI-editable) BC item numbers.
+    // SystemParameters keys for the (UI-editable) BC item numbers. There is intentionally NO hardcoded
+    // fallback: an unset key resolves to empty and the push fails loudly (EnsureBcItemsExistAsync)
+    // instead of silently posting a line to a stale/wrong item such as a leftover "BROKERCOMM".
     private const string LotSaleItemKey = "BcItem_LotSale";
     private const string AuctionFeeItemKey = "BcItem_AuctionFee";
     private const string CommissionItemKey = "BcItem_Commission";
 
     private readonly record struct BcItemNumbers(string LotSale, string AuctionFee, string Commission);
 
-    // Resolve the BC item numbers from SystemParameters (admin-editable), falling back to defaults.
+    // Resolve the BC item numbers from SystemParameters (admin-editable). Unset => empty (no fallback).
     private async Task<BcItemNumbers> GetBcItemNumbersAsync()
     {
         var keys = new[] { LotSaleItemKey, AuctionFeeItemKey, CommissionItemKey };
@@ -45,13 +42,29 @@ public class BusinessCentralSyncService
             .Where(p => keys.Contains(p.Key))
             .ToDictionaryAsync(p => p.Key, p => p.Value);
 
-        string Val(string key, string fallback) =>
-            map.TryGetValue(key, out var v) && !string.IsNullOrWhiteSpace(v) ? v.Trim() : fallback;
+        string Val(string key) =>
+            map.TryGetValue(key, out var v) && !string.IsNullOrWhiteSpace(v) ? v.Trim() : "";
 
-        return new BcItemNumbers(
-            Val(LotSaleItemKey, LotSaleItemNo),
-            Val(AuctionFeeItemKey, AuctionFeeItemNo),
-            Val(CommissionItemKey, CommissionItemNo));
+        return new BcItemNumbers(Val(LotSaleItemKey), Val(AuctionFeeItemKey), Val(CommissionItemKey));
+    }
+
+    // Verify every BC item the document will use actually exists BEFORE any line is created — so an
+    // invoice/credit note can never post with a missing or mis-configured item line (e.g. the broker
+    // commission silently dropped or sent to a stale item). Throws a clear message that the push's
+    // catch records as the BcSyncError shown on the "Push Failed" badge.
+    private async Task EnsureBcItemsExistAsync(Guid companyId, BcItemNumbers items, bool needAuctionFee, bool needCommission)
+    {
+        var required = new List<(string Number, string Label, string ParamKey)> { (items.LotSale, "Lot sale", LotSaleItemKey) };
+        if (needAuctionFee) required.Add((items.AuctionFee, "Auction fee", AuctionFeeItemKey));
+        if (needCommission) required.Add((items.Commission, "Commission", CommissionItemKey));
+
+        foreach (var (number, label, paramKey) in required)
+        {
+            if (string.IsNullOrWhiteSpace(number))
+                throw new InvalidOperationException($"{label} BC item is not configured — set the {paramKey} parameter.");
+            if (await _bcClient.GetItemByNumberAsync(companyId, number) == null)
+                throw new InvalidOperationException($"{label} BC item '{number}' does not exist in Business Central — check the {paramKey} parameter.");
+        }
     }
 
     public BusinessCentralSyncService(
@@ -530,6 +543,7 @@ public class BusinessCentralSyncService
     private async Task AddInvoiceLinesToBcAsync(Guid companyId, Guid documentId, Invoice invoice)
     {
         var items = await GetBcItemNumbersAsync();
+        await EnsureBcItemsExistAsync(companyId, items, invoice.AuctionFee != 0, invoice.Commission != 0);
         int seq = 10000;
         foreach (var line in invoice.Lines)
         {
@@ -570,6 +584,7 @@ public class BusinessCentralSyncService
     private async Task AddCreditMemoLinesToBcAsync(Guid companyId, Guid documentId, Invoice creditNote)
     {
         var items = await GetBcItemNumbersAsync();
+        await EnsureBcItemsExistAsync(companyId, items, creditNote.AuctionFee != 0, creditNote.Commission != 0);
         int seq = 10000;
         foreach (var line in creditNote.Lines)
         {

@@ -990,10 +990,22 @@ public class BusinessCentralFunctions
             var companyId = await _bcClient.ResolveCompanyIdAsync();
             var items = await _bcClient.GetItemsAsync(companyId);
             var serviceItems = items.Where(i => i.Type == "Service" || i.Type == "Non-Inventory").Select(i => new { i.Number, i.DisplayName, i.Type }).ToList();
+            var existing = items.Select(i => i.Number).Where(n => !string.IsNullOrWhiteSpace(n)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            // The ACTUAL item the push uses per parameter, and whether it exists in this company.
+            // (No "hardcoded" values — the push resolves these from the BcItem_* parameters.)
+            var keys = new[] { "BcItem_LotSale", "BcItem_AuctionFee", "BcItem_Commission" };
+            var map = await _db.SystemParameters.Where(p => keys.Contains(p.Key)).ToDictionaryAsync(p => p.Key, p => p.Value);
+            object Resolved(string key)
+            {
+                map.TryGetValue(key, out var v);
+                var num = string.IsNullOrWhiteSpace(v) ? null : v.Trim();
+                return new { parameter = key, configured = num, existsInBc = num != null && existing.Contains(num) };
+            }
             return await JsonResponse(req, new
             {
                 companyId,
-                hardcodedValues = new { lotSale = "LOTSALE", auctionFee = "AUCTFEE", commission = "BROKERCOMM" },
+                configuredItems = new[] { Resolved("BcItem_LotSale"), Resolved("BcItem_AuctionFee"), Resolved("BcItem_Commission") },
                 allServiceItems = serviceItems,
                 allItemCount = items.Count
             });
