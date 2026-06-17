@@ -648,7 +648,7 @@ public class AuctionResultFunctions
 
         var minC = Math.Max(0m, body.MinCommission ?? 0m);
         var maxC = Math.Max(minC, body.MaxCommission ?? minC);
-        var maxPerInvoice = Math.Clamp(body.MaxLotsPerInvoice ?? 5, 1, 100);
+        var maxPerInvoice = Math.Clamp(body.MaxLotsPerInvoice ?? 10, 1, 100);
 
         var results = await _db.AuctionResults
             .Where(r => r.AuctionId == body.AuctionId && r.SoldToBuyerId == null)
