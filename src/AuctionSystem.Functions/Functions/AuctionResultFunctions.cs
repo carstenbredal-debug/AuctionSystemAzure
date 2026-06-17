@@ -250,6 +250,7 @@ public class AuctionResultFunctions
         r.LastModifiedAt
     };
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
     [Function("GetAuctionResults")]
     public async Task<HttpResponseData> GetAll(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "auction-results")] HttpRequestData req)

@@ -126,6 +126,7 @@ public class SettlementFunctions
         return await CreateJsonResponse(req, new { invoice.Id, Status = invoice.Status.ToString(), invoice.ShippingStatus, bcPaymentError, bcPaymentSuccess });
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
     [Function("CheckBcPaymentBalance")]
     public async Task<HttpResponseData> CheckBcPaymentBalance(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements/invoices/{invoiceId:int}/bc-balance")] HttpRequestData req, int invoiceId)
@@ -652,6 +653,10 @@ public class SettlementFunctions
         if (invoice == null || invoice.PdfData == null)
             return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
 
+        // Ownership: only the invoice's broker, its buyer, or an admin may download it.
+        if (!req.FunctionContext.CanAccessBroker(invoice.BrokerId) && !req.FunctionContext.CanAccessBuyer(invoice.BuyerId))
+            return req.CreateResponse(System.Net.HttpStatusCode.Forbidden);
+
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/pdf");
         response.Headers.Add("Content-Disposition", $"inline; filename=\"{invoice.InvoiceNumber}.pdf\"");
@@ -679,6 +684,7 @@ public class SettlementFunctions
         return await CreateJsonResponse(req, invoices);
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
     [Function("GetAllInvoices")]
     public async Task<HttpResponseData> GetAllInvoices(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements/invoices")] HttpRequestData req)
@@ -785,6 +791,7 @@ public class SettlementFunctions
         return await CreateJsonResponse(req, result);
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
     [Function("GetInvoicePaymentHistory")]
     public async Task<HttpResponseData> GetInvoicePaymentHistory(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements/invoices/{invoiceId:int}/payment-history")] HttpRequestData req, int invoiceId)
@@ -994,6 +1001,7 @@ public class SettlementFunctions
         return await CreateJsonResponse(req, resultMap);
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
     [Function("GetAllSettlements")]
     public async Task<HttpResponseData> GetAllSettlements(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements")] HttpRequestData req)
