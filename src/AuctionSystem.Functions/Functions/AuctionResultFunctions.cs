@@ -777,9 +777,10 @@ public class AuctionResultFunctions
 
         // Split each (broker, buyer) group into invoices of a RANDOM number of lots (1..maxPerInvoice)
         // so the test data has realistically varied invoice sizes rather than one invoice per buyer.
+        // Always create the local invoice records — the BC push inside the helper is independently gated
+        // on the push queue, so sales still produce invoices when BC isn't configured.
         int invoices = 0;
-        if (_bcSyncService != null)
-            foreach (var grp in claimed.GroupBy(r => new { r.BrokerId, BuyerId = r.SoldToBuyerId!.Value }))
+        foreach (var grp in claimed.GroupBy(r => new { r.BrokerId, BuyerId = r.SoldToBuyerId!.Value }))
             {
                 var groupLots = grp.ToList();
                 int idx = 0;
