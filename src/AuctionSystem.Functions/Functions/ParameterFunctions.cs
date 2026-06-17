@@ -31,6 +31,7 @@ public class ParameterFunctions
         return await CreateJsonResponse(req, parameters);
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
     [Function("UpdateParameter")]
     public async Task<HttpResponseData> Update(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "parameters/{id:int}")] HttpRequestData req, int id)
@@ -46,6 +47,7 @@ public class ParameterFunctions
         return await CreateJsonResponse(req, param);
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
     [Function("CreateParameter")]
     public async Task<HttpResponseData> Create(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "parameters")] HttpRequestData req)
@@ -58,6 +60,7 @@ public class ParameterFunctions
         return await CreateJsonResponse(req, param, System.Net.HttpStatusCode.Created);
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
     [Function("DeleteParameter")]
     public async Task<HttpResponseData> Delete(
         [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "parameters/{id:int}")] HttpRequestData req, int id)

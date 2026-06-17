@@ -295,6 +295,7 @@ public class SettlementFunctions
         public bool ReleaseForShipping { get; set; }
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
     [Function("ApplyCreditNotesToBc")]
     public async Task<HttpResponseData> ApplyCreditNotesToBc(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "settlements/apply-credit-notes")] HttpRequestData req)
@@ -381,6 +382,7 @@ public class SettlementFunctions
         await _db.SaveChangesAsync();
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
     [Function("RecalculateCreditStatuses")]
     public async Task<HttpResponseData> RecalculateCreditStatuses(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "settlements/recalculate-credit-statuses")] HttpRequestData req)

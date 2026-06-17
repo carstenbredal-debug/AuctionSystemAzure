@@ -14,6 +14,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AuctionSystem.Functions.Functions;
 
+// All Business Central integration/sync/diagnostic endpoints are admin-only (class-level guard).
+[AuctionSystem.Functions.Auth.RequireRole("Admin")]
 public class BusinessCentralFunctions
 {
     private readonly BusinessCentralSyncService? _syncService;

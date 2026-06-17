@@ -115,6 +115,7 @@ public class BrokerFunctions
         return await CreateJsonResponse(req, broker);
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
     [Function("DeleteBroker")]
     public async Task<HttpResponseData> Delete(
         [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "brokers/{id:int}")] HttpRequestData req, int id)
@@ -256,6 +257,7 @@ public class BrokerFunctions
         return await CreateJsonResponse(req, buyer);
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
     [Function("DeleteBuyer")]
     public async Task<HttpResponseData> DeleteBuyer(
         [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "buyers/{id:int}")] HttpRequestData req, int id)

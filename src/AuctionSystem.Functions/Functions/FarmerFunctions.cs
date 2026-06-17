@@ -111,6 +111,7 @@ public class FarmerFunctions
         return await CreateJsonResponse(req, farmer);
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
     [Function("DeleteFarmer")]
     public async Task<HttpResponseData> Delete(
         [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "farmers/{id:int}")] HttpRequestData req, int id)

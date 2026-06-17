@@ -43,6 +43,7 @@ public class UserFunctions
         return await CreateJsonResponse(req, user);
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
     [Function("GetAllUsers")]
     public async Task<HttpResponseData> GetAll(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "users")] HttpRequestData req)
@@ -137,6 +138,7 @@ public class UserFunctions
         return await CreateJsonResponse(req, user, System.Net.HttpStatusCode.Created);
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
     [Function("UpdateUser")]
     public async Task<HttpResponseData> Update(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "users/{id:int}")] HttpRequestData req, int id)
@@ -202,6 +204,7 @@ public class UserFunctions
         return req.CreateResponse(System.Net.HttpStatusCode.NoContent);
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
     [Function("BulkCreateUsersFromEntities")]
     public async Task<HttpResponseData> BulkCreateFromEntities(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "users/bulk-create-from-entities")] HttpRequestData req)

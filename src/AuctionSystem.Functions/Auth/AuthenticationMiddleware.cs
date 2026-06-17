@@ -111,7 +111,10 @@ public sealed class AuthenticationMiddleware : IFunctionsWorkerMiddleware
             if (method is null)
                 return (false, Array.Empty<string>());
             var anon = method.GetCustomAttribute<AllowAnonymousAttribute>() is not null;
-            var roleAttr = method.GetCustomAttribute<RequireRoleAttribute>();
+            // Method-level role wins; otherwise fall back to a class-level [RequireRole] so an
+            // entire controller (e.g. BusinessCentralFunctions) can be locked with one attribute.
+            var roleAttr = method.GetCustomAttribute<RequireRoleAttribute>()
+                           ?? method.DeclaringType?.GetCustomAttribute<RequireRoleAttribute>();
             return (anon, roleAttr?.Roles ?? Array.Empty<string>());
         });
 

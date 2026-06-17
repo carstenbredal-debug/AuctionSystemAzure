@@ -795,6 +795,7 @@ public class AuctionResultFunctions
         return response;
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
     [Function("ReassignUnsoldLots")]
     public async Task<HttpResponseData> ReassignUnsoldLots(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auction-results/reassign-unsold")] HttpRequestData req)
@@ -1230,6 +1231,7 @@ public class AuctionResultFunctions
         return response;
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
     [Function("BackfillCatalogData")]
     public async Task<HttpResponseData> BackfillCatalogData(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auction-results/backfill-catalog")] HttpRequestData req)
