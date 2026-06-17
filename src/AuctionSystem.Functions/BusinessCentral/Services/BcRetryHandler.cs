@@ -36,9 +36,12 @@ public sealed class BcRetryHandler : DelegatingHandler
             {
                 var response = await base.SendAsync(attemptReq, ct);
                 var status = (int)response.StatusCode;
+                // A BC deadlock comes back under several HTTP codes (seen as 409 Internal_ServerError
+                // AND 400 Application_DialogException) — always with the same "deadlocked … Please retry"
+                // body. The victim is fully rolled back, so it's safe to retry regardless of code/method.
                 var retriable = status == 429
                     || (status >= 500 && isGet)
-                    || (status == 409 && await IsBcDeadlockAsync(response, ct)); // rolled-back victim, safe to retry
+                    || ((status == 409 || status == 400 || status == 500) && await IsBcDeadlockAsync(response, ct));
                 if (!retriable || attempt >= MaxRetries)
                     return response;
 
