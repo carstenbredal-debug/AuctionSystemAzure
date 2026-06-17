@@ -69,7 +69,9 @@ var host = new HostBuilder()
         {
             services.AddSingleton<BusinessCentralAuthService>();
             services.AddTransient<AuctionSystem.Functions.BusinessCentral.Services.BcRetryHandler>();
-            services.AddHttpClient<BusinessCentralApiClient>()
+            // Bound each logical BC call (incl. the retry loop, which sits inside this pipeline) so a
+            // hung BC endpoint can't tie up a worker for the full 100s default or stack across retries.
+            services.AddHttpClient<BusinessCentralApiClient>(c => c.Timeout = TimeSpan.FromSeconds(90))
                 .AddHttpMessageHandler<AuctionSystem.Functions.BusinessCentral.Services.BcRetryHandler>();
             services.AddScoped<BusinessCentralSyncService>();
         }

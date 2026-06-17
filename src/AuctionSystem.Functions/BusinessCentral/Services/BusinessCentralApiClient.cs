@@ -847,20 +847,29 @@ public class BusinessCentralApiClient
 
     private async Task<List<T>> GetListAsync<T>(string url)
     {
-        await SetAuthHeaderAsync();
-        _logger.LogInformation("GET {Url}", url);
+        var results = new List<T>();
+        var next = url;
+        // Follow @odata.nextLink so a result set larger than BC's page size is fully read instead of
+        // silently truncated at the first page. The page guard is a safety net against a bad nextLink.
+        for (var page = 0; !string.IsNullOrEmpty(next) && page < 1000; page++)
+        {
+            await SetAuthHeaderAsync();
+            _logger.LogDebug("GET {Url}", next);
 
-        var response = await _httpClient.GetAsync(url);
-        await EnsureSuccessAsync(response);
+            var response = await _httpClient.GetAsync(next);
+            await EnsureSuccessAsync(response);
 
-        var odata = await response.Content.ReadFromJsonAsync<ODataResponse<T>>(JsonOptions);
-        return odata?.Value ?? new List<T>();
+            var odata = await response.Content.ReadFromJsonAsync<ODataResponse<T>>(JsonOptions);
+            if (odata?.Value != null) results.AddRange(odata.Value);
+            next = odata?.NextLink;
+        }
+        return results;
     }
 
     private async Task<T?> GetSingleAsync<T>(string url) where T : class
     {
         await SetAuthHeaderAsync();
-        _logger.LogInformation("GET {Url}", url);
+        _logger.LogDebug("GET {Url}", url);
 
         var response = await _httpClient.GetAsync(url);
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
@@ -873,7 +882,7 @@ public class BusinessCentralApiClient
     private async Task<T> PostAsync<T>(string url, T payload)
     {
         await SetAuthHeaderAsync();
-        _logger.LogInformation("POST {Url}", url);
+        _logger.LogDebug("POST {Url}", url);
 
         var response = await _httpClient.PostAsJsonAsync(url, payload, JsonOptions);
         await EnsureSuccessAsync(response);
@@ -884,7 +893,7 @@ public class BusinessCentralApiClient
     private async Task<T> PatchAsync<T>(string url, T payload, string? etag)
     {
         await SetAuthHeaderAsync();
-        _logger.LogInformation("PATCH {Url}", url);
+        _logger.LogDebug("PATCH {Url}", url);
 
         var request = new HttpRequestMessage(HttpMethod.Patch, url)
         {

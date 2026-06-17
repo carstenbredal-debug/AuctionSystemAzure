@@ -169,11 +169,13 @@ public class BusinessCentralSyncService
     {
         var result = new SyncResult { Direction = "Push", EntityType = "Invoice → BC Sales Invoice" };
 
+        // Only load not-yet-pushed invoices (mirrors PushCreditNotesAsync) instead of the whole
+        // invoice table — keeps the push bounded as invoice history grows.
         var invoices = await _db.Set<Invoice>()
             .Include(i => i.Buyer)
             .Include(i => i.Broker)
             .Include(i => i.Lines)
-            .Where(i => !i.IsCreditNote)
+            .Where(i => !i.IsCreditNote && (i.BcInvoiceNumber == null || i.BcInvoiceNumber == ""))
             .ToListAsync();
 
         result.TotalProcessed = invoices.Count;
