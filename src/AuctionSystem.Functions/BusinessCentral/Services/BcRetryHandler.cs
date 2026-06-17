@@ -6,15 +6,13 @@ namespace AuctionSystem.Functions.BusinessCentral.Services;
 /// Retries transient Business Central API failures with exponential backoff + jitter, and logs
 /// each retry so flaky BC calls are visible.
 ///
-/// Safety: reads (GET) are retried on network errors, timeouts, 5xx and 429. Writes
-/// (POST/PATCH/DELETE) are retried ONLY on 429 (rate limiting, where the request was rejected
-/// before processing) — a 5xx/timeout after a write may already have been applied in BC, so
-/// re-sending could duplicate. Recovering those is left to the higher-level idempotency/claim
-/// guards in BusinessCentralSyncService.
-///
-/// Exception: a BC SQL deadlock surfaces as 409 Conflict with "deadlocked … Please retry the
-/// activity". BC kills one transaction as the deadlock victim and FULLY ROLLS IT BACK, so the
-/// write did not apply — making it safe to retry even for writes. We detect it by body and retry.
+/// Safety: reads (GET) are retried on network errors, timeouts, 5xx, 429, and BC deadlocks. Writes
+/// (POST/PATCH/DELETE) are retried ONLY on 429 (rate limiting, where the request was rejected before
+/// processing) — a 5xx/timeout/deadlock after a write may already have applied in BC, so re-sending
+/// could duplicate (observed: a deadlocked line-add that had partially applied got added twice on
+/// retry, inflating the BC invoice). Deadlocked writes are recovered by the higher-level push: it
+/// records the failure and the timer sweep re-pushes the whole document, deleting the stale draft
+/// first (DeleteStaleDraft*), which is idempotent — no duplicate lines.
 /// </summary>
 public sealed class BcRetryHandler : DelegatingHandler
 {
@@ -37,11 +35,12 @@ public sealed class BcRetryHandler : DelegatingHandler
                 var response = await base.SendAsync(attemptReq, ct);
                 var status = (int)response.StatusCode;
                 // A BC deadlock comes back under several HTTP codes (seen as 409 Internal_ServerError
-                // AND 400 Application_DialogException) — always with the same "deadlocked … Please retry"
-                // body. The victim is fully rolled back, so it's safe to retry regardless of code/method.
+                // AND 400 Application_DialogException) with a "deadlocked … Please retry" body. Retry it
+                // ONLY for reads — a deadlocked write may have partially applied, so re-sending can
+                // duplicate (it did). Deadlocked writes are recovered idempotently by the timer sweep.
                 var retriable = status == 429
                     || (status >= 500 && isGet)
-                    || ((status == 409 || status == 400 || status == 500) && await IsBcDeadlockAsync(response, ct));
+                    || ((status == 409 || status == 400 || status == 500) && isGet && await IsBcDeadlockAsync(response, ct));
                 if (!retriable || attempt >= MaxRetries)
                     return response;
 
