@@ -108,6 +108,11 @@ var host = new HostBuilder()
         services.AddSingleton(sp => new AuctionSystem.Functions.Services.SnapshotBuildQueue(
             storageConnectionString,
             sp.GetRequiredService<ILogger<AuctionSystem.Functions.Services.SnapshotBuildQueue>>()));
+
+        // Background paced typist-simulator queue (runs over time at a configurable delay).
+        services.AddSingleton(sp => new AuctionSystem.Functions.Services.TypistSimQueue(
+            storageConnectionString,
+            sp.GetRequiredService<ILogger<AuctionSystem.Functions.Services.TypistSimQueue>>()));
     })
     .Build();
 
@@ -234,6 +239,8 @@ using (var scope = host.Services.CreateScope())
                 ALTER TABLE auction.Auctions ADD SnapshotStatus nvarchar(400) NULL;
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Auctions') AND name = 'SnapshotBuiltAt')
                 ALTER TABLE auction.Auctions ADD SnapshotBuiltAt datetime2 NULL;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Auctions') AND name = 'TypistSimStatus')
+                ALTER TABLE auction.Auctions ADD TypistSimStatus nvarchar(400) NULL;
         ");
         // TypistEntries table
         db.Database.ExecuteSqlRaw(@"

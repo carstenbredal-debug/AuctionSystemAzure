@@ -22,5 +22,9 @@ public class Auction
     public string? SnapshotStatus { get; set; }
     public DateTime? SnapshotBuiltAt { get; set; }
 
+    // Background typist-simulator status (paced, runs over time). Null = idle; otherwise
+    // "Queued" / "Typing N/total (matched M, disagreements D)" / "Done: …" / "Failed: …".
+    public string? TypistSimStatus { get; set; }
+
     public ICollection<Lot> Lots { get; set; } = new List<Lot>();
 }

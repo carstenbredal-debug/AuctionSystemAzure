@@ -16,6 +16,7 @@ public class TypistEntryFunctions
     private readonly AuctionDbContext _db;
     private readonly CatalogDbContext _catalogDb;
     private readonly ILogger<TypistEntryFunctions> _logger;
+    private readonly Services.TypistSimQueue _simQueue;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -23,11 +24,12 @@ public class TypistEntryFunctions
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public TypistEntryFunctions(AuctionDbContext db, CatalogDbContext catalogDb, ILogger<TypistEntryFunctions> logger)
+    public TypistEntryFunctions(AuctionDbContext db, CatalogDbContext catalogDb, ILogger<TypistEntryFunctions> logger, Services.TypistSimQueue simQueue)
     {
         _db = db;
         _catalogDb = catalogDb;
         _logger = logger;
+        _simQueue = simQueue;
     }
 
     [AuctionSystem.Functions.Auth.RequireRole("Typist", "Admin")]
@@ -216,7 +218,12 @@ public class TypistEntryFunctions
 
     private record SimulateRequest(int AuctionId, int? DisagreementPercent, int? MaxLots,
         int? TypistUserId1, int? TypistUserId2, decimal? MinPrice, decimal? MaxPrice, string? DisagreementType,
-        List<int>? BrokerIds);
+        List<int>? BrokerIds, int? DelaySeconds);
+
+    // Queue message for the background paced run. Carries the run parameters; the worker recomputes the
+    // remaining un-typed lots each invocation (so it's resumable / idempotent) and re-enqueues until done.
+    private record TypistSimMessage(int AuctionId, int? DisagreementPercent, decimal? MinPrice, decimal? MaxPrice,
+        string? DisagreementType, List<int>? BrokerIds, int? TypistUserId1, int? TypistUserId2, int DelaySeconds, int TotalTarget);
 
     // The two typist users a simulate/resolve run acts as: the supplied pair, else the first two active
     // Typist users. Null if fewer than two are available.
@@ -244,100 +251,149 @@ public class TypistEntryFunctions
         if (body == null || body.AuctionId <= 0)
             return await CreateErrorResponse(req, "auctionId is required");
 
+        var auction = await _db.Auctions.FindAsync(body.AuctionId);
+        if (auction == null)
+            return await CreateErrorResponse(req, "Auction not found.");
+
         var pair = await ResolveSimTypistsAsync(body.TypistUserId1, body.TypistUserId2);
         if (pair == null)
             return await CreateErrorResponse(req, "Need two Typist users (seed two, or pass typistUserId1/2).");
-        var (typistA, typistB) = pair.Value;
 
         var brokerIds = await _db.Brokers.Where(b => b.IsActive).Select(b => b.Id).ToListAsync();
         if (brokerIds.Count == 0)
             return await CreateErrorResponse(req, "No active brokers to assign as the winning broker.");
+        if (body.BrokerIds is { Count: > 0 } && !body.BrokerIds.Any(b => brokerIds.Contains(b)))
+            return await CreateErrorResponse(req, "None of the selected brokers are active brokers.");
 
-        // Optional: restrict the winning brokers to a chosen set — typed lots are spread only across
-        // these (so you can pick which brokers, and how many, end up with lots). When empty/null, any
-        // active broker can win (random per lot), as before.
-        var winningPool = brokerIds;
-        if (body.BrokerIds is { Count: > 0 })
-        {
-            winningPool = body.BrokerIds.Where(b => brokerIds.Contains(b)).Distinct().ToList();
-            if (winningPool.Count == 0)
-                return await CreateErrorResponse(req, "None of the selected brokers are active brokers.");
-        }
+        if (!_simQueue.IsConfigured)
+            return await CreateErrorResponse(req, "Background queue (AzureWebJobsStorage) is not configured — the paced simulator needs it.");
 
-        // Unsold lots in this auction that aren't already recorded by a prior match.
-        var matchedLots = await _db.TypistEntries
-            .Where(e => e.AuctionId == body.AuctionId && e.IsMatched)
-            .Select(e => e.LotNumber).Distinct().ToListAsync();
-        var lotNumbers = await _db.Lots
-            .Where(l => l.AuctionId == body.AuctionId && l.Status != LotStatus.Sold && !matchedLots.Contains(l.LotNumber))
-            .OrderBy(l => l.LotNumber).Select(l => l.LotNumber).ToListAsync();
-        if (body.MaxLots is int max && max > 0) lotNumbers = lotNumbers.Take(max).ToList();
-        if (lotNumbers.Count == 0)
-            return await CreateJsonResponse(req, new { auctionId = body.AuctionId, lotsProcessed = 0, matched = 0, disagreements = 0, errors = 0, message = "No unsold lots to type in this auction." });
+        // Remaining un-typed unsold lots = the work to do; total target (capped at MaxLots) is fixed in
+        // the message so progress reads consistently across the worker's re-enqueued continuations.
+        var alreadyTyped = await _db.TypistEntries.Where(e => e.AuctionId == body.AuctionId).Select(e => e.LotNumber).Distinct().CountAsync();
+        var remainingCount = await _db.Lots.CountAsync(l => l.AuctionId == body.AuctionId && l.Status != LotStatus.Sold
+            && !_db.TypistEntries.Any(e => e.AuctionId == body.AuctionId && e.LotNumber == l.LotNumber));
+        if (remainingCount == 0)
+            return await CreateJsonResponse(req, new { auctionId = body.AuctionId, started = false, message = "No unsold un-typed lots to type in this auction." });
 
-        var rnd = new Random();
-        var disagreePct = Math.Clamp(body.DisagreementPercent ?? 0, 0, 100);
-        var minP = Math.Max(0.01m, body.MinPrice ?? 50m);
-        var maxP = Math.Max(minP, body.MaxPrice ?? 500m);
-        // Whole-number prices only (typists enter round figures).
-        decimal RandomPrice() => Math.Round(minP + (decimal)rnd.NextDouble() * (maxP - minP), 0, MidpointRounding.AwayFromZero);
-        var disType = (body.DisagreementType ?? "mixed").ToLowerInvariant(); // price | broker | mixed
-        int matched = 0, disagreements = 0, errors = 0;
+        var totalTarget = alreadyTyped + remainingCount;
+        if (body.MaxLots is int mx && mx > 0) totalTarget = Math.Min(totalTarget, alreadyTyped + mx);
+        var delay = Math.Clamp(body.DelaySeconds ?? 1, 0, 30);
 
-        foreach (var lotNumber in lotNumbers)
-        {
-            try
-            {
-                var brokerId = winningPool[rnd.Next(winningPool.Count)];
-                var price = RandomPrice();
-                var broker2 = brokerId;
-                var price2 = price;
-
-                if (rnd.Next(100) < disagreePct)
-                {
-                    // A match needs SAME broker AND price; differ on one to force a disagreement.
-                    var kind = disType switch
-                    {
-                        "broker" => "broker",
-                        "price" => "price",
-                        _ => rnd.Next(2) == 0 ? "price" : "broker"   // mixed
-                    };
-                    if (kind == "broker" && winningPool.Count > 1)
-                        broker2 = winningPool.Where(b => b != brokerId).ElementAt(rnd.Next(winningPool.Count - 1));
-                    else // price disagreement (and broker fallback when only one broker exists)
-                    {
-                        price2 = RandomPrice();
-                        if (price2 == price) price2 += 1m;
-                    }
-                }
-
-                var e1 = new TypistEntry { LotNumber = lotNumber, AuctionId = body.AuctionId, BrokerId = brokerId, PriceEur = price, TypistUserId = typistA.Id, TypistSlot = 1, EnteredAt = DateTime.UtcNow };
-                _db.TypistEntries.Add(e1);
-                await _db.SaveChangesAsync();
-
-                var e2 = new TypistEntry { LotNumber = lotNumber, AuctionId = body.AuctionId, BrokerId = broker2, PriceEur = price2, TypistUserId = typistB.Id, TypistSlot = 2, EnteredAt = DateTime.UtcNow };
-                _db.TypistEntries.Add(e2);
-                await _db.SaveChangesAsync();
-
-                await CompareEntries(e2, e1);
-                if (e2.IsMatched) matched++; else if (e2.IsDisagreement) disagreements++;
-            }
-            catch (Exception ex)
-            {
-                errors++;
-                _logger.LogError(ex, "Simulate typist failed for lot {Lot}", lotNumber);
-            }
-        }
+        var msg = new TypistSimMessage(body.AuctionId, body.DisagreementPercent, body.MinPrice, body.MaxPrice,
+            body.DisagreementType, body.BrokerIds, body.TypistUserId1, body.TypistUserId2, delay, totalTarget);
+        auction.TypistSimStatus = $"Queued — target {totalTarget} lots at {delay}s/entry";
+        await _db.SaveChangesAsync();
+        await _simQueue.EnqueueAsync(JsonSerializer.Serialize(msg, JsonOptions));
 
         return await CreateJsonResponse(req, new
         {
             auctionId = body.AuctionId,
-            typists = new[] { typistA.DisplayName ?? typistA.Email, typistB.DisplayName ?? typistB.Email },
-            lotsProcessed = lotNumbers.Count,
-            matched,
-            disagreements,
-            errors
+            started = true,
+            totalTarget,
+            delaySeconds = delay,
+            message = $"Started — typing {totalTarget} lot(s) in the background at {delay}s between entries. Watch the status."
         });
+    }
+
+    // Background worker: types a time-budgeted batch of the auction's remaining un-typed lots at the
+    // configured delay, then re-enqueues a continuation until the whole auction is typed. Each
+    // invocation stays well under the queue's visibility timeout so the message isn't redelivered.
+    [Function("TypistSimWorker")]
+    public async Task TypistSimWorker(
+        [QueueTrigger(Services.TypistSimQueue.QueueName, Connection = "AzureWebJobsStorage")] string message)
+    {
+        var msg = JsonSerializer.Deserialize<TypistSimMessage>(message, JsonOptions);
+        if (msg == null) { _logger.LogWarning("Bad typist-sim message: {Msg}", message); return; }
+
+        var auction = await _db.Auctions.FindAsync(msg.AuctionId);
+        if (auction == null) { _logger.LogWarning("Typist-sim: auction {Id} not found", msg.AuctionId); return; }
+
+        var pair = await ResolveSimTypistsAsync(msg.TypistUserId1, msg.TypistUserId2);
+        if (pair == null) { auction.TypistSimStatus = "Failed: need two active Typist users"; await _db.SaveChangesAsync(); return; }
+        var (a, b) = pair.Value;
+
+        var activeBrokers = await _db.Brokers.Where(x => x.IsActive).Select(x => x.Id).ToListAsync();
+        var winningPool = msg.BrokerIds is { Count: > 0 } ? msg.BrokerIds.Where(activeBrokers.Contains).Distinct().ToList() : activeBrokers;
+        if (winningPool.Count == 0) { auction.TypistSimStatus = "Failed: no active brokers"; await _db.SaveChangesAsync(); return; }
+
+        var rnd = new Random();
+        var minP = Math.Max(0.01m, msg.MinPrice ?? 50m);
+        var maxP = Math.Max(minP, msg.MaxPrice ?? 500m);
+        var disagreePct = Math.Clamp(msg.DisagreementPercent ?? 0, 0, 100);
+        var disType = (msg.DisagreementType ?? "mixed").ToLowerInvariant();
+        var delayMs = Math.Clamp(msg.DelaySeconds, 0, 30) * 1000;
+
+        var typedCount = await _db.TypistEntries.Where(e => e.AuctionId == msg.AuctionId).Select(e => e.LotNumber).Distinct().CountAsync();
+        if (typedCount >= msg.TotalTarget)
+        {
+            await FinishSimAsync(auction, msg.AuctionId, typedCount);
+            return;
+        }
+
+        // Next batch of un-typed unsold lots (NOT EXISTS so it stays server-side even for a big auction).
+        var remaining = await _db.Lots
+            .Where(l => l.AuctionId == msg.AuctionId && l.Status != LotStatus.Sold
+                && !_db.TypistEntries.Any(e => e.AuctionId == msg.AuctionId && e.LotNumber == l.LotNumber))
+            .OrderBy(l => l.LotNumber)
+            .Select(l => l.LotNumber)
+            .Take(Math.Max(1, msg.TotalTarget - typedCount))
+            .ToListAsync();
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var budget = TimeSpan.FromMinutes(2); // comfortably under the 5-minute queue visibility timeout
+        foreach (var lot in remaining)
+        {
+            try { await TypeOneLotAsync(msg.AuctionId, lot, a, b, winningPool, minP, maxP, disagreePct, disType, rnd, delayMs); }
+            catch (Exception ex) { _logger.LogError(ex, "Typist-sim failed for lot {Lot}", lot); }
+            typedCount++;
+            auction.TypistSimStatus = $"Typing {typedCount}/{msg.TotalTarget}…";
+            await _db.SaveChangesAsync();
+            if (sw.Elapsed > budget) break;
+        }
+
+        if (typedCount < msg.TotalTarget)
+            await _simQueue.EnqueueAsync(message); // continue with the same parameters
+        else
+            await FinishSimAsync(auction, msg.AuctionId, typedCount);
+    }
+
+    private async Task FinishSimAsync(Auction auction, int auctionId, int typedCount)
+    {
+        var matched = await _db.TypistEntries.Where(e => e.AuctionId == auctionId && e.IsMatched).Select(e => e.LotNumber).Distinct().CountAsync();
+        var disagreements = await _db.TypistEntries.Where(e => e.AuctionId == auctionId && e.IsDisagreement && !e.IsResolved).Select(e => e.LotNumber).Distinct().CountAsync();
+        auction.TypistSimStatus = $"Done: typed {typedCount} lot(s) — {matched} matched, {disagreements} disagreement(s)";
+        await _db.SaveChangesAsync();
+    }
+
+    // Types one lot as both typists (with the configured delay between entries) and runs the real match.
+    private async Task TypeOneLotAsync(int auctionId, int lotNumber, AppUser a, AppUser b, List<int> pool,
+        decimal minP, decimal maxP, int disagreePct, string disType, Random rnd, int delayMs)
+    {
+        decimal RandomPrice() => Math.Round(minP + (decimal)rnd.NextDouble() * (maxP - minP), 0, MidpointRounding.AwayFromZero);
+        var brokerId = pool[rnd.Next(pool.Count)];
+        var price = RandomPrice();
+        var broker2 = brokerId;
+        var price2 = price;
+        if (rnd.Next(100) < disagreePct)
+        {
+            var kind = disType switch { "broker" => "broker", "price" => "price", _ => rnd.Next(2) == 0 ? "price" : "broker" };
+            if (kind == "broker" && pool.Count > 1)
+                broker2 = pool.Where(x => x != brokerId).ElementAt(rnd.Next(pool.Count - 1));
+            else { price2 = RandomPrice(); if (price2 == price) price2 += 1m; }
+        }
+
+        var e1 = new TypistEntry { LotNumber = lotNumber, AuctionId = auctionId, BrokerId = brokerId, PriceEur = price, TypistUserId = a.Id, TypistSlot = 1, EnteredAt = DateTime.UtcNow };
+        _db.TypistEntries.Add(e1);
+        await _db.SaveChangesAsync();
+        if (delayMs > 0) await Task.Delay(delayMs);
+
+        var e2 = new TypistEntry { LotNumber = lotNumber, AuctionId = auctionId, BrokerId = broker2, PriceEur = price2, TypistUserId = b.Id, TypistSlot = 2, EnteredAt = DateTime.UtcNow };
+        _db.TypistEntries.Add(e2);
+        await _db.SaveChangesAsync();
+
+        await CompareEntries(e2, e1);
+        if (delayMs > 0) await Task.Delay(delayMs);
     }
 
     // TEST TOOL (admin-only): clear an auction's disagreement queue by re-entering matching values as
