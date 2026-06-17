@@ -560,7 +560,7 @@ using (var scope = host.Services.CreateScope())
                 VALUES ('BcItem_AuctionFee', 'AUCTFEE', 'BC item number for the auction fee line', 'string', GETUTCDATE());
             IF NOT EXISTS (SELECT 1 FROM auction.SystemParameters WHERE [Key] = 'BcItem_Commission')
                 INSERT INTO auction.SystemParameters ([Key], Value, Description, DataType, UpdatedAt)
-                VALUES ('BcItem_Commission', 'BROKERCOMM', 'BC item number for the commission line', 'string', GETUTCDATE());
+                VALUES ('BcItem_Commission', 'BROKERCOM', 'BC item number for the commission line', 'string', GETUTCDATE());
         ");
         // Add PackingListPdfUrl column to Shipments if missing
         db.Database.ExecuteSqlRaw(@"
