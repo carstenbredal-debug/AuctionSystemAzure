@@ -51,6 +51,20 @@ else
                 <option value="broker">Broker only</option>
             </select>
         </div>
+        <div class="col-md-6">
+            <label class="form-label">Winning broker</label>
+            <select class="form-select" @bind="_brokerId">
+                <option value="0">— random per lot —</option>
+                @if (_brokers != null)
+                {
+                    @foreach (var b in _brokers)
+                    {
+                        <option value="@b.Id">@b.BrokerNumber — @b.CompanyName</option>
+                    }
+                }
+            </select>
+            <div class="form-text">Pick a broker to send every typed lot to it (so your test broker reliably sees them).</div>
+        </div>
     </div>
 
     <div class="mt-3 d-flex gap-2">
@@ -78,12 +92,14 @@ else
 
 @code {
     private List<AuctionDto>? _auctions;
+    private List<BrokerDto>? _brokers;
     private int _auctionId;
     private int _disagreementPercent;
     private int? _maxLots;
     private decimal _minPrice = 50;
     private decimal _maxPrice = 500;
     private string _disagreementType = "mixed";
+    private int _brokerId;
     private bool _running;
     private bool _resolving;
     private string? _message;
@@ -92,6 +108,7 @@ else
     protected override async Task OnInitializedAsync()
     {
         _auctions = await Api.GetAuctionsAsync();
+        _brokers = await Api.GetBrokersAsync();
     }
 
     private async Task Run()
@@ -101,7 +118,7 @@ else
         _message = null;
         try
         {
-            var resp = await Api.SimulateTypistEntriesAsync(_auctionId, _disagreementPercent, _maxLots, _minPrice, _maxPrice, _disagreementType);
+            var resp = await Api.SimulateTypistEntriesAsync(_auctionId, _disagreementPercent, _maxLots, _minPrice, _maxPrice, _disagreementType, _brokerId > 0 ? _brokerId : null);
             var json = await resp.Content.ReadAsStringAsync();
             if (resp.IsSuccessStatusCode)
             {

@@ -215,7 +215,8 @@ public class TypistEntryFunctions
     }
 
     private record SimulateRequest(int AuctionId, int? DisagreementPercent, int? MaxLots,
-        int? TypistUserId1, int? TypistUserId2, decimal? MinPrice, decimal? MaxPrice, string? DisagreementType);
+        int? TypistUserId1, int? TypistUserId2, decimal? MinPrice, decimal? MaxPrice, string? DisagreementType,
+        int? BrokerId);
 
     // The two typist users a simulate/resolve run acts as: the supplied pair, else the first two active
     // Typist users. Null if fewer than two are available.
@@ -252,6 +253,11 @@ public class TypistEntryFunctions
         if (brokerIds.Count == 0)
             return await CreateErrorResponse(req, "No active brokers to assign as the winning broker.");
 
+        // Optional: pin every lot to one broker (so a specific test broker reliably gets them all).
+        // When null the winning broker is random per lot, as before.
+        if (body.BrokerId is int fixedBroker && !brokerIds.Contains(fixedBroker))
+            return await CreateErrorResponse(req, "Selected broker is not an active broker.");
+
         // Unsold lots in this auction that aren't already recorded by a prior match.
         var matchedLots = await _db.TypistEntries
             .Where(e => e.AuctionId == body.AuctionId && e.IsMatched)
@@ -267,7 +273,8 @@ public class TypistEntryFunctions
         var disagreePct = Math.Clamp(body.DisagreementPercent ?? 0, 0, 100);
         var minP = Math.Max(0.01m, body.MinPrice ?? 50m);
         var maxP = Math.Max(minP, body.MaxPrice ?? 500m);
-        decimal RandomPrice() => Math.Round(minP + (decimal)rnd.NextDouble() * (maxP - minP), 2);
+        // Whole-number prices only (typists enter round figures).
+        decimal RandomPrice() => Math.Round(minP + (decimal)rnd.NextDouble() * (maxP - minP), 0, MidpointRounding.AwayFromZero);
         var disType = (body.DisagreementType ?? "mixed").ToLowerInvariant(); // price | broker | mixed
         int matched = 0, disagreements = 0, errors = 0;
 
@@ -275,7 +282,7 @@ public class TypistEntryFunctions
         {
             try
             {
-                var brokerId = brokerIds[rnd.Next(brokerIds.Count)];
+                var brokerId = body.BrokerId ?? brokerIds[rnd.Next(brokerIds.Count)];
                 var price = RandomPrice();
                 var broker2 = brokerId;
                 var price2 = price;
