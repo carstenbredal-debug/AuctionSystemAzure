@@ -208,6 +208,28 @@ public class BrokerFunctions
         return await CreateJsonResponse(req, result);
     }
 
+    [Function("SearchBuyers")]
+    public async Task<HttpResponseData> SearchBuyers(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "buyers/search")] HttpRequestData req)
+    {
+        // Typeahead for the broker "invite customer" picker. Any authenticated user may search (same
+        // access the old full-list dropdown had); returns a capped, minimal projection — no financials.
+        var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+        var q = (query["q"] ?? "").Trim();
+        if (q.Length < 2)
+            return await CreateJsonResponse(req, new List<object>());
+
+        var matches = await _db.Buyers.AsNoTracking()
+            .Where(b => b.IsActive && (b.Name.Contains(q) || b.BuyerNumber.Contains(q)
+                        || (b.ContactEmail != null && b.ContactEmail.Contains(q))))
+            .OrderBy(b => b.Name)
+            .Take(25)
+            .Select(b => new { b.Id, b.Name, b.BuyerNumber, b.ContactEmail })
+            .ToListAsync();
+
+        return await CreateJsonResponse(req, matches);
+    }
+
     [Function("GetBuyerById")]
     public async Task<HttpResponseData> GetBuyerById(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "buyers/{id:int}")] HttpRequestData req, int id)

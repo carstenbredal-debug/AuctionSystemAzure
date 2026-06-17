@@ -256,10 +256,14 @@ else
     private async Task LoadData()
     {
         // Default to the selected auction; _selectedAuctionId == 0 means "All auctions".
-        _purchases = await Api.GetAuctionResultsByBuyerAsync(
+        var purchasesTask = Api.GetAuctionResultsByBuyerAsync(
             _buyerId, _selectedAuctionId > 0 ? _selectedAuctionId : (int?)null);
-        _pendingTakebacks = await Api.GetTakebackRequestsByBuyerAsync(_buyerId);
-        await LoadFeeParameters();
+        var takebacksTask = Api.GetTakebackRequestsByBuyerAsync(_buyerId);
+        var paramsTask = Api.GetParametersAsync();
+        await Task.WhenAll(purchasesTask, takebacksTask, paramsTask);
+        _purchases = await purchasesTask;
+        _pendingTakebacks = await takebacksTask;
+        ApplyFeeParameters(await paramsTask);
     }
 
     private async Task OnAuctionFilterChanged()
@@ -268,9 +272,8 @@ else
         await LoadData();
     }
 
-    private async Task LoadFeeParameters()
+    private void ApplyFeeParameters(List<SystemParameterDto> parameters)
     {
-        var parameters = await Api.GetParametersAsync();
         var auctionFee = parameters.FirstOrDefault(p => p.Key == "AuctionFee");
         var handlingFee = parameters.FirstOrDefault(p => p.Key == "HandlingFee");
         if (auctionFee != null) decimal.TryParse(auctionFee.Value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _auctionFeePercent);

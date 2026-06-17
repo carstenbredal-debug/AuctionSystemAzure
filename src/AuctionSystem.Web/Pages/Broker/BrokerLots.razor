@@ -746,18 +746,29 @@ else if (_activeTab == "takeback")
             if (user?.BrokerId != null)
             {
                 _brokerId = user.BrokerId.Value;
-                _auctions = (await Api.GetAuctionsAsync())
+
+                // Fire the independent loads concurrently, then await once (was ~5 serial round-trips).
+                var auctionsTask = Api.GetAuctionsAsync();
+                // Sell dropdown must be ONLY the broker's linked customers (the BrokerBuyers
+                // junction). No customer-request fallback — a non-linked buyer can never appear.
+                var buyersTask = Api.GetBrokerLinkedBuyersAsync(_brokerId);
+                var takebacksTask = Api.GetTakebackRequestsByBrokerAsync(_brokerId);
+                var linksTask = Api.GetInvoiceLinksForBrokerAsync(_brokerId);
+                var paramsTask = Api.GetParametersAsync();
+                await Task.WhenAll(auctionsTask, buyersTask, takebacksTask, linksTask, paramsTask);
+
+                _auctions = (await auctionsTask)
                     .Where(a => a.Status == AuctionStatus.Active || a.Status == AuctionStatus.Closed)
                     .ToList();
                 if (_auctions.Any())
                     _selectedAuctionId = _auctions.First().Id;
+                _buyers = await buyersTask;
+                _pendingTakebacks = await takebacksTask;
+                _invoiceLinks = await linksTask;
+                ApplyFeeParameters(await paramsTask);
+
+                // Results depend on the chosen auction, so this one runs after.
                 await LoadResults();
-                // Sell dropdown must be ONLY the broker's linked customers (the BrokerBuyers
-                // junction). No customer-request fallback — a non-linked buyer can never appear.
-                _buyers = await Api.GetBrokerLinkedBuyersAsync(_brokerId);
-                _pendingTakebacks = await Api.GetTakebackRequestsByBrokerAsync(_brokerId);
-                _invoiceLinks = await Api.GetInvoiceLinksForBrokerAsync(_brokerId);
-                await LoadFeeParameters();
             }
         }
 
@@ -787,9 +798,8 @@ else if (_activeTab == "takeback")
         await LoadResults();
     }
 
-    private async Task LoadFeeParameters()
+    private void ApplyFeeParameters(List<SystemParameterDto> parameters)
     {
-        var parameters = await Api.GetParametersAsync();
         var auctionFee = parameters.FirstOrDefault(p => p.Key == "AuctionFee");
         var handlingFee = parameters.FirstOrDefault(p => p.Key == "HandlingFee");
         if (auctionFee != null) decimal.TryParse(auctionFee.Value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _auctionFeePercent);

@@ -7,6 +7,16 @@ public class AuctionApiClient
 {
     private readonly HttpClient _http;
 
+    // Lightweight per-session cache for low-churn reference data. AuctionApiClient is Scoped, which
+    // in Blazor WASM lives for the whole app session, so this spares repeated fetches as the user
+    // navigates between pages. Writes to these resources clear the cache; otherwise a short TTL caps
+    // staleness against another user's change.
+    private static readonly TimeSpan RefTtl = TimeSpan.FromMinutes(5);
+    private List<SystemParameterDto>? _paramCache;
+    private DateTime _paramCachedAt;
+    private List<AuctionDto>? _auctionCache;
+    private DateTime _auctionCachedAt;
+
     public AuctionApiClient(HttpClient http) => _http = http;
 
     public string BaseUrl => _http.BaseAddress?.ToString().TrimEnd('/') ?? "";
@@ -30,25 +40,35 @@ public class AuctionApiClient
 
     // Auctions
     public async Task<List<AuctionDto>> GetAuctionsAsync()
-        => await _http.GetFromJsonAsync<List<AuctionDto>>("api/auctions") ?? new();
+    {
+        if (_auctionCache != null && DateTime.UtcNow - _auctionCachedAt < RefTtl) return _auctionCache;
+        _auctionCache = await _http.GetFromJsonAsync<List<AuctionDto>>("api/auctions") ?? new();
+        _auctionCachedAt = DateTime.UtcNow;
+        return _auctionCache;
+    }
 
     public async Task<AuctionDto?> GetAuctionAsync(int id)
         => await _http.GetFromJsonAsync<AuctionDto>($"api/auctions/{id}");
 
     public async Task<HttpResponseMessage> CreateAuctionAsync(object auction)
-        => await _http.PostAsJsonAsync("api/auctions", auction);
+    {
+        _auctionCache = null;
+        return await _http.PostAsJsonAsync("api/auctions", auction);
+    }
 
     public async Task<List<LotDto>> GetLotsByAuctionAsync(int auctionId)
         => await _http.GetFromJsonAsync<List<LotDto>>($"api/auctions/{auctionId}/lots") ?? new();
 
     public async Task<bool> UpdateAuctionStatusAsync(int id, AuctionStatus status)
     {
+        _auctionCache = null;
         var resp = await _http.PutAsJsonAsync($"api/auctions/{id}/status", status);
         return await OkAsync(resp);
     }
 
     public async Task<bool> DeleteAuctionAsync(int id)
     {
+        _auctionCache = null;
         var resp = await _http.DeleteAsync($"api/auctions/{id}");
         return resp.IsSuccessStatusCode;
     }
@@ -107,6 +127,11 @@ public class AuctionApiClient
     // Buyers
     public async Task<List<BuyerDto>> GetAllBuyersAsync()
         => await _http.GetFromJsonAsync<List<BuyerDto>>("api/buyers") ?? new();
+
+    // Server-side typeahead search (capped, minimal projection) so pickers never pull the whole
+    // buyer table into the browser.
+    public async Task<List<BuyerDto>> SearchBuyersAsync(string q)
+        => await _http.GetFromJsonAsync<List<BuyerDto>>($"api/buyers/search?q={Uri.EscapeDataString(q)}") ?? new();
 
     public async Task<List<BuyerDto>> GetBrokerLinkedBuyersAsync(int brokerId)
         => await _http.GetFromJsonAsync<List<BuyerDto>>($"api/brokers/{brokerId}/buyers") ?? new();
@@ -323,10 +348,16 @@ public class AuctionApiClient
 
     // Parameters
     public async Task<List<SystemParameterDto>> GetParametersAsync()
-        => await _http.GetFromJsonAsync<List<SystemParameterDto>>("api/parameters") ?? new();
+    {
+        if (_paramCache != null && DateTime.UtcNow - _paramCachedAt < RefTtl) return _paramCache;
+        _paramCache = await _http.GetFromJsonAsync<List<SystemParameterDto>>("api/parameters") ?? new();
+        _paramCachedAt = DateTime.UtcNow;
+        return _paramCache;
+    }
 
     public async Task<SystemParameterDto?> CreateParameterAsync(SystemParameterDto param)
     {
+        _paramCache = null;
         var resp = await _http.PostAsJsonAsync("api/parameters", param);
         if (!await OkAsync(resp)) return null;
         return await resp.Content.ReadFromJsonAsync<SystemParameterDto>();
@@ -334,13 +365,17 @@ public class AuctionApiClient
 
     public async Task<SystemParameterDto?> UpdateParameterAsync(int id, SystemParameterDto param)
     {
+        _paramCache = null;
         var resp = await _http.PutAsJsonAsync($"api/parameters/{id}", param);
         if (!await OkAsync(resp)) return null;
         return await resp.Content.ReadFromJsonAsync<SystemParameterDto>();
     }
 
     public async Task DeleteParameterAsync(int id)
-        => await _http.DeleteAsync($"api/parameters/{id}");
+    {
+        _paramCache = null;
+        await _http.DeleteAsync($"api/parameters/{id}");
+    }
 
     // Catalog Lots
     public async Task<List<CatalogLotDto>> GetCatalogLotsAsync()

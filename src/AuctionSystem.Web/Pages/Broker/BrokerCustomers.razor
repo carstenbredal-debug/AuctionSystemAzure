@@ -35,13 +35,28 @@ else
             <div class="row g-3 align-items-end">
                 <div class="col-md-6">
                     <label class="form-label">Select Customer</label>
-                    <select class="form-select" @bind="_selectedBuyerId">
-                        <option value="0">— Choose a customer to invite —</option>
-                        @foreach (var buyer in _availableBuyers)
-                        {
-                            <option value="@buyer.Id">@buyer.Name (@buyer.BuyerNumber) — @buyer.ContactEmail</option>
-                        }
-                    </select>
+                    <div class="input-group">
+                        <input class="form-control" placeholder="Type a name, number or email…"
+                               @bind="_buyerSearch" @bind:event="oninput" @onkeyup="OnSearchKeyUp" />
+                        <button class="btn btn-outline-secondary" type="button" @onclick="SearchBuyers">Search</button>
+                    </div>
+                    @if (_searching)
+                    {
+                        <div class="text-muted small mt-1">Searching…</div>
+                    }
+                    else if (_searchResults.Any())
+                    {
+                        <select class="form-select mt-2" size="6" @onchange="OnPickBuyer">
+                            @foreach (var buyer in _searchResults)
+                            {
+                                <option value="@buyer.Id" selected="@(_selectedBuyerId == buyer.Id)">@buyer.Name (@buyer.BuyerNumber) — @buyer.ContactEmail</option>
+                            }
+                        </select>
+                    }
+                    else if (_searchAttempted && !string.IsNullOrWhiteSpace(_buyerSearch))
+                    {
+                        <div class="text-muted small mt-1">No matching customers.</div>
+                    }
                 </div>
                 <div class="col-md-3">
                     <button class="btn btn-primary" @onclick="SendInvitation" disabled="@(_selectedBuyerId == 0)">
@@ -162,8 +177,11 @@ else
     private List<BrokerCustomerRequestDto> _requests = new();
     private List<BrokerCustomerRequestDto> _buyerPendingRequests = new();
     private List<BuyerDto> _linkedBuyers = new();
-    private List<BuyerDto> _allBuyers = new();
-    private List<BuyerDto> _availableBuyers = new();
+    private string _buyerSearch = "";
+    private List<BuyerDto> _searchResults = new();
+    private bool _searching;
+    private bool _searchAttempted;
+    private HashSet<int> _excludedBuyerIds = new(); // already linked or with a pending request
 
     protected override async Task OnInitializedAsync()
     {
@@ -195,15 +213,35 @@ else
         // Get buyers linked via junction table (may exist without customer requests)
         _linkedBuyers = await Api.GetBrokerLinkedBuyersAsync(_brokerId);
 
-        _allBuyers = await Api.GetAllBuyersAsync();
-
         var requestedBuyerIds = allRequests.Select(r => r.BuyerId).ToHashSet();
         var linkedBuyerIds = _linkedBuyers.Select(b => b.Id).ToHashSet();
-        _availableBuyers = _allBuyers
-            .Where(b => !requestedBuyerIds.Contains(b.Id) && !linkedBuyerIds.Contains(b.Id))
-            .OrderBy(b => b.Name)
-            .ToList();
+        _excludedBuyerIds = requestedBuyerIds.Concat(linkedBuyerIds).ToHashSet();
+        // Drop anything that just became linked/requested from the visible results.
+        _searchResults = _searchResults.Where(b => !_excludedBuyerIds.Contains(b.Id)).ToList();
     }
+
+    private async Task SearchBuyers()
+    {
+        var term = _buyerSearch.Trim();
+        _selectedBuyerId = 0;
+        _searchAttempted = true;
+        if (term.Length < 2) { _searchResults = new(); return; }
+        _searching = true;
+        try
+        {
+            var results = await Api.SearchBuyersAsync(term);
+            _searchResults = results.Where(b => !_excludedBuyerIds.Contains(b.Id)).ToList();
+        }
+        finally { _searching = false; }
+    }
+
+    private async Task OnSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await SearchBuyers();
+    }
+
+    private void OnPickBuyer(ChangeEventArgs e)
+        => _selectedBuyerId = int.TryParse(e.Value?.ToString(), out var id) ? id : 0;
 
     private async Task SendInvitation()
     {
@@ -212,7 +250,7 @@ else
         var result = await Api.CreateCustomerRequestAsync(_brokerId, _selectedBuyerId);
         if (result != null)
         {
-            var buyerName = _allBuyers.FirstOrDefault(b => b.Id == _selectedBuyerId)?.Name ?? "Customer";
+            var buyerName = _searchResults.FirstOrDefault(b => b.Id == _selectedBuyerId)?.Name ?? "Customer";
             _message = $"Invitation sent to '{buyerName}'. Awaiting their approval.";
             _messageIsError = false;
         }
@@ -223,6 +261,9 @@ else
         }
 
         _selectedBuyerId = 0;
+        _buyerSearch = "";
+        _searchResults = new();
+        _searchAttempted = false;
         await LoadData();
     }
 
