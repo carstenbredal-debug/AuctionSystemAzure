@@ -203,6 +203,10 @@ using (var scope = host.Services.CreateScope())
                 ALTER TABLE auction.Invoices ADD DownpaymentPercentage decimal(18,4) NULL;
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Invoices') AND name = 'BcPushStartedAt')
                 ALTER TABLE auction.Invoices ADD BcPushStartedAt datetime2 NULL;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Invoices') AND name = 'BcSyncError')
+                ALTER TABLE auction.Invoices ADD BcSyncError nvarchar(1000) NULL;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Invoices') AND name = 'BcSyncErrorAt')
+                ALTER TABLE auction.Invoices ADD BcSyncErrorAt datetime2 NULL;
         ");
         // TypistEntries table
         db.Database.ExecuteSqlRaw(@"

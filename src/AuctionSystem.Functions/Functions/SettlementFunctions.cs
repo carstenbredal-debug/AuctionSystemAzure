@@ -775,6 +775,7 @@ public class SettlementFunctions
                 BrokerName = i.Broker?.CompanyName, BuyerName = i.Buyer?.Name, BuyerNumber = i.Buyer?.BuyerNumber, LinesCount = i.Lines.Count,
                 i.IsCreditNote, OriginalInvoiceNumber = i.OriginalInvoice?.InvoiceNumber,
                 i.PdfUrl, i.BcInvoiceNumber, i.ShippingStatus,
+                i.BcSyncError, i.BcSyncErrorAt,
                 i.DownpaymentAmount, i.DownpaymentPercentage,
                 RemainingBalance = remainingBalance,
                 CreditedAmount = creditInfo?.Amount ?? 0m,

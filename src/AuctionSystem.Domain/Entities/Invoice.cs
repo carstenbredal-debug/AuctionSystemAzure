@@ -39,6 +39,13 @@ public class Invoice
     // reclaimable so a crashed push can be retried.
     public DateTime? BcPushStartedAt { get; set; }
 
+    // Last BC push failure for this document: the reason and when. Set when a push does not post;
+    // cleared on a successful post. Lets the admin UI explain a stuck invoice without re-running the
+    // sync. Column added via the startup raw-SQL block (this project patches post-baseline schema
+    // there, not via EF migrations) — see Program.cs "Invoice BC columns".
+    public string? BcSyncError { get; set; }
+    public DateTime? BcSyncErrorAt { get; set; }
+
     public string? ShippingStatus { get; set; }
     public decimal? DownpaymentAmount { get; set; }
     public decimal? DownpaymentPercentage { get; set; }

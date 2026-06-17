@@ -178,7 +178,14 @@ else
                                 }
                                 @if (!inv.IsCreditNote && string.IsNullOrEmpty(inv.BcInvoiceNumber))
                                 {
-                                    <span class="badge bg-warning text-dark" title="Invoice has not posted to Business Central yet">Not Posted</span>
+                                    @if (!string.IsNullOrEmpty(inv.BcSyncError))
+                                    {
+                                        <span class="badge bg-danger" title="@($"Last BC push failed{(inv.BcSyncErrorAt.HasValue ? $" at {inv.BcSyncErrorAt.Value:yyyy-MM-dd HH:mm} UTC" : "")}: {inv.BcSyncError}")">Push Failed</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-warning text-dark" title="Invoice has not posted to Business Central yet">Not Posted</span>
+                                    }
                                 }
                                 else
                                 {

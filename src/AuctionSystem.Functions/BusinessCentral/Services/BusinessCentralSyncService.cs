@@ -293,7 +293,9 @@ public class BusinessCentralSyncService
             {
                 // Did not post — free the claim so the next retry isn't skipped for 5 minutes.
                 await ReleaseBcPushClaimAsync(creditNote.Id);
-                return BcPushResult.NotPushed($"Buyer {creditNote.Buyer?.BuyerNumber ?? creditNote.BuyerId.ToString()} is not a customer in BC");
+                var reason = $"Buyer {creditNote.Buyer?.BuyerNumber ?? creditNote.BuyerId.ToString()} is not a customer in BC";
+                await RecordPushFailureAsync(creditNote.Id, reason);
+                return BcPushResult.NotPushed(reason);
             }
 
             var extDocNumber = !string.IsNullOrEmpty(creditNote.InvoiceNumber) ? creditNote.InvoiceNumber : $"CN-{creditNote.Id}";
@@ -320,6 +322,8 @@ public class BusinessCentralSyncService
             _logger.LogInformation("Posted credit memo: finalNumber={FinalNumber}, finalId={FinalId}, postedWasNull={PostedNull}",
                 finalNumber, finalId, posted == null);
 
+            creditNote.BcSyncError = null;
+            creditNote.BcSyncErrorAt = null;
             await TryFetchAndStoreCreditMemoPdfAsync(companyId, finalId, creditNote);
             await _db.SaveChangesAsync();
 
@@ -331,12 +335,13 @@ public class BusinessCentralSyncService
 
             return BcPushResult.Posted;
         }
-        catch
+        catch (Exception ex)
         {
             // The push threw before the credit memo posted (BcInvoiceNumber not set). Release the
             // claim so the next retry can run instead of being skipped as "concurrent". If BC
             // actually posted but the local save failed, the idempotency check recovers it on retry.
             await ReleaseBcPushClaimAsync(creditNote.Id);
+            await RecordPushFailureAsync(creditNote.Id, ex.Message);
             throw;
         }
     }
@@ -374,6 +379,19 @@ public class BusinessCentralSyncService
             SET BcPushStartedAt = NULL
             WHERE Id = {invoiceId}
               AND BcInvoiceNumber IS NULL");
+    }
+
+    // Record why a push did not post so the admin UI can explain a stuck document without re-running
+    // the sync. Isolated raw SQL (like the claim) so it can't persist partially-tracked entity state
+    // left over from a failed push. Cleared on a successful post via the entity save in the push.
+    private async Task RecordPushFailureAsync(int invoiceId, string reason)
+    {
+        var trimmed = string.IsNullOrEmpty(reason) ? "Unknown error"
+            : reason.Length > 1000 ? reason[..1000] : reason;
+        await _db.Database.ExecuteSqlInterpolatedAsync($@"
+            UPDATE auction.Invoices
+            SET BcSyncError = {trimmed}, BcSyncErrorAt = SYSUTCDATETIME()
+            WHERE Id = {invoiceId}");
     }
 
     // Delete a leftover draft (from a prior interrupted push) so we can recreate it cleanly.
@@ -678,7 +696,9 @@ public class BusinessCentralSyncService
             {
                 // Did not post — free the claim so the next retry isn't skipped for 5 minutes.
                 await ReleaseBcPushClaimAsync(invoice.Id);
-                return BcPushResult.NotPushed($"Buyer {invoice.Buyer?.BuyerNumber ?? invoice.BuyerId.ToString()} is not a customer in BC");
+                var reason = $"Buyer {invoice.Buyer?.BuyerNumber ?? invoice.BuyerId.ToString()} is not a customer in BC";
+                await RecordPushFailureAsync(invoice.Id, reason);
+                return BcPushResult.NotPushed(reason);
             }
 
             var extDocRef = !string.IsNullOrEmpty(invoice.InvoiceNumber) ? invoice.InvoiceNumber : $"AUC-{invoice.Id}";
@@ -710,6 +730,8 @@ public class BusinessCentralSyncService
             _logger.LogInformation("Posted invoice: finalNumber={FinalNumber}, finalId={FinalId}, postedWasNull={PostedNull}",
                 finalNumber, finalId, posted == null);
 
+            invoice.BcSyncError = null;
+            invoice.BcSyncErrorAt = null;
             await TryFetchAndStorePdfAsync(companyId, finalId, invoice);
             await _db.SaveChangesAsync();
 
@@ -718,12 +740,13 @@ public class BusinessCentralSyncService
 
             return BcPushResult.Posted;
         }
-        catch
+        catch (Exception ex)
         {
             // The push threw before the invoice posted (BcInvoiceNumber not set). Release the claim
             // so the next retry can run instead of being skipped as "concurrent". If BC actually
             // posted but the local save failed, the idempotency check recovers it on retry.
             await ReleaseBcPushClaimAsync(invoice.Id);
+            await RecordPushFailureAsync(invoice.Id, ex.Message);
             throw;
         }
     }

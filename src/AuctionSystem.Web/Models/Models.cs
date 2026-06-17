@@ -414,6 +414,8 @@ public class InvoiceSummaryDto
     public string Currency { get; set; } = "EUR";
     public string Status { get; set; } = "";
     public string? BcInvoiceNumber { get; set; }
+    public string? BcSyncError { get; set; }
+    public DateTime? BcSyncErrorAt { get; set; }
     public string? BrokerName { get; set; }
     public string? BuyerName { get; set; }
     public string? BuyerNumber { get; set; }
