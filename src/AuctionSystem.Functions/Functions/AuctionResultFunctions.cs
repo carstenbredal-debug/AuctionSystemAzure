@@ -446,43 +446,10 @@ public class AuctionResultFunctions
         // in twice) try to sell the same lot to different buyers at the same time, exactly one
         // UPDATE matches and the other affects 0 rows — so a lot can never be sold, or invoiced,
         // twice. Only the rows we actually won proceed to history + invoicing below.
-        var now = DateTime.UtcNow;
-        var claimedResults = new List<AuctionResult>();
-        foreach (var result in results)
-        {
-            decimal? commissionAmount = null;
-            if (body.CommissionType == "percentage" && body.CommissionValue.HasValue)
-                commissionAmount = (result.TotalSkins * result.PriceEur) * body.CommissionValue.Value / 100m;
-            else if (body.CommissionType == "amount" && body.CommissionValue.HasValue)
-                commissionAmount = body.CommissionValue.Value;
-
-            var claimed = await _db.Database.ExecuteSqlInterpolatedAsync($@"
-                UPDATE auction.AuctionResults
-                SET SoldToBuyerId = {body.BuyerId},
-                    SoldAt = {now},
-                    CommissionType = {body.CommissionType},
-                    CommissionValue = {body.CommissionValue},
-                    CommissionAmount = {commissionAmount},
-                    LastModifiedBy = {body.Initials},
-                    LastModifiedAt = {now}
-                WHERE Id = {result.Id} AND SoldToBuyerId IS NULL");
-
-            if (claimed == 1)
-            {
-                // Mirror the authoritative DB values onto the tracked entity so downstream history
-                // and invoicing see the sale, then mark it Unchanged so SaveChanges doesn't re-issue
-                // the write without the IS NULL guard.
-                result.SoldToBuyerId = body.BuyerId;
-                result.SoldAt = now;
-                result.CommissionType = body.CommissionType;
-                result.CommissionValue = body.CommissionValue;
-                result.CommissionAmount = commissionAmount;
-                result.LastModifiedBy = body.Initials;
-                result.LastModifiedAt = now;
-                _db.Entry(result).State = EntityState.Unchanged;
-                claimedResults.Add(result);
-            }
-        }
+        // Sell through the shared core (atomic claim -> commission -> lot status -> history -> invoice
+        // -> BC enqueue) — the SAME path the simulator drives, so both exercise identical behaviour.
+        var (claimedResults, invoiceId, bcError) = await SellResultsCoreAsync(
+            results, body.BuyerId, buyer, body.CommissionType, body.CommissionValue, body.Initials);
 
         // Every requested lot was already sold by a concurrent request — nothing to do.
         if (claimedResults.Count == 0)
@@ -493,44 +460,71 @@ public class AuctionResultFunctions
             return conflict;
         }
 
-        // Update lot status to Sold (only for lots we actually claimed)
+        var pdfUrl = invoiceId != null ? (await _db.Invoices.FindAsync(invoiceId))?.PdfUrl : null;
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(new { soldCount = claimedResults.Count, invoiceId, pdfUrl, bcError }, JsonOptions));
+        return response;
+    }
+
+    // Shared sell core used by BOTH the broker SellLotsToBuyer endpoint and the sell simulator, so they
+    // exercise identical behaviour. Atomically claims each still-unsold result for the buyer (with
+    // commission), marks its lot Sold, records sales history, then creates the invoice. The atomic
+    // "WHERE SoldToBuyerId IS NULL" guard means a lot can never be sold or invoiced twice. Invoicing is
+    // NOT gated on BC — a sale always bills locally; the BC push is gated on the queue inside the helper.
+    private async Task<(List<AuctionResult> Claimed, int? InvoiceId, string? BcError)> SellResultsCoreAsync(
+        List<AuctionResult> results, int buyerId, Buyer buyer, string? commissionType, decimal? commissionValue, string? initials)
+    {
+        var now = DateTime.UtcNow;
+        var claimedResults = new List<AuctionResult>();
+        foreach (var result in results)
+        {
+            decimal? commissionAmount = null;
+            if (commissionType == "percentage" && commissionValue.HasValue)
+                commissionAmount = (result.TotalSkins * result.PriceEur) * commissionValue.Value / 100m;
+            else if (commissionType == "amount" && commissionValue.HasValue)
+                commissionAmount = commissionValue.Value;
+
+            var claimed = await _db.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE auction.AuctionResults
+                SET SoldToBuyerId = {buyerId}, SoldAt = {now}, CommissionType = {commissionType},
+                    CommissionValue = {commissionValue}, CommissionAmount = {commissionAmount},
+                    LastModifiedBy = {initials}, LastModifiedAt = {now}
+                WHERE Id = {result.Id} AND SoldToBuyerId IS NULL");
+            if (claimed == 1)
+            {
+                result.SoldToBuyerId = buyerId; result.SoldAt = now; result.CommissionType = commissionType;
+                result.CommissionValue = commissionValue; result.CommissionAmount = commissionAmount;
+                result.LastModifiedBy = initials; result.LastModifiedAt = now;
+                _db.Entry(result).State = EntityState.Unchanged;
+                claimedResults.Add(result);
+            }
+        }
+
+        if (claimedResults.Count == 0) return (claimedResults, null, null);
+
         var lotNumbers = claimedResults.Select(r => r.LotNumber).ToList();
         var lots = await _db.Lots.Where(l => lotNumbers.Contains(l.LotNumber)).ToListAsync();
-        foreach (var lot in lots)
-        {
-            lot.Status = LotStatus.Sold;
-        }
-
+        foreach (var lot in lots) lot.Status = LotStatus.Sold;
         await _db.SaveChangesAsync();
 
-        // Record sales history
         foreach (var result in claimedResults)
         {
-            var hammerPrice = result.TotalSkins * result.PriceEur;
             _db.LotSalesHistories.Add(new LotSalesHistory
             {
-                LotNumber = result.LotNumber,
-                AuctionResultId = result.Id,
-                ActionType = "Sold",
-                Initials = body.Initials,
-                BuyerId = body.BuyerId,
-                BuyerName = buyer.Name,
-                Amount = hammerPrice,
-                CreatedAt = DateTime.UtcNow
+                LotNumber = result.LotNumber, AuctionResultId = result.Id, ActionType = "Sold",
+                Initials = initials, BuyerId = buyerId, BuyerName = buyer.Name,
+                Amount = result.TotalSkins * result.PriceEur, CreatedAt = DateTime.UtcNow
             });
         }
+        await _db.SaveChangesAsync();
 
-        int? invoiceId = null;
-        string? bcError = null;
-        if (claimedResults.Count > 0 && _bcSyncService != null)
-            (invoiceId, bcError) = await CreateInvoiceAndQueuePushAsync(claimedResults, body.BuyerId, buyer);
+        var (invoiceId, bcError) = await CreateInvoiceAndQueuePushAsync(claimedResults, buyerId, buyer);
 
-        string? pdfUrl = null;
         if (invoiceId != null)
         {
             var inv = await _db.Invoices.FindAsync(invoiceId);
-            pdfUrl = inv?.PdfUrl;
-            // Update sales history with invoice info
             var lotNums = claimedResults.Select(r => r.LotNumber).ToList();
             var historyEntries = await _db.LotSalesHistories
                 .Where(h => lotNums.Contains(h.LotNumber) && h.InvoiceId == null && h.ActionType == "Sold")
@@ -544,10 +538,7 @@ public class AuctionResultFunctions
             await _db.SaveChangesAsync();
         }
 
-        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
-        response.Headers.Add("Content-Type", "application/json");
-        await response.WriteStringAsync(JsonSerializer.Serialize(new { soldCount = claimedResults.Count, invoiceId, pdfUrl, bcError }, JsonOptions));
-        return response;
+        return (claimedResults, invoiceId, bcError);
     }
 
     private async Task<(int? InvoiceId, string? BcError)> CreateInvoiceAndQueuePushAsync(List<AuctionResult> results, int buyerId, Buyer buyer)
@@ -731,71 +722,41 @@ public class AuctionResultFunctions
         List<AuctionResult> results, Dictionary<int, List<int>> buyersByBroker, Dictionary<int, Buyer> buyers,
         decimal minC, decimal maxC, int maxPerInvoice, Random rnd)
     {
-        var now = DateTime.UtcNow;
         decimal RandPct() => maxC <= minC ? minC : Math.Round(minC + (decimal)rnd.NextDouble() * (maxC - minC), 2);
-        var claimed = new List<AuctionResult>();
-        int skipped = 0;
 
+        // Assign each sellable result a random linked buyer of its broker; skip those with no eligible
+        // buyer. Then sell through the SHARED SellResultsCoreAsync — the exact path the broker UI uses.
+        var assignments = new List<(AuctionResult Result, int BuyerId)>();
+        int skipped = 0;
         foreach (var r in results)
         {
             if (!buyersByBroker.TryGetValue(r.BrokerId, out var pool) || pool.Count == 0) { skipped++; continue; }
-            var buyerId = pool[rnd.Next(pool.Count)];
-            var pct = RandPct();
-            decimal? commissionAmount = pct > 0 ? Math.Round((r.TotalSkins * r.PriceEur) * pct / 100m, 2) : (decimal?)null;
-            var rows = await _db.Database.ExecuteSqlInterpolatedAsync($@"
-                UPDATE auction.AuctionResults
-                SET SoldToBuyerId = {buyerId}, SoldAt = {now}, CommissionType = {"percentage"},
-                    CommissionValue = {pct}, CommissionAmount = {commissionAmount},
-                    LastModifiedBy = {"SIM"}, LastModifiedAt = {now}
-                WHERE Id = {r.Id} AND SoldToBuyerId IS NULL");
-            if (rows == 1)
-            {
-                r.SoldToBuyerId = buyerId; r.SoldAt = now; r.CommissionType = "percentage";
-                r.CommissionValue = pct; r.CommissionAmount = commissionAmount;
-                r.LastModifiedBy = "SIM"; r.LastModifiedAt = now;
-                _db.Entry(r).State = EntityState.Unchanged;
-                claimed.Add(r);
-            }
+            assignments.Add((r, pool[rnd.Next(pool.Count)]));
         }
+        if (assignments.Count == 0) return (new List<int>(), 0, skipped);
 
-        if (claimed.Count == 0) return (new List<int>(), 0, skipped);
-
-        var lotNumbers = claimed.Select(r => r.LotNumber).ToList();
-        var lots = await _db.Lots.Where(l => lotNumbers.Contains(l.LotNumber)).ToListAsync();
-        foreach (var lot in lots) lot.Status = LotStatus.Sold;
-        foreach (var r in claimed)
-        {
-            var buyer = buyers[r.SoldToBuyerId!.Value];
-            _db.LotSalesHistories.Add(new LotSalesHistory
-            {
-                LotNumber = r.LotNumber, AuctionResultId = r.Id, ActionType = "Sold",
-                Initials = "SIM", BuyerId = r.SoldToBuyerId.Value, BuyerName = buyer.Name,
-                Amount = r.TotalSkins * r.PriceEur, CreatedAt = now
-            });
-        }
-        await _db.SaveChangesAsync();
-
-        // Split each (broker, buyer) group into invoices of a RANDOM number of lots (1..maxPerInvoice)
-        // so the test data has realistically varied invoice sizes rather than one invoice per buyer.
-        // Always create the local invoice records — the BC push inside the helper is independently gated
-        // on the push queue, so sales still produce invoices when BC isn't configured.
+        var soldIds = new List<int>();
         int invoices = 0;
-        foreach (var grp in claimed.GroupBy(r => new { r.BrokerId, BuyerId = r.SoldToBuyerId!.Value }))
+        // Group by (broker, buyer), split each into invoices of a RANDOM number of lots (1..maxPerInvoice),
+        // and sell each chunk via the real core at a random commission %.
+        foreach (var grp in assignments.GroupBy(a => new { a.Result.BrokerId, a.BuyerId }))
+        {
+            var groupResults = grp.Select(a => a.Result).ToList();
+            var buyer = buyers[grp.Key.BuyerId];
+            int idx = 0;
+            while (idx < groupResults.Count)
             {
-                var groupLots = grp.ToList();
-                int idx = 0;
-                while (idx < groupLots.Count)
-                {
-                    var remaining = groupLots.Count - idx;
-                    var chunkSize = maxPerInvoice <= 1 ? 1 : rnd.Next(1, Math.Min(maxPerInvoice, remaining) + 1);
-                    var chunk = groupLots.GetRange(idx, chunkSize);
-                    idx += chunkSize;
-                    var (invId, _) = await CreateInvoiceAndQueuePushAsync(chunk, grp.Key.BuyerId, buyers[grp.Key.BuyerId]);
-                    if (invId != null) invoices++;
-                }
+                var remaining = groupResults.Count - idx;
+                var chunkSize = maxPerInvoice <= 1 ? 1 : rnd.Next(1, Math.Min(maxPerInvoice, remaining) + 1);
+                var chunk = groupResults.GetRange(idx, chunkSize);
+                idx += chunkSize;
+                var (claimed, invId, _) = await SellResultsCoreAsync(chunk, grp.Key.BuyerId, buyer, "percentage", RandPct(), "SIM");
+                soldIds.AddRange(claimed.Select(r => r.Id));
+                if (invId != null) invoices++;
             }
+        }
 
-        return (claimed.Select(r => r.Id).ToList(), invoices, skipped);
+        return (soldIds, invoices, skipped);
     }
 
     private static async Task<HttpResponseData> SimJson(HttpRequestData req, System.Net.HttpStatusCode code, object body)
