@@ -37,7 +37,20 @@ public class FarmerFunctions
     public async Task<HttpResponseData> GetAll(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "farmers")] HttpRequestData req)
     {
-        var farmers = await _db.Farmers.ToListAsync();
+        var farmers = await _db.Farmers.AsNoTracking().ToListAsync();
+        // Redact bank/tax/payment details for non-admins (this list feeds the farmer portal,
+        // which only needs id + name). AsNoTracking + GET-only, so mutation never persists.
+        if (!req.FunctionContext.IsAdmin())
+        {
+            foreach (var f in farmers)
+            {
+                f.VatRegistrationNo = ""; f.RegistrationNo = "";
+                f.PaymentTerm = ""; f.PaymentMethod = "";
+                f.BankName = ""; f.BankAddress = ""; f.BankIbanNumber = "";
+                f.SwiftCode = ""; f.BankCountry = "";
+                f.CreditLimit = 0m; f.VatBusPostingGroup = "";
+            }
+        }
         return await CreateJsonResponse(req, farmers);
     }
 

@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using AuctionSystem.Domain.Data;
 using AuctionSystem.Domain.Entities;
 using AuctionSystem.Domain.Enums;
+using AuctionSystem.Functions.Auth;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.EntityFrameworkCore;
@@ -29,6 +30,7 @@ public class TypistEntryFunctions
         _logger = logger;
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Typist", "Admin")]
     [Function("SubmitTypistEntry")]
     public async Task<HttpResponseData> Submit(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "typist-entries")] HttpRequestData req)
@@ -36,6 +38,12 @@ public class TypistEntryFunctions
         var body = await req.ReadFromJsonAsync<SubmitTypistEntryRequest>();
         if (body == null)
             return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+
+        // The typist is the authenticated user — never trust a TypistUserId supplied in the body.
+        var authUserId = req.FunctionContext.GetAppUser()?.Id ?? 0;
+        if (authUserId == 0)
+            return req.CreateResponse(System.Net.HttpStatusCode.Forbidden);
+        body = body with { TypistUserId = authUserId };
 
         var broker = await _db.Brokers.FindAsync(body.BrokerId);
         if (broker == null)
@@ -114,6 +122,7 @@ public class TypistEntryFunctions
         });
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Typist", "Admin")]
     [Function("SubmitDisagreementReentry")]
     public async Task<HttpResponseData> SubmitReentry(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "typist-entries/reentry")] HttpRequestData req)
@@ -121,6 +130,12 @@ public class TypistEntryFunctions
         var body = await req.ReadFromJsonAsync<SubmitTypistEntryRequest>();
         if (body == null)
             return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+
+        // The typist is the authenticated user — never trust a TypistUserId supplied in the body.
+        var authUserId = req.FunctionContext.GetAppUser()?.Id ?? 0;
+        if (authUserId == 0)
+            return req.CreateResponse(System.Net.HttpStatusCode.Forbidden);
+        body = body with { TypistUserId = authUserId };
 
         var broker = await _db.Brokers.FindAsync(body.BrokerId);
         if (broker == null)

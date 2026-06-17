@@ -34,17 +34,27 @@ public class BrokerFunctions
     public async Task<HttpResponseData> GetAll(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "brokers")] HttpRequestData req)
     {
+        // Non-admins (typists, buyers, brokers using the broker dropdowns) get the same shape but
+        // with sensitive financial/banking/tax fields redacted; admins get full detail.
+        var isAdmin = req.FunctionContext.IsAdmin();
         var brokers = await _db.Brokers
             .Select(b => new
             {
                 b.Id, b.BrokerNumber, b.CompanyName, b.CompanyName2,
                 b.SearchName, b.ContactPerson, b.AddressLine1, b.AddressLine2,
                 b.Country, b.PostalCode, b.City, b.ContactPhone, b.MobilePhone,
-                b.ContactEmail, b.HomePage, b.VatRegistrationNo, b.RegistrationNo,
-                b.CustomerGroup, b.SalesPerson, b.PaymentTerm, b.PaymentMethod,
+                b.ContactEmail, b.HomePage,
+                VatRegistrationNo = isAdmin ? b.VatRegistrationNo : "",
+                RegistrationNo = isAdmin ? b.RegistrationNo : "",
+                b.CustomerGroup, b.SalesPerson,
+                PaymentTerm = isAdmin ? b.PaymentTerm : "",
+                PaymentMethod = isAdmin ? b.PaymentMethod : "",
                 b.Currency, b.Language,
-                b.GenBusPostingGroup, b.VatBusPostingGroup, b.CustomerPostingGroup,
-                b.CreditLimit, b.Blocked,
+                GenBusPostingGroup = isAdmin ? b.GenBusPostingGroup : "",
+                VatBusPostingGroup = isAdmin ? b.VatBusPostingGroup : "",
+                CustomerPostingGroup = isAdmin ? b.CustomerPostingGroup : "",
+                CreditLimit = isAdmin ? b.CreditLimit : 0m,
+                Blocked = isAdmin ? b.Blocked : "",
                 b.IsActive, b.Address, b.CreatedAt,
                 BuyerCount = b.BrokerBuyers.Count
             })
@@ -165,16 +175,30 @@ public class BrokerFunctions
             .Include(b => b.BrokerBuyers).ThenInclude(bb => bb.Broker)
             .ToListAsync();
 
+        // Same shape for everyone, but bank/tax/payment details are redacted for non-admins
+        // (this endpoint feeds the broker "invite customer" list, which only needs name/number).
+        var isAdmin = req.FunctionContext.IsAdmin();
         var result = buyers
             .OrderBy(b => int.TryParse(b.BuyerNumber, out var n) ? n : int.MaxValue)
             .Select(b => new
             {
                 b.Id, b.BuyerNumber, b.Name, b.Name2, b.SearchName,
                 b.ContactName, b.AddressLine1, b.AddressLine2, b.Country, b.PostalCode, b.City,
-                b.ContactPhone, b.MobilePhone, b.ContactEmail, b.HomePage, b.VatRegistrationNo,
-                b.RegistrationNo, b.CustomerGroup, b.SalesPerson, b.PaymentTerm, b.PaymentMethod,
-                b.Currency, b.Language, b.BankName, b.BankAddress, b.BankIbanNumber, b.SwiftCode,
-                b.BankCountry, b.Assignee, b.AssignmentOfReceivable, b.IsActive, b.Address,
+                b.ContactPhone, b.MobilePhone, b.ContactEmail, b.HomePage,
+                VatRegistrationNo = isAdmin ? b.VatRegistrationNo : "",
+                RegistrationNo = isAdmin ? b.RegistrationNo : "",
+                b.CustomerGroup, b.SalesPerson,
+                PaymentTerm = isAdmin ? b.PaymentTerm : "",
+                PaymentMethod = isAdmin ? b.PaymentMethod : "",
+                b.Currency, b.Language,
+                BankName = isAdmin ? b.BankName : "",
+                BankAddress = isAdmin ? b.BankAddress : "",
+                BankIbanNumber = isAdmin ? b.BankIbanNumber : "",
+                SwiftCode = isAdmin ? b.SwiftCode : "",
+                BankCountry = isAdmin ? b.BankCountry : "",
+                Assignee = isAdmin ? b.Assignee : "",
+                AssignmentOfReceivable = isAdmin && b.AssignmentOfReceivable,
+                b.IsActive, b.Address,
                 b.BrokerId, b.CreatedAt,
                 Brokers = b.BrokerBuyers.Select(bb => new { bb.Broker.Id, bb.Broker.BrokerNumber, bb.Broker.CompanyName }).ToList()
             })
