@@ -51,19 +51,10 @@ else
                 <option value="broker">Broker only</option>
             </select>
         </div>
-        <div class="col-md-6">
-            <label class="form-label">Winning broker</label>
-            <select class="form-select" @bind="_brokerId">
-                <option value="0">— random per lot —</option>
-                @if (_brokers != null)
-                {
-                    @foreach (var b in _brokers)
-                    {
-                        <option value="@b.Id">@b.BrokerNumber — @b.CompanyName</option>
-                    }
-                }
-            </select>
-            <div class="form-text">Pick a broker to send every typed lot to it (so your test broker reliably sees them).</div>
+        <div class="col-12">
+            <label class="form-label">Winning broker numbers <span class="text-muted">(comma-separated, e.g. 888, 168 — empty = random across all active)</span></label>
+            <input class="form-control" @bind="_brokerNumbersInput" placeholder="e.g. 888, 168, 018" />
+            <div class="form-text">Type the broker numbers that should win lots — typed lots are spread across only those. Leave empty to win randomly across all active brokers.</div>
         </div>
     </div>
 
@@ -99,7 +90,7 @@ else
     private decimal _minPrice = 50;
     private decimal _maxPrice = 500;
     private string _disagreementType = "mixed";
-    private int _brokerId;
+    private string _brokerNumbersInput = "";
     private bool _running;
     private bool _resolving;
     private string? _message;
@@ -111,14 +102,55 @@ else
         _brokers = await Api.GetBrokersAsync();
     }
 
+    // Resolve the typed broker numbers to broker ids. Returns false (with an error message) if any
+    // typed number doesn't match a known broker, so a typo can't silently change who wins.
+    private bool TryResolveBrokerNumbers(out List<int>? brokerIds, out string? error)
+    {
+        brokerIds = null;
+        error = null;
+        if (string.IsNullOrWhiteSpace(_brokerNumbersInput))
+            return true; // empty = random across all active
+
+        var tokens = _brokerNumbersInput
+            .Split(new[] { ',', ';', ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(t => t.Trim())
+            .Where(t => t.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var matched = new List<int>();
+        var unmatched = new List<string>();
+        foreach (var tok in tokens)
+        {
+            var b = _brokers?.FirstOrDefault(x => string.Equals(x.BrokerNumber?.Trim(), tok, StringComparison.OrdinalIgnoreCase));
+            if (b != null) matched.Add(b.Id);
+            else unmatched.Add(tok);
+        }
+
+        if (unmatched.Count > 0)
+        {
+            error = $"Unknown broker number(s): {string.Join(", ", unmatched)}. Check the numbers and try again.";
+            return false;
+        }
+
+        brokerIds = matched.Count > 0 ? matched : null;
+        return true;
+    }
+
     private async Task Run()
     {
         if (_auctionId <= 0) return;
+        if (!TryResolveBrokerNumbers(out var brokerIds, out var resolveError))
+        {
+            _message = resolveError;
+            _error = true;
+            return;
+        }
         _running = true;
         _message = null;
         try
         {
-            var resp = await Api.SimulateTypistEntriesAsync(_auctionId, _disagreementPercent, _maxLots, _minPrice, _maxPrice, _disagreementType, _brokerId > 0 ? _brokerId : null);
+            var resp = await Api.SimulateTypistEntriesAsync(_auctionId, _disagreementPercent, _maxLots, _minPrice, _maxPrice, _disagreementType, brokerIds);
             var json = await resp.Content.ReadAsStringAsync();
             if (resp.IsSuccessStatusCode)
             {

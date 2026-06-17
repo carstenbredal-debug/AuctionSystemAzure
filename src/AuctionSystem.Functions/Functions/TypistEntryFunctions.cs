@@ -216,7 +216,7 @@ public class TypistEntryFunctions
 
     private record SimulateRequest(int AuctionId, int? DisagreementPercent, int? MaxLots,
         int? TypistUserId1, int? TypistUserId2, decimal? MinPrice, decimal? MaxPrice, string? DisagreementType,
-        int? BrokerId);
+        List<int>? BrokerIds);
 
     // The two typist users a simulate/resolve run acts as: the supplied pair, else the first two active
     // Typist users. Null if fewer than two are available.
@@ -253,10 +253,16 @@ public class TypistEntryFunctions
         if (brokerIds.Count == 0)
             return await CreateErrorResponse(req, "No active brokers to assign as the winning broker.");
 
-        // Optional: pin every lot to one broker (so a specific test broker reliably gets them all).
-        // When null the winning broker is random per lot, as before.
-        if (body.BrokerId is int fixedBroker && !brokerIds.Contains(fixedBroker))
-            return await CreateErrorResponse(req, "Selected broker is not an active broker.");
+        // Optional: restrict the winning brokers to a chosen set — typed lots are spread only across
+        // these (so you can pick which brokers, and how many, end up with lots). When empty/null, any
+        // active broker can win (random per lot), as before.
+        var winningPool = brokerIds;
+        if (body.BrokerIds is { Count: > 0 })
+        {
+            winningPool = body.BrokerIds.Where(b => brokerIds.Contains(b)).Distinct().ToList();
+            if (winningPool.Count == 0)
+                return await CreateErrorResponse(req, "None of the selected brokers are active brokers.");
+        }
 
         // Unsold lots in this auction that aren't already recorded by a prior match.
         var matchedLots = await _db.TypistEntries
@@ -282,7 +288,7 @@ public class TypistEntryFunctions
         {
             try
             {
-                var brokerId = body.BrokerId ?? brokerIds[rnd.Next(brokerIds.Count)];
+                var brokerId = winningPool[rnd.Next(winningPool.Count)];
                 var price = RandomPrice();
                 var broker2 = brokerId;
                 var price2 = price;
@@ -296,8 +302,8 @@ public class TypistEntryFunctions
                         "price" => "price",
                         _ => rnd.Next(2) == 0 ? "price" : "broker"   // mixed
                     };
-                    if (kind == "broker" && brokerIds.Count > 1)
-                        broker2 = brokerIds.Where(b => b != brokerId).ElementAt(rnd.Next(brokerIds.Count - 1));
+                    if (kind == "broker" && winningPool.Count > 1)
+                        broker2 = winningPool.Where(b => b != brokerId).ElementAt(rnd.Next(winningPool.Count - 1));
                     else // price disagreement (and broker fallback when only one broker exists)
                     {
                         price2 = RandomPrice();
