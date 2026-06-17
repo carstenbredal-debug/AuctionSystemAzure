@@ -355,27 +355,31 @@ public class BusinessCentralApiClient
         var response = await _httpClient.PostAsync(url, null);
         await EnsureSuccessAsync(response);
 
-        // Strategy 1: re-fetch from salesInvoices by ID
+        // CRITICAL: only accept a re-fetched doc whose status is actually POSTED (non-Draft). The doc
+        // stays in `salesInvoices` after posting with a posted status; if Microsoft.NAV.post returned
+        // 2xx but the invoice is still Draft (post didn't really take), returning it would stamp a
+        // bogus "posted" number that has no ledger entry in BC. Return null in that case so the caller
+        // leaves it unconfirmed and the sweep reconciles/re-posts.
+
+        // Strategy 1: re-fetch by ID, accept only if posted.
         try
         {
-            var fetchUrl = $"{_options.BaseUrl}/companies({companyId})/salesInvoices({invoiceId})";
-            _logger.LogInformation("Re-fetch attempt 1 (by ID): {Url}", fetchUrl);
-            var posted = await GetSingleAsync<BcSalesInvoice>(fetchUrl);
-            if (posted != null) { _logger.LogInformation("Re-fetch by ID succeeded"); return posted; }
+            var byId = await GetSingleAsync<BcSalesInvoice>($"{_options.BaseUrl}/companies({companyId})/salesInvoices({invoiceId})");
+            if (byId != null && IsPostedStatus(byId.Status)) { _logger.LogInformation("Post confirmed by ID (status {Status})", byId.Status); return byId; }
+            if (byId != null) _logger.LogWarning("Invoice {Id} re-fetched but status is {Status} — not confirmed posted", invoiceId, byId.Status);
         }
         catch (Exception ex)
         {
             _logger.LogWarning("Re-fetch by ID failed: {Error}", ex.Message);
         }
 
-        // Strategy 2: re-fetch from salesInvoices by external doc number
+        // Strategy 2: look up the POSTED invoice by external doc number (status-filtered).
         if (!string.IsNullOrEmpty(externalDocNumber))
         {
             try
             {
-                _logger.LogInformation("Re-fetch attempt 2 (by external doc): {ExtDoc}", externalDocNumber);
-                var byDoc = await GetSalesInvoiceByExternalDocAsync(companyId, externalDocNumber);
-                if (byDoc != null) { _logger.LogInformation("Re-fetch by external doc succeeded"); return byDoc; }
+                var byDoc = await GetPostedSalesInvoiceByExternalDocAsync(companyId, externalDocNumber);
+                if (byDoc != null) { _logger.LogInformation("Post confirmed by external doc {ExtDoc}", externalDocNumber); return byDoc; }
             }
             catch (Exception ex)
             {
@@ -383,23 +387,7 @@ public class BusinessCentralApiClient
             }
         }
 
-        // Strategy 3: try the postedSalesInvoices endpoint (some BC versions move posted invoices there)
-        if (!string.IsNullOrEmpty(externalDocNumber))
-        {
-            try
-            {
-                var postedUrl = $"{_options.BaseUrl}/companies({companyId})/salesInvoices?$filter=number eq '{externalDocNumber}' or externalDocumentNumber eq '{externalDocNumber}'&$orderby=lastModifiedDateTime desc&$top=1";
-                _logger.LogInformation("Re-fetch attempt 3 (broad filter): {Url}", postedUrl);
-                var items = await GetListAsync<BcSalesInvoice>(postedUrl);
-                if (items.Count > 0) { _logger.LogInformation("Re-fetch by broad filter succeeded, found {Count} items", items.Count); return items[0]; }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning("Re-fetch by broad filter failed: {Error}", ex.Message);
-            }
-        }
-
-        _logger.LogError("All re-fetch strategies failed for posted invoice {InvoiceId}, externalDoc={ExtDoc}", invoiceId, externalDocNumber);
+        _logger.LogError("Could not confirm a POSTED invoice for {InvoiceId} (externalDoc={ExtDoc}); leaving unconfirmed for the sweep", invoiceId, externalDocNumber);
         return null;
     }
 
@@ -622,11 +610,14 @@ public class BusinessCentralApiClient
         var response = await _httpClient.PostAsync(url, null);
         await EnsureSuccessAsync(response);
 
+        // Only accept a re-fetched credit memo whose status is actually POSTED (non-Draft) — same
+        // reason as invoices: a still-Draft doc returned as "posted" stamps a bogus number with no
+        // ledger entry. Return null otherwise so the caller leaves it unconfirmed for the sweep.
         try
         {
-            var fetchUrl = $"{_options.BaseUrl}/companies({companyId})/salesCreditMemos({creditMemoId})";
-            var posted = await GetSingleAsync<BcSalesCreditMemo>(fetchUrl);
-            if (posted != null) return posted;
+            var byId = await GetSingleAsync<BcSalesCreditMemo>($"{_options.BaseUrl}/companies({companyId})/salesCreditMemos({creditMemoId})");
+            if (byId != null && IsPostedStatus(byId.Status)) return byId;
+            if (byId != null) _logger.LogWarning("Credit memo {Id} re-fetched but status is {Status} — not confirmed posted", creditMemoId, byId.Status);
         }
         catch
         {
@@ -637,7 +628,7 @@ public class BusinessCentralApiClient
         {
             try
             {
-                var byDoc = await GetSalesCreditMemoByExternalDocAsync(companyId, externalDocNumber);
+                var byDoc = await GetPostedSalesCreditMemoByExternalDocAsync(companyId, externalDocNumber);
                 if (byDoc != null) return byDoc;
             }
             catch
