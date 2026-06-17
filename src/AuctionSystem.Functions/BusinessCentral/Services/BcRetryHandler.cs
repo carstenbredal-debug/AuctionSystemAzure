@@ -11,6 +11,10 @@ namespace AuctionSystem.Functions.BusinessCentral.Services;
 /// before processing) — a 5xx/timeout after a write may already have been applied in BC, so
 /// re-sending could duplicate. Recovering those is left to the higher-level idempotency/claim
 /// guards in BusinessCentralSyncService.
+///
+/// Exception: a BC SQL deadlock surfaces as 409 Conflict with "deadlocked … Please retry the
+/// activity". BC kills one transaction as the deadlock victim and FULLY ROLLS IT BACK, so the
+/// write did not apply — making it safe to retry even for writes. We detect it by body and retry.
 /// </summary>
 public sealed class BcRetryHandler : DelegatingHandler
 {
@@ -31,7 +35,10 @@ public sealed class BcRetryHandler : DelegatingHandler
             try
             {
                 var response = await base.SendAsync(attemptReq, ct);
-                var retriable = (int)response.StatusCode == 429 || ((int)response.StatusCode >= 500 && isGet);
+                var status = (int)response.StatusCode;
+                var retriable = status == 429
+                    || (status >= 500 && isGet)
+                    || (status == 409 && await IsBcDeadlockAsync(response, ct)); // rolled-back victim, safe to retry
                 if (!retriable || attempt >= MaxRetries)
                     return response;
 
@@ -66,6 +73,17 @@ public sealed class BcRetryHandler : DelegatingHandler
                     clone.Content.Headers.TryAddWithoutValidation(h.Key, h.Value);
         }
         return clone;
+    }
+
+    // A 409 is a BC deadlock only if the body says so. Buffer the content first so that, if we decide
+    // NOT to retry, the caller (EnsureSuccessAsync) can still read the same body.
+    private static async Task<bool> IsBcDeadlockAsync(HttpResponseMessage response, CancellationToken ct)
+    {
+        if (response.Content is null) return false;
+        await response.Content.LoadIntoBufferAsync();
+        var body = await response.Content.ReadAsStringAsync(ct);
+        return body.Contains("deadlock", StringComparison.OrdinalIgnoreCase)
+            || body.Contains("Please retry the activity", StringComparison.OrdinalIgnoreCase);
     }
 
     private static TimeSpan Backoff(int attempt) =>

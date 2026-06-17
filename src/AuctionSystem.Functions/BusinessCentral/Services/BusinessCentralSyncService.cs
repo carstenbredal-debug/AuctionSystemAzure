@@ -336,19 +336,30 @@ public class BusinessCentralSyncService
             await AddCreditMemoLinesToBcAsync(companyId, created.Id, creditNote);
 
             var posted = await _bcClient.PostSalesCreditMemoAsync(companyId, created.Id, bcCreditMemo.ExternalDocumentNumber);
-            var finalNumber = posted?.Number ?? created.Number;
-            var finalId = posted?.Id ?? created.Id;
 
-            creditNote.BcInvoiceNumber = finalNumber;
-            creditNote.BcInvoiceId = finalId;
-            creditNote.InvoiceNumber = finalNumber;
+            // Posted, but the posted document couldn't be re-read. Do NOT fall back to the draft's
+            // number — stamping a number that doesn't exist as a POSTED doc in BC creates the web/BC
+            // desync (a number shown in the app that BC has no posted record for) and makes the sweep
+            // skip it forever. Leave it unconfirmed; the next sweep's idempotency check finds the real
+            // posted credit memo by external-doc number (CN-{Id}) and records the correct number.
+            if (posted is null)
+            {
+                await ReleaseBcPushClaimAsync(creditNote.Id);
+                var reason = "Posted to BC but the posted credit-memo number couldn't be confirmed; reconciling on the next sweep.";
+                await RecordPushFailureAsync(creditNote.Id, reason);
+                _logger.LogWarning("Credit note {Id}: {Reason}", creditNote.Id, reason);
+                return BcPushResult.NotPushed(reason);
+            }
 
-            _logger.LogInformation("Posted credit memo: finalNumber={FinalNumber}, finalId={FinalId}, postedWasNull={PostedNull}",
-                finalNumber, finalId, posted == null);
+            creditNote.BcInvoiceNumber = posted.Number;
+            creditNote.BcInvoiceId = posted.Id;
+            creditNote.InvoiceNumber = posted.Number;
+
+            _logger.LogInformation("Posted credit memo {Number} (id {Id})", posted.Number, posted.Id);
 
             creditNote.BcSyncError = null;
             creditNote.BcSyncErrorAt = null;
-            await TryFetchAndStoreCreditMemoPdfAsync(companyId, finalId, creditNote);
+            await TryFetchAndStoreCreditMemoPdfAsync(companyId, posted.Id, creditNote);
             await _db.SaveChangesAsync();
 
             _logger.LogInformation("Created and posted BC sales credit memo {BcNumber} (customer={Customer})",
@@ -476,6 +487,8 @@ public class BusinessCentralSyncService
                 invoice.BcInvoiceNumber = posted.Number;
                 invoice.BcInvoiceId = posted.Id;
                 if (string.IsNullOrEmpty(invoice.InvoiceNumber)) invoice.InvoiceNumber = posted.Number;
+                invoice.BcSyncError = null;
+                invoice.BcSyncErrorAt = null;
                 await _db.SaveChangesAsync();
                 _logger.LogInformation("Invoice {Id} already POSTED in BC as {Number} (extDoc {Ext}); recording, not re-posting",
                     invoice.Id, posted.Number, extDoc);
@@ -510,6 +523,8 @@ public class BusinessCentralSyncService
                 creditNote.BcInvoiceNumber = posted.Number;
                 creditNote.BcInvoiceId = posted.Id;
                 if (string.IsNullOrEmpty(creditNote.InvoiceNumber)) creditNote.InvoiceNumber = posted.Number;
+                creditNote.BcSyncError = null;
+                creditNote.BcSyncErrorAt = null;
                 await _db.SaveChangesAsync();
                 _logger.LogInformation("Credit note {Id} already POSTED in BC as {Number} (extDoc {Ext}); recording, not re-posting",
                     creditNote.Id, posted.Number, extDoc);
@@ -746,19 +761,29 @@ public class BusinessCentralSyncService
             await AddInvoiceLinesToBcAsync(companyId, created.Id, invoice);
 
             var posted = await _bcClient.PostSalesInvoiceAsync(companyId, created.Id, bcInvoice.ExternalDocumentNumber);
-            var finalNumber = posted?.Number ?? created.Number;
-            var finalId = posted?.Id ?? created.Id;
 
-            invoice.BcInvoiceNumber = finalNumber;
-            invoice.BcInvoiceId = finalId;
-            invoice.InvoiceNumber = finalNumber;
+            // Posted, but the posted document couldn't be re-read. Do NOT fall back to the draft's
+            // number — that desyncs web vs BC and makes the sweep skip it forever. Leave it unconfirmed;
+            // the next sweep's idempotency check finds the real posted invoice by external-doc number
+            // (AUC-{Id}) and records the correct number.
+            if (posted is null)
+            {
+                await ReleaseBcPushClaimAsync(invoice.Id);
+                var reason = "Posted to BC but the posted invoice number couldn't be confirmed; reconciling on the next sweep.";
+                await RecordPushFailureAsync(invoice.Id, reason);
+                _logger.LogWarning("Invoice {Id}: {Reason}", invoice.Id, reason);
+                return BcPushResult.NotPushed(reason);
+            }
 
-            _logger.LogInformation("Posted invoice: finalNumber={FinalNumber}, finalId={FinalId}, postedWasNull={PostedNull}",
-                finalNumber, finalId, posted == null);
+            invoice.BcInvoiceNumber = posted.Number;
+            invoice.BcInvoiceId = posted.Id;
+            invoice.InvoiceNumber = posted.Number;
+
+            _logger.LogInformation("Posted invoice {Number} (id {Id})", posted.Number, posted.Id);
 
             invoice.BcSyncError = null;
             invoice.BcSyncErrorAt = null;
-            await TryFetchAndStorePdfAsync(companyId, finalId, invoice);
+            await TryFetchAndStorePdfAsync(companyId, posted.Id, invoice);
             await _db.SaveChangesAsync();
 
             _logger.LogInformation("Created and posted BC sales invoice {BcNumber} (customer={Customer})",
