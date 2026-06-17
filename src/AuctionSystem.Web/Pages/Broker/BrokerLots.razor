@@ -946,7 +946,9 @@ else if (_activeTab == "takeback")
         {
             _lastInvoiceId = json.InvoiceId;
             _lastInvoicePdfUrl = json.PdfUrl;
-            _message += " Invoice generated.";
+            // BC posting now runs in the background, so the number/PDF aren't ready this instant —
+            // they appear in the grid shortly (the delayed refresh below picks them up).
+            _message += " Invoice created — posting to Business Central; the number and PDF will appear shortly.";
         }
         _messageIsError = !string.IsNullOrEmpty(json?.BcError);
         if (_messageIsError) _message += $" BC Error: {json!.BcError}";
@@ -956,6 +958,26 @@ else if (_activeTab == "takeback")
         _showCommissionModal = false;
         await LoadResults();
         _invoiceLinks = await Api.GetInvoiceLinksForBrokerAsync(_brokerId);
+
+        // The background worker posts to BC within seconds; refresh a few times so the posted number,
+        // PDF and "Invoiced" status appear without the broker having to reload the page.
+        _ = RefreshAfterBcPostAsync();
+    }
+
+    private async Task RefreshAfterBcPostAsync()
+    {
+        try
+        {
+            for (var i = 0; i < 3; i++)
+            {
+                await Task.Delay(3000);
+                await LoadResults();
+                _pendingTakebacks = await Api.GetTakebackRequestsByBrokerAsync(_brokerId);
+                _invoiceLinks = await Api.GetInvoiceLinksForBrokerAsync(_brokerId);
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch { /* best-effort; the broker can always reload manually */ }
     }
 
     private void ToggleSoldSelection(int id)
@@ -995,13 +1017,17 @@ else if (_activeTab == "takeback")
                 {
                     _lastCreditNoteId = json.CreditNoteId;
                     _lastCreditNotePdfUrl = json.CreditNotePdfUrl;
-                    _takebackMessage += " Credit note generated.";
+                    // Credit-note BC posting runs in the background now; the PDF appears shortly.
+                    _takebackMessage += " Credit note created — posting to Business Central; the PDF will appear shortly.";
                 }
                 _takebackMessageIsError = false;
                 _selectedSoldIds.Clear();
                 await LoadResults();
                 _pendingTakebacks = await Api.GetTakebackRequestsByBrokerAsync(_brokerId);
                 _invoiceLinks = await Api.GetInvoiceLinksForBrokerAsync(_brokerId);
+
+                // Pick up the background BC post (number + PDF) without a manual reload.
+                _ = RefreshAfterBcPostAsync();
             }
             else
             {
