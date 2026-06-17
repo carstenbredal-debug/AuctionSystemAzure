@@ -79,6 +79,48 @@ else
     {
         <div class="alert @(_error ? "alert-danger" : "alert-success") mt-3" style="max-width:760px">@_message</div>
     }
+
+    <hr class="my-4" style="max-width:760px" />
+
+    <h5>Sell lots</h5>
+    <p class="text-muted" style="max-width:760px">
+        Sells this auction's recorded-but-unsold lots through the real sell path (commission → invoice →
+        background BC push), to buyers <strong>linked to each lot's broker</strong>. Lots whose broker has
+        no eligible linked buyer are skipped. Lets you carry a simulated auction through to invoicing / BC.
+    </p>
+
+    <div class="row g-3" style="max-width:760px">
+        <div class="col-md-4">
+            <label class="form-label">Lots to sell <span class="text-muted">(blank = all)</span></label>
+            <input type="number" min="1" class="form-control" @bind="_sellCount" />
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">Commission %</label>
+            <input type="number" min="0" step="0.01" class="form-control" @bind="_sellCommission" />
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">Re-invoice % <span class="text-muted">(of sold lots)</span></label>
+            <input type="number" min="0" max="100" class="form-control" @bind="_sellReinvoicePct" />
+        </div>
+        <div class="col-12">
+            <label class="form-label">Buyer numbers <span class="text-muted">(comma-separated; empty = random linked buyer per lot)</span></label>
+            <input class="form-control" @bind="_sellBuyerNumbersInput" placeholder="e.g. 5112, 8446" />
+            <div class="form-text">Restrict sales to these buyers (they must be linked to the lots' brokers). Empty picks a random linked buyer per lot. Re-invoice % takes back that share of the sold lots (credit note) and sells them again.</div>
+        </div>
+    </div>
+
+    <button class="btn btn-success mt-3" @onclick="SellLots" disabled="@(_running || _auctionId <= 0)">
+        @if (_selling)
+        {
+            <span class="spinner-border spinner-border-sm me-1"></span>
+        }
+        Sell lots
+    </button>
+
+    @if (_sellMessage != null)
+    {
+        <div class="alert @(_sellError ? "alert-danger" : "alert-success") mt-3" style="max-width:760px">@_sellMessage</div>
+    }
 }
 
 @code {
@@ -96,10 +138,20 @@ else
     private string? _message;
     private bool _error;
 
+    private List<BuyerDto>? _buyers;
+    private int? _sellCount;
+    private decimal _sellCommission = 1.5m;
+    private int _sellReinvoicePct;
+    private string _sellBuyerNumbersInput = "";
+    private bool _selling;
+    private string? _sellMessage;
+    private bool _sellError;
+
     protected override async Task OnInitializedAsync()
     {
         _auctions = await Api.GetAuctionsAsync();
         _brokers = await Api.GetBrokersAsync();
+        _buyers = await Api.GetAllBuyersAsync();
     }
 
     // Resolve the typed broker numbers to broker ids. Returns false (with an error message) if any
@@ -226,6 +278,86 @@ else
         {
             _running = false;
             _resolving = false;
+        }
+    }
+
+    // Resolve typed buyer numbers to ids; reject unknowns so a typo can't silently change who buys.
+    private bool TryResolveBuyerNumbers(out List<int>? buyerIds, out string? error)
+    {
+        buyerIds = null;
+        error = null;
+        if (string.IsNullOrWhiteSpace(_sellBuyerNumbersInput))
+            return true; // empty = random linked buyer per lot
+
+        var tokens = _sellBuyerNumbersInput
+            .Split(new[] { ',', ';', ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(t => t.Trim()).Where(t => t.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+        var matched = new List<int>();
+        var unmatched = new List<string>();
+        foreach (var tok in tokens)
+        {
+            var b = _buyers?.FirstOrDefault(x => string.Equals(x.BuyerNumber?.Trim(), tok, StringComparison.OrdinalIgnoreCase));
+            if (b != null) matched.Add(b.Id);
+            else unmatched.Add(tok);
+        }
+        if (unmatched.Count > 0)
+        {
+            error = $"Unknown buyer number(s): {string.Join(", ", unmatched)}. Check the numbers and try again.";
+            return false;
+        }
+        buyerIds = matched.Count > 0 ? matched : null;
+        return true;
+    }
+
+    private async Task SellLots()
+    {
+        if (_auctionId <= 0) return;
+        if (!TryResolveBuyerNumbers(out var buyerIds, out var resolveError))
+        {
+            _sellMessage = resolveError;
+            _sellError = true;
+            return;
+        }
+        _running = true;
+        _selling = true;
+        _sellMessage = null;
+        try
+        {
+            var resp = await Api.SimulateSellLotsAsync(_auctionId, _sellCount, _sellCommission, _sellCommission, buyerIds, _sellReinvoicePct);
+            var json = await resp.Content.ReadAsStringAsync();
+            if (resp.IsSuccessStatusCode)
+            {
+                var root = JsonDocument.Parse(json).RootElement;
+                if (root.TryGetProperty("error", out var errEl) && errEl.ValueKind == JsonValueKind.String)
+                {
+                    _sellMessage = errEl.GetString();
+                    _sellError = true;
+                }
+                else
+                {
+                    int Get(string p) => root.TryGetProperty(p, out var e) && e.ValueKind == JsonValueKind.Number ? e.GetInt32() : 0;
+                    var note = root.TryGetProperty("message", out var m) && m.ValueKind == JsonValueKind.String ? m.GetString() : null;
+                    _sellMessage = note ?? $"Sold {Get("sold")} lot(s), {Get("invoices")} invoice(s); re-invoiced {Get("reinvoiced")} ({Get("creditNotes")} credit note(s)); {Get("skipped")} skipped (no linked buyer). BC posting runs in the background.";
+                    _sellError = false;
+                }
+            }
+            else
+            {
+                _sellMessage = $"Failed: {(int)resp.StatusCode} {resp.ReasonPhrase}. {json}";
+                _sellError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            _sellMessage = $"Error: {ex.Message}";
+            _sellError = true;
+        }
+        finally
+        {
+            _running = false;
+            _selling = false;
         }
     }
 }

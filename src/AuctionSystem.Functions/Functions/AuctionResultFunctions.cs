@@ -630,6 +630,148 @@ public class AuctionResultFunctions
         }
     }
 
+    private record SimulateSellRequest(int AuctionId, int? Count, decimal? MinCommission, decimal? MaxCommission, List<int>? BuyerIds, int? ReinvoicePercent);
+
+    // TEST TOOL (admin only). Sells an auction's recorded-but-unsold lots through the real sell path
+    // (atomic claim + commission + invoice + background BC push) so the whole sell -> invoice -> BC ->
+    // balance chain can be exercised on demand. Each lot goes to a random buyer LINKED to its broker
+    // (the real rule); an optional buyer-id set restricts the pool. Commission % is random in a range.
+    // Lots whose broker has no eligible linked buyer are skipped and reported.
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [Function("SimulateSellLots")]
+    public async Task<HttpResponseData> SimulateSell(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auction-results/simulate-sell")] HttpRequestData req)
+    {
+        var body = await req.ReadFromJsonAsync<SimulateSellRequest>();
+        if (body == null || body.AuctionId <= 0)
+            return await SimJson(req, System.Net.HttpStatusCode.BadRequest, new { error = "auctionId is required." });
+
+        var minC = Math.Max(0m, body.MinCommission ?? 0m);
+        var maxC = Math.Max(minC, body.MaxCommission ?? minC);
+
+        var results = await _db.AuctionResults
+            .Where(r => r.AuctionId == body.AuctionId && r.SoldToBuyerId == null)
+            .OrderBy(r => r.LotNumber)
+            .ToListAsync();
+        if (body.Count is int cap && cap > 0) results = results.Take(cap).ToList();
+        if (results.Count == 0)
+            return await SimJson(req, System.Net.HttpStatusCode.OK, new { auctionId = body.AuctionId, sold = 0, invoices = 0, skipped = 0, message = "No recorded-but-unsold lots to sell." });
+
+        // Linked buyers per broker (a lot may only sell to a buyer linked to its broker), optionally
+        // restricted to a chosen buyer set.
+        var brokerIds = results.Select(r => r.BrokerId).Distinct().ToList();
+        var links = await _db.BrokerBuyers.Where(bb => brokerIds.Contains(bb.BrokerId))
+            .Select(bb => new { bb.BrokerId, bb.BuyerId }).ToListAsync();
+        var restrict = body.BuyerIds is { Count: > 0 } ? body.BuyerIds.ToHashSet() : null;
+        var buyersByBroker = links
+            .Where(l => restrict == null || restrict.Contains(l.BuyerId))
+            .GroupBy(l => l.BrokerId)
+            .ToDictionary(g => g.Key, g => g.Select(x => x.BuyerId).Distinct().ToList());
+        var allBuyerIds = buyersByBroker.Values.SelectMany(v => v).Distinct().ToList();
+        var buyers = await _db.Buyers.Where(b => allBuyerIds.Contains(b.Id)).ToDictionaryAsync(b => b.Id);
+
+        var rnd = new Random();
+        var (soldIds, invoices, skipped) = await SimSellBatchAsync(results, buyersByBroker, buyers, minC, maxC, rnd);
+        if (soldIds.Count == 0)
+            return await SimJson(req, System.Net.HttpStatusCode.OK, new { auctionId = body.AuctionId, sold = 0, invoices = 0, skipped, reinvoiced = 0, creditNotes = 0,
+                message = skipped > 0 ? "No lots sold — the winning brokers have no linked buyer in the selected set. Link customers first." : "No lots sold." });
+
+        // Optionally take back a % of the just-sold lots through the real credit-note path (-> BC credit
+        // memo) and sell them again, exercising the whole re-invoice / credit-memo chain end to end.
+        int reinvoiced = 0, creditNotes = 0, reinvoiceInvoices = 0;
+        var reinvPct = Math.Clamp(body.ReinvoicePercent ?? 0, 0, 100);
+        if (reinvPct > 0)
+        {
+            int take = (int)Math.Ceiling(soldIds.Count * reinvPct / 100.0);
+            var pickIds = soldIds.Take(take).ToList();
+            var toReinvoice = await _db.AuctionResults.Where(r => pickIds.Contains(r.Id) && r.SoldToBuyerId != null).ToListAsync();
+            if (toReinvoice.Count > 0)
+            {
+                foreach (var r in toReinvoice) { r.LastModifiedBy = "SIM"; r.LastModifiedAt = DateTime.UtcNow; }
+                var (_, takenBackIds, _) = await ProcessBrokerTakebacksAsync(toReinvoice);
+                await _db.SaveChangesAsync();
+                var cns = await GenerateCreditNotesAsync(takenBackIds);
+                creditNotes = cns.Count;
+                reinvoiced = takenBackIds.Count;
+
+                var reSell = await _db.AuctionResults.Where(r => takenBackIds.Contains(r.Id) && r.SoldToBuyerId == null).ToListAsync();
+                var (_, inv2, _) = await SimSellBatchAsync(reSell, buyersByBroker, buyers, minC, maxC, rnd);
+                reinvoiceInvoices = inv2;
+            }
+        }
+
+        return await SimJson(req, System.Net.HttpStatusCode.OK, new { auctionId = body.AuctionId, sold = soldIds.Count, invoices, skipped, reinvoiced, creditNotes, reinvoiceInvoices });
+    }
+
+    // Claim + record + invoice a batch of unsold results. Returns the ids actually sold, the invoice
+    // count, and how many were skipped for lack of an eligible linked buyer.
+    private async Task<(List<int> SoldIds, int Invoices, int Skipped)> SimSellBatchAsync(
+        List<AuctionResult> results, Dictionary<int, List<int>> buyersByBroker, Dictionary<int, Buyer> buyers,
+        decimal minC, decimal maxC, Random rnd)
+    {
+        var now = DateTime.UtcNow;
+        decimal RandPct() => maxC <= minC ? minC : Math.Round(minC + (decimal)rnd.NextDouble() * (maxC - minC), 2);
+        var claimed = new List<AuctionResult>();
+        int skipped = 0;
+
+        foreach (var r in results)
+        {
+            if (!buyersByBroker.TryGetValue(r.BrokerId, out var pool) || pool.Count == 0) { skipped++; continue; }
+            var buyerId = pool[rnd.Next(pool.Count)];
+            var pct = RandPct();
+            decimal? commissionAmount = pct > 0 ? Math.Round((r.TotalSkins * r.PriceEur) * pct / 100m, 2) : (decimal?)null;
+            var rows = await _db.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE auction.AuctionResults
+                SET SoldToBuyerId = {buyerId}, SoldAt = {now}, CommissionType = {"percentage"},
+                    CommissionValue = {pct}, CommissionAmount = {commissionAmount},
+                    LastModifiedBy = {"SIM"}, LastModifiedAt = {now}
+                WHERE Id = {r.Id} AND SoldToBuyerId IS NULL");
+            if (rows == 1)
+            {
+                r.SoldToBuyerId = buyerId; r.SoldAt = now; r.CommissionType = "percentage";
+                r.CommissionValue = pct; r.CommissionAmount = commissionAmount;
+                r.LastModifiedBy = "SIM"; r.LastModifiedAt = now;
+                _db.Entry(r).State = EntityState.Unchanged;
+                claimed.Add(r);
+            }
+        }
+
+        if (claimed.Count == 0) return (new List<int>(), 0, skipped);
+
+        var lotNumbers = claimed.Select(r => r.LotNumber).ToList();
+        var lots = await _db.Lots.Where(l => lotNumbers.Contains(l.LotNumber)).ToListAsync();
+        foreach (var lot in lots) lot.Status = LotStatus.Sold;
+        foreach (var r in claimed)
+        {
+            var buyer = buyers[r.SoldToBuyerId!.Value];
+            _db.LotSalesHistories.Add(new LotSalesHistory
+            {
+                LotNumber = r.LotNumber, AuctionResultId = r.Id, ActionType = "Sold",
+                Initials = "SIM", BuyerId = r.SoldToBuyerId.Value, BuyerName = buyer.Name,
+                Amount = r.TotalSkins * r.PriceEur, CreatedAt = now
+            });
+        }
+        await _db.SaveChangesAsync();
+
+        int invoices = 0;
+        if (_bcSyncService != null)
+            foreach (var grp in claimed.GroupBy(r => new { r.BrokerId, BuyerId = r.SoldToBuyerId!.Value }))
+            {
+                var (invId, _) = await CreateInvoiceAndQueuePushAsync(grp.ToList(), grp.Key.BuyerId, buyers[grp.Key.BuyerId]);
+                if (invId != null) invoices++;
+            }
+
+        return (claimed.Select(r => r.Id).ToList(), invoices, skipped);
+    }
+
+    private static async Task<HttpResponseData> SimJson(HttpRequestData req, System.Net.HttpStatusCode code, object body)
+    {
+        var resp = req.CreateResponse(code);
+        resp.Headers.Add("Content-Type", "application/json");
+        await resp.WriteStringAsync(JsonSerializer.Serialize(body, JsonOptions));
+        return resp;
+    }
+
     [Function("GetAuctionResultsByBuyer")]
     public async Task<HttpResponseData> GetByBuyer(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "auction-results/buyer/{buyerId:int}")] HttpRequestData req, int buyerId)

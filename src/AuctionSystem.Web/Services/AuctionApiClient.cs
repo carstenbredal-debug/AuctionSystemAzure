@@ -767,6 +767,11 @@ public class AuctionApiClient
     public async Task<HttpResponseMessage> ResolveTypistDisagreementsAsync(int auctionId)
         => await _http.PostAsync($"api/typist-entries/resolve-disagreements?auctionId={auctionId}", null);
 
+    // Admin test tool: sell an auction's recorded lots to linked buyers (real sell path -> invoices/BC),
+    // optionally taking back + re-selling a % of them (credit-note / re-invoice path).
+    public async Task<HttpResponseMessage> SimulateSellLotsAsync(int auctionId, int? count, decimal minCommission, decimal maxCommission, List<int>? buyerIds, int reinvoicePercent)
+        => await _http.PostAsJsonAsync("api/auction-results/simulate-sell", new { auctionId, count, minCommission, maxCommission, buyerIds, reinvoicePercent });
+
     public async Task<bool> ResetTypistLotAsync(int lotNumber)
     {
         var resp = await _http.PostAsync($"api/typist-entries/reset-lot/{lotNumber}", null);
