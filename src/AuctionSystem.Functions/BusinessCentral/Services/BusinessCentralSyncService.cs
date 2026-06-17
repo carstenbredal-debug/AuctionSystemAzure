@@ -25,6 +25,13 @@ public class BusinessCentralSyncService
     private readonly BlobStorageService _blobStorage;
     private readonly ILogger<BusinessCentralSyncService> _logger;
 
+    // Process-wide gate so only ONE BC document push runs at a time across the queue worker AND the
+    // timer sweep. They run independently, and two concurrent pushes deadlock on BC's Sales Line table
+    // (which then rolls a post back to Draft, etc.). batchSize:1 serializes the worker alone; this
+    // extends serialization to cover the sweep too. (Single instance in DEV — PROD scale-out would need
+    // a distributed lock; see the TEST/PROD runbook.)
+    private static readonly SemaphoreSlim BcPushGate = new(1, 1);
+
     // SystemParameters keys for the (UI-editable) BC item numbers. There is intentionally NO hardcoded
     // fallback: an unset key resolves to empty and the push fails loudly (EnsureBcItemsExistAsync)
     // instead of silently posting a line to a stale/wrong item such as a leftover "BROKERCOMM".
@@ -299,6 +306,13 @@ public class BusinessCentralSyncService
     /// PDF is fetched from BC and stored in blob storage.
     /// </summary>
     public async Task<BcPushResult> PushCreditNoteToBcAsync(Invoice creditNote)
+    {
+        await BcPushGate.WaitAsync();
+        try { return await PushCreditNoteToBcCoreAsync(creditNote); }
+        finally { BcPushGate.Release(); }
+    }
+
+    private async Task<BcPushResult> PushCreditNoteToBcCoreAsync(Invoice creditNote)
     {
         var companyId = await _bcClient.ResolveCompanyIdAsync();
 
@@ -719,6 +733,13 @@ public class BusinessCentralSyncService
     /// PDF is fetched from BC and stored in blob storage.
     /// </summary>
     public async Task<BcPushResult> PushInvoiceToBcAsync(Invoice invoice)
+    {
+        await BcPushGate.WaitAsync();
+        try { return await PushInvoiceToBcCoreAsync(invoice); }
+        finally { BcPushGate.Release(); }
+    }
+
+    private async Task<BcPushResult> PushInvoiceToBcCoreAsync(Invoice invoice)
     {
         var companyId = await _bcClient.ResolveCompanyIdAsync();
 
