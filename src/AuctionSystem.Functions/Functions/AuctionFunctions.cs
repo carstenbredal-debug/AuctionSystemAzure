@@ -342,7 +342,7 @@ public class AuctionFunctions
         var keepEntities = query["keepEntities"]?.Equals("true", StringComparison.OrdinalIgnoreCase) == true;
 
         if (keepEntities)
-            _logger.LogWarning("RESETTING TRANSACTION DATA (keeping Brokers, Buyers, Farmers, AppUsers, SystemParameters)");
+            _logger.LogWarning("RESETTING TRANSACTION DATA (keeping Brokers, Buyers, Farmers, broker-buyer links, AppUsers, SystemParameters)");
         else
             _logger.LogWarning("RESETTING ALL DATA (except SystemParameters)");
 
@@ -354,11 +354,14 @@ public class AuctionFunctions
                 "ShipmentLines", "Shipments",
                 "LotSalesHistories", "AuctionTransactions", "TypistEntries",
                 "InvoiceLines", "Invoices",
-                "TakebackRequests", "LotAllocations", "AuctionResults", "Settlements", "Bids", "Lots", "Auctions",
-                "BrokerCustomerRequests" };
+                "TakebackRequests", "LotAllocations", "AuctionResults", "Settlements", "Bids", "Lots", "Auctions" };
 
-            // Entity tables (only deleted if keepEntities=false)
-            var entityTables = new[] { "BrokerBuyers", "Buyers", "Brokers", "Farmers", "AppUsers",
+            // Entity tables (only deleted if keepEntities=false). BrokerCustomerRequests is kept with
+            // keepEntities=true: it's a broker<->buyer RELATIONSHIP record (the link's status, joined
+            // by the customer-links / broker portal views), not a transaction. Deleting it tore the
+            // relationship even though the BrokerBuyers junction survived. Listed before Buyers/Brokers
+            // so a full (keepEntities=false) reset deletes the child first.
+            var entityTables = new[] { "BrokerCustomerRequests", "BrokerBuyers", "Buyers", "Brokers", "Farmers", "AppUsers",
                 "ShippingAddresses", "Shippers", "BoxTypeDimensions" };
 
             var allTables = keepEntities ? transactionTables : transactionTables.Concat(entityTables).ToArray();
@@ -394,11 +397,14 @@ public class AuctionFunctions
             var auctionCount = await _db.Auctions.CountAsync();
             var paramCount = await _db.SystemParameters.CountAsync();
             var userCount = keepEntities ? await _db.AppUsers.CountAsync() : 0;
+            // Verify the broker<->buyer relationship survived (junction links + request records).
+            var brokerBuyerLinks = await _db.BrokerBuyers.CountAsync();
+            var customerRequests = await _db.BrokerCustomerRequests.CountAsync();
 
             _logger.LogWarning("Reset complete");
 
             var message = keepEntities
-                ? "Transaction data reset (Brokers, Buyers, Farmers, AppUsers, SystemParameters kept)"
+                ? "Transaction data reset (Brokers, Buyers, Farmers, broker-buyer links + requests, AppUsers, SystemParameters kept)"
                 : "All data reset (SystemParameters kept)";
 
             return await CreateJsonResponse(req, new
@@ -411,7 +417,9 @@ public class AuctionFunctions
                     farmers = farmerCount,
                     appUsers = userCount,
                     auctions = auctionCount,
-                    systemParameters = paramCount
+                    systemParameters = paramCount,
+                    brokerBuyerLinks,
+                    customerRequests
                 }
             });
         }
