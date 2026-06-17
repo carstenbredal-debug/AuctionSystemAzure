@@ -171,9 +171,22 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        _auctions = await Api.GetAuctionsAsync();
-        _brokers = await Api.GetBrokersAsync();
-        _buyers = await Api.GetAllBuyersAsync();
+        // Load resiliently — a transient backend blip (e.g. 502 while the API is restarting after a
+        // deploy) must not white-screen the whole page. Render with what we have + a retry hint.
+        try
+        {
+            _auctions = await Api.GetAuctionsAsync();
+            _brokers = await Api.GetBrokersAsync();
+            _buyers = await Api.GetAllBuyersAsync();
+        }
+        catch (Exception ex)
+        {
+            _auctions ??= new();
+            _brokers ??= new();
+            _buyers ??= new();
+            _message = $"Couldn't load page data — the backend may be restarting (deploy). Refresh in a moment. ({ex.Message})";
+            _error = true;
+        }
     }
 
     // Resolve the typed broker numbers to broker ids. Returns false (with an error message) if any
@@ -366,35 +379,47 @@ else
         _running = true;
         _selling = true;
         _sellMessage = null;
+        _sellError = false;
+
+        // The server caps each call (so it can't time out); loop here until the target is met or no
+        // sellable lots remain, accumulating the totals into a live progress line.
+        var target = (_sellCount is int c && c > 0) ? c : int.MaxValue;
+        int totalSold = 0, totalInv = 0, totalReinv = 0, totalCN = 0, totalSkip = 0;
         try
         {
-            var resp = await Api.SimulateSellLotsAsync(_auctionId, _sellCount, _sellCommission, _sellCommission, buyerIds, _sellReinvoicePct, _sellMaxLotsPerInvoice);
-            var json = await resp.Content.ReadAsStringAsync();
-            if (resp.IsSuccessStatusCode)
+            const int batch = 200;
+            while (totalSold < target)
             {
+                var thisCall = Math.Min(batch, target - totalSold);
+                var resp = await Api.SimulateSellLotsAsync(_auctionId, thisCall, _sellCommission, _sellCommission, buyerIds, _sellReinvoicePct, _sellMaxLotsPerInvoice);
+                var json = await resp.Content.ReadAsStringAsync();
+                if (!resp.IsSuccessStatusCode)
+                {
+                    _sellMessage = $"Failed after {totalSold} sold: {(int)resp.StatusCode} {resp.ReasonPhrase}. {json}";
+                    _sellError = true;
+                    break;
+                }
                 var root = JsonDocument.Parse(json).RootElement;
                 if (root.TryGetProperty("error", out var errEl) && errEl.ValueKind == JsonValueKind.String)
                 {
                     _sellMessage = errEl.GetString();
                     _sellError = true;
+                    break;
                 }
-                else
-                {
-                    int Get(string p) => root.TryGetProperty(p, out var e) && e.ValueKind == JsonValueKind.Number ? e.GetInt32() : 0;
-                    var note = root.TryGetProperty("message", out var m) && m.ValueKind == JsonValueKind.String ? m.GetString() : null;
-                    _sellMessage = note ?? $"Sold {Get("sold")} lot(s), {Get("invoices")} invoice(s); re-invoiced {Get("reinvoiced")} ({Get("creditNotes")} credit note(s)); {Get("skipped")} skipped (no linked buyer). BC posting runs in the background.";
-                    _sellError = false;
-                }
+                int Get(string p) => root.TryGetProperty(p, out var e) && e.ValueKind == JsonValueKind.Number ? e.GetInt32() : 0;
+                var sold = Get("sold");
+                totalSold += sold; totalInv += Get("invoices"); totalReinv += Get("reinvoiced"); totalCN += Get("creditNotes"); totalSkip += Get("skipped");
+                var remaining = Get("remaining");
+                _sellMessage = $"Selling… {totalSold} sold, {totalInv} invoice(s), {totalReinv} re-invoiced ({totalCN} credit note(s)){(totalSkip > 0 ? $", {totalSkip} skipped" : "")} — {remaining} left.";
+                await InvokeAsync(StateHasChanged);
+                if (sold == 0 || remaining == 0) break; // nothing more sellable (e.g. no linked buyers)
             }
-            else
-            {
-                _sellMessage = $"Failed: {(int)resp.StatusCode} {resp.ReasonPhrase}. {json}";
-                _sellError = true;
-            }
+            if (!_sellError)
+                _sellMessage = $"Done — {totalSold} sold, {totalInv} invoice(s), {totalReinv} re-invoiced ({totalCN} credit note(s)), {totalSkip} skipped. BC posting runs in the background.";
         }
         catch (Exception ex)
         {
-            _sellMessage = $"Error: {ex.Message}";
+            _sellMessage = $"Error after {totalSold} sold: {ex.Message}";
             _sellError = true;
         }
         finally

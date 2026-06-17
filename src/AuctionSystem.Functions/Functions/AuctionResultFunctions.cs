@@ -650,13 +650,17 @@ public class AuctionResultFunctions
         var maxC = Math.Max(minC, body.MaxCommission ?? minC);
         var maxPerInvoice = Math.Clamp(body.MaxLotsPerInvoice ?? 10, 1, 100);
 
+        // Hard server cap per call so a big auction can't blow the request timeout (the UI loops to
+        // continue). Count, when given, is the per-call batch the UI asks for; it's still capped here.
+        const int MaxPerCall = 200;
+        var take = body.Count is int cap && cap > 0 ? Math.Min(cap, MaxPerCall) : MaxPerCall;
         var results = await _db.AuctionResults
             .Where(r => r.AuctionId == body.AuctionId && r.SoldToBuyerId == null)
             .OrderBy(r => r.LotNumber)
+            .Take(take)
             .ToListAsync();
-        if (body.Count is int cap && cap > 0) results = results.Take(cap).ToList();
         if (results.Count == 0)
-            return await SimJson(req, System.Net.HttpStatusCode.OK, new { auctionId = body.AuctionId, sold = 0, invoices = 0, skipped = 0, message = "No recorded-but-unsold lots to sell." });
+            return await SimJson(req, System.Net.HttpStatusCode.OK, new { auctionId = body.AuctionId, sold = 0, invoices = 0, skipped = 0, reinvoiced = 0, creditNotes = 0, remaining = 0, message = "No recorded-but-unsold lots to sell." });
 
         // Linked buyers per broker (a lot may only sell to a buyer linked to its broker), optionally
         // restricted to a chosen buyer set.
@@ -717,7 +721,8 @@ public class AuctionResultFunctions
             }
         }
 
-        return await SimJson(req, System.Net.HttpStatusCode.OK, new { auctionId = body.AuctionId, sold = soldIds.Count, invoices, skipped, reinvoiced, creditNotes, reinvoiceInvoices });
+        var remaining = await _db.AuctionResults.CountAsync(r => r.AuctionId == body.AuctionId && r.SoldToBuyerId == null);
+        return await SimJson(req, System.Net.HttpStatusCode.OK, new { auctionId = body.AuctionId, sold = soldIds.Count, invoices, skipped, reinvoiced, creditNotes, reinvoiceInvoices, remaining });
     }
 
     // Claim + record + invoice a batch of unsold results. Returns the ids actually sold, the invoice

@@ -349,18 +349,25 @@ public class TypistEntryFunctions
         var budget = TimeSpan.FromMinutes(2); // comfortably under the 5-minute queue visibility timeout
         foreach (var lot in remaining)
         {
-            try { await TypeOneLotAsync(msg.AuctionId, lot, a, b, winningPool, minP, maxP, disagreePct, disType, rnd, delayMs); }
+            // Idempotency: a concurrent or redelivered batch may have typed this lot since `remaining`
+            // was read — skip it so it can't be double-typed (extra entries / duplicate results).
+            if (await _db.TypistEntries.AnyAsync(e => e.AuctionId == msg.AuctionId && e.LotNumber == lot))
+                continue;
+            try { await TypeOneLotAsync(msg.AuctionId, lot, a, b, winningPool, minP, maxP, disagreePct, disType, rnd, delayMs); typedCount++; }
             catch (Exception ex) { _logger.LogError(ex, "Typist-sim failed for lot {Lot}", lot); }
-            typedCount++;
             auction.TypistSimStatus = $"Typing {typedCount}/{msg.TotalTarget}…";
             await _db.SaveChangesAsync();
             if (sw.Elapsed > budget) break;
         }
 
-        if (typedCount < msg.TotalTarget)
-            await _simQueue.EnqueueAsync(message); // continue with the same parameters
+        // Authoritative progress for the continue/finish decision: re-count distinct typed lots (handles
+        // skips/concurrency) and only continue if this batch actually had work, so the target exceeding
+        // the available lots can't make it re-enqueue forever.
+        var actualTyped = await _db.TypistEntries.Where(e => e.AuctionId == msg.AuctionId).Select(e => e.LotNumber).Distinct().CountAsync();
+        if (actualTyped < msg.TotalTarget && remaining.Count > 0)
+            await _simQueue.EnqueueAsync(message);
         else
-            await FinishSimAsync(auction, msg.AuctionId, typedCount);
+            await FinishSimAsync(auction, msg.AuctionId, actualTyped);
     }
 
     private async Task FinishSimAsync(Auction auction, int auctionId, int typedCount)
