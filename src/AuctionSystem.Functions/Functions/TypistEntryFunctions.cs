@@ -255,6 +255,11 @@ public class TypistEntryFunctions
         if (auction == null)
             return await CreateErrorResponse(req, "Auction not found.");
 
+        // One paced run per auction at a time — a second start would race the first and double-type lots
+        // (extra entries/results). Wait until the status shows Done/Failed before starting another.
+        if (auction.TypistSimStatus is string st && (st.StartsWith("Queued") || st.StartsWith("Typing")))
+            return await CreateErrorResponse(req, $"A typist simulation is already running for this auction ({st}). Wait for it to finish before starting another.");
+
         var pair = await ResolveSimTypistsAsync(body.TypistUserId1, body.TypistUserId2);
         if (pair == null)
             return await CreateErrorResponse(req, "Need two Typist users (seed two, or pass typistUserId1/2).");
