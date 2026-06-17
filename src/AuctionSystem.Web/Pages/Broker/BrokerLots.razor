@@ -751,7 +751,7 @@ else if (_activeTab == "takeback")
                     .ToList();
                 if (_auctions.Any())
                     _selectedAuctionId = _auctions.First().Id;
-                _allResults = await Api.GetAuctionResultsByBrokerAsync(_brokerId);
+                await LoadResults();
                 // Sell dropdown must be ONLY the broker's linked customers (the BrokerBuyers
                 // junction). No customer-request fallback — a non-linked buyer can never appear.
                 _buyers = await Api.GetBrokerLinkedBuyersAsync(_brokerId);
@@ -764,16 +764,27 @@ else if (_activeTab == "takeback")
         _loading = false;
     }
 
+    // Results are now fetched scoped to the selected auction, so _allResults already holds just
+    // that sale. Kept as a defensive filter so a stale _selectedAuctionId can never leak rows.
     private List<AuctionResultDto> GetFilteredResults()
     {
         if (_selectedAuctionId <= 0) return new();
         return _allResults.Where(r => r.AuctionId == _selectedAuctionId).ToList();
     }
 
+    // Load only the selected auction's results instead of the broker's entire cross-auction history.
+    private async Task LoadResults()
+    {
+        _allResults = _selectedAuctionId > 0
+            ? await Api.GetAuctionResultsByBrokerAsync(_brokerId, _selectedAuctionId)
+            : new();
+    }
+
     private async Task OnAuctionFilterChanged()
     {
         _selectedIds.Clear();
         _selectedSoldIds.Clear();
+        await LoadResults();
     }
 
     private async Task LoadFeeParameters()
@@ -933,7 +944,7 @@ else if (_activeTab == "takeback")
         _selectedIds.Clear();
         _selectedBuyerId = 0;
         _showCommissionModal = false;
-        _allResults = await Api.GetAuctionResultsByBrokerAsync(_brokerId);
+        await LoadResults();
         _invoiceLinks = await Api.GetInvoiceLinksForBrokerAsync(_brokerId);
     }
 
@@ -978,7 +989,7 @@ else if (_activeTab == "takeback")
                 }
                 _takebackMessageIsError = false;
                 _selectedSoldIds.Clear();
-                _allResults = await Api.GetAuctionResultsByBrokerAsync(_brokerId);
+                await LoadResults();
                 _pendingTakebacks = await Api.GetTakebackRequestsByBrokerAsync(_brokerId);
                 _invoiceLinks = await Api.GetInvoiceLinksForBrokerAsync(_brokerId);
             }
@@ -1024,7 +1035,7 @@ else if (_activeTab == "takeback")
             {
                 _brokerTakebackMessage = approve ? "Return approved. Lot moved back to un-invoiced." : "Return request declined.";
                 _brokerTakebackMessageIsError = false;
-                _allResults = await Api.GetAuctionResultsByBrokerAsync(_brokerId);
+                await LoadResults();
                 _pendingTakebacks = await Api.GetTakebackRequestsByBrokerAsync(_brokerId);
                 _invoiceLinks = await Api.GetInvoiceLinksForBrokerAsync(_brokerId);
             }

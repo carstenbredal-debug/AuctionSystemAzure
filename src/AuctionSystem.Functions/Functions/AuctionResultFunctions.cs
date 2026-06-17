@@ -302,8 +302,13 @@ public class AuctionResultFunctions
         if (!req.FunctionContext.CanAccessBroker(brokerId))
             return req.CreateResponse(System.Net.HttpStatusCode.Forbidden);
 
+        // Optional auction scope: the broker UI works one auction at a time, so callers pass
+        // ?auctionId=N to avoid pulling the broker's entire cross-auction history into the browser.
+        var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+        int? auctionId = int.TryParse(query["auctionId"], out var aid) ? aid : null;
+
         var results = await _db.AuctionResults
-            .Where(r => r.BrokerId == brokerId)
+            .Where(r => r.BrokerId == brokerId && (auctionId == null || r.AuctionId == auctionId.Value))
             .OrderByDescending(r => r.ReceivedAt)
             .Select(r => new
             {

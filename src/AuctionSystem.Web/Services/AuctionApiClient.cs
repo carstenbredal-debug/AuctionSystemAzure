@@ -365,8 +365,11 @@ public class AuctionApiClient
         catch { return null; }
     }
 
-    public async Task<List<AuctionResultDto>> GetAuctionResultsByBrokerAsync(int brokerId)
-        => await _http.GetFromJsonAsync<List<AuctionResultDto>>($"api/auction-results/broker/{brokerId}") ?? new();
+    public async Task<List<AuctionResultDto>> GetAuctionResultsByBrokerAsync(int brokerId, int? auctionId = null)
+        => await _http.GetFromJsonAsync<List<AuctionResultDto>>(
+               auctionId is int aid
+                   ? $"api/auction-results/broker/{brokerId}?auctionId={aid}"
+                   : $"api/auction-results/broker/{brokerId}") ?? new();
 
     public async Task<HttpResponseMessage> SubmitAuctionResultAsync(int lotNumber, int brokerId, decimal priceEur)
         => await _http.PostAsJsonAsync("api/auction-results", new { lotNumber, brokerId, priceEur });
