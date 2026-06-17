@@ -341,11 +341,25 @@ public class BusinessCentralSyncService
                 CurrencyCode = "EUR"
             };
 
-            await DeleteStaleDraftCreditMemoAsync(companyId, extDocNumber);
-            var created = await _bcClient.CreateSalesCreditMemoAsync(companyId, bcCreditMemo);
-            await AddCreditMemoLinesToBcAsync(companyId, created.Id, creditNote);
-
-            var posted = await _bcClient.PostSalesCreditMemoAsync(companyId, created.Id, bcCreditMemo.ExternalDocumentNumber);
+            // Build + post, retrying the WHOLE operation on a BC deadlock / "try again" transient.
+            // DeleteStaleDraft at the top of each attempt makes the retry idempotent — no duplicate lines.
+            BcSalesCreditMemo? posted = null;
+            for (var attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    await DeleteStaleDraftCreditMemoAsync(companyId, extDocNumber);
+                    var created = await _bcClient.CreateSalesCreditMemoAsync(companyId, bcCreditMemo);
+                    await AddCreditMemoLinesToBcAsync(companyId, created.Id, creditNote);
+                    posted = await _bcClient.PostSalesCreditMemoAsync(companyId, created.Id, bcCreditMemo.ExternalDocumentNumber);
+                    break;
+                }
+                catch (Exception ex) when (attempt < 6 && IsBcTransient(ex.Message))
+                {
+                    _logger.LogWarning("Transient BC error pushing credit memo {Id} (attempt {Attempt}): {Msg} — resetting draft and retrying", creditNote.Id, attempt, ex.Message);
+                    await Task.Delay(TimeSpan.FromMilliseconds(400 * attempt + Random.Shared.Next(0, 300)));
+                }
+            }
 
             // Posted, but the posted document couldn't be re-read. Do NOT fall back to the draft's
             // number — stamping a number that doesn't exist as a POSTED doc in BC creates the web/BC
@@ -759,6 +773,15 @@ public class BusinessCentralSyncService
         }
     }
 
+    // BC errors that are safe to retry as a WHOLE push (the build resets the draft first, so retrying
+    // can't duplicate): the SQL deadlock, and BC's generic "operation could not be completed, try again"
+    // contention error. NOT a business error (missing item/customer) — those would just fail again.
+    private static bool IsBcTransient(string? message) =>
+        !string.IsNullOrEmpty(message)
+        && (message.Contains("deadlock", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("Please retry the activity", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("could not be completed at this time", StringComparison.OrdinalIgnoreCase));
+
     private async Task<BcPushResult> PushInvoiceToBcCoreAsync(Invoice invoice)
     {
         var companyId = await _bcClient.ResolveCompanyIdAsync();
@@ -794,14 +817,28 @@ public class BusinessCentralSyncService
                 CurrencyCode = "EUR"
             };
 
-            // Remove any stale draft from a prior interrupted push (half-built lines / never posted)
-            // before creating a fresh one. It isn't posted — the idempotency check ran first — so it's
-            // safe to delete, and this avoids orphaned drafts and partial-line leftovers.
-            await DeleteStaleDraftInvoiceAsync(companyId, extDocRef);
-            var created = await _bcClient.CreateSalesInvoiceAsync(companyId, bcInvoice);
-            await AddInvoiceLinesToBcAsync(companyId, created.Id, invoice);
-
-            var posted = await _bcClient.PostSalesInvoiceAsync(companyId, created.Id, bcInvoice.ExternalDocumentNumber);
+            // Build + post, retrying the WHOLE operation on a BC deadlock / "operation could not be
+            // completed, try again" transient (BC's own posting engine contends under rapid posting).
+            // DeleteStaleDraft at the top of each attempt wipes any partial draft first, so the retry is
+            // idempotent — no duplicate lines (unlike retrying the individual line-add). This recovers in
+            // seconds instead of waiting for the 5-minute sweep.
+            BcSalesInvoice? posted = null;
+            for (var attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    await DeleteStaleDraftInvoiceAsync(companyId, extDocRef);
+                    var created = await _bcClient.CreateSalesInvoiceAsync(companyId, bcInvoice);
+                    await AddInvoiceLinesToBcAsync(companyId, created.Id, invoice);
+                    posted = await _bcClient.PostSalesInvoiceAsync(companyId, created.Id, bcInvoice.ExternalDocumentNumber);
+                    break;
+                }
+                catch (Exception ex) when (attempt < 6 && IsBcTransient(ex.Message))
+                {
+                    _logger.LogWarning("Transient BC error pushing invoice {Id} (attempt {Attempt}): {Msg} — resetting draft and retrying", invoice.Id, attempt, ex.Message);
+                    await Task.Delay(TimeSpan.FromMilliseconds(400 * attempt + Random.Shared.Next(0, 300)));
+                }
+            }
 
             // Posted, but the posted document couldn't be re-read. Do NOT fall back to the draft's
             // number — that desyncs web vs BC and makes the sweep skip it forever. Leave it unconfirmed;
