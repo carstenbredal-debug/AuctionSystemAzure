@@ -683,8 +683,24 @@ public class AuctionResultFunctions
         var reinvPct = Math.Clamp(body.ReinvoicePercent ?? 0, 0, 100);
         if (reinvPct > 0)
         {
-            int take = (int)Math.Ceiling(soldIds.Count * reinvPct / 100.0);
-            var pickIds = soldIds.Take(take).ToList();
+            int targetLots = (int)Math.Ceiling(soldIds.Count * reinvPct / 100.0);
+
+            // Map the just-sold lots to their invoices so credits vary realistically: each chosen invoice
+            // is either fully credited (all its lots taken back) or partially (a random subset of its lots).
+            var lines = await _db.InvoiceLines.Where(l => soldIds.Contains(l.AuctionResultId))
+                .Select(l => new { l.InvoiceId, l.AuctionResultId }).ToListAsync();
+            var invoiceGroups = lines.GroupBy(x => x.InvoiceId).Select(g => g.Select(x => x.AuctionResultId).ToList()).ToList();
+
+            var pickIds = new List<int>();
+            foreach (var invLots in invoiceGroups.OrderBy(_ => rnd.Next()))
+            {
+                if (pickIds.Count >= targetLots) break;
+                if (rnd.Next(2) == 0)                 // whole invoice
+                    pickIds.AddRange(invLots);
+                else                                  // a random subset of this invoice's lots
+                    pickIds.AddRange(invLots.OrderBy(_ => rnd.Next()).Take(rnd.Next(1, invLots.Count + 1)));
+            }
+
             var toReinvoice = await _db.AuctionResults.Where(r => pickIds.Contains(r.Id) && r.SoldToBuyerId != null).ToListAsync();
             if (toReinvoice.Count > 0)
             {
