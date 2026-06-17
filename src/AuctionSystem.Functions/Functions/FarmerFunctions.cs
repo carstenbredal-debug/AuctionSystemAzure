@@ -58,6 +58,9 @@ public class FarmerFunctions
     public async Task<HttpResponseData> Get(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "farmers/{id:int}")] HttpRequestData req, int id)
     {
+        if (!req.FunctionContext.CanAccessFarmer(id))
+            return req.CreateResponse(System.Net.HttpStatusCode.Forbidden);
+
         var farmer = await _db.Farmers.FirstOrDefaultAsync(s => s.Id == id);
         if (farmer == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
         return await CreateJsonResponse(req, farmer);

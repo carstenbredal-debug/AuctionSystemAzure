@@ -93,8 +93,8 @@ else
 
         if (user?.FarmerId == null) return null;
 
-        var farmers = await Api.GetFarmersAsync();
-        return farmers.FirstOrDefault(f => f.Id == user.FarmerId)?.Name;
+        var farmer = await Api.GetFarmerAsync(user.FarmerId.Value);
+        return farmer?.Name;
     }
 
     private void GoToAuction(string auctionNumber)

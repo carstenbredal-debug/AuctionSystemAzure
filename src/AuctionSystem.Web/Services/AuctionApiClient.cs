@@ -81,6 +81,9 @@ public class AuctionApiClient
     public async Task<List<FarmerDto>> GetFarmersAsync()
         => await _http.GetFromJsonAsync<List<FarmerDto>>("api/farmers") ?? new();
 
+    public async Task<FarmerDto?> GetFarmerAsync(int id)
+        => await _http.GetFromJsonAsync<FarmerDto>($"api/farmers/{id}");
+
     public async Task<FarmerDto?> CreateFarmerAsync(FarmerDto farmer)
     {
         var resp = await _http.PostAsJsonAsync("api/farmers", farmer);

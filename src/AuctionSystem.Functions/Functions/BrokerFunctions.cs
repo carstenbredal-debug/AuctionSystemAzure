@@ -63,6 +63,7 @@ public class BrokerFunctions
         return await CreateJsonResponse(req, sorted);
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
     [Function("GetBroker")]
     public async Task<HttpResponseData> Get(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "brokers/{id:int}")] HttpRequestData req, int id)
@@ -213,6 +214,13 @@ public class BrokerFunctions
     {
         var buyer = await _db.Buyers.Include(b => b.BrokerBuyers).ThenInclude(bb => bb.Broker).FirstOrDefaultAsync(b => b.Id == id);
         if (buyer == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        // Ownership: admin, the buyer themselves, or a broker this buyer is linked to.
+        var appUser = req.FunctionContext.GetAppUser();
+        if (!req.FunctionContext.CanAccessBuyer(id)
+            && !(appUser?.BrokerId != null && buyer.BrokerBuyers.Any(bb => bb.BrokerId == appUser.BrokerId.Value)))
+            return req.CreateResponse(System.Net.HttpStatusCode.Forbidden);
+
         var result = new
         {
             buyer.Id, buyer.BuyerNumber, buyer.Name, buyer.Name2, buyer.SearchName,
