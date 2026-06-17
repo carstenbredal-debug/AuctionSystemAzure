@@ -1,0 +1,94 @@
+@page "/admin/balance-comparison"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
+@inject AuctionApiClient Api
+
+<h3>Balance Comparison (Web vs BC)</h3>
+<p class="text-muted">
+    Per buyer, the local invoiced/credited (from <strong>posted</strong> invoices) against Business
+    Central's customer ledger, with the deltas. A non-zero delta means web and BC disagree — a
+    duplicated, missing, or wrong posting. Unpushed invoices are noted (a delta may just be pending).
+</p>
+
+<button class="btn btn-primary mb-3" @onclick="Load" disabled="@_loading">
+    @if (_loading) { <span class="spinner-border spinner-border-sm me-1"></span> }
+    Compare
+</button>
+
+@if (_error != null)
+{
+    <div class="alert alert-danger" style="max-width:760px">@_error</div>
+}
+else if (_result != null)
+{
+    <div class="alert @(_result.Matched == _result.Total ? "alert-success" : "alert-warning")" style="max-width:760px">
+        <strong>@_result.Matched / @_result.Total</strong> buyers match.
+        @if (_result.Matched != _result.Total) { <text>@(_result.Total - _result.Matched) mismatched (highlighted below).</text> }
+        <span class="text-muted ms-2">@_result.LastChecked</span>
+    </div>
+
+    <table class="table table-sm table-hover" style="font-size:.9rem">
+        <thead>
+            <tr>
+                <th>Buyer</th><th>Name</th>
+                <th class="text-end">Web invoiced</th><th class="text-end">BC invoiced</th><th class="text-end">Δ inv</th>
+                <th class="text-end">Web credited</th><th class="text-end">BC credited</th><th class="text-end">Δ cred</th>
+                <th class="text-end">Unpushed</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var r in _result.Rows.OrderByDescending(x => !x.Match).ThenBy(x => x.BuyerNumber))
+            {
+                <tr class="@(r.Match ? "" : "table-warning")">
+                    <td>@r.BuyerNumber</td>
+                    <td>@r.Name</td>
+                    <td class="text-end">@r.WebInvoiced.ToString("N2")</td>
+                    <td class="text-end">@r.BcInvoiced.ToString("N2")</td>
+                    <td class="text-end @(r.DeltaInvoiced != 0 ? "fw-bold text-danger" : "text-muted")">@r.DeltaInvoiced.ToString("N2")</td>
+                    <td class="text-end">@r.WebCredited.ToString("N2")</td>
+                    <td class="text-end">@r.BcCredited.ToString("N2")</td>
+                    <td class="text-end @(r.DeltaCredited != 0 ? "fw-bold text-danger" : "text-muted")">@r.DeltaCredited.ToString("N2")</td>
+                    <td class="text-end">@(r.Unpushed > 0 ? r.Unpushed.ToString() : "")</td>
+                </tr>
+            }
+        </tbody>
+        <tfoot>
+            <tr class="fw-bold">
+                <td colspan="2">Totals</td>
+                <td class="text-end">@_result.Rows.Sum(x => x.WebInvoiced).ToString("N2")</td>
+                <td class="text-end">@_result.Rows.Sum(x => x.BcInvoiced).ToString("N2")</td>
+                <td class="text-end">@_result.Rows.Sum(x => x.DeltaInvoiced).ToString("N2")</td>
+                <td class="text-end">@_result.Rows.Sum(x => x.WebCredited).ToString("N2")</td>
+                <td class="text-end">@_result.Rows.Sum(x => x.BcCredited).ToString("N2")</td>
+                <td class="text-end">@_result.Rows.Sum(x => x.DeltaCredited).ToString("N2")</td>
+                <td></td>
+            </tr>
+        </tfoot>
+    </table>
+}
+
+@code {
+    private BalanceComparisonResult? _result;
+    private bool _loading;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _result = await Api.GetBalanceComparisonAsync();
+            if (_result == null) _error = "No response (Business Central may not be configured).";
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load comparison: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

@@ -495,6 +495,9 @@ public class AuctionApiClient
     public async Task<List<BcCustomerDto>> GetBcCustomersAsync()
         => await _http.GetFromJsonAsync<List<BcCustomerDto>>("api/bc/customers") ?? new();
 
+    public async Task<BalanceComparisonResult?> GetBalanceComparisonAsync()
+        => await _http.GetFromJsonAsync<BalanceComparisonResult>("api/bc/balance-comparison");
+
     public async Task<List<BcVendorDto>> GetBcVendorsAsync()
         => await _http.GetFromJsonAsync<List<BcVendorDto>>("api/bc/vendors") ?? new();
 

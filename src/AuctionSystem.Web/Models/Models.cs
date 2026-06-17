@@ -1152,3 +1152,25 @@ public class ShipperListDto
     public string TrackingUrlTemplate { get; set; } = "";
     public bool IsActive { get; set; }
 }
+
+public class BalanceComparisonResult
+{
+    public List<BalanceComparisonRow> Rows { get; set; } = new();
+    public int Matched { get; set; }
+    public int Total { get; set; }
+    public string? LastChecked { get; set; }
+}
+
+public class BalanceComparisonRow
+{
+    public string BuyerNumber { get; set; } = "";
+    public string? Name { get; set; }
+    public decimal WebInvoiced { get; set; }
+    public decimal WebCredited { get; set; }
+    public decimal BcInvoiced { get; set; }
+    public decimal BcCredited { get; set; }
+    public decimal DeltaInvoiced { get; set; }
+    public decimal DeltaCredited { get; set; }
+    public int Unpushed { get; set; }
+    public bool Match { get; set; }
+}

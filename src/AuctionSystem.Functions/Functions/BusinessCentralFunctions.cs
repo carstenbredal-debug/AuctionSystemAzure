@@ -828,6 +828,76 @@ public class BusinessCentralFunctions
         });
     }
 
+    // Reconciliation diagnostic: per buyer, the local (web) invoiced/credited from POSTED invoices vs
+    // BC's customer-ledger invoiced/credited, with the deltas — so a web/BC divergence (e.g. a
+    // duplicated or missing posting) is visible at a glance instead of needing a manual SQL compare.
+    [Function("BcBalanceComparison")]
+    public async Task<HttpResponseData> GetBalanceComparison(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "bc/balance-comparison")] HttpRequestData req)
+    {
+        if (!EnsureConfigured(out var error))
+            return await JsonResponse(req, error!, HttpStatusCode.BadRequest);
+
+        var companyId = await _bcClient!.ResolveCompanyIdAsync();
+
+        // BC side: invoiced / credited per customer from the ledger.
+        var allEntries = await _bcClient.GetCustomerLedgerEntriesAsync(companyId);
+        var bcByCustomer = allEntries
+            .GroupBy(e => e.CustomerNo)
+            .ToDictionary(g => g.Key, g => (
+                Invoiced: g.Where(e => IsDocType(e.DocumentType, "Invoice")).Sum(e => e.OriginalAmount),
+                Credited: g.Where(e => IsDocType(e.DocumentType, "Credit Memo")).Sum(e => Math.Abs(e.OriginalAmount))));
+
+        // Web side: invoiced / credited per buyer from POSTED local invoices (apples-to-apples with BC),
+        // plus how many of that buyer's invoices haven't pushed yet (a mismatch may just be pending).
+        var webRows = await _db.Invoices
+            .GroupBy(i => i.Buyer.BuyerNumber)
+            .Select(g => new
+            {
+                BuyerNumber = g.Key,
+                Invoiced = g.Sum(i => !i.IsCreditNote && i.BcInvoiceNumber != null && i.BcInvoiceNumber != "" ? i.TotalAmount : 0m),
+                Credited = g.Sum(i => i.IsCreditNote && i.BcInvoiceNumber != null && i.BcInvoiceNumber != "" ? (i.TotalAmount < 0 ? -i.TotalAmount : i.TotalAmount) : 0m),
+                Unpushed = g.Sum(i => i.BcInvoiceNumber == null || i.BcInvoiceNumber == "" ? 1 : 0)
+            })
+            .ToListAsync();
+        var webByBuyer = webRows.ToDictionary(x => x.BuyerNumber);
+        var names = await _db.Buyers.ToDictionaryAsync(b => b.BuyerNumber, b => b.Name);
+
+        var rows = bcByCustomer.Keys.Union(webByBuyer.Keys)
+            .OrderBy(n => n)
+            .Select(num =>
+            {
+                bcByCustomer.TryGetValue(num, out var bc);
+                webByBuyer.TryGetValue(num, out var web);
+                var webInv = web?.Invoiced ?? 0m;
+                var webCr = web?.Credited ?? 0m;
+                var dInv = Math.Round(webInv - bc.Invoiced, 2);
+                var dCr = Math.Round(webCr - bc.Credited, 2);
+                return new
+                {
+                    buyerNumber = num,
+                    name = names.TryGetValue(num, out var nm) ? nm : null,
+                    webInvoiced = webInv,
+                    webCredited = webCr,
+                    bcInvoiced = bc.Invoiced,
+                    bcCredited = bc.Credited,
+                    deltaInvoiced = dInv,
+                    deltaCredited = dCr,
+                    unpushed = web?.Unpushed ?? 0,
+                    match = dInv == 0 && dCr == 0
+                };
+            })
+            .ToList();
+
+        return await JsonResponse(req, new
+        {
+            rows,
+            matched = rows.Count(r => r.match),
+            total = rows.Count,
+            lastChecked = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss UTC")
+        });
+    }
+
     [Function("BcCustomerEntries")]
     public async Task<HttpResponseData> GetCustomerEntries(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "bc/customer-entries/{customerNo}")] HttpRequestData req, string customerNo)
