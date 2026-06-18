@@ -4,6 +4,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Dapper;
+using AuctionSystem.Functions.Auth;
 using AuctionSystem.Functions.Models;
 using AuctionSystem.Functions.Services;
 using System.Data;
@@ -38,11 +39,25 @@ public class LotGenerationFunctions
             ?? "";
     }
 
+    // Machine-to-machine endpoint (an hourly job triggers it). It opts out of the user-principal
+    // middleware ([AllowAnonymous]) and authenticates instead with a shared secret in the x-api-key
+    // header, matched against the LOT_GEN_API_KEY app setting. Fails closed: if the key isn't configured
+    // or doesn't match, it's a 401. Set LOT_GEN_API_KEY on the Function app and send it as x-api-key.
+    [AllowAnonymous]
     [Function("GenerateLots")]
     public async Task<HttpResponseData> GenerateLots(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", Route = "lots/generate")]
         HttpRequestData req)
     {
+        var expectedKey = _configuration["LOT_GEN_API_KEY"] ?? _configuration["Values:LOT_GEN_API_KEY"];
+        var providedKey = req.Headers.TryGetValues("x-api-key", out var keyVals) ? keyVals.FirstOrDefault() : null;
+        if (string.IsNullOrEmpty(expectedKey) || !string.Equals(providedKey, expectedKey, StringComparison.Ordinal))
+        {
+            var unauth = req.CreateResponse(HttpStatusCode.Unauthorized);
+            await unauth.WriteStringAsync("Invalid or missing x-api-key.");
+            return unauth;
+        }
+
         try
         {
             var connectionString = GetCatalogConnectionString();
