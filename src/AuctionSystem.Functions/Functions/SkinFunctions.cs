@@ -725,12 +725,13 @@ public class SkinFunctions
         if (soldResults.Count == 0)
             return new Dictionary<int, BoxSaleInfo>();
 
-        // Get catalog lots to map lot numbers to box numbers
+        // Map lot number → box numbers from the per-auction FROZEN lots snapshot ([{AuctionNumber}.Lots]),
+        // NOT the live global CatalogLots. A later catalog regeneration can drop or rewrite the boxes of an
+        // already-completed auction, which silently undercounts that auction's sold skins and value. The
+        // snapshot tables are the source of truth for all reporting on a given auction. Falls back to the
+        // live catalog only when no auction is scoped (the global all-skins view) or no snapshot exists.
         var soldLotNumbers = soldResults.Select(r => r.LotNumber).Distinct().ToList();
-        var catalogLots = await _catalogDb.CatalogLots
-            .Where(cl => soldLotNumbers.Contains(cl.LotNumber))
-            .Select(cl => new { cl.LotNumber, cl.IncludedBoxNumbers })
-            .ToListAsync();
+        var catalogLots = await GetLotIncludedBoxesAsync(auctionId, soldLotNumbers);
 
         // Build lookup: lot number → sale info
         var lotSaleInfo = soldResults.ToDictionary(r => r.LotNumber, r => r);
@@ -759,6 +760,44 @@ public class SkinFunctions
         }
 
         return boxSaleInfo;
+    }
+
+    // Returns lot → IncludedBoxNumbers. For an auction-scoped query this reads the FROZEN per-auction
+    // lots snapshot auction.[{AuctionNumber}.Lots] so reporting reflects exactly what the auction sold,
+    // immune to later catalog regenerations. Falls back to the live global CatalogLots only when there is
+    // no auction scope (global all-skins view) or the snapshot table doesn't exist for that auction.
+    private async Task<List<(int LotNumber, string? IncludedBoxNumbers)>> GetLotIncludedBoxesAsync(int? auctionId, List<int> lotNumbers)
+    {
+        if (auctionId.HasValue)
+        {
+            var auction = await _auctionDb.Auctions.FindAsync(auctionId.Value);
+            if (auction != null)
+            {
+                try
+                {
+                    var wanted = new HashSet<int>(lotNumbers);
+                    var rows = new List<(int, string?)>();
+                    await using var conn = new SqlConnection(_auctionDb.Database.GetConnectionString()!);
+                    await conn.OpenAsync();
+                    await using var cmd = new SqlCommand($"SELECT LotNumber, IncludedBoxNumbers FROM auction.[{auction.AuctionNumber}.Lots]", conn);
+                    await using var reader = await cmd.ExecuteReaderAsync();
+                    while (await reader.ReadAsync())
+                    {
+                        var ln = reader.GetInt32(0);
+                        if (wanted.Count > 0 && !wanted.Contains(ln)) continue;
+                        rows.Add((ln, reader.IsDBNull(1) ? null : reader.GetString(1)));
+                    }
+                    return rows;
+                }
+                catch { /* snapshot table missing for this auction — fall through to the live catalog */ }
+            }
+        }
+
+        var live = await _catalogDb.CatalogLots
+            .Where(cl => lotNumbers.Contains(cl.LotNumber))
+            .Select(cl => new { cl.LotNumber, cl.IncludedBoxNumbers })
+            .ToListAsync();
+        return live.Select(x => (x.LotNumber, (string?)x.IncludedBoxNumbers)).ToList();
     }
 
     private class BoxSaleInfo
