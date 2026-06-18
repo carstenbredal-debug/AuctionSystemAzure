@@ -38,7 +38,7 @@ else if (_rows != null)
             @foreach (var r in _rows)
             {
                 <tr>
-                    <td>@r.Farmer</td>
+                    <td><a href="@($"/farmer/auction/{_auctionId}?farmer={Uri.EscapeDataString(r.Farmer)}")">@r.Farmer</a></td>
                     <td class="text-end">@r.SkinsSold.ToString("N0")</td>
                     <td class="text-end">@r.TotalValue.ToString("N2")</td>
                 </tr>

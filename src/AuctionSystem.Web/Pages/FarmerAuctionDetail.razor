@@ -18,6 +18,10 @@
 else
 {
     <h1>Auction @_auctionNumber</h1>
+    @if (_adminView)
+    {
+        <p class="text-muted mb-3">Farmer: <strong>@_farmerName</strong> &nbsp;·&nbsp; <a href="admin/farmer-sales">&larr; Back to Farmers</a></p>
+    }
 
     <div class="row mb-4">
         <div class="col-md-4">
@@ -219,6 +223,14 @@ else
 @code {
     [Parameter] public int AuctionId { get; set; }
 
+    // Admin override: Finance > Farmers links here with ?farmer=Name so an admin can view a specific
+    // farmer's auction detail. Ignored for non-admins (they always see their own), so a farmer can't
+    // view another farmer's data.
+    [Parameter]
+    [Microsoft.AspNetCore.Components.SupplyParameterFromQuery]
+    public string? Farmer { get; set; }
+
+    private bool _adminView;
     private bool _loading = true;
     private string _auctionNumber = "";
     private string _farmerName = "";
@@ -251,7 +263,16 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        _farmerName = await ResolveFarmerNameAsync() ?? "";
+        var auth = await AuthState.GetAuthenticationStateAsync();
+        if (!string.IsNullOrWhiteSpace(Farmer) && auth.User.IsInRole("Admin"))
+        {
+            _farmerName = Farmer;       // admin viewing a specific farmer (from Finance > Farmers)
+            _adminView = true;
+        }
+        else
+        {
+            _farmerName = await ResolveFarmerNameAsync() ?? "";
+        }
 
         if (string.IsNullOrEmpty(_farmerName))
         {
