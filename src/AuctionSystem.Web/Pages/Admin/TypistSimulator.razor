@@ -19,7 +19,7 @@ else
     <div class="row g-3" style="max-width:760px">
         <div class="col-md-6">
             <label class="form-label">Auction</label>
-            <select class="form-select" @bind="_auctionId">
+            <select class="form-select" @bind="_auctionId" @bind:after="OnAuctionChanged">
                 <option value="0">— select —</option>
                 @foreach (var a in _auctions)
                 {
@@ -155,6 +155,7 @@ else
     private int _delaySeconds = 1;
     private string? _simStatus;
     private bool _running;
+    private bool _polling;
     private bool _resolving;
     private string? _message;
     private bool _error;
@@ -274,23 +275,48 @@ else
         }
     }
 
-    // The run is paced in the background; poll the auction's status until it's Done/Failed.
+    // The run is paced in the background; poll the auction's status until it's Done/Failed. Guarded so
+    // re-selecting the auction (e.g. after navigating back) can't spin up a second concurrent poller.
     private async Task PollSimStatusAsync(int auctionId)
     {
-        _simStatus = "Starting…";
-        await InvokeAsync(StateHasChanged);
-        for (var i = 0; i < 5000; i++)
+        if (_polling) return;
+        _polling = true;
+        try
         {
-            await Task.Delay(3000);
-            try
-            {
-                var a = await Api.GetAuctionAsync(auctionId);
-                _simStatus = a?.TypistSimStatus ?? _simStatus;
-            }
-            catch { /* transient; keep polling */ }
+            _simStatus ??= "Starting…";
             await InvokeAsync(StateHasChanged);
-            if (_simStatus != null && (_simStatus.StartsWith("Done") || _simStatus.StartsWith("Failed"))) break;
+            for (var i = 0; i < 5000; i++)
+            {
+                await Task.Delay(3000);
+                try
+                {
+                    var a = await Api.GetAuctionAsync(auctionId);
+                    _simStatus = a?.TypistSimStatus ?? _simStatus;
+                }
+                catch { /* transient; keep polling */ }
+                await InvokeAsync(StateHasChanged);
+                if (_simStatus != null && (_simStatus.StartsWith("Done") || _simStatus.StartsWith("Failed"))) break;
+            }
         }
+        finally { _polling = false; }
+    }
+
+    // When the auction selection changes (including returning to the page and re-selecting), pick up an
+    // in-progress simulation so its live progress shows again instead of the page looking idle.
+    private async Task OnAuctionChanged()
+    {
+        _simStatus = null;
+        if (_auctionId <= 0) return;
+        try
+        {
+            var a = await Api.GetAuctionAsync(_auctionId);
+            var st = a?.TypistSimStatus;
+            if (string.IsNullOrEmpty(st)) return;
+            _simStatus = st;                       // show the current/terminal status immediately
+            if (!st.StartsWith("Done") && !st.StartsWith("Failed"))
+                _ = PollSimStatusAsync(_auctionId); // still running -> resume live polling
+        }
+        catch { /* transient; ignore */ }
     }
 
     private async Task ResolveDisagreements()
