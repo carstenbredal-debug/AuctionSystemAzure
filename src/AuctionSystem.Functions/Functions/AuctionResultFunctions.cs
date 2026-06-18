@@ -605,13 +605,10 @@ public class AuctionResultFunctions
             _db.Invoices.Add(invoice);
             await _db.SaveChangesAsync();
 
-            // Hand the BC push to the background queue (same as credit notes) so a slow/timing-out BC
-            // can't hang the sale. The invoice exists locally now; the queue worker posts it and the
-            // status badge surfaces progress ("Not Posted" -> "Invoiced") or any "buyer not in BC"
-            // reason ("Push Failed"). The timer sweep is the safety net.
-            if (_bcPushQueue != null)
-                await _bcPushQueue.EnqueueAsync(BcPushQueue.Invoice, invoice.Id);
-
+            // No inline BC push: the serial BcPushDrainer (singleton timer, one doc at a time) picks this
+            // up by its empty BcInvoiceNumber and posts it with confirmation. Pushing here would put a
+            // second concurrent consumer on BC — exactly the deadlock/empty-post source we removed. The
+            // invoice shows "Not Posted" until the drainer confirms it in BC.
             return (invoice.Id, null);
         }
         catch (Exception ex)
@@ -1374,15 +1371,9 @@ public class AuctionResultFunctions
 
         await _db.SaveChangesAsync();
 
-        // Hand the BC push to the background queue instead of pushing inline. A slow/timing-out BC
-        // here previously hung the request, which led to re-clicks and duplicate credit notes. The
-        // queue worker pushes with the same idempotent method, and the timer sweep is the safety net.
-        if (_bcSyncService != null && _bcPushQueue != null)
-        {
-            foreach (var cn in createdCreditNotes)
-                await _bcPushQueue.EnqueueAsync(BcPushQueue.CreditNote, cn.Id);
-        }
-
+        // No inline BC push. The serial BcPushDrainer posts these credit notes one at a time (credit
+        // notes before invoices each tick), confirming each in BC. Pushing inline here is what hung the
+        // request and led to re-clicks + duplicate credit notes; the drainer is the single consumer now.
         return createdCreditNotes;
     }
 
