@@ -60,20 +60,56 @@ public class LotGenerationFunctions
 
         try
         {
-            var connectionString = GetCatalogConnectionString();
+            var summary = await RunLotGenerationAsync();
+            var ok = req.CreateResponse(HttpStatusCode.OK);
+            await ok.WriteStringAsync(summary);
+            return ok;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in GenerateLots");
+            var response = req.CreateResponse(HttpStatusCode.InternalServerError);
+            await response.WriteStringAsync(ex.ToString());
+            return response;
+        }
+    }
 
-            if (string.IsNullOrWhiteSpace(connectionString))
-            {
-                _logger.LogError("SqlConnectionString missing.");
-                var response = req.CreateResponse(HttpStatusCode.InternalServerError);
-                await response.WriteStringAsync("Connection string missing.");
-                return response;
-            }
+    // Runs the lot generation every 15 minutes (internal timer — bypasses the HTTP auth middleware and
+    // needs no api-key; no external scheduler required).
+    [Function("GenerateLotsTimer")]
+    public async Task GenerateLotsTimer([TimerTrigger("0 */15 * * * *")] TimerInfo timer)
+    {
+        try
+        {
+            var summary = await RunLotGenerationAsync();
+            _logger.LogInformation("Scheduled lot generation (15-min): {Summary}", summary);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Scheduled lot generation failed");
+        }
+    }
 
-            using var connection = new SqlConnection(connectionString);
-            await connection.OpenAsync();
+    // Shared generation worker for both the HTTP endpoint and the 15-minute timer. Serializes via a SQL
+    // app-lock (skip if already running) so a scheduled run can't race a manual one on the TRUNCATE +
+    // bulk-inserts.
+    private async Task<string> RunLotGenerationAsync()
+    {
+        var connectionString = GetCatalogConnectionString();
+        if (string.IsNullOrWhiteSpace(connectionString))
+            throw new InvalidOperationException("SqlConnectionString missing.");
 
-            _logger.LogInformation("Loading data from database...");
+        using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync();
+
+        var lockRc = await connection.ExecuteScalarAsync<int>("DECLARE @r int; EXEC @r = sp_getapplock @Resource=N'LotGeneration', @LockMode=N'Exclusive', @LockOwner=N'Session', @LockTimeout=5000; SELECT @r;");
+        if (lockRc < 0)
+        {
+            _logger.LogInformation("Lot generation already running; skipping this run.");
+            return "Lot generation already running; skipped.";
+        }
+
+        _logger.LogInformation("Loading data from database...");
 
             var boxes = await connection.QueryAsync<BoxRow>(@"
                 SELECT
@@ -368,18 +404,6 @@ public class LotGenerationFunctions
                 $"Skipped groups: {skippedGroups.Count}.";
 
             _logger.LogInformation(summary);
-
-            var ok = req.CreateResponse(HttpStatusCode.OK);
-            await ok.WriteStringAsync(summary);
-            return ok;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error in GenerateLots");
-            var response = req.CreateResponse(HttpStatusCode.InternalServerError);
-            await response.WriteStringAsync(ex.ToString());
-            return response;
-        }
+            return summary;
     }
-
 }
