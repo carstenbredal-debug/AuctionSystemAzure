@@ -1292,17 +1292,6 @@ public class AuctionResultFunctions
     // other buyers charged but never credited). Returns the created credit notes.
     private async Task<List<Invoice>> GenerateCreditNotesAsync(List<int> auctionResultIds)
     {
-        // Idempotency guard: never credit an auction result that already has a credit-note line.
-        // The atomic take-back claim in the callers is the primary defence against the concurrent
-        // double-submit that produced duplicate credit notes; this is a second line that also covers
-        // any future caller and a sequential re-credit.
-        var alreadyCredited = await _db.Set<InvoiceLine>()
-            .Where(l => auctionResultIds.Contains(l.AuctionResultId) && l.Invoice.IsCreditNote)
-            .Select(l => l.AuctionResultId)
-            .Distinct()
-            .ToListAsync();
-        if (alreadyCredited.Count > 0)
-            auctionResultIds = auctionResultIds.Except(alreadyCredited).ToList();
         if (auctionResultIds.Count == 0) return new List<Invoice>();
 
         var allInvoiceLines = await _db.Set<InvoiceLine>()
@@ -1311,11 +1300,25 @@ public class AuctionResultFunctions
             .Where(l => auctionResultIds.Contains(l.AuctionResultId) && !l.Invoice.IsCreditNote)
             .ToListAsync();
 
-        // Only use the most recent invoice line per auction result to avoid double crediting
+        // Credit the MOST RECENT sale (invoice line) per auction result. A lot can be sold and credited
+        // many times over its life, so we always credit the current sale — never an older one.
         var invoiceLines = allInvoiceLines
             .GroupBy(l => l.AuctionResultId)
             .Select(g => g.OrderByDescending(l => l.Invoice.InvoiceDate).First())
             .ToList();
+
+        // Idempotency scoped to the SALE, not the lot: skip only a (result, original-invoice) pair that
+        // already has a credit note, so the same sale can't be double-credited — but a lot that was
+        // credited, re-sold, and taken back again IS credited again (its NEW invoice isn't in this set).
+        // The atomic take-back claim in the callers remains the primary concurrent double-submit defence.
+        var creditedPairs = (await _db.Set<InvoiceLine>()
+                .Where(l => auctionResultIds.Contains(l.AuctionResultId) && l.Invoice.IsCreditNote && l.Invoice.OriginalInvoiceId != null)
+                .Select(l => new { l.AuctionResultId, OriginalInvoiceId = l.Invoice.OriginalInvoiceId!.Value })
+                .Distinct()
+                .ToListAsync())
+            .Select(p => (p.AuctionResultId, p.OriginalInvoiceId))
+            .ToHashSet();
+        invoiceLines = invoiceLines.Where(l => !creditedPairs.Contains((l.AuctionResultId, l.InvoiceId))).ToList();
 
         if (invoiceLines.Count == 0) return new List<Invoice>();
 
