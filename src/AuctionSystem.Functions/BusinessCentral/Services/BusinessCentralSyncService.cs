@@ -814,7 +814,11 @@ public class BusinessCentralSyncService
     private static bool IsBcNumberSeriesJam(string? message) =>
         !string.IsNullOrEmpty(message)
         && (message.Contains("already assigned to a record", StringComparison.OrdinalIgnoreCase)
-            || message.Contains("Update the number series", StringComparison.OrdinalIgnoreCase));
+            || message.Contains("Update the number series", StringComparison.OrdinalIgnoreCase)
+            // Series exhausted / overshot its Ending No.: "You cannot assign numbers greater than X from
+            // the number series Y." Same class — BC-side config, retrying can't help, blocks every doc.
+            || message.Contains("cannot assign numbers greater than", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("cannot assign new numbers from the number series", StringComparison.OrdinalIgnoreCase));
 
     private const string BcNumberSeriesJamStatus =
         "BC number series needs attention: BC won't issue the next posted number (\"already assigned to a record — update the number series\"). Fix the Sales Invoice posting No. Series in BC; this posts automatically once a free number is available.";
