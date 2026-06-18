@@ -4,13 +4,7 @@
 
 <PageTitle>Invoices - Admin</PageTitle>
 
-<div class="d-flex justify-content-between align-items-center">
-    <h1>Invoices</h1>
-    <button class="btn btn-outline-primary" @onclick="LoadInvoices" disabled="@_refreshing">
-        @if (_refreshing) { <span class="spinner-border spinner-border-sm me-1"></span> }
-        Refresh
-    </button>
-</div>
+<h1>Invoices</h1>
 <p class="text-muted">All invoices and credit notes across all brokers and buyers.</p>
 
 @if (!string.IsNullOrEmpty(_bcError))
@@ -98,8 +92,12 @@ else
                 }
             </select>
         </div>
-        <div class="col-md-3 d-flex align-items-end">
+        <div class="col-md-3 d-flex align-items-end gap-2">
             <button class="btn btn-outline-secondary" @onclick="ClearFilters">Clear Filters</button>
+            <button class="btn btn-outline-primary" @onclick="LoadInvoices" disabled="@_refreshing">
+                @if (_refreshing) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                Refresh
+            </button>
         </div>
     </div>
 
