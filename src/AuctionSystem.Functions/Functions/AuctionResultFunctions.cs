@@ -874,32 +874,44 @@ public class AuctionResultFunctions
 
         while (DateTime.UtcNow < deadline)
         {
-            var batch = await _db.AuctionResults
+            var didWork = false;
+
+            // (a) Sell any unsold lots for this broker.
+            var unsold = await _db.AuctionResults
                 .Where(r => r.AuctionId == auctionId && r.BrokerId == brokerId && r.SoldToBuyerId == null)
                 .OrderBy(r => r.LotNumber).Take(40).ToListAsync();
-            if (batch.Count == 0) break;
+            if (unsold.Count > 0)
+            {
+                var (soldIds, inv, _) = await SimSellBatchAsync(unsold, buyersByBroker, buyers, commission, commission, maxPerInvoice, rnd);
+                res.Sold += soldIds.Count;
+                res.Invoices += inv;
+                didWork |= soldIds.Count > 0;
+            }
 
-            var (soldIds, inv, _) = await SimSellBatchAsync(batch, buyersByBroker, buyers, commission, commission, maxPerInvoice, rnd);
-            res.Sold += soldIds.Count;
-            res.Invoices += inv;
-            if (soldIds.Count == 0) break; // claimed nothing — stop instead of spinning
-
+            // (b) Re-invoice churn: take back a random chunk of this broker's already-SOLD lots, credit
+            // them, and re-sell — so the brokers keep stressing the credit-note + re-sell path concurrently
+            // even when the auction is fully sold (which is the case after a full sell run).
             if (reinvPct > 0)
             {
-                var pick = soldIds.OrderBy(_ => rnd.Next()).Take((int)Math.Ceiling(soldIds.Count * reinvPct / 100.0)).ToList();
-                var toReinvoice = await _db.AuctionResults.Where(r => pick.Contains(r.Id) && r.SoldToBuyerId != null).ToListAsync();
-                if (toReinvoice.Count > 0)
+                var sold = await _db.AuctionResults
+                    .Where(r => r.AuctionId == auctionId && r.BrokerId == brokerId && r.SoldToBuyerId != null)
+                    .OrderBy(r => Guid.NewGuid()).Take(40).ToListAsync();
+                var pick = sold.Take(Math.Max(1, (int)Math.Ceiling(sold.Count * reinvPct / 100.0))).ToList();
+                if (pick.Count > 0)
                 {
-                    foreach (var r in toReinvoice) { r.LastModifiedBy = "BROKERSIM"; r.LastModifiedAt = DateTime.UtcNow; }
-                    var (_, takenBackIds, _) = await ProcessBrokerTakebacksAsync(toReinvoice);
+                    foreach (var r in pick) { r.LastModifiedBy = "BROKERSIM"; r.LastModifiedAt = DateTime.UtcNow; }
+                    var (_, takenBackIds, _) = await ProcessBrokerTakebacksAsync(pick);
                     await _db.SaveChangesAsync();
                     res.CreditNotes += (await GenerateCreditNotesAsync(takenBackIds)).Count;
                     res.Reinvoiced += takenBackIds.Count;
                     var reSell = await _db.AuctionResults.Where(r => takenBackIds.Contains(r.Id) && r.SoldToBuyerId == null).ToListAsync();
                     var (_, inv2, _) = await SimSellBatchAsync(reSell, buyersByBroker, buyers, commission, commission, maxPerInvoice, rnd);
                     res.Invoices += inv2;
+                    didWork |= takenBackIds.Count > 0;
                 }
             }
+
+            if (!didWork) break; // nothing left to sell and nothing to re-invoice
         }
         return res;
     }
