@@ -273,6 +273,31 @@ using (var scope = host.Services.CreateScope())
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.TypistEntries') AND name = 'AuctionId')
                 ALTER TABLE auction.TypistEntries ADD AuctionId INT NOT NULL DEFAULT 0;
         ");
+        // TypistEntries: filtered UNIQUE index so a lot can be typed into a slot only ONCE per auction.
+        // Two concurrent / redelivered sim workers otherwise both typed the same lot (each picking its
+        // own random winning broker) -> duplicate AuctionResults that double-count brokers and poison
+        // every per-broker rollup. Filtered on IsResolved=0 so the disagreement-resolve path (mark the old
+        // rows resolved, then insert fresh ones) still works. Dedup any pre-existing active duplicates
+        // first (null their inbound MatchedWith links, then delete the extras) so the index can be built
+        // even on a DB that already accumulated duplicates from the race.
+        db.Database.ExecuteSqlRaw(@"
+            IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.TypistEntries') AND name = 'IsResolved')
+               AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_TypistEntries_Auction_Lot_Slot_Active')
+            BEGIN
+                UPDATE te SET te.MatchedWithEntryId = NULL
+                FROM auction.TypistEntries te
+                WHERE te.MatchedWithEntryId IN (
+                    SELECT Id FROM (SELECT Id, ROW_NUMBER() OVER (PARTITION BY AuctionId, LotNumber, TypistSlot ORDER BY Id) rn
+                                    FROM auction.TypistEntries WHERE IsResolved = 0) x WHERE x.rn > 1);
+
+                DELETE FROM auction.TypistEntries WHERE Id IN (
+                    SELECT Id FROM (SELECT Id, ROW_NUMBER() OVER (PARTITION BY AuctionId, LotNumber, TypistSlot ORDER BY Id) rn
+                                    FROM auction.TypistEntries WHERE IsResolved = 0) x WHERE x.rn > 1);
+
+                CREATE UNIQUE INDEX UX_TypistEntries_Auction_Lot_Slot_Active
+                    ON auction.TypistEntries (AuctionId, LotNumber, TypistSlot) WHERE IsResolved = 0;
+            END
+        ");
         // AuctionTransactions table
         db.Database.ExecuteSqlRaw(@"
             IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'AuctionTransactions')

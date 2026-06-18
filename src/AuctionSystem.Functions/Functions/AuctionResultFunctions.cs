@@ -634,6 +634,13 @@ public class AuctionResultFunctions
         if (body == null || body.AuctionId <= 0)
             return await SimJson(req, System.Net.HttpStatusCode.BadRequest, new { error = "auctionId is required." });
 
+        // Don't sell while the typist sim is still running for this auction. The sell's DB load can slow a
+        // typist batch past the queue visibility timeout, triggering a redelivery that double-types lots
+        // (a lot won by two brokers -> duplicate results). Make the user wait until typing is Done.
+        var simStatus = await _db.Auctions.Where(a => a.Id == body.AuctionId).Select(a => a.TypistSimStatus).FirstOrDefaultAsync();
+        if (!string.IsNullOrEmpty(simStatus) && !simStatus.StartsWith("Done") && !simStatus.StartsWith("Failed"))
+            return await SimJson(req, System.Net.HttpStatusCode.Conflict, new { error = $"Typist simulation is still running ({simStatus}). Wait until it's Done before selling." });
+
         var minC = Math.Max(0m, body.MinCommission ?? 0m);
         var maxC = Math.Max(minC, body.MaxCommission ?? minC);
         var maxPerInvoice = Math.Clamp(body.MaxLotsPerInvoice ?? 10, 1, 100);
