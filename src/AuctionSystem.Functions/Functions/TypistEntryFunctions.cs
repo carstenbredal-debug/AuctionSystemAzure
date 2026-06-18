@@ -322,6 +322,18 @@ public class TypistEntryFunctions
         var winningPool = msg.BrokerIds is { Count: > 0 } ? msg.BrokerIds.Where(activeBrokers.Contains).Distinct().ToList() : activeBrokers;
         if (winningPool.Count == 0) { auction.TypistSimStatus = "Failed: no active brokers"; await _db.SaveChangesAsync(); return; }
 
+        // Only win lots for brokers that ALREADY have a linked buyer, so every typed lot is sellable
+        // through an existing broker→buyer combination (we use the links that are there; we never create
+        // any). This is what makes the whole auction sellable end-to-end without inventing relationships.
+        var linkedBrokers = (await _db.BrokerBuyers.Select(bb => bb.BrokerId).Distinct().ToListAsync()).ToHashSet();
+        winningPool = winningPool.Where(linkedBrokers.Contains).ToList();
+        if (winningPool.Count == 0)
+        {
+            auction.TypistSimStatus = "Failed: no active broker has a linked buyer — link customers to brokers first.";
+            await _db.SaveChangesAsync();
+            return;
+        }
+
         var rnd = new Random();
         var minP = Math.Max(0.01m, msg.MinPrice ?? 50m);
         var maxP = Math.Max(minP, msg.MaxPrice ?? 500m);
