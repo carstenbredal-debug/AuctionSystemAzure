@@ -140,6 +140,49 @@ else
     {
         <div class="alert @(_sellError ? "alert-danger" : "alert-success") mt-3" style="max-width:760px">@_sellMessage</div>
     }
+
+    <hr class="my-4" style="max-width:760px" />
+
+    <h5>Broker Simulator <span class="text-muted">(concurrency test)</span></h5>
+    <p class="text-muted" style="max-width:760px">
+        Runs N brokers <strong>at the same time</strong>, each selling and re-invoicing its own lots through
+        the real path — stressing simultaneous broker activity (atomic claims, invoicing, the BC drainer,
+        the credit-note path). Only runs once the typist is Done.
+    </p>
+    <div class="row g-3" style="max-width:760px">
+        <div class="col-md-3">
+            <label class="form-label">Brokers (concurrent)</label>
+            <input type="number" min="1" max="50" class="form-control" @bind="_brokerSimCount" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Duration (seconds)</label>
+            <input type="number" min="1" max="120" class="form-control" @bind="_brokerSimDuration" />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Commission %</label>
+            <input type="number" min="0" step="0.01" class="form-control" @bind="_brokerSimCommission" />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Re-invoice %</label>
+            <input type="number" min="0" max="100" class="form-control" @bind="_brokerSimReinvoicePct" />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Max lots/inv</label>
+            <input type="number" min="1" max="100" class="form-control" @bind="_brokerSimMaxLots" />
+        </div>
+    </div>
+    <button class="btn btn-warning mt-3" @onclick="RunBrokerSim" disabled="@(_running || _auctionId <= 0)">
+        @if (_brokerSimRunning)
+        {
+            <span class="spinner-border spinner-border-sm me-1"></span>
+        }
+        Run @_brokerSimCount brokers
+    </button>
+
+    @if (_brokerSimMessage != null)
+    {
+        <div class="alert @(_brokerSimError ? "alert-danger" : "alert-success") mt-3" style="max-width:760px">@_brokerSimMessage</div>
+    }
 }
 
 @code {
@@ -169,6 +212,16 @@ else
     private bool _selling;
     private string? _sellMessage;
     private bool _sellError;
+
+    // Broker concurrency simulator
+    private int _brokerSimCount = 15;
+    private int _brokerSimDuration = 30;
+    private decimal _brokerSimCommission = 1.5m;
+    private int _brokerSimReinvoicePct = 10;
+    private int _brokerSimMaxLots = 10;
+    private bool _brokerSimRunning;
+    private string? _brokerSimMessage;
+    private bool _brokerSimError;
 
     protected override async Task OnInitializedAsync()
     {
@@ -452,6 +505,50 @@ else
         {
             _running = false;
             _selling = false;
+        }
+    }
+
+    private async Task RunBrokerSim()
+    {
+        if (_auctionId <= 0) return;
+        _running = true;
+        _brokerSimRunning = true;
+        _brokerSimMessage = null;
+        _brokerSimError = false;
+        try
+        {
+            var resp = await Api.SimulateBrokersAsync(_auctionId, _brokerSimCount, _brokerSimDuration, _brokerSimCommission, _brokerSimReinvoicePct, _brokerSimMaxLots);
+            var json = await resp.Content.ReadAsStringAsync();
+            if (!resp.IsSuccessStatusCode)
+            {
+                _brokerSimMessage = $"Failed: {(int)resp.StatusCode} {resp.ReasonPhrase}. {json}";
+                _brokerSimError = true;
+            }
+            else
+            {
+                var root = JsonDocument.Parse(json).RootElement;
+                if (root.TryGetProperty("error", out var errEl) && errEl.ValueKind == JsonValueKind.String)
+                {
+                    _brokerSimMessage = errEl.GetString();
+                    _brokerSimError = true;
+                }
+                else
+                {
+                    int Get(string p) => root.TryGetProperty(p, out var e) && e.ValueKind == JsonValueKind.Number ? e.GetInt32() : 0;
+                    _brokerSimMessage = $"{Get("brokers")} brokers ran concurrently for {Get("durationSeconds")}s — {Get("sold")} sold, {Get("invoices")} invoice(s), {Get("reinvoiced")} re-invoiced ({Get("creditNotes")} credit note(s)), {Get("errors")} error(s). BC posting runs in the background.";
+                    _brokerSimError = Get("errors") > 0;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _brokerSimMessage = $"Error: {ex.Message}";
+            _brokerSimError = true;
+        }
+        finally
+        {
+            _running = false;
+            _brokerSimRunning = false;
         }
     }
 }

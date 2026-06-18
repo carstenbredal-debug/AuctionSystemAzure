@@ -10,6 +10,7 @@ using AuctionSystem.Functions.Services;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace AuctionSystem.Functions.Functions;
@@ -22,6 +23,7 @@ public class AuctionResultFunctions
     private readonly BlobStorageService? _blobStorage;
     private readonly BusinessCentralSyncService? _bcSyncService;
     private readonly BcPushQueue? _bcPushQueue;
+    private readonly IServiceScopeFactory? _scopeFactory;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -29,7 +31,7 @@ public class AuctionResultFunctions
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public AuctionResultFunctions(AuctionDbContext db, CatalogDbContext catalogDb, ILogger<AuctionResultFunctions> logger, BlobStorageService? blobStorage = null, BusinessCentralSyncService? bcSyncService = null, BcPushQueue? bcPushQueue = null)
+    public AuctionResultFunctions(AuctionDbContext db, CatalogDbContext catalogDb, ILogger<AuctionResultFunctions> logger, BlobStorageService? blobStorage = null, BusinessCentralSyncService? bcSyncService = null, BcPushQueue? bcPushQueue = null, IServiceScopeFactory? scopeFactory = null)
     {
         _db = db;
         _catalogDb = catalogDb;
@@ -37,6 +39,7 @@ public class AuctionResultFunctions
         _blobStorage = blobStorage;
         _bcSyncService = bcSyncService;
         _bcPushQueue = bcPushQueue;
+        _scopeFactory = scopeFactory;
     }
 
     [Function("SubmitAuctionResult")]
@@ -780,6 +783,125 @@ public class AuctionResultFunctions
         resp.Headers.Add("Content-Type", "application/json");
         await resp.WriteStringAsync(JsonSerializer.Serialize(body, JsonOptions));
         return resp;
+    }
+
+    private record SimulateBrokersRequest(int AuctionId, int? BrokerCount, int? DurationSeconds, decimal? Commission, int? ReinvoicePercent, int? MaxLotsPerInvoice);
+
+    private class BrokerSimResult { public int BrokerId; public int Sold; public int Invoices; public int CreditNotes; public int Reinvoiced; public int Errors; }
+
+    // Concurrency simulator: N brokers selling + re-invoicing their own lots AT THE SAME TIME, to stress
+    // the real flow under simultaneous broker activity (atomic claims, invoice creation, the BC drainer,
+    // the credit-note path). Each broker runs in its OWN DbContext scope so the parallelism is genuine.
+    [Function("SimulateBrokers")]
+    public async Task<HttpResponseData> SimulateBrokers(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auction-results/simulate-brokers")] HttpRequestData req)
+    {
+        var body = await req.ReadFromJsonAsync<SimulateBrokersRequest>();
+        if (body == null || body.AuctionId <= 0)
+            return await SimJson(req, System.Net.HttpStatusCode.BadRequest, new { error = "auctionId is required." });
+        if (_scopeFactory is null)
+            return await SimJson(req, System.Net.HttpStatusCode.InternalServerError, new { error = "Broker simulator unavailable (no scope factory)." });
+
+        // Same guard as the sell: don't run while the typist sim is still typing.
+        var simStatus = await _db.Auctions.Where(a => a.Id == body.AuctionId).Select(a => a.TypistSimStatus).FirstOrDefaultAsync();
+        if (!string.IsNullOrEmpty(simStatus) && !simStatus.StartsWith("Done") && !simStatus.StartsWith("Failed"))
+            return await SimJson(req, System.Net.HttpStatusCode.Conflict, new { error = $"Typist simulation is still running ({simStatus}). Wait until it's Done." });
+
+        var commission = Math.Max(0m, body.Commission ?? 1.5m);
+        var reinvPct = Math.Clamp(body.ReinvoicePercent ?? 0, 0, 100);
+        var maxPerInvoice = Math.Clamp(body.MaxLotsPerInvoice ?? 10, 1, 100);
+        var durationSec = Math.Clamp(body.DurationSeconds ?? 30, 1, 120);
+        var brokerCount = Math.Clamp(body.BrokerCount ?? 15, 1, 50);
+        var deadline = DateTime.UtcNow.AddSeconds(durationSec);
+
+        // Brokers that have unsold lots in this auction AND a linked buyer (only those can sell).
+        var linkedBrokers = (await _db.BrokerBuyers.Select(bb => bb.BrokerId).Distinct().ToListAsync()).ToHashSet();
+        var brokersWithUnsold = await _db.AuctionResults
+            .Where(r => r.AuctionId == body.AuctionId && r.SoldToBuyerId == null)
+            .Select(r => r.BrokerId).Distinct().ToListAsync();
+        var candidates = brokersWithUnsold.Where(linkedBrokers.Contains).Take(brokerCount).ToList();
+        if (candidates.Count == 0)
+            return await SimJson(req, System.Net.HttpStatusCode.OK, new { auctionId = body.AuctionId, brokers = 0, message = "No brokers with unsold lots and a linked buyer." });
+
+        // Fan out — every broker runs concurrently, each in its own scope/context.
+        var results = await Task.WhenAll(candidates.Select(brokerId =>
+            RunBrokerInScopeAsync(body.AuctionId, brokerId, commission, reinvPct, maxPerInvoice, deadline)));
+
+        return await SimJson(req, System.Net.HttpStatusCode.OK, new
+        {
+            auctionId = body.AuctionId,
+            brokers = results.Length,
+            durationSeconds = durationSec,
+            sold = results.Sum(r => r.Sold),
+            invoices = results.Sum(r => r.Invoices),
+            creditNotes = results.Sum(r => r.CreditNotes),
+            reinvoiced = results.Sum(r => r.Reinvoiced),
+            errors = results.Sum(r => r.Errors),
+            perBroker = results.OrderBy(r => r.BrokerId).Select(r => new { broker = r.BrokerId, r.Sold, r.Invoices, r.CreditNotes, r.Errors })
+        });
+    }
+
+    // Run one broker's sell/re-invoice loop on a FRESH scope (own DbContext + services), so 15 of these
+    // can run truly in parallel without sharing the request's context.
+    private async Task<BrokerSimResult> RunBrokerInScopeAsync(int auctionId, int brokerId, decimal commission, int reinvPct, int maxPerInvoice, DateTime deadline)
+    {
+        try
+        {
+            using var scope = _scopeFactory!.CreateScope();
+            var fn = ActivatorUtilities.CreateInstance<AuctionResultFunctions>(scope.ServiceProvider);
+            return await fn.SimulateSellForBrokerAsync(auctionId, brokerId, commission, reinvPct, maxPerInvoice, deadline);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Broker sim failed for broker {Broker}", brokerId);
+            return new BrokerSimResult { BrokerId = brokerId, Errors = 1 };
+        }
+    }
+
+    // Sell (and optionally re-invoice) a single broker's unsold lots, looping until they're exhausted or
+    // the shared deadline passes. Uses this instance's (scoped) _db, so it's safe to run concurrently with
+    // other brokers' runners. Invoked by RunBrokerInScopeAsync on the per-scope instance (private access
+    // to another instance of the same type is allowed in C#).
+    private async Task<BrokerSimResult> SimulateSellForBrokerAsync(int auctionId, int brokerId, decimal commission, int reinvPct, int maxPerInvoice, DateTime deadline)
+    {
+        var res = new BrokerSimResult { BrokerId = brokerId };
+        var rnd = new Random(brokerId * 100003 + Environment.TickCount);
+
+        var buyerIds = await _db.BrokerBuyers.Where(bb => bb.BrokerId == brokerId).Select(bb => bb.BuyerId).Distinct().ToListAsync();
+        if (buyerIds.Count == 0) return res;
+        var buyers = await _db.Buyers.Where(b => buyerIds.Contains(b.Id)).ToDictionaryAsync(b => b.Id);
+        var buyersByBroker = new Dictionary<int, List<int>> { [brokerId] = buyerIds };
+
+        while (DateTime.UtcNow < deadline)
+        {
+            var batch = await _db.AuctionResults
+                .Where(r => r.AuctionId == auctionId && r.BrokerId == brokerId && r.SoldToBuyerId == null)
+                .OrderBy(r => r.LotNumber).Take(40).ToListAsync();
+            if (batch.Count == 0) break;
+
+            var (soldIds, inv, _) = await SimSellBatchAsync(batch, buyersByBroker, buyers, commission, commission, maxPerInvoice, rnd);
+            res.Sold += soldIds.Count;
+            res.Invoices += inv;
+            if (soldIds.Count == 0) break; // claimed nothing — stop instead of spinning
+
+            if (reinvPct > 0)
+            {
+                var pick = soldIds.OrderBy(_ => rnd.Next()).Take((int)Math.Ceiling(soldIds.Count * reinvPct / 100.0)).ToList();
+                var toReinvoice = await _db.AuctionResults.Where(r => pick.Contains(r.Id) && r.SoldToBuyerId != null).ToListAsync();
+                if (toReinvoice.Count > 0)
+                {
+                    foreach (var r in toReinvoice) { r.LastModifiedBy = "BROKERSIM"; r.LastModifiedAt = DateTime.UtcNow; }
+                    var (_, takenBackIds, _) = await ProcessBrokerTakebacksAsync(toReinvoice);
+                    await _db.SaveChangesAsync();
+                    res.CreditNotes += (await GenerateCreditNotesAsync(takenBackIds)).Count;
+                    res.Reinvoiced += takenBackIds.Count;
+                    var reSell = await _db.AuctionResults.Where(r => takenBackIds.Contains(r.Id) && r.SoldToBuyerId == null).ToListAsync();
+                    var (_, inv2, _) = await SimSellBatchAsync(reSell, buyersByBroker, buyers, commission, commission, maxPerInvoice, rnd);
+                    res.Invoices += inv2;
+                }
+            }
+        }
+        return res;
     }
 
     [Function("GetAuctionResultsByBuyer")]
