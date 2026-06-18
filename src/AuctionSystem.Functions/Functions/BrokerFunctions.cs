@@ -266,7 +266,7 @@ public class BrokerFunctions
         if (dto == null) return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
         var buyer = await _db.Buyers.FindAsync(id);
         if (buyer == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
-        buyer.BuyerNumber = dto.BuyerNumber;
+        buyer.BuyerNumber = dto.BuyerNumber?.Trim() ?? buyer.BuyerNumber;
         buyer.Name = dto.Name;
         buyer.Name2 = dto.Name2;
         buyer.SearchName = dto.SearchName;

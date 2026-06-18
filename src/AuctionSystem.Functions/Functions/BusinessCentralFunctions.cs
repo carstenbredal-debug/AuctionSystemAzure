@@ -842,8 +842,10 @@ public class BusinessCentralFunctions
 
         // BC side: invoiced / credited per customer from the ledger.
         var allEntries = await _bcClient.GetCustomerLedgerEntriesAsync(companyId);
+        // Trim the merge key on both sides so a stray trailing space (e.g. "8521 ") can't split one
+        // buyer into a web-only row and a BC-only row with equal-but-opposite deltas.
         var bcByCustomer = allEntries
-            .GroupBy(e => e.CustomerNo)
+            .GroupBy(e => (e.CustomerNo ?? "").Trim())
             .ToDictionary(g => g.Key, g => (
                 Invoiced: g.Where(e => IsDocType(e.DocumentType, "Invoice")).Sum(e => e.OriginalAmount),
                 Credited: g.Where(e => IsDocType(e.DocumentType, "Credit Memo")).Sum(e => Math.Abs(e.OriginalAmount))));
@@ -860,8 +862,10 @@ public class BusinessCentralFunctions
                 Unpushed = g.Sum(i => i.BcInvoiceNumber == null || i.BcInvoiceNumber == "" ? 1 : 0)
             })
             .ToListAsync();
-        var webByBuyer = webRows.ToDictionary(x => x.BuyerNumber);
-        var names = await _db.Buyers.ToDictionaryAsync(b => b.BuyerNumber, b => b.Name);
+        var webByBuyer = webRows.ToDictionary(x => (x.BuyerNumber ?? "").Trim());
+        var names = (await _db.Buyers.ToListAsync())
+            .GroupBy(b => (b.BuyerNumber ?? "").Trim())
+            .ToDictionary(g => g.Key, g => g.First().Name);
 
         var rows = bcByCustomer.Keys.Union(webByBuyer.Keys)
             .OrderBy(n => n)

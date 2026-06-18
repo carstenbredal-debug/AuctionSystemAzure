@@ -1077,11 +1077,15 @@ public class BusinessCentralSyncService
     {
         var companyId = await _bcClient.ResolveCompanyIdAsync();
 
+        // Trim both sides of the match: a stray trailing space on a local number (e.g. an imported
+        // "8521 ") otherwise fails .Contains against BC's "8521" and the entity flaps unsynced forever.
         var vendorNumbers = (await _bcClient.GetVendorsAsync(companyId))
             .Select(v => v.Number).Where(n => !string.IsNullOrWhiteSpace(n))
+            .Select(n => n!.Trim())
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var customerNumbers = (await _bcClient.GetCustomersAsync(companyId))
             .Select(c => c.Number).Where(n => !string.IsNullOrWhiteSpace(n))
+            .Select(n => n!.Trim())
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var changed = 0;
@@ -1096,17 +1100,17 @@ public class BusinessCentralSyncService
         foreach (var b in await _db.Set<Broker>().Where(b => b.IsActive).ToListAsync())
         {
             var f = b.BcSyncedAt;
-            if (Apply(vendorNumbers.Contains(b.BrokerNumber), ref f)) { b.BcSyncedAt = f; changed++; }
+            if (Apply(vendorNumbers.Contains((b.BrokerNumber ?? "").Trim()), ref f)) { b.BcSyncedAt = f; changed++; }
         }
         foreach (var fa in await _db.Set<Farmer>().Where(f => f.IsActive).ToListAsync())
         {
             var f = fa.BcSyncedAt;
-            if (Apply(vendorNumbers.Contains(fa.FarmerNumber), ref f)) { fa.BcSyncedAt = f; changed++; }
+            if (Apply(vendorNumbers.Contains((fa.FarmerNumber ?? "").Trim()), ref f)) { fa.BcSyncedAt = f; changed++; }
         }
         foreach (var bu in await _db.Set<Buyer>().Where(b => b.IsActive).ToListAsync())
         {
             var f = bu.BcSyncedAt;
-            if (Apply(customerNumbers.Contains(bu.BuyerNumber), ref f)) { bu.BcSyncedAt = f; changed++; }
+            if (Apply(customerNumbers.Contains((bu.BuyerNumber ?? "").Trim()), ref f)) { bu.BcSyncedAt = f; changed++; }
         }
 
         if (changed > 0) await _db.SaveChangesAsync();
