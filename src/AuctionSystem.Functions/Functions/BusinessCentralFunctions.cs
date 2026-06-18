@@ -863,9 +863,17 @@ public class BusinessCentralFunctions
             })
             .ToListAsync();
         var webByBuyer = webRows.ToDictionary(x => (x.BuyerNumber ?? "").Trim());
-        var names = (await _db.Buyers.ToListAsync())
+        var buyerInfo = (await _db.Buyers.ToListAsync())
             .GroupBy(b => (b.BuyerNumber ?? "").Trim())
-            .ToDictionary(g => g.Key, g => g.First().Name);
+            .ToDictionary(g => g.Key, g => g.First());
+
+        // Web invoices are NET; BC posts the customer ledger GROSS. Only a Polish DOMESTIC sale carries
+        // VAT — identified as blank currency (transacts in local currency) + VAT Bus. Posting Group
+        // POLAND → 23%. EU (reverse charge) and NONEU (export) are 0%, so web net already equals BC.
+        static decimal VatRate(Buyer? b) =>
+            b != null && string.IsNullOrWhiteSpace(b.Currency)
+                && string.Equals(b.VatBusPostingGroup, "POLAND", StringComparison.OrdinalIgnoreCase)
+                ? 0.23m : 0m;
 
         var rows = bcByCustomer.Keys.Union(webByBuyer.Keys)
             .OrderBy(n => n)
@@ -873,15 +881,21 @@ public class BusinessCentralFunctions
             {
                 bcByCustomer.TryGetValue(num, out var bc);
                 webByBuyer.TryGetValue(num, out var web);
+                buyerInfo.TryGetValue(num, out var binfo);
+                var rate = VatRate(binfo);
                 var webInv = web?.Invoiced ?? 0m;
                 var webCr = web?.Credited ?? 0m;
-                var dInv = Math.Round(webInv - bc.Invoiced, 2);
-                var dCr = Math.Round(webCr - bc.Credited, 2);
+                var vat = Math.Round(webInv * rate, 2);          // VAT added on top of the net invoiced
+                var vatCr = Math.Round(webCr * rate, 2);
+                // Compare web GROSS (net + VAT) against BC's gross ledger so Polish domestic balances.
+                var dInv = Math.Round(webInv + vat - bc.Invoiced, 2);
+                var dCr = Math.Round(webCr + vatCr - bc.Credited, 2);
                 return new
                 {
                     buyerNumber = num,
-                    name = names.TryGetValue(num, out var nm) ? nm : null,
+                    name = binfo?.Name,
                     webInvoiced = webInv,
+                    vat,
                     webCredited = webCr,
                     bcInvoiced = bc.Invoiced,
                     bcCredited = bc.Credited,

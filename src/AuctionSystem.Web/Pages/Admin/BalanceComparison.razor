@@ -30,7 +30,7 @@ else if (_result != null)
         <thead>
             <tr>
                 <th>Buyer</th><th>Name</th>
-                <th class="text-end">Web invoiced</th><th class="text-end">BC invoiced</th><th class="text-end">Δ inv</th>
+                <th class="text-end">Web invoiced</th><th class="text-end">VAT</th><th class="text-end">BC invoiced</th><th class="text-end">Δ inv</th>
                 <th class="text-end">Web credited</th><th class="text-end">BC credited</th><th class="text-end">Δ cred</th>
                 <th class="text-end">Unpushed</th>
             </tr>
@@ -42,6 +42,7 @@ else if (_result != null)
                     <td>@r.BuyerNumber</td>
                     <td>@r.Name</td>
                     <td class="text-end">@r.WebInvoiced.ToString("N2")</td>
+                    <td class="text-end @(r.Vat != 0 ? "text-info" : "text-muted")">@r.Vat.ToString("N2")</td>
                     <td class="text-end">@r.BcInvoiced.ToString("N2")</td>
                     <td class="text-end @(r.DeltaInvoiced != 0 ? "fw-bold text-danger" : "text-muted")">@r.DeltaInvoiced.ToString("N2")</td>
                     <td class="text-end">@r.WebCredited.ToString("N2")</td>
@@ -55,6 +56,7 @@ else if (_result != null)
             <tr class="fw-bold">
                 <td colspan="2">Totals</td>
                 <td class="text-end">@_result.Rows.Sum(x => x.WebInvoiced).ToString("N2")</td>
+                <td class="text-end">@_result.Rows.Sum(x => x.Vat).ToString("N2")</td>
                 <td class="text-end">@_result.Rows.Sum(x => x.BcInvoiced).ToString("N2")</td>
                 <td class="text-end">@_result.Rows.Sum(x => x.DeltaInvoiced).ToString("N2")</td>
                 <td class="text-end">@_result.Rows.Sum(x => x.WebCredited).ToString("N2")</td>

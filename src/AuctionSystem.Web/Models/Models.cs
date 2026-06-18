@@ -1166,6 +1166,7 @@ public class BalanceComparisonRow
     public string BuyerNumber { get; set; } = "";
     public string? Name { get; set; }
     public decimal WebInvoiced { get; set; }
+    public decimal Vat { get; set; }
     public decimal WebCredited { get; set; }
     public decimal BcInvoiced { get; set; }
     public decimal BcCredited { get; set; }
