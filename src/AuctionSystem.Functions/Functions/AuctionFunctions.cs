@@ -267,6 +267,9 @@ public class AuctionFunctions
                 CROSS APPLY STRING_SPLIT(IncludedBoxNumbers, ',')
                 WHERE TRY_CAST(LTRIM(RTRIM(value)) AS INT) > 0
             );
+            -- Skins with no farmer get the catch-all 'Unknow' farmer so they aren't lost from per-farmer
+            -- reports / drill-downs (and reconcile with the 'Unknow' farmer master record).
+            UPDATE auction.[{skinsTable}] SET Farmer = 'Unknow' WHERE Farmer IS NULL OR LTRIM(RTRIM(Farmer)) = '';
         ");
 
         // 3. Boxes snapshot — aggregated view + location/weight from boxstatingfromkphg.

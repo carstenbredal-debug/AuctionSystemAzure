@@ -670,7 +670,8 @@ public class SkinFunctions
                 await using var reader = await cmd.ExecuteReaderAsync();
                 while (await reader.ReadAsync())
                 {
-                    var farmer = reader.IsDBNull(0) ? "(unknown)" : reader.GetString(0);
+                    var farmerRaw = reader.IsDBNull(0) ? null : reader.GetString(0);
+                    var farmer = string.IsNullOrWhiteSpace(farmerRaw) ? "Unknow" : farmerRaw; // catch-all farmer for skins with no farmer
                     var box = reader.GetInt32(1);
                     var cnt = reader.GetInt32(2);
                     if (saleInfoByBox.TryGetValue(box, out var info)) // only sold boxes count
