@@ -1154,6 +1154,13 @@ public class ShipperListDto
     public bool IsActive { get; set; }
 }
 
+public class FarmerSalesRow
+{
+    public string Farmer { get; set; } = "";
+    public int SkinsSold { get; set; }
+    public decimal TotalValue { get; set; }
+}
+
 public class BalanceComparisonResult
 {
     public List<BalanceComparisonRow> Rows { get; set; } = new();

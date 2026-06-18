@@ -778,6 +778,9 @@ public class AuctionApiClient
     public async Task<HttpResponseMessage> SimulateBrokersAsync(int auctionId, int brokerCount, int durationSeconds, decimal commission, int reinvoicePercent, int maxLotsPerInvoice)
         => await _http.PostAsJsonAsync("api/auction-results/simulate-brokers", new { auctionId, brokerCount, durationSeconds, commission, reinvoicePercent, maxLotsPerInvoice });
 
+    public async Task<List<FarmerSalesRow>> GetFarmerSalesByAuctionAsync(int auctionId)
+        => await _http.GetFromJsonAsync<List<FarmerSalesRow>>($"api/skins/farmer-sales?auctionId={auctionId}") ?? new();
+
     public async Task<bool> ResetTypistLotAsync(int lotNumber)
     {
         var resp = await _http.PostAsync($"api/typist-entries/reset-lot/{lotNumber}", null);

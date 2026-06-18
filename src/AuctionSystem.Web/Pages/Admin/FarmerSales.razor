@@ -1,0 +1,76 @@
+@page "/admin/farmer-sales"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
+@inject AuctionApiClient Api
+
+<PageTitle>Farmers - Finance</PageTitle>
+
+<h1>Farmers</h1>
+<p class="text-muted">Skins sold and total value per farmer, for the selected auction.</p>
+
+<div class="row mb-3" style="max-width:520px">
+    <div class="col">
+        <label class="form-label">Auction</label>
+        <select class="form-select" @bind="_auctionId" @bind:after="Load">
+            <option value="0">— select an auction —</option>
+            @foreach (var a in _auctions ?? new())
+            {
+                <option value="@a.Id">@a.AuctionNumber — @a.Title</option>
+            }
+        </select>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <p><em>Loading…</em></p>
+}
+else if (_rows != null)
+{
+    <table class="table table-sm table-hover" style="max-width:720px">
+        <thead class="table-dark">
+            <tr><th>Farmer</th><th class="text-end">Skins sold</th><th class="text-end">Total value (€)</th></tr>
+        </thead>
+        <tbody>
+            @if (_rows.Count == 0)
+            {
+                <tr><td colspan="3" class="text-center text-muted py-3">No sold skins for this auction.</td></tr>
+            }
+            @foreach (var r in _rows)
+            {
+                <tr>
+                    <td>@r.Farmer</td>
+                    <td class="text-end">@r.SkinsSold.ToString("N0")</td>
+                    <td class="text-end">@r.TotalValue.ToString("N2")</td>
+                </tr>
+            }
+        </tbody>
+        @if (_rows.Count > 0)
+        {
+            <tfoot>
+                <tr class="fw-bold">
+                    <td>Total — @_rows.Count farmer(s)</td>
+                    <td class="text-end">@_rows.Sum(x => x.SkinsSold).ToString("N0")</td>
+                    <td class="text-end">@_rows.Sum(x => x.TotalValue).ToString("N2")</td>
+                </tr>
+            </tfoot>
+        }
+    </table>
+}
+
+@code {
+    private List<AuctionDto>? _auctions;
+    private int _auctionId;
+    private List<FarmerSalesRow>? _rows;
+    private bool _loading;
+
+    protected override async Task OnInitializedAsync() => _auctions = await Api.GetAuctionsAsync();
+
+    private async Task Load()
+    {
+        if (_auctionId <= 0) { _rows = null; return; }
+        _loading = true;
+        try { _rows = await Api.GetFarmerSalesByAuctionAsync(_auctionId); }
+        catch { _rows = new(); }
+        finally { _loading = false; }
+    }
+}

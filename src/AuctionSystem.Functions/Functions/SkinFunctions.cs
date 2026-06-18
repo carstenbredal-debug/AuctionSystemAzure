@@ -640,6 +640,60 @@ public class SkinFunctions
         return response;
     }
 
+    // Per-farmer sold skins + total value for ONE auction (the Finance > Farmers page). Skins live in the
+    // auction snapshot table grouped by box; a box counts only if it sold (it's in the sold-box sale map),
+    // and value = skins-in-box * the box's sale price per skin.
+    [Function("GetFarmerSalesByAuction")]
+    public async Task<HttpResponseData> GetFarmerSalesByAuction(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "skins/farmer-sales")] HttpRequestData req)
+    {
+        var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+        int.TryParse(query["auctionId"], out var auctionId);
+        if (auctionId <= 0)
+        {
+            var bad = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+            await bad.WriteStringAsync("auctionId query parameter is required");
+            return bad;
+        }
+
+        var auction = await _auctionDb.Auctions.FindAsync(auctionId);
+        var rows = new List<object>();
+        if (auction != null)
+        {
+            var saleInfoByBox = await GetSoldBoxSaleInfoAsync(auctionId);
+            var perFarmer = new Dictionary<string, (int Skins, decimal Value)>();
+            try
+            {
+                await using var conn = new SqlConnection(_auctionDb.Database.GetConnectionString()!);
+                await conn.OpenAsync();
+                await using var cmd = new SqlCommand($"SELECT Farmer, BoxNumber, COUNT(*) AS Cnt FROM auction.[{auction.AuctionNumber}.Skins] GROUP BY Farmer, BoxNumber", conn);
+                await using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    var farmer = reader.IsDBNull(0) ? "(unknown)" : reader.GetString(0);
+                    var box = reader.GetInt32(1);
+                    var cnt = reader.GetInt32(2);
+                    if (saleInfoByBox.TryGetValue(box, out var info)) // only sold boxes count
+                    {
+                        var cur = perFarmer.TryGetValue(farmer, out var v) ? v : (0, 0m);
+                        perFarmer[farmer] = (cur.Item1 + cnt, cur.Item2 + cnt * info.PriceEur);
+                    }
+                }
+            }
+            catch { /* snapshot table may not exist for this auction */ }
+
+            rows = perFarmer
+                .OrderByDescending(kv => kv.Value.Value)
+                .Select(kv => (object)new { farmer = kv.Key, skinsSold = kv.Value.Skins, totalValue = kv.Value.Value })
+                .ToList();
+        }
+
+        var resp = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        resp.Headers.Add("Content-Type", "application/json");
+        await resp.WriteStringAsync(JsonSerializer.Serialize(rows, JsonOptions));
+        return resp;
+    }
+
     private async Task<Dictionary<int, BoxSaleInfo>> GetSoldBoxSaleInfoAsync(int? auctionId = null)
     {
         // Get auction results (any result from the typist means hammer price is determined)
