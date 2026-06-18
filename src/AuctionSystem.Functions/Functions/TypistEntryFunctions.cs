@@ -311,24 +311,11 @@ public class TypistEntryFunctions
         var msg = JsonSerializer.Deserialize<TypistSimMessage>(message, JsonOptions);
         if (msg == null) { _logger.LogWarning("Bad typist-sim message: {Msg}", message); return; }
 
-        // Serialize per auction: a redelivered / scaled-out duplicate of this message must NOT run
-        // concurrently with another worker on the same auction, or both type the same lots (each picks its
-        // own random winning broker -> the lot is "won" by two brokers, duplicate results). Hold a SQL
-        // app-lock for the whole batch; if another worker already holds it, this message just exits (that
-        // worker re-enqueues the continuation, so no progress is lost). The unique index is the backstop.
-        await using var lockConn = new Microsoft.Data.SqlClient.SqlConnection(_db.Database.GetConnectionString());
-        await lockConn.OpenAsync();
-        using (var lockCmd = lockConn.CreateCommand())
-        {
-            lockCmd.CommandText = "DECLARE @r int; EXEC @r = sp_getapplock @Resource=@res, @LockMode='Exclusive', @LockOwner='Session', @LockTimeout=5000; SELECT @r;";
-            lockCmd.Parameters.AddWithValue("@res", $"TypistSim-{msg.AuctionId}");
-            var rc = (int)(await lockCmd.ExecuteScalarAsync() ?? -999);
-            if (rc < 0)
-            {
-                _logger.LogInformation("Typist-sim for auction {Id} already being processed; skipping this (likely redelivered) message", msg.AuctionId);
-                return;
-            }
-        }
+        // NOTE: double-typing is prevented by the filtered UNIQUE index on TypistEntries plus the
+        // detach-on-conflict in TypeOneLotAsync — if a redelivered/concurrent worker races on the same
+        // lot, the second slot insert simply fails and that lot is skipped (no duplicate result). We do
+        // NOT take a per-auction app-lock here: holding it for the whole batch and skipping a contended
+        // continuation could delete that continuation message and stall the chain (observed as a hang).
 
         var auction = await _db.Auctions.FindAsync(msg.AuctionId);
         if (auction == null) { _logger.LogWarning("Typist-sim: auction {Id} not found", msg.AuctionId); return; }
