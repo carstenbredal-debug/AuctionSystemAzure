@@ -1023,6 +1023,22 @@ public class SettlementFunctions
 
     private async Task<string> ApplyPaymentToBcAsync(Invoice invoice, decimal? partialAmount = null)
     {
+        // Serialize payment application across concurrent clicks (several people / tabs applying at once).
+        // Without this, two applications can both read the SAME set of open BC payment entries and then
+        // both apply the same payment -> a double application or a missed payment. Hold a SQL app-lock for
+        // the whole application; concurrent callers WAIT for it (up to the timeout) rather than racing.
+        // Cross-instance safe (the function scales out), like the BC document-push lock.
+        await using var paymentLockConn = new Microsoft.Data.SqlClient.SqlConnection(_db.Database.GetConnectionString());
+        await paymentLockConn.OpenAsync();
+        using (var lockCmd = paymentLockConn.CreateCommand())
+        {
+            lockCmd.CommandText = "DECLARE @r int; EXEC @r = sp_getapplock @Resource = N'BcPaymentApply', @LockMode = N'Exclusive', @LockOwner = N'Session', @LockTimeout = 120000; SELECT @r;";
+            lockCmd.CommandTimeout = 150;
+            var rc = (int)(await lockCmd.ExecuteScalarAsync() ?? -999);
+            if (rc < 0)
+                _logger.LogWarning("BC payment applock not acquired (rc={Rc}); proceeding without cross-instance serialization", rc);
+        }
+
         var companyId = await _bcClient!.ResolveCompanyIdAsync();
 
         // Find the buyer's BC customer number
