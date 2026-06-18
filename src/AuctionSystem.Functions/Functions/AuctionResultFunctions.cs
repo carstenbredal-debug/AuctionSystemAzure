@@ -642,20 +642,31 @@ public class AuctionResultFunctions
         // continue). Count, when given, is the per-call batch the UI asks for; it's still capped here.
         const int MaxPerCall = 200;
         var take = body.Count is int cap && cap > 0 ? Math.Min(cap, MaxPerCall) : MaxPerCall;
+
+        // A lot can only sell to a buyer LINKED to its winning broker (optionally restricted to a chosen
+        // buyer set). Most brokers have no linked buyer, so pick lots ONLY from brokers that DO — otherwise
+        // "Lots to sell = N" grabs N lots in lot-number order, skips the unsellable ones, and sells far
+        // fewer than asked (the "asked for 10, got 2" case).
+        var restrict = body.BuyerIds is { Count: > 0 } ? body.BuyerIds.ToHashSet() : null;
+        var sellableBrokers = await _db.BrokerBuyers
+            .Where(bb => restrict == null || restrict.Contains(bb.BuyerId))
+            .Select(bb => bb.BrokerId).Distinct().ToListAsync();
+
         var results = await _db.AuctionResults
-            .Where(r => r.AuctionId == body.AuctionId && r.SoldToBuyerId == null)
+            .Where(r => r.AuctionId == body.AuctionId && r.SoldToBuyerId == null && sellableBrokers.Contains(r.BrokerId))
             .OrderBy(r => r.LotNumber)
             .Take(take)
             .ToListAsync();
         if (results.Count == 0)
-            return await SimJson(req, System.Net.HttpStatusCode.OK, new { auctionId = body.AuctionId, sold = 0, invoices = 0, skipped = 0, reinvoiced = 0, creditNotes = 0, remaining = 0, message = "No recorded-but-unsold lots to sell." });
+            return await SimJson(req, System.Net.HttpStatusCode.OK, new { auctionId = body.AuctionId, sold = 0, invoices = 0, skipped = 0, reinvoiced = 0, creditNotes = 0, remaining = 0,
+                message = sellableBrokers.Count == 0
+                    ? "No lots can sell — no buyers are linked to any winning broker (in the selected set). Link customers first."
+                    : "No recorded-but-unsold lots left to sell (for brokers that have a linked buyer)." });
 
-        // Linked buyers per broker (a lot may only sell to a buyer linked to its broker), optionally
-        // restricted to a chosen buyer set.
+        // Linked buyers per picked broker, for buyer assignment in the batch.
         var brokerIds = results.Select(r => r.BrokerId).Distinct().ToList();
         var links = await _db.BrokerBuyers.Where(bb => brokerIds.Contains(bb.BrokerId))
             .Select(bb => new { bb.BrokerId, bb.BuyerId }).ToListAsync();
-        var restrict = body.BuyerIds is { Count: > 0 } ? body.BuyerIds.ToHashSet() : null;
         var buyersByBroker = links
             .Where(l => restrict == null || restrict.Contains(l.BuyerId))
             .GroupBy(l => l.BrokerId)
