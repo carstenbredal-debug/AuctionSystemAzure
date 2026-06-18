@@ -239,6 +239,15 @@ public class BusinessCentralSyncService
                         break;
                 }
             }
+            catch (BcNumberSeriesJamException)
+            {
+                // BC's posting series is jammed — every remaining invoice would fail on the same number.
+                // Stop this pass instead of churning a draft for each; the next tick retries once BC is fixed.
+                result.Failed++;
+                result.Errors.Add(BcNumberSeriesJamStatus);
+                _logger.LogError("BC number series jammed — stopping the invoice push pass; will retry next tick.");
+                break;
+            }
             catch (Exception ex)
             {
                 result.Failed++;
@@ -288,6 +297,15 @@ public class BusinessCentralSyncService
                         _logger.LogWarning("Credit note {DocRef} not pushed: {Reason}", docRef, outcome.Reason);
                         break;
                 }
+            }
+            catch (BcNumberSeriesJamException)
+            {
+                // BC's posting series is jammed — every remaining credit note would fail the same way.
+                // Stop this pass; the next tick retries once BC is fixed.
+                result.Failed++;
+                result.Errors.Add(BcNumberSeriesJamStatus);
+                _logger.LogError("BC number series jammed — stopping the credit-note push pass; will retry next tick.");
+                break;
             }
             catch (Exception ex)
             {
@@ -400,6 +418,12 @@ public class BusinessCentralSyncService
             // claim so the next retry can run instead of being skipped as "concurrent". If BC
             // actually posted but the local save failed, the idempotency check recovers it on retry.
             await ReleaseBcPushClaimAsync(creditNote.Id);
+            if (IsBcNumberSeriesJam(ex.Message))
+            {
+                await RecordPushFailureAsync(creditNote.Id, BcNumberSeriesJamStatus);
+                _logger.LogError("BC number series jammed pushing credit note {Id}: {Msg}", creditNote.Id, ex.Message);
+                throw new BcNumberSeriesJamException(BcNumberSeriesJamStatus);
+            }
             await RecordPushFailureAsync(creditNote.Id, ex.Message);
             throw;
         }
@@ -782,6 +806,25 @@ public class BusinessCentralSyncService
             || message.Contains("Please retry the activity", StringComparison.OrdinalIgnoreCase)
             || message.Contains("could not be completed at this time", StringComparison.OrdinalIgnoreCase));
 
+    // BC's posting number series can't issue the next number because a record already holds it
+    // ("... is already assigned to a record. Update the number series ..."). This is a BC-side config
+    // issue — NOT transient and not our bug. Retrying can't help and only churns drafts, and it blocks
+    // EVERY pending document the same way, so the drainer should stop the whole pass and surface a clear
+    // status until the series is fixed in BC. Thrown as BcNumberSeriesJamException to abort the pass.
+    private static bool IsBcNumberSeriesJam(string? message) =>
+        !string.IsNullOrEmpty(message)
+        && (message.Contains("already assigned to a record", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("Update the number series", StringComparison.OrdinalIgnoreCase));
+
+    private const string BcNumberSeriesJamStatus =
+        "BC number series needs attention: BC won't issue the next posted number (\"already assigned to a record — update the number series\"). Fix the Sales Invoice posting No. Series in BC; this posts automatically once a free number is available.";
+
+    /// <summary>Signals that BC's posting number series is jammed, so the drainer stops this pass.</summary>
+    public sealed class BcNumberSeriesJamException : Exception
+    {
+        public BcNumberSeriesJamException(string message) : base(message) { }
+    }
+
     private async Task<BcPushResult> PushInvoiceToBcCoreAsync(Invoice invoice)
     {
         var companyId = await _bcClient.ResolveCompanyIdAsync();
@@ -875,6 +918,12 @@ public class BusinessCentralSyncService
             // so the next retry can run instead of being skipped as "concurrent". If BC actually
             // posted but the local save failed, the idempotency check recovers it on retry.
             await ReleaseBcPushClaimAsync(invoice.Id);
+            if (IsBcNumberSeriesJam(ex.Message))
+            {
+                await RecordPushFailureAsync(invoice.Id, BcNumberSeriesJamStatus);
+                _logger.LogError("BC number series jammed pushing invoice {Id}: {Msg}", invoice.Id, ex.Message);
+                throw new BcNumberSeriesJamException(BcNumberSeriesJamStatus);
+            }
             await RecordPushFailureAsync(invoice.Id, ex.Message);
             throw;
         }
