@@ -75,6 +75,11 @@ public class SettlementFunctions
         var invoice = await _db.Invoices.FirstOrDefaultAsync(i => i.Id == invoiceId);
         if (invoice == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
 
+        // Remember the prior state so we can roll back if the BC payment application below fails — marking
+        // Paid locally must NOT stick when BC didn't actually register the payment.
+        var previousStatus = invoice.Status;
+        var previousShipping = invoice.ShippingStatus;
+
         invoice.Status = status;
         if (body.ReleaseForShipping)
         {
@@ -120,6 +125,11 @@ public class SettlementFunctions
             {
                 _logger.LogWarning(ex, "Failed to apply payment in BC for invoice {Id}", invoice.Id);
                 bcPaymentError = ex.Message;
+                // BC did NOT register the payment — roll the invoice back so it isn't falsely shown as
+                // Paid (and can't be sent to shipping). The caller surfaces bcPaymentError to the user.
+                invoice.Status = previousStatus;
+                invoice.ShippingStatus = previousShipping;
+                await _db.SaveChangesAsync();
             }
         }
 
@@ -243,6 +253,12 @@ public class SettlementFunctions
         var invoice = await _db.Invoices.Include(i => i.Lines).FirstOrDefaultAsync(i => i.Id == invoiceId);
         if (invoice == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
 
+        // Prior state, so we can roll back if the BC partial-payment application fails.
+        var previousStatus = invoice.Status;
+        var previousShipping = invoice.ShippingStatus;
+        var previousDpAmount = invoice.DownpaymentAmount;
+        var previousDpPct = invoice.DownpaymentPercentage;
+
         // Calculate downpayment amount
         decimal amount;
         if (body.IsPercentage)
@@ -283,6 +299,12 @@ public class SettlementFunctions
             {
                 _logger.LogWarning(ex, "Failed to apply partial payment in BC for invoice {Id}", invoice.Id);
                 bcPaymentError = ex.Message;
+                // BC did NOT register the partial payment — roll back the local downpayment/status.
+                invoice.Status = previousStatus;
+                invoice.ShippingStatus = previousShipping;
+                invoice.DownpaymentAmount = previousDpAmount;
+                invoice.DownpaymentPercentage = previousDpPct;
+                await _db.SaveChangesAsync();
             }
         }
 
