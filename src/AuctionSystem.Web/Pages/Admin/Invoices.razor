@@ -4,7 +4,13 @@
 
 <PageTitle>Invoices - Admin</PageTitle>
 
-<h1>Invoices</h1>
+<div class="d-flex justify-content-between align-items-center">
+    <h1>Invoices</h1>
+    <button class="btn btn-outline-primary" @onclick="LoadInvoices" disabled="@_refreshing">
+        @if (_refreshing) { <span class="spinner-border spinner-border-sm me-1"></span> }
+        Refresh
+    </button>
+</div>
 <p class="text-muted">All invoices and credit notes across all brokers and buyers.</p>
 
 @if (!string.IsNullOrEmpty(_bcError))
@@ -453,6 +459,7 @@ else
 
     private List<InvoiceSummaryDto> _invoices = new();
     private bool _loading = true;
+    private bool _refreshing;
     private string _tab = "all";
     private string _selectedBroker = "";
     private string _selectedBuyer = "";
@@ -517,12 +524,19 @@ else
         StateHasChanged();
     }
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnInitializedAsync() => await LoadInvoices();
+
+    // Re-fetch the full invoice list. Used on first load and by the Refresh button so the drainer's
+    // Not Posted -> posted progress shows without a full page reload (filters/tab are preserved).
+    private async Task LoadInvoices()
     {
+        _refreshing = true;
+        StateHasChanged();
         _invoices = await Api.GetAllInvoiceSummariesAsync();
         _brokerNames = _invoices.Where(i => !string.IsNullOrEmpty(i.BrokerName)).Select(i => i.BrokerName!).Distinct().OrderBy(n => n).ToList();
         _buyerNames = _invoices.Where(i => !string.IsNullOrEmpty(i.BuyerName)).Select(i => i.BuyerName!).Distinct().OrderBy(n => n).ToList();
         _loading = false;
+        _refreshing = false;
     }
 
     private void ClearFilters()
