@@ -420,6 +420,7 @@ public class InvoiceSummaryDto
     public string? BcSyncError { get; set; }
     public DateTime? BcSyncErrorAt { get; set; }
     public string? BrokerName { get; set; }
+    public string? BrokerNumber { get; set; }
     public string? BuyerName { get; set; }
     public string? BuyerNumber { get; set; }
     public int LinesCount { get; set; }

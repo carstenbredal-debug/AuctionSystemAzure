@@ -66,9 +66,9 @@ else
             <label class="form-label">Broker</label>
             <select class="form-select" @bind="_selectedBroker">
                 <option value="">All Brokers</option>
-                @foreach (var broker in _brokerNames)
+                @foreach (var b in _brokerOptions)
                 {
-                    <option value="@broker">@broker</option>
+                    <option value="@b.Name">@(string.IsNullOrEmpty(b.Number) ? b.Name : $"{b.Number} - {b.Name}")</option>
                 }
             </select>
         </div>
@@ -76,9 +76,9 @@ else
             <label class="form-label">Buyer</label>
             <select class="form-select" @bind="_selectedBuyer">
                 <option value="">All Buyers</option>
-                @foreach (var buyer in _buyerNames)
+                @foreach (var b in _buyerOptions)
                 {
-                    <option value="@buyer">@buyer</option>
+                    <option value="@b.Name">@(string.IsNullOrEmpty(b.Number) ? b.Name : $"{b.Number} - {b.Name}")</option>
                 }
             </select>
         </div>
@@ -157,9 +157,9 @@ else
                                     <br /><small class="text-muted">Ref: @inv.OriginalInvoiceNumber</small>
                                 }
                             </td>
-                            <td>@(inv.BrokerName ?? "—")</td>
+                            <td>@(string.IsNullOrEmpty(inv.BrokerNumber) ? (inv.BrokerName ?? "—") : $"{inv.BrokerNumber} - {inv.BrokerName}")</td>
                             <td>@(inv.BuyerNumber ?? "—")</td>
-                            <td>@(inv.BuyerName ?? "—")</td>
+                            <td>@(string.IsNullOrEmpty(inv.BuyerNumber) ? (inv.BuyerName ?? "—") : $"{inv.BuyerNumber} - {inv.BuyerName}")</td>
                             <td>@inv.LinesCount</td>
                             <td>€@inv.SubTotal.ToString("N2")</td>
                             <td>€@inv.AuctionFee.ToString("N2")</td>
@@ -462,9 +462,9 @@ else
     private string _selectedBroker = "";
     private string _selectedBuyer = "";
     private string _selectedStatus = "";
-    private List<string> _brokerNames = new();
-    private List<string> _buyerNames = new();
-    private List<string> _statusOptions = new() { "Issued", "Partially Paid", "Paid", "Closed", "Partially Credited", "Fully Credited", "Alloted" };
+    private List<(string Number, string Name)> _brokerOptions = new();
+    private List<(string Number, string Name)> _buyerOptions = new();
+    private List<string> _statusOptions = new(); // built from the data so it matches the displayed status badges
     private int? _updatingId;
     private int? _expandedInvoiceId;
 
@@ -500,7 +500,7 @@ else
             result = result.Where(i => i.BuyerName == _selectedBuyer);
 
         if (!string.IsNullOrEmpty(_selectedStatus))
-            result = result.Where(i => GetCreditStatus(i) == _selectedStatus);
+            result = result.Where(i => GetDisplayStatus(i) == _selectedStatus);
 
         if (_tab == "invoices")
             result = result.Where(i => !i.IsCreditNote);
@@ -531,8 +531,13 @@ else
         _refreshing = true;
         StateHasChanged();
         _invoices = await Api.GetAllInvoiceSummariesAsync();
-        _brokerNames = _invoices.Where(i => !string.IsNullOrEmpty(i.BrokerName)).Select(i => i.BrokerName!).Distinct().OrderBy(n => n).ToList();
-        _buyerNames = _invoices.Where(i => !string.IsNullOrEmpty(i.BuyerName)).Select(i => i.BuyerName!).Distinct().OrderBy(n => n).ToList();
+        _brokerOptions = _invoices.Where(i => !string.IsNullOrEmpty(i.BrokerName))
+            .Select(i => (Number: i.BrokerNumber ?? "", Name: i.BrokerName!)).Distinct().OrderBy(x => x.Name).ToList();
+        _buyerOptions = _invoices.Where(i => !string.IsNullOrEmpty(i.BuyerName))
+            .Select(i => (Number: i.BuyerNumber ?? "", Name: i.BuyerName!)).Distinct().OrderBy(x => x.Name).ToList();
+        // Status options come from the SAME function that renders the badge, so the filter always matches
+        // what's on screen (incl. "Not Posted" / "Push Failed", which the old static list was missing).
+        _statusOptions = _invoices.Select(GetDisplayStatus).Where(s => !string.IsNullOrEmpty(s)).Distinct().OrderBy(s => s).ToList();
         _loading = false;
         _refreshing = false;
     }
@@ -730,6 +735,16 @@ else
     private void ToggleLots(int invoiceId)
     {
         _expandedInvoiceId = _expandedInvoiceId == invoiceId ? null : invoiceId;
+    }
+
+    // The status as shown in the table badge — the filter uses this too so the two always agree. An
+    // unposted invoice shows "Not Posted"/"Push Failed" (not its credit status), which the old filter
+    // (keyed on GetCreditStatus) and the old static option list both missed.
+    private string GetDisplayStatus(InvoiceSummaryDto inv)
+    {
+        if (!inv.IsCreditNote && string.IsNullOrEmpty(inv.BcInvoiceNumber))
+            return string.IsNullOrEmpty(inv.BcSyncError) ? "Not Posted" : "Push Failed";
+        return GetCreditStatus(inv);
     }
 
     private string GetCreditStatus(InvoiceSummaryDto inv)
