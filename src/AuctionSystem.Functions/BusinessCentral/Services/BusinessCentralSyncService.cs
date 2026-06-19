@@ -196,12 +196,6 @@ public class BusinessCentralSyncService
     /// Push invoices (non-credit-notes) to BC as Sales Invoices.
     /// Matches by InvoiceNumber as ExternalDocumentNumber.
     /// </summary>
-    // Gap (ms) between consecutive BC document posts. A big Sell burst floods the serial drainer, and BC's
-    // posting engine flakes its post→confirm under rapid-fire posting → duplicate postings (the PACED broker
-    // run never hit this). A small gap lets BC settle between docs. Tunable via BC_POST_PACING_MS; default 1s.
-    private static readonly int PostPacingMs =
-        int.TryParse(Environment.GetEnvironmentVariable("BC_POST_PACING_MS"), out var __p) ? Math.Clamp(__p, 0, 10000) : 1000;
-
     public async Task<SyncResult> PushInvoicesAsync()
     {
         var result = new SyncResult { Direction = "Push", EntityType = "Invoice → BC Sales Invoice" };
@@ -244,10 +238,6 @@ public class BusinessCentralSyncService
                         _logger.LogWarning("Invoice {DocRef} not pushed: {Reason}", docRef, outcome.Reason);
                         break;
                 }
-
-                // Pace BC posts: let the posting engine settle between documents so a Sell burst can't hammer
-                // it into the flaky-confirm state that caused duplicate postings.
-                if (PostPacingMs > 0) await Task.Delay(PostPacingMs);
             }
             catch (BcNumberSeriesJamException)
             {
@@ -307,10 +297,6 @@ public class BusinessCentralSyncService
                         _logger.LogWarning("Credit note {DocRef} not pushed: {Reason}", docRef, outcome.Reason);
                         break;
                 }
-
-                // Pace BC posts (see PushInvoicesAsync): settle between documents so a burst can't flake the
-                // post→confirm into duplicates.
-                if (PostPacingMs > 0) await Task.Delay(PostPacingMs);
             }
             catch (BcNumberSeriesJamException)
             {
@@ -333,45 +319,6 @@ public class BusinessCentralSyncService
     }
 
     /// <summary>
-    /// Re-apply any POSTED credit memo that isn't yet held against its (also posted) invoice in BC. Covers
-    /// the ledger-timing race where the inline apply ran right after posting but couldn't find the memo's
-    /// ledger entry yet (one-shot, never retried). Runs each drainer tick; idempotent — skips Alloted ones.
-    /// </summary>
-    public async Task<SyncResult> ReapplyUnappliedCreditMemosAsync()
-    {
-        var result = new SyncResult { Direction = "Apply", EntityType = "Credit Memo → Invoice (BC)" };
-        var companyId = await _bcClient.ResolveCompanyIdAsync();
-
-        var pending = await _db.Set<Invoice>()
-            .Include(i => i.Buyer)
-            .Include(i => i.OriginalInvoice)
-            .Where(i => i.IsCreditNote
-                && i.BcInvoiceNumber != null && i.BcInvoiceNumber != ""
-                && i.Status != Domain.Enums.InvoiceStatus.Alloted
-                && i.OriginalInvoice != null
-                && i.OriginalInvoice.BcInvoiceNumber != null && i.OriginalInvoice.BcInvoiceNumber != "")
-            .ToListAsync();
-
-        result.TotalProcessed = pending.Count;
-        foreach (var cn in pending)
-        {
-            var buyerNumber = cn.Buyer?.BuyerNumber;
-            if (string.IsNullOrEmpty(buyerNumber)) { result.Skipped++; continue; }
-            try
-            {
-                await TryApplyCreditMemoToInvoiceAsync(companyId, cn, buyerNumber);
-                if (cn.Status == Domain.Enums.InvoiceStatus.Alloted) result.Created++; else result.Skipped++;
-            }
-            catch (Exception ex)
-            {
-                result.Failed++;
-                _logger.LogWarning(ex, "Re-apply sweep: failed to apply credit memo {Id}", cn.Id);
-            }
-        }
-        return result;
-    }
-
-    /// <summary>
     /// Push a single credit note to BC as a Sales Credit Memo.
     /// BC assigns the number from the credit memo number series.
     /// PDF is fetched from BC and stored in blob storage.
@@ -384,15 +331,6 @@ public class BusinessCentralSyncService
         var companyId = await _bcClient.ResolveCompanyIdAsync();
 
         if (await SkipAlreadyPushedCreditNoteAsync(companyId, creditNote)) return BcPushResult.AlreadyPushed;
-
-        // A credit memo can only be APPLIED to (held against) its original invoice once that invoice is
-        // POSTED in BC. If it isn't yet, DEFER — do NOT post a standalone, unapplicable memo. No claim is
-        // taken and no BcInvoiceNumber is set, so it stays pending; the drainer pushes invoices first and
-        // retries this memo next tick, by which point the invoice has posted and the apply will succeed.
-        var depInvoice = creditNote.OriginalInvoice
-            ?? (creditNote.OriginalInvoiceId.HasValue ? await _db.Invoices.FindAsync(creditNote.OriginalInvoiceId.Value) : null);
-        if (depInvoice != null && string.IsNullOrEmpty(depInvoice.BcInvoiceNumber))
-            return BcPushResult.NotPushed($"deferred: original invoice {depInvoice.InvoiceNumber} not yet posted to BC");
 
         if (!await TryClaimForBcPushAsync(creditNote.Id))
         {
@@ -428,13 +366,6 @@ public class BusinessCentralSyncService
             {
                 try
                 {
-                    // On a RETRY, a prior attempt may already have POSTED before the transient threw.
-                    // DeleteStaleDraft only removes DRAFTS, so re-creating would duplicate — adopt instead.
-                    if (attempt > 1)
-                    {
-                        posted = await _bcClient.GetPostedSalesCreditMemoByExternalDocAsync(companyId, extDocNumber);
-                        if (posted is not null) { _logger.LogInformation("Credit memo {Id} already posted as {Number} on a prior attempt; adopting, not re-posting", creditNote.Id, posted.Number); break; }
-                    }
                     await DeleteStaleDraftCreditMemoAsync(companyId, extDocNumber);
                     var created = await _bcClient.CreateSalesCreditMemoAsync(companyId, bcCreditMemo);
                     await AddCreditMemoLinesToBcAsync(companyId, created.Id, creditNote);
@@ -943,13 +874,6 @@ public class BusinessCentralSyncService
             {
                 try
                 {
-                    // On a RETRY, a prior attempt may already have POSTED before the transient threw.
-                    // DeleteStaleDraft only removes DRAFTS, so re-creating would duplicate — adopt instead.
-                    if (attempt > 1)
-                    {
-                        posted = await _bcClient.GetPostedSalesInvoiceByExternalDocAsync(companyId, extDocRef);
-                        if (posted is not null) { _logger.LogInformation("Invoice {Id} already posted as {Number} on a prior attempt; adopting, not re-posting", invoice.Id, posted.Number); break; }
-                    }
                     await DeleteStaleDraftInvoiceAsync(companyId, extDocRef);
                     var created = await _bcClient.CreateSalesInvoiceAsync(companyId, bcInvoice);
                     await AddInvoiceLinesToBcAsync(companyId, created.Id, invoice);
