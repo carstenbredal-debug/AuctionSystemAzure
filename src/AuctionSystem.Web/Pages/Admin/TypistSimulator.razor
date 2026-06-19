@@ -147,7 +147,8 @@ else
     <p class="text-muted" style="max-width:760px">
         Runs N brokers <strong>at the same time</strong>, each selling and re-invoicing its own lots through
         the real path — stressing simultaneous broker activity (atomic claims, invoicing, the BC drainer,
-        the credit-note path). Only runs once the typist is Done.
+        the credit-note path). Runs concurrently with the typist (real-life scenario) — loop it to keep the
+        brokers hammering for the whole typing window.
     </p>
     <div class="row g-3" style="max-width:760px">
         <div class="col-md-3">
@@ -171,13 +172,23 @@ else
             <input type="number" min="1" max="100" class="form-control" @bind="_brokerSimMaxLots" />
         </div>
     </div>
-    <button class="btn btn-warning mt-3" @onclick="RunBrokerSim" disabled="@(_running || _auctionId <= 0)">
+    <div class="form-check mt-3">
+        <input class="form-check-input" type="checkbox" id="brokerLoop" @bind="_brokerSimLoop" disabled="@_brokerSimRunning" />
+        <label class="form-check-label" for="brokerLoop">
+            Loop continuously until the typist is Done (re-fires back-to-back; each burst = Duration seconds)
+        </label>
+    </div>
+    <button class="btn btn-warning mt-2" @onclick="RunBrokerSim" disabled="@(_brokerSimRunning || _auctionId <= 0)">
         @if (_brokerSimRunning)
         {
             <span class="spinner-border spinner-border-sm me-1"></span>
         }
-        Run @_brokerSimCount brokers
+        @(_brokerSimLoop ? "Run brokers — loop until typist Done" : $"Run {_brokerSimCount} brokers once")
     </button>
+    @if (_brokerSimRunning)
+    {
+        <button class="btn btn-outline-danger mt-2 ms-2" @onclick="StopBrokerSim">Stop</button>
+    }
 
     @if (_brokerSimMessage != null)
     {
@@ -220,6 +231,9 @@ else
     private int _brokerSimReinvoicePct = 10;
     private int _brokerSimMaxLots = 10;
     private bool _brokerSimRunning;
+    private bool _brokerSimLoop = true;     // loop back-to-back until the typist is Done
+    private bool _brokerSimLoopActive;      // cleared by the Stop button to break the loop
+    private int _brokerSimPasses;
     private string? _brokerSimMessage;
     private bool _brokerSimError;
 
@@ -508,37 +522,61 @@ else
         }
     }
 
+    private void StopBrokerSim() => _brokerSimLoopActive = false;
+
     private async Task RunBrokerSim()
     {
         if (_auctionId <= 0) return;
-        _running = true;
         _brokerSimRunning = true;
-        _brokerSimMessage = null;
+        _brokerSimLoopActive = true;
         _brokerSimError = false;
+        _brokerSimPasses = 0;
+        int totSold = 0, totInv = 0, totCN = 0, totReinv = 0, totErr = 0;
         try
         {
-            var resp = await Api.SimulateBrokersAsync(_auctionId, _brokerSimCount, _brokerSimDuration, _brokerSimCommission, _brokerSimReinvoicePct, _brokerSimMaxLots);
-            var json = await resp.Content.ReadAsStringAsync();
-            if (!resp.IsSuccessStatusCode)
+            // Keep the brokers hammering for the WHOLE typist window. Each server call is capped at 120s, so
+            // we re-fire back-to-back until the typist sim is Done/Failed, then a couple of final passes to
+            // sweep lots typed right at the end. Single-burst mode (checkbox off) runs exactly one pass.
+            var typistDone = false;
+            var drainPasses = 0;
+            do
             {
-                _brokerSimMessage = $"Failed: {(int)resp.StatusCode} {resp.ReasonPhrase}. {json}";
-                _brokerSimError = true;
-            }
-            else
-            {
+                var resp = await Api.SimulateBrokersAsync(_auctionId, _brokerSimCount, _brokerSimDuration, _brokerSimCommission, _brokerSimReinvoicePct, _brokerSimMaxLots);
+                var json = await resp.Content.ReadAsStringAsync();
+                if (!resp.IsSuccessStatusCode)
+                {
+                    _brokerSimMessage = $"Failed: {(int)resp.StatusCode} {resp.ReasonPhrase}. {json}";
+                    _brokerSimError = true;
+                    break;
+                }
                 var root = JsonDocument.Parse(json).RootElement;
                 if (root.TryGetProperty("error", out var errEl) && errEl.ValueKind == JsonValueKind.String)
                 {
                     _brokerSimMessage = errEl.GetString();
                     _brokerSimError = true;
+                    break;
                 }
-                else
-                {
-                    int Get(string p) => root.TryGetProperty(p, out var e) && e.ValueKind == JsonValueKind.Number ? e.GetInt32() : 0;
-                    _brokerSimMessage = $"{Get("brokers")} brokers ran concurrently for {Get("durationSeconds")}s — {Get("sold")} sold, {Get("invoices")} invoice(s), {Get("reinvoiced")} re-invoiced ({Get("creditNotes")} credit note(s)), {Get("errors")} error(s). BC posting runs in the background.";
-                    _brokerSimError = Get("errors") > 0;
-                }
+                int Get(string p) => root.TryGetProperty(p, out var e) && e.ValueKind == JsonValueKind.Number ? e.GetInt32() : 0;
+                totSold += Get("sold"); totInv += Get("invoices"); totCN += Get("creditNotes");
+                totReinv += Get("reinvoiced"); totErr += Get("errors");
+                _brokerSimPasses++;
+                if (totErr > 0) _brokerSimError = true;
+
+                // Is the typist still typing? (drain two more passes after it finishes to sweep the tail.)
+                string? st = null;
+                try { var a = await Api.GetAuctionAsync(_auctionId); st = a?.TypistSimStatus; } catch { }
+                typistDone = string.IsNullOrEmpty(st) || st.StartsWith("Done") || st.StartsWith("Failed");
+                if (typistDone) drainPasses++;
+
+                _brokerSimMessage = $"Pass {_brokerSimPasses} — cumulative: {totSold} sold, {totInv} invoice(s), {totReinv} re-invoiced ({totCN} credit note(s)), {totErr} error(s). Typist: {st ?? "n/a"}{(typistDone ? " (draining)" : " (typing)")}.";
+                StateHasChanged();
+
+                if (!_brokerSimLoop) break;   // single-burst mode
             }
+            while (_brokerSimLoopActive && (!typistDone || drainPasses < 2));
+
+            if (!_brokerSimError)
+                _brokerSimMessage = $"Finished — {_brokerSimPasses} pass(es): {totSold} sold, {totInv} invoice(s), {totReinv} re-invoiced ({totCN} credit note(s)), {totErr} error(s). BC posting runs in the background.";
         }
         catch (Exception ex)
         {
@@ -547,8 +585,8 @@ else
         }
         finally
         {
-            _running = false;
             _brokerSimRunning = false;
+            _brokerSimLoopActive = false;
         }
     }
 }
