@@ -135,57 +135,54 @@ public class SkinFunctions
             return emptyResponse;
         }
 
-        // Get catalog lots for sold lot numbers
-        var soldLotNumbers = soldResults.Select(r => r.LotNumber).Distinct().ToList();
-        var catalogLots = await _catalogDb.CatalogLots
-            .Where(cl => soldLotNumbers.Contains(cl.LotNumber))
-            .ToListAsync();
-
-        // Build lot → box numbers mapping
-        var lotBoxes = new Dictionary<int, List<int>>();
-        foreach (var cl in catalogLots)
-        {
-            if (string.IsNullOrEmpty(cl.IncludedBoxNumbers)) continue;
-            var boxes = cl.IncludedBoxNumbers
-                .Split(',', StringSplitOptions.RemoveEmptyEntries)
-                .Select(b => int.TryParse(b.Trim(), out var n) ? n : 0)
-                .Where(n => n > 0)
-                .ToList();
-            lotBoxes[cl.LotNumber] = boxes;
-        }
-
-        // Get all relevant box numbers and count skins per box
-        var allBoxNumbers = lotBoxes.Values.SelectMany(b => b).Distinct().ToList();
-        var skinsPerBox = await _catalogDb.Skins
-            .Where(s => s.IsActive && allBoxNumbers.Contains(s.BoxNumber))
-            .GroupBy(s => s.BoxNumber)
-            .Select(g => new { BoxNumber = g.Key, Count = g.Count() })
-            .ToDictionaryAsync(x => x.BoxNumber, x => x.Count);
-
-        // Check each sold lot
+        // Check each sold lot against ITS OWN auction's frozen snapshot ([{AuctionNumber}.Lots] +
+        // [{AuctionNumber}.Skins]), grouping by AuctionId. Reading the live catalog here would compare
+        // results to a catalog a later regeneration has rewritten and report a flood of false mismatches.
         var mismatches = new List<object>();
-        foreach (var result in soldResults)
+        foreach (var auctionGroup in soldResults.GroupBy(r => r.AuctionId))
         {
-            if (!lotBoxes.TryGetValue(result.LotNumber, out var boxes)) continue;
+            var auctionId = auctionGroup.Key;
+            var lotNumbers = auctionGroup.Select(r => r.LotNumber).Distinct().ToList();
 
-            var actualSkinCount = boxes.Sum(b => skinsPerBox.GetValueOrDefault(b, 0));
-            var expectedHammerPrice = result.TotalSkins * result.PriceEur;
-            var actualHammerPrice = actualSkinCount * result.PriceEur;
-
-            if (actualSkinCount != result.TotalSkins)
+            // lot → box numbers, from the auction's snapshot lots
+            var lotBoxes = new Dictionary<int, List<int>>();
+            foreach (var (lotNumber, includedBoxNumbers) in await GetLotIncludedBoxesAsync(auctionId, lotNumbers))
             {
-                mismatches.Add(new
+                if (string.IsNullOrEmpty(includedBoxNumbers)) continue;
+                lotBoxes[lotNumber] = includedBoxNumbers
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(b => int.TryParse(b.Trim(), out var n) ? n : 0)
+                    .Where(n => n > 0)
+                    .ToList();
+            }
+
+            // skins per box, from the auction's snapshot skins
+            var allBoxNumbers = lotBoxes.Values.SelectMany(b => b).Distinct().ToList();
+            var skinsPerBox = await GetSkinsPerBoxAsync(auctionId, allBoxNumbers);
+
+            foreach (var result in auctionGroup)
+            {
+                if (!lotBoxes.TryGetValue(result.LotNumber, out var boxes)) continue;
+
+                var actualSkinCount = boxes.Sum(b => skinsPerBox.GetValueOrDefault(b, 0));
+                var expectedHammerPrice = result.TotalSkins * result.PriceEur;
+                var actualHammerPrice = actualSkinCount * result.PriceEur;
+
+                if (actualSkinCount != result.TotalSkins)
                 {
-                    lotNumber = result.LotNumber,
-                    broker = result.Broker.CompanyName,
-                    buyer = result.SoldToBuyer?.Name,
-                    pricePerSkin = result.PriceEur,
-                    expectedSkins = result.TotalSkins,
-                    actualSkins = actualSkinCount,
-                    expectedHammerPrice,
-                    actualHammerPrice,
-                    difference = actualHammerPrice - expectedHammerPrice
-                });
+                    mismatches.Add(new
+                    {
+                        lotNumber = result.LotNumber,
+                        broker = result.Broker.CompanyName,
+                        buyer = result.SoldToBuyer?.Name,
+                        pricePerSkin = result.PriceEur,
+                        expectedSkins = result.TotalSkins,
+                        actualSkins = actualSkinCount,
+                        expectedHammerPrice,
+                        actualHammerPrice,
+                        difference = actualHammerPrice - expectedHammerPrice
+                    });
+                }
             }
         }
 
@@ -798,6 +795,45 @@ public class SkinFunctions
             .Select(cl => new { cl.LotNumber, cl.IncludedBoxNumbers })
             .ToListAsync();
         return live.Select(x => (x.LotNumber, (string?)x.IncludedBoxNumbers)).ToList();
+    }
+
+    // Returns box number → skin count. For an auction-scoped query this counts from the FROZEN per-auction
+    // skins snapshot auction.[{AuctionNumber}.Skins] so audits/reports reflect what the auction actually held,
+    // immune to later changes in the live skins table. Falls back to the live catalog skins only when there
+    // is no auction scope or the snapshot table doesn't exist.
+    private async Task<Dictionary<int, int>> GetSkinsPerBoxAsync(int? auctionId, List<int> boxNumbers)
+    {
+        if (boxNumbers.Count == 0) return new Dictionary<int, int>();
+
+        if (auctionId.HasValue)
+        {
+            var auction = await _auctionDb.Auctions.FindAsync(auctionId.Value);
+            if (auction != null)
+            {
+                try
+                {
+                    var wanted = new HashSet<int>(boxNumbers);
+                    var dict = new Dictionary<int, int>();
+                    await using var conn = new SqlConnection(_auctionDb.Database.GetConnectionString()!);
+                    await conn.OpenAsync();
+                    await using var cmd = new SqlCommand($"SELECT BoxNumber, COUNT(*) FROM auction.[{auction.AuctionNumber}.Skins] GROUP BY BoxNumber", conn);
+                    await using var reader = await cmd.ExecuteReaderAsync();
+                    while (await reader.ReadAsync())
+                    {
+                        var bn = reader.GetInt32(0);
+                        if (wanted.Contains(bn)) dict[bn] = reader.GetInt32(1);
+                    }
+                    return dict;
+                }
+                catch { /* snapshot table missing for this auction — fall through to the live catalog */ }
+            }
+        }
+
+        return await _catalogDb.Skins
+            .Where(s => s.IsActive && boxNumbers.Contains(s.BoxNumber))
+            .GroupBy(s => s.BoxNumber)
+            .Select(g => new { BoxNumber = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.BoxNumber, x => x.Count);
     }
 
     private class BoxSaleInfo
