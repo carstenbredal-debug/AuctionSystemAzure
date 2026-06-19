@@ -237,7 +237,7 @@ public class SkinFunctions
         {
             await conn.OpenAsync();
 
-            await using (var cmd = new SqlCommand($"SELECT BoxNumber, COUNT(*) AS Cnt FROM {skinsTable} WHERE Farmer = @farmer GROUP BY BoxNumber", conn))
+            await using (var cmd = new SqlCommand($"SELECT BoxNumber, COUNT(*) AS Cnt FROM {skinsTable} WHERE Farmer = @farmer AND IsActive = 1 GROUP BY BoxNumber", conn))
             {
                 cmd.Parameters.AddWithValue("@farmer", farmerName);
                 await using var reader = await cmd.ExecuteReaderAsync();
@@ -322,7 +322,7 @@ public class SkinFunctions
         await using (var preConn = new SqlConnection(connStr))
         {
             await preConn.OpenAsync();
-            await using var preCmd = new SqlCommand($"SELECT BoxNumber, COUNT(*) FROM {skinsTable} WHERE Farmer = @farmer GROUP BY BoxNumber", preConn);
+            await using var preCmd = new SqlCommand($"SELECT BoxNumber, COUNT(*) FROM {skinsTable} WHERE Farmer = @farmer AND IsActive = 1 GROUP BY BoxNumber", preConn);
             preCmd.Parameters.AddWithValue("@farmer", farmerName);
             await using var preReader = await preCmd.ExecuteReaderAsync();
             while (await preReader.ReadAsync())
@@ -452,7 +452,7 @@ public class SkinFunctions
         await using var cmd = new SqlCommand($@"
             SELECT BoxNumber, BoxType, COUNT(*) AS SkinCount
             FROM {skinsTable}
-            WHERE Farmer = @farmer AND BoxNumber IN ({string.Join(",", boxNumbers)})
+            WHERE Farmer = @farmer AND IsActive = 1 AND BoxNumber IN ({string.Join(",", boxNumbers)})
             GROUP BY BoxNumber, BoxType
             ORDER BY BoxNumber", conn);
         cmd.Parameters.AddWithValue("@farmer", farmerName);
@@ -526,7 +526,7 @@ public class SkinFunctions
         await using var cmd = new SqlCommand($@"
             SELECT Barcode, BoxNumber, BoxType, SalesType, Gender, [Group], Size, Color, Quality, Clarity, Damages, HairLength
             FROM {skinsTable}
-            WHERE Farmer = @farmer AND BoxNumber IN ({string.Join(",", boxNumbers)})
+            WHERE Farmer = @farmer AND IsActive = 1 AND BoxNumber IN ({string.Join(",", boxNumbers)})
             ORDER BY BoxNumber, Barcode", conn);
         cmd.Parameters.AddWithValue("@farmer", farmerName);
 
@@ -589,7 +589,7 @@ public class SkinFunctions
                 await using var conn = new SqlConnection(connStr);
                 await conn.OpenAsync();
 
-                await using var cmd = new SqlCommand($"SELECT BoxNumber, COUNT(*) AS Cnt FROM {skinsTable} WHERE Farmer = @farmer GROUP BY BoxNumber", conn);
+                await using var cmd = new SqlCommand($"SELECT BoxNumber, COUNT(*) AS Cnt FROM {skinsTable} WHERE Farmer = @farmer AND IsActive = 1 GROUP BY BoxNumber", conn);
                 cmd.Parameters.AddWithValue("@farmer", farmerName);
                 await using var reader = await cmd.ExecuteReaderAsync();
                 while (await reader.ReadAsync())
@@ -663,7 +663,7 @@ public class SkinFunctions
             {
                 await using var conn = new SqlConnection(_auctionDb.Database.GetConnectionString()!);
                 await conn.OpenAsync();
-                await using var cmd = new SqlCommand($"SELECT Farmer, BoxNumber, COUNT(*) AS Cnt FROM auction.[{auction.AuctionNumber}.Skins] GROUP BY Farmer, BoxNumber", conn);
+                await using var cmd = new SqlCommand($"SELECT Farmer, BoxNumber, COUNT(*) AS Cnt FROM auction.[{auction.AuctionNumber}.Skins] WHERE IsActive = 1 GROUP BY Farmer, BoxNumber", conn);
                 await using var reader = await cmd.ExecuteReaderAsync();
                 while (await reader.ReadAsync())
                 {
@@ -816,7 +816,7 @@ public class SkinFunctions
                     var dict = new Dictionary<int, int>();
                     await using var conn = new SqlConnection(_auctionDb.Database.GetConnectionString()!);
                     await conn.OpenAsync();
-                    await using var cmd = new SqlCommand($"SELECT BoxNumber, COUNT(*) FROM auction.[{auction.AuctionNumber}.Skins] GROUP BY BoxNumber", conn);
+                    await using var cmd = new SqlCommand($"SELECT BoxNumber, COUNT(*) FROM auction.[{auction.AuctionNumber}.Skins] WHERE IsActive = 1 GROUP BY BoxNumber", conn);
                     await using var reader = await cmd.ExecuteReaderAsync();
                     while (await reader.ReadAsync())
                     {
