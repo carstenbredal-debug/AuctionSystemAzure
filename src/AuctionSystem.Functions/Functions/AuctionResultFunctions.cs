@@ -637,12 +637,12 @@ public class AuctionResultFunctions
         if (body == null || body.AuctionId <= 0)
             return await SimJson(req, System.Net.HttpStatusCode.BadRequest, new { error = "auctionId is required." });
 
-        // Don't sell while the typist sim is still running for this auction. The sell's DB load can slow a
-        // typist batch past the queue visibility timeout, triggering a redelivery that double-types lots
-        // (a lot won by two brokers -> duplicate results). Make the user wait until typing is Done.
-        var simStatus = await _db.Auctions.Where(a => a.Id == body.AuctionId).Select(a => a.TypistSimStatus).FirstOrDefaultAsync();
-        if (!string.IsNullOrEmpty(simStatus) && !simStatus.StartsWith("Done") && !simStatus.StartsWith("Failed"))
-            return await SimJson(req, System.Net.HttpStatusCode.Conflict, new { error = $"Typist simulation is still running ({simStatus}). Wait until it's Done before selling." });
+        // Selling concurrently with the typist sim is ALLOWED (real-life scenario: sell already-typed lots
+        // while later lots are still being typed). The double-type race this used to block against (sell DB
+        // load slows a typist batch past the queue visibility timeout -> redelivery -> a lot typed twice) is
+        // now prevented structurally by the filtered unique index UX_TypistEntries_Auction_Lot_Slot_Active:
+        // the redelivered worker hits the constraint, throws, and is detached, so the lot keeps its first
+        // result. The index is the real protection; this guard was belt-and-suspenders and is removed.
 
         var minC = Math.Max(0m, body.MinCommission ?? 0m);
         var maxC = Math.Max(minC, body.MaxCommission ?? minC);
@@ -802,10 +802,8 @@ public class AuctionResultFunctions
         if (_scopeFactory is null)
             return await SimJson(req, System.Net.HttpStatusCode.InternalServerError, new { error = "Broker simulator unavailable (no scope factory)." });
 
-        // Same guard as the sell: don't run while the typist sim is still typing.
-        var simStatus = await _db.Auctions.Where(a => a.Id == body.AuctionId).Select(a => a.TypistSimStatus).FirstOrDefaultAsync();
-        if (!string.IsNullOrEmpty(simStatus) && !simStatus.StartsWith("Done") && !simStatus.StartsWith("Failed"))
-            return await SimJson(req, System.Net.HttpStatusCode.Conflict, new { error = $"Typist simulation is still running ({simStatus}). Wait until it's Done." });
+        // Running concurrently with the typist sim is ALLOWED — see the note in SimulateSell. The double-type
+        // race is prevented by the UX_TypistEntries_Auction_Lot_Slot_Active unique index, not by blocking here.
 
         var commission = Math.Max(0m, body.Commission ?? 1.5m);
         var reinvPct = Math.Clamp(body.ReinvoicePercent ?? 0, 0, 100);
