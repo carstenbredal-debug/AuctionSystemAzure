@@ -261,7 +261,8 @@ public class AuctionFunctions
             IF OBJECT_ID('auction.[{skinsTable}]', 'U') IS NOT NULL DROP TABLE auction.[{skinsTable}];
             SELECT s.* INTO auction.[{skinsTable}]
             FROM dbo.SkinTable s
-            WHERE s.BoxNumber IN (
+            WHERE s.IsActive = 1
+              AND s.BoxNumber IN (
                 SELECT TRY_CAST(LTRIM(RTRIM(value)) AS INT)
                 FROM auction.[{lotsTable}]
                 CROSS APPLY STRING_SPLIT(IncludedBoxNumbers, ',')
