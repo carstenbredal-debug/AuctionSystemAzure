@@ -332,6 +332,15 @@ public class BusinessCentralSyncService
 
         if (await SkipAlreadyPushedCreditNoteAsync(companyId, creditNote)) return BcPushResult.AlreadyPushed;
 
+        // A credit memo can only be APPLIED to (held against) its original invoice once that invoice is
+        // POSTED in BC. If it isn't yet, DEFER — do NOT post a standalone, unapplicable memo. No claim is
+        // taken and no BcInvoiceNumber is set, so it stays pending; the drainer pushes invoices first and
+        // retries this memo next tick, by which point the invoice has posted and the apply will succeed.
+        var depInvoice = creditNote.OriginalInvoice
+            ?? (creditNote.OriginalInvoiceId.HasValue ? await _db.Invoices.FindAsync(creditNote.OriginalInvoiceId.Value) : null);
+        if (depInvoice != null && string.IsNullOrEmpty(depInvoice.BcInvoiceNumber))
+            return BcPushResult.NotPushed($"deferred: original invoice {depInvoice.InvoiceNumber} not yet posted to BC");
+
         if (!await TryClaimForBcPushAsync(creditNote.Id))
         {
             _logger.LogWarning("Credit note {Id} is already being pushed to BC (claim held); skipping this push", creditNote.Id);

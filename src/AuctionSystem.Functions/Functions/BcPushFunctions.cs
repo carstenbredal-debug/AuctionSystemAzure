@@ -38,17 +38,20 @@ public class BcPushFunctions
     private BusinessCentralSyncService? Sync => _services.GetService<BusinessCentralSyncService>();
 
     // Serial drainer. Runs every minute; the timer is singleton so only one instance ever drains, and
-    // PushCreditNotesAsync/PushInvoicesAsync push one document at a time, confirming each in BC before
-    // the next. Credit notes first so a take-back's reversal lands before its re-invoice.
+    // PushInvoicesAsync/PushCreditNotesAsync push one document at a time, confirming each in BC before the
+    // next. INVOICES FIRST: a credit memo can only be applied to (held against) its original invoice once
+    // that invoice is POSTED in BC, so the invoice must land before its credit note — otherwise the memo
+    // posts standalone and unapplied. PushCreditNoteToBcCoreAsync additionally defers any memo whose
+    // original invoice isn't posted yet, so a memo never posts ahead of its invoice.
     [Function("BcPushDrainer")]
     public async Task RunDrainer([TimerTrigger("0 */1 * * * *")] TimerInfo timer)
     {
         var sync = Sync;
         if (sync is null) return;
 
-        if (await _db.Invoices.AnyAsync(i => i.IsCreditNote && (i.BcInvoiceNumber == null || i.BcInvoiceNumber == "")))
-            await sync.PushCreditNotesAsync();
         if (await _db.Invoices.AnyAsync(i => !i.IsCreditNote && (i.BcInvoiceNumber == null || i.BcInvoiceNumber == "")))
             await sync.PushInvoicesAsync();
+        if (await _db.Invoices.AnyAsync(i => i.IsCreditNote && (i.BcInvoiceNumber == null || i.BcInvoiceNumber == "")))
+            await sync.PushCreditNotesAsync();
     }
 }
