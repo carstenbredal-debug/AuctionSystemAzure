@@ -196,6 +196,12 @@ public class BusinessCentralSyncService
     /// Push invoices (non-credit-notes) to BC as Sales Invoices.
     /// Matches by InvoiceNumber as ExternalDocumentNumber.
     /// </summary>
+    // Gap (ms) between consecutive BC document posts. A big Sell burst floods the serial drainer, and BC's
+    // posting engine flakes its post→confirm under rapid-fire posting → duplicate postings (the PACED broker
+    // run never hit this). A small gap lets BC settle between docs. Tunable via BC_POST_PACING_MS; default 1s.
+    private static readonly int PostPacingMs =
+        int.TryParse(Environment.GetEnvironmentVariable("BC_POST_PACING_MS"), out var __p) ? Math.Clamp(__p, 0, 10000) : 1000;
+
     public async Task<SyncResult> PushInvoicesAsync()
     {
         var result = new SyncResult { Direction = "Push", EntityType = "Invoice → BC Sales Invoice" };
@@ -238,6 +244,10 @@ public class BusinessCentralSyncService
                         _logger.LogWarning("Invoice {DocRef} not pushed: {Reason}", docRef, outcome.Reason);
                         break;
                 }
+
+                // Pace BC posts: let the posting engine settle between documents so a Sell burst can't hammer
+                // it into the flaky-confirm state that caused duplicate postings.
+                if (PostPacingMs > 0) await Task.Delay(PostPacingMs);
             }
             catch (BcNumberSeriesJamException)
             {
@@ -297,6 +307,10 @@ public class BusinessCentralSyncService
                         _logger.LogWarning("Credit note {DocRef} not pushed: {Reason}", docRef, outcome.Reason);
                         break;
                 }
+
+                // Pace BC posts (see PushInvoicesAsync): settle between documents so a burst can't flake the
+                // post→confirm into duplicates.
+                if (PostPacingMs > 0) await Task.Delay(PostPacingMs);
             }
             catch (BcNumberSeriesJamException)
             {
