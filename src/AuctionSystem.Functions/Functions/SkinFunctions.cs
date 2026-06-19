@@ -160,13 +160,8 @@ public class SkinFunctions
             var allBoxNumbers = lotBoxes.Values.SelectMany(b => b).Distinct().ToList();
             var skinsPerBox = await GetSkinsPerBoxAsync(auctionId, allBoxNumbers);
 
-            // Show lots are samples — their physical boxes hold fewer skins than the represented/catalogued
-            // quantity, so a physical skin-count audit is meaningless for them. Skip them.
-            var showLots = await GetShowLotNumbersAsync(auctionId, lotNumbers);
-
             foreach (var result in auctionGroup)
             {
-                if (showLots.Contains(result.LotNumber)) continue;
                 if (!lotBoxes.TryGetValue(result.LotNumber, out var boxes)) continue;
 
                 var actualSkinCount = boxes.Sum(b => skinsPerBox.GetValueOrDefault(b, 0));
@@ -839,45 +834,6 @@ public class SkinFunctions
             .GroupBy(s => s.BoxNumber)
             .Select(g => new { BoxNumber = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.BoxNumber, x => x.Count);
-    }
-
-    // Returns the lot numbers that are SHOW lots for an auction. A show lot's physical sample boxes legitimately
-    // hold fewer skins than the catalogued/represented quantity, so a physical skin-count audit must skip them.
-    // Snapshot-first ([{AuctionNumber}.Lots]) with a live CatalogLots fallback.
-    private async Task<HashSet<int>> GetShowLotNumbersAsync(int? auctionId, List<int> lotNumbers)
-    {
-        var show = new HashSet<int>();
-        if (lotNumbers.Count == 0) return show;
-
-        if (auctionId.HasValue)
-        {
-            var auction = await _auctionDb.Auctions.FindAsync(auctionId.Value);
-            if (auction != null)
-            {
-                try
-                {
-                    var wanted = new HashSet<int>(lotNumbers);
-                    await using var conn = new SqlConnection(_auctionDb.Database.GetConnectionString()!);
-                    await conn.OpenAsync();
-                    await using var cmd = new SqlCommand($"SELECT LotNumber FROM auction.[{auction.AuctionNumber}.Lots] WHERE IsShow = 'Yes'", conn);
-                    await using var reader = await cmd.ExecuteReaderAsync();
-                    while (await reader.ReadAsync())
-                    {
-                        var ln = reader.GetInt32(0);
-                        if (wanted.Contains(ln)) show.Add(ln);
-                    }
-                    return show;
-                }
-                catch { /* snapshot table missing for this auction — fall through to the live catalog */ }
-            }
-        }
-
-        var live = await _catalogDb.CatalogLots
-            .Where(cl => lotNumbers.Contains(cl.LotNumber) && cl.IsShow == "Yes")
-            .Select(cl => cl.LotNumber)
-            .ToListAsync();
-        foreach (var ln in live) show.Add(ln);
-        return show;
     }
 
     private class BoxSaleInfo
