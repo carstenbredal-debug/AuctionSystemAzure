@@ -717,10 +717,8 @@ public class AuctionResultFunctions
             var toReinvoice = await _db.AuctionResults.Where(r => pickIds.Contains(r.Id) && r.SoldToBuyerId != null).ToListAsync();
             if (toReinvoice.Count > 0)
             {
-                foreach (var r in toReinvoice) { r.LastModifiedBy = "SIM"; r.LastModifiedAt = DateTime.UtcNow; }
-                var (_, takenBackIds, _) = await ProcessBrokerTakebacksAsync(toReinvoice);
-                await _db.SaveChangesAsync();
-                var cns = await GenerateCreditNotesAsync(takenBackIds);
+                // Atomic + retried take-back + credit (shared hardened helper).
+                var (takenBackIds, cns) = await TakeBackAndCreditAsync(toReinvoice.Select(r => r.Id).ToList(), "SIM");
                 creditNotes = cns.Count;
                 reinvoiced = takenBackIds.Count;
 
@@ -895,15 +893,9 @@ public class AuctionResultFunctions
                     .OrderBy(r => Guid.NewGuid()).Take(rnd.Next(1, 4)).ToListAsync();
                 if (sold.Count > 0)
                 {
-                    List<int> takenBackIds = new();
-                    await using (var tx = await _db.Database.BeginTransactionAsync())
-                    {
-                        foreach (var r in sold) { r.LastModifiedBy = "BROKERSIM"; r.LastModifiedAt = DateTime.UtcNow; }
-                        (_, takenBackIds, _) = await ProcessBrokerTakebacksAsync(sold);
-                        await _db.SaveChangesAsync();
-                        res.CreditNotes += (await GenerateCreditNotesAsync(takenBackIds)).Count;
-                        await tx.CommitAsync();
-                    }
+                    // Atomic + retried take-back + credit (shared hardened helper).
+                    var (takenBackIds, creditNotes) = await TakeBackAndCreditAsync(sold.Select(r => r.Id).ToList(), "BROKERSIM");
+                    res.CreditNotes += creditNotes.Count;
                     res.Reinvoiced += takenBackIds.Count;
 
                     // Re-sell the taken-back lots as a fresh sale (outside the credit transaction).
@@ -997,26 +989,10 @@ public class AuctionResultFunctions
         var shippingError = await CheckShippedLotsAsync(results, req, "Cannot take back");
         if (shippingError != null) return shippingError;
 
-        // Record initials on auction results
-        foreach (var r in results)
-        {
-            r.LastModifiedBy = body.Initials;
-            r.LastModifiedAt = DateTime.UtcNow;
-        }
-
-        var (created, takenBackResultIds, _) = await ProcessBrokerTakebacksAsync(results);
-        await _db.SaveChangesAsync();
-
-        // Issue one credit note per buyer/original invoice for the taken-back lots.
-        var creditNotes = new List<Invoice>();
-        try
-        {
-            creditNotes = await GenerateCreditNotesAsync(takenBackResultIds);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to generate credit notes for takeback");
-        }
+        // Atomic + retried take-back + credit (shared hardened helper). Either the reversal AND its credit
+        // notes commit, or neither does — the lots stay SOLD and the caller can retry. Replaces the old
+        // swallow-the-error path that left lots reversed but never credited (buyer charged, no credit note).
+        var (takenBackResultIds, creditNotes) = await TakeBackAndCreditAsync(results.Select(r => r.Id).ToList(), body.Initials);
 
         // Map each taken-back auction result to the credit note that actually covers it,
         // so history is attributed to the lot's own buyer — not the first buyer in the batch.
@@ -1049,7 +1025,7 @@ public class AuctionResultFunctions
         response.Headers.Add("Content-Type", "application/json");
         await response.WriteStringAsync(JsonSerializer.Serialize(new
         {
-            requestCount = created.Count,
+            requestCount = takenBackResultIds.Count,
             creditNoteId = firstCreditNote?.Id,
             creditNotePdfUrl = firstCreditNote?.PdfUrl,
             creditNoteIds = creditNotes.Select(c => c.Id).ToList()
@@ -1277,48 +1253,51 @@ public class AuctionResultFunctions
             return resp;
         }
 
-        takebackReq.Status = body.Approve ? CustomerRequestStatus.Approved : CustomerRequestStatus.Declined;
         takebackReq.RespondedAt = DateTime.UtcNow;
 
         int? creditNoteId = null;
         var resultClaimed = false;
         if (body.Approve)
         {
-            // Atomically take the result back. Only the responder that flips SoldToBuyerId
-            // (NOT NULL -> NULL) credits it, so two concurrent approves — or a broker re-invoice
-            // racing this — can't both generate a credit note for the same result.
+            // Atomic: flip the request to Approved, take the result back, AND credit it — all in ONE
+            // transaction. On failure nothing commits (request stays Pending, lot stays sold), so it's
+            // retryable and can never leave a reversal without its credit note. Only the responder that
+            // flips SoldToBuyerId (NOT NULL -> NULL) credits it, so two concurrent approves — or a broker
+            // re-invoice racing this — can't both credit the same result.
+            await using var tx = await _db.Database.BeginTransactionAsync();
+            takebackReq.Status = CustomerRequestStatus.Approved;
+
             var claimed = await _db.Database.ExecuteSqlInterpolatedAsync($@"
                 UPDATE auction.AuctionResults
                 SET SoldToBuyerId = NULL, SoldAt = NULL
                 WHERE Id = {takebackReq.AuctionResultId} AND SoldToBuyerId IS NOT NULL");
             resultClaimed = claimed > 0;
 
-            takebackReq.AuctionResult.SoldToBuyerId = null;
-            takebackReq.AuctionResult.SoldAt = null;
-
-            // Update lot status back to Broker
-            var lot = await _db.Lots.FirstOrDefaultAsync(l => l.LotNumber == takebackReq.AuctionResult.LotNumber);
-            if (lot != null) lot.Status = LotStatus.Broker;
-        }
-
-        await _db.SaveChangesAsync();
-
-        if (body.Approve && resultClaimed)
-        {
-            try
+            if (resultClaimed)
             {
+                takebackReq.AuctionResult.SoldToBuyerId = null;
+                takebackReq.AuctionResult.SoldAt = null;
+                var lot = await _db.Lots.FirstOrDefaultAsync(l => l.LotNumber == takebackReq.AuctionResult.LotNumber);
+                if (lot != null) lot.Status = LotStatus.Broker;
+                await _db.SaveChangesAsync();
+
                 var creditNotes = await GenerateCreditNotesAsync(new List<int> { takebackReq.AuctionResultId });
                 creditNoteId = creditNotes.Count > 0 ? creditNotes[0].Id : (int?)null;
             }
-            catch (Exception ex)
+            else
             {
-                _logger.LogError(ex, "Failed to generate credit note for takeback approval");
+                // Already taken back by a concurrent request — just record this approval response.
+                _logger.LogWarning("Takeback {Id}: result {ResultId} was already taken back by a concurrent request; skipping duplicate credit note",
+                    takebackReq.Id, takebackReq.AuctionResultId);
+                await _db.SaveChangesAsync();
             }
+
+            await tx.CommitAsync();
         }
-        else if (body.Approve)
+        else
         {
-            _logger.LogWarning("Takeback {Id}: result {ResultId} was already taken back by a concurrent request; skipping duplicate credit note",
-                takebackReq.Id, takebackReq.AuctionResultId);
+            takebackReq.Status = CustomerRequestStatus.Declined;
+            await _db.SaveChangesAsync();
         }
 
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
@@ -1411,6 +1390,58 @@ public class AuctionResultFunctions
         }
 
         return (created, takenBackResultIds, takebackBuyerId);
+    }
+
+    // Hardened take-back + credit. Runs ProcessBrokerTakebacksAsync and GenerateCreditNotesAsync in ONE
+    // transaction with transient-deadlock retry, so either BOTH the reversal and its credit note commit, or
+    // NEITHER does (the lots stay SOLD and it's retryable) — a reversal can never be orphaned without a
+    // credit note. Results are re-queried fresh each attempt because the take-back mutates them. The serial
+    // BcPushDrainer then posts the credit notes, exactly like invoices. Callers must have no other pending
+    // tracked changes (this clears the change tracker per attempt).
+    private async Task<(List<int> TakenBackIds, List<Invoice> CreditNotes)> TakeBackAndCreditAsync(
+        List<int> resultIds, string? initials)
+    {
+        if (resultIds.Count == 0) return (new List<int>(), new List<Invoice>());
+
+        const int maxAttempts = 4;
+        for (int attempt = 1; ; attempt++)
+        {
+            try
+            {
+                _db.ChangeTracker.Clear(); // start each attempt from a clean slate (rollback doesn't revert tracked entities)
+                var results = await _db.AuctionResults
+                    .Where(r => resultIds.Contains(r.Id) && r.SoldToBuyerId != null)
+                    .ToListAsync();
+                if (results.Count == 0) return (new List<int>(), new List<Invoice>());
+
+                if (!string.IsNullOrEmpty(initials))
+                    foreach (var r in results) { r.LastModifiedBy = initials; r.LastModifiedAt = DateTime.UtcNow; }
+
+                await using var tx = await _db.Database.BeginTransactionAsync();
+                var (_, takenBackIds, _) = await ProcessBrokerTakebacksAsync(results);
+                await _db.SaveChangesAsync();
+                var creditNotes = await GenerateCreditNotesAsync(takenBackIds);
+                await tx.CommitAsync();
+                return (takenBackIds, creditNotes);
+            }
+            catch (Exception ex) when (attempt < maxAttempts && IsTransientDbError(ex))
+            {
+                _logger.LogWarning(ex, "TakeBackAndCredit transient failure (attempt {Attempt}/{Max}); retrying", attempt, maxAttempts);
+                await Task.Delay(50 * attempt);
+            }
+        }
+    }
+
+    // SQL Server transient errors worth retrying: deadlock victim (1205), lock-request timeout (1222),
+    // command timeout (-2), and Azure SQL throttling (49920/40197/40501).
+    private static bool IsTransientDbError(Exception ex)
+    {
+        for (Exception? e = ex; e != null; e = e.InnerException)
+            if (e is Microsoft.Data.SqlClient.SqlException sql)
+                foreach (Microsoft.Data.SqlClient.SqlError err in sql.Errors)
+                    if (err.Number is 1205 or 1222 or -2 or 49920 or 40197 or 40501)
+                        return true;
+        return false;
     }
 
     private async Task<List<TakebackRequest>> ProcessBuyerTakebackRequestsAsync(List<AuctionResult> results)
