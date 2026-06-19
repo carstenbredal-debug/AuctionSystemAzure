@@ -480,6 +480,10 @@ public class AuctionResultFunctions
         List<AuctionResult> results, int buyerId, Buyer buyer, string? commissionType, decimal? commissionValue, string? initials)
     {
         var now = DateTime.UtcNow;
+        // Atomic: the sale claim(s) and the invoice commit together, or NEITHER does. If invoice creation
+        // fails (e.g. a deadlock), CreateInvoiceAndQueuePushAsync rethrows, this transaction rolls back, and
+        // the lots stay UNSOLD (re-sellable on a later pass) instead of being left sold-but-uninvoiced.
+        await using var tx = await _db.Database.BeginTransactionAsync();
         var claimedResults = new List<AuctionResult>();
         foreach (var result in results)
         {
@@ -505,7 +509,7 @@ public class AuctionResultFunctions
             }
         }
 
-        if (claimedResults.Count == 0) return (claimedResults, null, null);
+        if (claimedResults.Count == 0) { await tx.CommitAsync(); return (claimedResults, null, null); }
 
         var lotNumbers = claimedResults.Select(r => r.LotNumber).ToList();
         var lots = await _db.Lots.Where(l => lotNumbers.Contains(l.LotNumber)).ToListAsync();
@@ -541,6 +545,7 @@ public class AuctionResultFunctions
             await _db.SaveChangesAsync();
         }
 
+        await tx.CommitAsync();
         return (claimedResults, invoiceId, bcError);
     }
 
@@ -617,7 +622,7 @@ public class AuctionResultFunctions
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to create BC invoice for {Count} lots", results.Count);
-            return (null, ex.Message);
+            throw;   // propagate so SellResultsCoreAsync's transaction rolls back the claim — never sold-but-uninvoiced
         }
     }
 
