@@ -414,6 +414,13 @@ public class BusinessCentralSyncService
             {
                 try
                 {
+                    // On a RETRY, a prior attempt may already have POSTED before the transient threw.
+                    // DeleteStaleDraft only removes DRAFTS, so re-creating would duplicate — adopt instead.
+                    if (attempt > 1)
+                    {
+                        posted = await _bcClient.GetPostedSalesCreditMemoByExternalDocAsync(companyId, extDocNumber);
+                        if (posted is not null) { _logger.LogInformation("Credit memo {Id} already posted as {Number} on a prior attempt; adopting, not re-posting", creditNote.Id, posted.Number); break; }
+                    }
                     await DeleteStaleDraftCreditMemoAsync(companyId, extDocNumber);
                     var created = await _bcClient.CreateSalesCreditMemoAsync(companyId, bcCreditMemo);
                     await AddCreditMemoLinesToBcAsync(companyId, created.Id, creditNote);
@@ -922,6 +929,13 @@ public class BusinessCentralSyncService
             {
                 try
                 {
+                    // On a RETRY, a prior attempt may already have POSTED before the transient threw.
+                    // DeleteStaleDraft only removes DRAFTS, so re-creating would duplicate — adopt instead.
+                    if (attempt > 1)
+                    {
+                        posted = await _bcClient.GetPostedSalesInvoiceByExternalDocAsync(companyId, extDocRef);
+                        if (posted is not null) { _logger.LogInformation("Invoice {Id} already posted as {Number} on a prior attempt; adopting, not re-posting", invoice.Id, posted.Number); break; }
+                    }
                     await DeleteStaleDraftInvoiceAsync(companyId, extDocRef);
                     var created = await _bcClient.CreateSalesInvoiceAsync(companyId, bcInvoice);
                     await AddInvoiceLinesToBcAsync(companyId, created.Id, invoice);

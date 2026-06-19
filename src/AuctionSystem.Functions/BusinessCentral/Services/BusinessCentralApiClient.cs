@@ -320,12 +320,15 @@ public class BusinessCentralApiClient
     /// <summary>Posted sales invoice matching an external document number (used for idempotency on retry).</summary>
     public async Task<BcSalesInvoice?> GetPostedSalesInvoiceByExternalDocAsync(Guid companyId, string externalDocNumber)
     {
-        // Standard api/v2.0 has no `postedSalesInvoices` resource (it 404s, and a recreated company
-        // won't expose a custom one). Posted invoices stay in `salesInvoices` with a non-Draft
-        // status — the same source PostSalesInvoiceAsync re-reads them from — so look them up there.
-        var url = $"{_options.BaseUrl}/companies({companyId})/salesInvoices?$filter=externalDocumentNumber eq '{externalDocNumber}'";
+        // Posted invoices stay in `salesInvoices` with a non-Draft status, BUT this BC returns
+        // externalDocumentNumber only in $select — it does NOT honour it as a $filter (the filter yields 0
+        // rows for posted docs). That silently broke idempotency and let a re-push after a flaky confirm
+        // create DUPLICATES. So match CLIENT-SIDE: pull recent posted invoices (most-recently-modified first,
+        // so a just-posted doc is near the top) and find the one whose external doc matches.
+        var url = $"{_options.BaseUrl}/companies({companyId})/salesInvoices?$select=id,number,status,externalDocumentNumber&$orderby=lastModifiedDateTime%20desc&$top=2000";
         var invoices = await GetListAsync<BcSalesInvoice>(url);
-        return invoices.FirstOrDefault(i => IsPostedStatus(i.Status));
+        return invoices.FirstOrDefault(i => IsPostedStatus(i.Status)
+            && string.Equals(i.ExternalDocumentNumber, externalDocNumber, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>A BC sales document status other than Draft/In Review means it has been posted.</summary>
@@ -650,11 +653,13 @@ public class BusinessCentralApiClient
     /// <summary>Posted sales credit memo matching an external document number (used for idempotency on retry).</summary>
     public async Task<BcSalesCreditMemo?> GetPostedSalesCreditMemoByExternalDocAsync(Guid companyId, string externalDocNumber)
     {
-        // As with invoices: no `postedSalesCreditMemos` resource in standard api/v2.0. Posted credit
-        // memos remain in `salesCreditMemos` with a non-Draft status.
-        var url = $"{_options.BaseUrl}/companies({companyId})/salesCreditMemos?$filter=externalDocumentNumber eq '{externalDocNumber}'";
+        // Same as invoices: externalDocumentNumber comes back in $select but is NOT a working $filter on
+        // this BC, so match CLIENT-SIDE to keep idempotency working (the broken filter let re-pushes
+        // duplicate). Pull recent posted memos (most-recently-modified first) and match the external doc.
+        var url = $"{_options.BaseUrl}/companies({companyId})/salesCreditMemos?$select=id,number,status,externalDocumentNumber&$orderby=lastModifiedDateTime%20desc&$top=2000";
         var items = await GetListAsync<BcSalesCreditMemo>(url);
-        return items.FirstOrDefault(c => IsPostedStatus(c.Status));
+        return items.FirstOrDefault(c => IsPostedStatus(c.Status)
+            && string.Equals(c.ExternalDocumentNumber, externalDocNumber, StringComparison.OrdinalIgnoreCase));
     }
 
     public async Task<byte[]?> GetSalesCreditMemoPdfAsync(Guid companyId, Guid creditMemoId)
