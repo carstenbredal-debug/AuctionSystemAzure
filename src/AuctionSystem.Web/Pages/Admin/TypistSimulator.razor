@@ -147,8 +147,9 @@ else
     <p class="text-muted" style="max-width:760px">
         Runs N brokers <strong>at the same time</strong>, each selling and re-invoicing its own lots through
         the real path — stressing simultaneous broker activity (atomic claims, invoicing, the BC drainer,
-        the credit-note path). Runs concurrently with the typist (real-life scenario) — loop it to keep the
-        brokers hammering for the whole typing window.
+        the credit-note path). Runs concurrently with the typist (real-life scenario). Each pass, every broker
+        buys a small batch and occasionally issues a credit note; loop it to keep that up across the whole
+        typing window at a realistic, paced rate (the buy interval) instead of hammering.
     </p>
     <div class="row g-3" style="max-width:760px">
         <div class="col-md-3">
@@ -156,7 +157,7 @@ else
             <input type="number" min="1" max="50" class="form-control" @bind="_brokerSimCount" />
         </div>
         <div class="col-md-3">
-            <label class="form-label">Duration (seconds)</label>
+            <label class="form-label">Buy interval (seconds)</label>
             <input type="number" min="1" max="120" class="form-control" @bind="_brokerSimDuration" />
         </div>
         <div class="col-md-2">
@@ -175,7 +176,7 @@ else
     <div class="form-check mt-3">
         <input class="form-check-input" type="checkbox" id="brokerLoop" @bind="_brokerSimLoop" disabled="@_brokerSimRunning" />
         <label class="form-check-label" for="brokerLoop">
-            Loop continuously until the typist is Done (re-fires back-to-back; each burst = Duration seconds)
+            Loop until the typist is Done — each pass buys a small batch (+ some credit notes), then waits the buy interval
         </label>
     </div>
     <button class="btn btn-warning mt-2" @onclick="RunBrokerSim" disabled="@(_brokerSimRunning || _auctionId <= 0)">
@@ -571,7 +572,12 @@ else
                 _brokerSimMessage = $"Pass {_brokerSimPasses} — cumulative: {totSold} sold, {totInv} invoice(s), {totReinv} re-invoiced ({totCN} credit note(s)), {totErr} error(s). Typist: {st ?? "n/a"}{(typistDone ? " (draining)" : " (typing)")}.";
                 StateHasChanged();
 
-                if (!_brokerSimLoop) break;   // single-burst mode
+                if (!_brokerSimLoop) break;   // single-pass mode
+
+                // Pace it: wait the buy interval before the next batch, so the brokers buy periodically
+                // (real-life) instead of hammering back-to-back. Stop takes effect after the current wait.
+                if (_brokerSimLoopActive && (!typistDone || drainPasses < 2))
+                    await Task.Delay(Math.Max(1, _brokerSimDuration) * 1000);
             }
             while (_brokerSimLoopActive && (!typistDone || drainPasses < 2));
 

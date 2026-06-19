@@ -856,10 +856,10 @@ public class AuctionResultFunctions
         }
     }
 
-    // Sell (and optionally re-invoice) a single broker's unsold lots, looping until they're exhausted or
-    // the shared deadline passes. Uses this instance's (scoped) _db, so it's safe to run concurrently with
-    // other brokers' runners. Invoked by RunBrokerInScopeAsync on the per-scope instance (private access
-    // to another instance of the same type is allowed in C#).
+    // One realistic batch for a single broker: buy a small handful of unsold lots and, gated by reinvPct,
+    // credit + re-sell a couple. The UI fires these passes ~30s apart, so this models periodic broker
+    // activity rather than a tight loop. Uses this instance's (scoped) _db, so it's safe to run concurrently
+    // with other brokers' runners. (deadline is unused now that pacing is UI-driven; kept for the signature.)
     private async Task<BrokerSimResult> SimulateSellForBrokerAsync(int auctionId, int brokerId, decimal commission, int reinvPct, int maxPerInvoice, DateTime deadline)
     {
         var res = new BrokerSimResult { BrokerId = brokerId };
@@ -870,46 +870,58 @@ public class AuctionResultFunctions
         var buyers = await _db.Buyers.Where(b => buyerIds.Contains(b.Id)).ToDictionaryAsync(b => b.Id);
         var buyersByBroker = new Dictionary<int, List<int>> { [brokerId] = buyerIds };
 
-        while (DateTime.UtcNow < deadline)
+        try
         {
-            var didWork = false;
-
-            // (a) Sell any unsold lots for this broker.
+            // (a) Buy a small batch (1..maxPerInvoice) of this broker's unsold lots. One modest batch per
+            // call — the UI fires these ~30s apart — instead of a tight loop that just deadlocks itself.
+            var buyCount = rnd.Next(1, Math.Max(2, maxPerInvoice + 1));
             var unsold = await _db.AuctionResults
                 .Where(r => r.AuctionId == auctionId && r.BrokerId == brokerId && r.SoldToBuyerId == null)
-                .OrderBy(r => r.LotNumber).Take(40).ToListAsync();
+                .OrderBy(r => r.LotNumber).Take(buyCount).ToListAsync();
             if (unsold.Count > 0)
             {
                 var (soldIds, inv, _) = await SimSellBatchAsync(unsold, buyersByBroker, buyers, commission, commission, maxPerInvoice, rnd);
                 res.Sold += soldIds.Count;
                 res.Invoices += inv;
-                didWork |= soldIds.Count > 0;
             }
 
-            // (b) Re-invoice churn: take back a random chunk of this broker's already-SOLD lots, credit
-            // them, and re-sell — so the brokers keep stressing the credit-note + re-sell path concurrently
-            // even when the auction is fully sold (which is the case after a full sell run).
-            if (reinvPct > 0)
+            // (b) Occasionally (gated by reinvPct) credit a couple of already-sold lots and re-sell them.
+            // Take-back + credit run in ONE transaction, so a failure rolls BOTH back — a reversal can never
+            // be left without its credit note (the orphaned-credit bug the load test exposed).
+            if (reinvPct > 0 && rnd.Next(100) < reinvPct)
             {
                 var sold = await _db.AuctionResults
                     .Where(r => r.AuctionId == auctionId && r.BrokerId == brokerId && r.SoldToBuyerId != null)
-                    .OrderBy(r => Guid.NewGuid()).Take(40).ToListAsync();
-                var pick = sold.Take(Math.Max(1, (int)Math.Ceiling(sold.Count * reinvPct / 100.0))).ToList();
-                if (pick.Count > 0)
+                    .OrderBy(r => Guid.NewGuid()).Take(rnd.Next(1, 4)).ToListAsync();
+                if (sold.Count > 0)
                 {
-                    foreach (var r in pick) { r.LastModifiedBy = "BROKERSIM"; r.LastModifiedAt = DateTime.UtcNow; }
-                    var (_, takenBackIds, _) = await ProcessBrokerTakebacksAsync(pick);
-                    await _db.SaveChangesAsync();
-                    res.CreditNotes += (await GenerateCreditNotesAsync(takenBackIds)).Count;
+                    List<int> takenBackIds = new();
+                    await using (var tx = await _db.Database.BeginTransactionAsync())
+                    {
+                        foreach (var r in sold) { r.LastModifiedBy = "BROKERSIM"; r.LastModifiedAt = DateTime.UtcNow; }
+                        (_, takenBackIds, _) = await ProcessBrokerTakebacksAsync(sold);
+                        await _db.SaveChangesAsync();
+                        res.CreditNotes += (await GenerateCreditNotesAsync(takenBackIds)).Count;
+                        await tx.CommitAsync();
+                    }
                     res.Reinvoiced += takenBackIds.Count;
+
+                    // Re-sell the taken-back lots as a fresh sale (outside the credit transaction).
                     var reSell = await _db.AuctionResults.Where(r => takenBackIds.Contains(r.Id) && r.SoldToBuyerId == null).ToListAsync();
-                    var (_, inv2, _) = await SimSellBatchAsync(reSell, buyersByBroker, buyers, commission, commission, maxPerInvoice, rnd);
-                    res.Invoices += inv2;
-                    didWork |= takenBackIds.Count > 0;
+                    if (reSell.Count > 0)
+                    {
+                        var (_, inv2, _) = await SimSellBatchAsync(reSell, buyersByBroker, buyers, commission, commission, maxPerInvoice, rnd);
+                        res.Invoices += inv2;
+                    }
                 }
             }
-
-            if (!didWork) break; // nothing left to sell and nothing to re-invoice
+        }
+        catch (Exception ex)
+        {
+            // Transient deadlock under concurrency: the credit transaction rolled back (no orphaned
+            // reversal), so count it and move on rather than aborting the whole broker.
+            _logger.LogWarning(ex, "Broker {Broker} batch skipped on a transient error", brokerId);
+            res.Errors += 1;
         }
         return res;
     }
