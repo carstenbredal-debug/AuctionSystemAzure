@@ -319,6 +319,45 @@ public class BusinessCentralSyncService
     }
 
     /// <summary>
+    /// Re-apply any POSTED credit memo that isn't yet held against its (also posted) invoice in BC. Covers
+    /// the ledger-timing race where the inline apply ran right after posting but couldn't find the memo's
+    /// ledger entry yet (one-shot, never retried). Runs each drainer tick; idempotent — skips Alloted ones.
+    /// </summary>
+    public async Task<SyncResult> ReapplyUnappliedCreditMemosAsync()
+    {
+        var result = new SyncResult { Direction = "Apply", EntityType = "Credit Memo → Invoice (BC)" };
+        var companyId = await _bcClient.ResolveCompanyIdAsync();
+
+        var pending = await _db.Set<Invoice>()
+            .Include(i => i.Buyer)
+            .Include(i => i.OriginalInvoice)
+            .Where(i => i.IsCreditNote
+                && i.BcInvoiceNumber != null && i.BcInvoiceNumber != ""
+                && i.Status != Domain.Enums.InvoiceStatus.Alloted
+                && i.OriginalInvoice != null
+                && i.OriginalInvoice.BcInvoiceNumber != null && i.OriginalInvoice.BcInvoiceNumber != "")
+            .ToListAsync();
+
+        result.TotalProcessed = pending.Count;
+        foreach (var cn in pending)
+        {
+            var buyerNumber = cn.Buyer?.BuyerNumber;
+            if (string.IsNullOrEmpty(buyerNumber)) { result.Skipped++; continue; }
+            try
+            {
+                await TryApplyCreditMemoToInvoiceAsync(companyId, cn, buyerNumber);
+                if (cn.Status == Domain.Enums.InvoiceStatus.Alloted) result.Created++; else result.Skipped++;
+            }
+            catch (Exception ex)
+            {
+                result.Failed++;
+                _logger.LogWarning(ex, "Re-apply sweep: failed to apply credit memo {Id}", cn.Id);
+            }
+        }
+        return result;
+    }
+
+    /// <summary>
     /// Push a single credit note to BC as a Sales Credit Memo.
     /// BC assigns the number from the credit memo number series.
     /// PDF is fetched from BC and stored in blob storage.

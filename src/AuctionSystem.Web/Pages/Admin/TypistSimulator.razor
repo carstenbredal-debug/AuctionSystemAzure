@@ -77,6 +77,16 @@ else
             }
             Clear disagreements
         </button>
+        @if (_simStatus != null && !(_simStatus.StartsWith("Done") || _simStatus.StartsWith("Failed") || _simStatus.StartsWith("Stopped")))
+        {
+            <button class="btn btn-outline-danger" @onclick="StopTyping" disabled="@_stopping">
+                @if (_stopping)
+                {
+                    <span class="spinner-border spinner-border-sm me-1"></span>
+                }
+                Stop typing
+            </button>
+        }
     </div>
 
     @if (_message != null)
@@ -210,6 +220,7 @@ else
     private int _delaySeconds = 1;
     private string? _simStatus;
     private bool _running;
+    private bool _stopping;
     private bool _polling;
     private bool _resolving;
     private string? _message;
@@ -341,6 +352,22 @@ else
         {
             _running = false;
         }
+    }
+
+    private async Task StopTyping()
+    {
+        if (_auctionId <= 0) return;
+        _stopping = true;
+        try
+        {
+            var resp = await Api.StopTypistSimAsync(_auctionId);
+            _error = !resp.IsSuccessStatusCode;
+            _message = resp.IsSuccessStatusCode
+                ? "Stop requested — the typist simulator will halt within a lot or two."
+                : $"Failed to stop: {(int)resp.StatusCode} {resp.ReasonPhrase}";
+        }
+        catch (Exception ex) { _message = $"Error: {ex.Message}"; _error = true; }
+        finally { _stopping = false; }
     }
 
     // The run is paced in the background; poll the auction's status until it's Done/Failed. Guarded so

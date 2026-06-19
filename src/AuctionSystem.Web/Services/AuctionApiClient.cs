@@ -766,6 +766,10 @@ public class AuctionApiClient
     public async Task<HttpResponseMessage> SimulateTypistEntriesAsync(int auctionId, int disagreementPercent, int? maxLots, decimal minPrice, decimal maxPrice, string disagreementType, List<int>? brokerIds, int delaySeconds)
         => await _http.PostAsJsonAsync("api/typist-entries/simulate", new { auctionId, disagreementPercent, maxLots, minPrice, maxPrice, disagreementType, brokerIds, delaySeconds });
 
+    // Admin test tool: stop a running paced typist simulation (halts within a lot or two; already-typed lots stay).
+    public async Task<HttpResponseMessage> StopTypistSimAsync(int auctionId)
+        => await _http.PostAsJsonAsync("api/typist-entries/simulate/stop", new { auctionId });
+
     // Admin test tool: clear an auction's disagreement queue (re-enter matching values to resolve).
     public async Task<HttpResponseMessage> ResolveTypistDisagreementsAsync(int auctionId)
         => await _http.PostAsync($"api/typist-entries/resolve-disagreements?auctionId={auctionId}", null);

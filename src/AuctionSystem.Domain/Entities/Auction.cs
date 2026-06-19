@@ -26,5 +26,9 @@ public class Auction
     // "Queued" / "Typing N/total (matched M, disagreements D)" / "Done: …" / "Failed: …".
     public string? TypistSimStatus { get; set; }
 
+    // Set by the Stop endpoint; the paced typist-sim worker checks it each lot and at the start of each
+    // batch, halts without re-enqueuing, then clears it. Reset to false when a new sim is started.
+    public bool TypistSimStopRequested { get; set; }
+
     public ICollection<Lot> Lots { get; set; } = new List<Lot>();
 }

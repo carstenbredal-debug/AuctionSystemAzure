@@ -288,6 +288,7 @@ public class TypistEntryFunctions
         var msg = new TypistSimMessage(body.AuctionId, body.DisagreementPercent, body.MinPrice, body.MaxPrice,
             body.DisagreementType, body.BrokerIds, body.TypistUserId1, body.TypistUserId2, delay, totalTarget);
         auction.TypistSimStatus = $"Queued — target {totalTarget} lots at {delay}s/entry";
+        auction.TypistSimStopRequested = false;   // clear any stale stop request from a previous run
         await _db.SaveChangesAsync();
         await _simQueue.EnqueueAsync(JsonSerializer.Serialize(msg, JsonOptions));
 
@@ -300,6 +301,28 @@ public class TypistEntryFunctions
             message = $"Started — typing {totalTarget} lot(s) in the background at {delay}s between entries. Watch the status."
         });
     }
+
+    // Stop a running paced typist simulation. Sets the stop flag (raw UPDATE so it lands even while the
+    // worker is mid-batch overwriting status); the worker checks it each lot, halts without re-enqueuing,
+    // and clears it. Already-typed lots stay; a later Start resumes from the remaining un-typed lots.
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [Function("StopTypistSim")]
+    public async Task<HttpResponseData> StopTypistSim(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "typist-entries/simulate/stop")] HttpRequestData req)
+    {
+        var body = await req.ReadFromJsonAsync<StopSimRequest>();
+        if (body == null || body.AuctionId <= 0)
+            return await CreateErrorResponse(req, "auctionId is required");
+
+        var n = await _db.Database.ExecuteSqlInterpolatedAsync(
+            $"UPDATE auction.Auctions SET TypistSimStopRequested = 1 WHERE Id = {body.AuctionId}");
+        if (n == 0) return await CreateErrorResponse(req, "Auction not found.");
+
+        return await CreateJsonResponse(req, new { auctionId = body.AuctionId, stopping = true,
+            message = "Stop requested — the typist simulator will halt within a lot or two." });
+    }
+
+    private record StopSimRequest(int AuctionId);
 
     // Background worker: types a time-budgeted batch of the auction's remaining un-typed lots at the
     // configured delay, then re-enqueues a continuation until the whole auction is typed. Each
@@ -363,10 +386,17 @@ public class TypistEntryFunctions
             .Take(Math.Max(1, msg.TotalTarget - typedCount))
             .ToListAsync();
 
+        // Stop requested between batches? Halt before doing any work.
+        if (await StopRequestedAsync(msg.AuctionId)) { await StopSimAsync(auction, msg.AuctionId); return; }
+
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var budget = TimeSpan.FromMinutes(2); // comfortably under the 5-minute queue visibility timeout
+        var stopped = false;
         foreach (var lot in remaining)
         {
+            // Stop button pressed mid-batch — halt now and don't re-enqueue.
+            if (await StopRequestedAsync(msg.AuctionId)) { stopped = true; break; }
+
             // Idempotency: a concurrent or redelivered batch may have typed this lot since `remaining`
             // was read — skip it so it can't be double-typed (extra entries / duplicate results).
             if (await _db.TypistEntries.AnyAsync(e => e.AuctionId == msg.AuctionId && e.LotNumber == lot))
@@ -378,6 +408,8 @@ public class TypistEntryFunctions
             if (sw.Elapsed > budget) break;
         }
 
+        if (stopped) { await StopSimAsync(auction, msg.AuctionId); return; }
+
         // Authoritative progress for the continue/finish decision: re-count distinct typed lots (handles
         // skips/concurrency) and only continue if this batch actually had work, so the target exceeding
         // the available lots can't make it re-enqueue forever.
@@ -386,6 +418,20 @@ public class TypistEntryFunctions
             await _simQueue.EnqueueAsync(message);
         else
             await FinishSimAsync(auction, msg.AuctionId, actualTyped);
+    }
+
+    // Fresh (untracked) read of the stop flag — the worker holds a tracked `auction` whose copy is stale,
+    // so we read the DB value directly each check.
+    private async Task<bool> StopRequestedAsync(int auctionId)
+        => await _db.Auctions.AsNoTracking().Where(a => a.Id == auctionId).Select(a => a.TypistSimStopRequested).FirstOrDefaultAsync();
+
+    private async Task StopSimAsync(Auction auction, int auctionId)
+    {
+        var typed = await _db.TypistEntries.Where(e => e.AuctionId == auctionId).Select(e => e.LotNumber).Distinct().CountAsync();
+        auction.TypistSimStatus = $"Stopped: typed {typed} lot(s) on request";
+        await _db.SaveChangesAsync();
+        // Clear the flag in the DB (the tracked entity's copy is stale, so a normal SaveChanges wouldn't write it).
+        await _db.Database.ExecuteSqlInterpolatedAsync($"UPDATE auction.Auctions SET TypistSimStopRequested = 0 WHERE Id = {auctionId}");
     }
 
     private async Task FinishSimAsync(Auction auction, int auctionId, int typedCount)

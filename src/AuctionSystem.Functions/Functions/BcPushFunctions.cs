@@ -53,5 +53,12 @@ public class BcPushFunctions
             await sync.PushInvoicesAsync();
         if (await _db.Invoices.AnyAsync(i => i.IsCreditNote && (i.BcInvoiceNumber == null || i.BcInvoiceNumber == "")))
             await sync.PushCreditNotesAsync();
+
+        // Heal any posted credit memo that didn't get applied to its invoice (ledger-timing race in the
+        // inline apply). Only runs when there's something to re-apply.
+        if (await _db.Invoices.AnyAsync(i => i.IsCreditNote && i.BcInvoiceNumber != null && i.BcInvoiceNumber != ""
+                && i.Status != Domain.Enums.InvoiceStatus.Alloted
+                && i.OriginalInvoice != null && i.OriginalInvoice.BcInvoiceNumber != null && i.OriginalInvoice.BcInvoiceNumber != ""))
+            await sync.ReapplyUnappliedCreditMemosAsync();
     }
 }

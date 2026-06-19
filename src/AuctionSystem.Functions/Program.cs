@@ -241,6 +241,8 @@ using (var scope = host.Services.CreateScope())
                 ALTER TABLE auction.Auctions ADD SnapshotBuiltAt datetime2 NULL;
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Auctions') AND name = 'TypistSimStatus')
                 ALTER TABLE auction.Auctions ADD TypistSimStatus nvarchar(400) NULL;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Auctions') AND name = 'TypistSimStopRequested')
+                ALTER TABLE auction.Auctions ADD TypistSimStopRequested bit NOT NULL DEFAULT 0;
         ");
         // TypistEntries table
         db.Database.ExecuteSqlRaw(@"
