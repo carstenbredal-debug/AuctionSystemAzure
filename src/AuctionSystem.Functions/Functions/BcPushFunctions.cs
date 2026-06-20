@@ -50,5 +50,13 @@ public class BcPushFunctions
             await sync.PushCreditNotesAsync();
         if (await _db.Invoices.AnyAsync(i => !i.IsCreditNote && (i.BcInvoiceNumber == null || i.BcInvoiceNumber == "")))
             await sync.PushInvoicesAsync();
+
+        // Apply posted-but-unapplied credit memos to their original invoices. The immediate apply at push
+        // time can miss when BC hasn't surfaced the just-posted ledger entry yet, leaving the invoice open
+        // (a residual buyer balance). Retry it here until the credit note is Alloted. Apply-only — does not
+        // touch the document push/idempotency path. Idempotent (skips already-applied/closed credit memos).
+        if (await _db.Invoices.AnyAsync(cn => cn.IsCreditNote && cn.BcInvoiceNumber != null && cn.BcInvoiceNumber != ""
+                && cn.OriginalInvoiceId != null && cn.Status != AuctionSystem.Domain.Enums.InvoiceStatus.Alloted))
+            await sync.ApplyPendingCreditMemosAsync();
     }
 }

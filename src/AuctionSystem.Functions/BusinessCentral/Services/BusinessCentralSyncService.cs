@@ -762,6 +762,42 @@ public class BusinessCentralSyncService
     }
 
     /// <summary>
+    /// Retry applying posted-but-unapplied credit memos to their original invoices. The immediate apply at
+    /// push time (PushSalesCreditMemoAsync) can miss when BC hasn't yet surfaced the just-posted credit-memo
+    /// ledger entry (eventual consistency) or on a transient error — leaving the original invoice OPEN, so
+    /// the buyer shows a residual balance even though the offsetting credit exists. This sweep re-runs the
+    /// apply for any posted credit note not yet marked Alloted. It is safe to repeat: TryApply only acts on
+    /// OPEN credit-memo ledger entries, so an already-applied (closed) one is skipped — no double-apply.
+    /// Bounded per run so one drainer tick can't run long; the rest are picked up on the next tick.
+    /// This touches ONLY the credit-memo APPLICATION step — never the document push/idempotency path.
+    /// </summary>
+    public async Task ApplyPendingCreditMemosAsync(int maxPerRun = 50)
+    {
+        var pending = await _db.Invoices
+            .Where(cn => cn.IsCreditNote
+                && cn.BcInvoiceNumber != null && cn.BcInvoiceNumber != ""
+                && cn.OriginalInvoiceId != null
+                && cn.Status != Domain.Enums.InvoiceStatus.Alloted)
+            .OrderBy(cn => cn.Id)
+            .Take(maxPerRun)
+            .ToListAsync();
+        if (pending.Count == 0) return;
+
+        var companyId = await _bcClient.ResolveCompanyIdAsync();
+        foreach (var cn in pending)
+        {
+            // Need the buyer's BC number, and the original invoice must actually be posted in BC.
+            var buyer = await _db.Buyers.FindAsync(cn.BuyerId);
+            if (buyer == null || string.IsNullOrEmpty(buyer.BuyerNumber)) continue;
+            var orig = cn.OriginalInvoiceId.HasValue ? await _db.Invoices.FindAsync(cn.OriginalInvoiceId.Value) : null;
+            if (orig == null || string.IsNullOrEmpty(orig.BcInvoiceNumber)) continue;
+
+            // Re-run the shared apply (marks the credit note Alloted + saves on success).
+            await TryApplyCreditMemoToInvoiceAsync(companyId, cn, buyer.BuyerNumber!);
+        }
+    }
+
+    /// <summary>
     /// Push a single invoice to BC as a Sales Invoice.
     /// BC assigns the invoice number from the SALESINV number series.
     /// PDF is fetched from BC and stored in blob storage.
