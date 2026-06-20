@@ -52,6 +52,6 @@ jobs:
       - name: Deploy to Azure Functions
         run: |
           az functionapp deployment source config-zip \
-            --name ${{ secrets.AZURE_FUNCTIONAPP_NAME_PROD }} \
-            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_PROD }} \
+            --name ${{ secrets.KSEF_FUNCTIONAPP_NAME_PROD }} \
+            --resource-group ${{ secrets.KSEF_RESOURCE_GROUP_PROD }} \
             --src ${{ github.workspace }}/deploy.zip
