@@ -3,9 +3,17 @@
 One checklist to stand up a new environment (TEST first, then PROD) with security and
 performance **built in from day one** — rather than retrofitting, the way DEV was.
 
-- **Branch mapping:** `test` → TEST, `prod` → PROD (see `.github/workflows/deploy-test.yml`,
-  `deploy-prod.yml`). `dev` → DEV already exists.
-- **Companion docs:** app-level auth rollout is in [`SECURITY_AUTH_ROLLOUT.md`](SECURITY_AUTH_ROLLOUT.md).
+- **Branch mapping:** `test` → TEST, `prod` → PROD. Auction: `deploy-test.yml` / `deploy-prod.yml`;
+  KSeF: `ksef-deploy-functions-test.yml` / `-prod.yml` + `ksef-build-bc-extension.yml`. `dev` → DEV exists.
+- **Monorepo:** this repo also holds the **KSeF integration** under `ksef/` (folded in from the old
+  KSeFIntegration repo). One 3-branch promotion covers both systems; CI is path-filtered so each deploys
+  independently (`ksef/**` vs the rest).
+- **Separate tenant (important):** DEV is in one Entra tenant; **TEST and PROD are in a different,
+  unconnected tenant.** Every TEST/PROD resource — including the CI/OIDC and SWA-login **app
+  registrations** — is created in that other tenant, and the `*_TEST` / `*_PROD` secrets point there.
+  There is **no trust or link between the tenants**; GitHub federates to each one independently.
+- **Companion docs:** app-level auth rollout — [`SECURITY_AUTH_ROLLOUT.md`](SECURITY_AUTH_ROLLOUT.md);
+  KSeF per-env setup — [`ksef/TEST_PROD_KSEF.md`](ksef/TEST_PROD_KSEF.md).
   This runbook adds the network lock, the in-VNet deploy path, and the performance infra.
 - **Why this exists:** DEV runs on app-level controls only and is deliberately left that way
   (no real PII in DEV). TEST/PROD must be network-isolated because the Functions auth middleware
@@ -28,6 +36,62 @@ Do TEST end-to-end first, prove it, then repeat the identical steps for PROD.
 | Entra app registration (client/tenant id) for the SWA login | | |
 
 > Keep TEST and PROD in **separate resource groups and separate SQL servers**. No shared data.
+
+---
+
+## Resource inventory (per environment — provision all of this in the TEST/PROD tenant)
+
+Build this list for **TEST** first, then identically for **PROD**. PROD adds one external item (#15).
+
+**Azure — compute & data**
+| # | Resource | Maps to |
+|---|----------|---------|
+| 1 | Resource Group (clean name; can hold both systems) | `AZURE_RESOURCE_GROUP_*` / `KSEF_RESOURCE_GROUP_*` |
+| 2 | **Auction** Function App (Flex Consumption, .NET 8 isolated) | `AZURE_FUNCTIONAPP_NAME_*` |
+| 3 | **KSeF** Function App (Flex Consumption, .NET 8 isolated) — separate | `KSEF_FUNCTIONAPP_NAME_*` |
+| 4 | Admin **Static Web App** (Standard) | `AZURE_SWA_TOKEN_*` |
+| 5 | Catalog **Static Web App** (Standard — `LotCatalogWeb`) | `AZURE_SWA_TOKEN_CATALOG_*` |
+| 6 | **Azure SQL** server + database (separate per env; TEST small, PROD ~200 users) | app setting |
+
+**Network & deploy (hardening — Phases B/C)**
+| # | Resource | Notes |
+|---|----------|-------|
+| 7 | VNet + private-endpoint subnet | — |
+| 8 | Private Endpoint for the **Auction** Function App + `privatelink.azurewebsites.net` DNS zone | disable its public access |
+| 9 | Self-hosted GitHub runner in the VNet (VM or Container App) | the bulk of the effort |
+| 10 | Key Vault (SQL + BC + KSeF secrets) | no secrets in repo |
+
+> ⚠️ The **KSeF Function App is NOT network-locked** — Business Central (cloud) calls it directly, so it
+> stays public, protected by its **function key** (optionally IP-restrict to BC). Only the auction
+> function hides behind the SWA.
+
+**Identity (in the TEST/PROD tenant)**
+| # | Resource | Maps to |
+|---|----------|---------|
+| 11 | Entra app reg — **CI/OIDC** (federated to this GitHub repo; access to the RG) | `AZURE_CLIENT_ID_*`, `AZURE_TENANT_ID_*`, `AZURE_SUBSCRIPTION_ID_*` |
+| 12 | Entra app reg — **SWA login** (redirect URIs = SWA hostname) | SWA auth config |
+
+**Business Central (per env)**
+| # | Item |
+|---|------|
+| 13 | BC company per env (hosts the auction BC integration **and** the KSeF extension) |
+| 14 | BC API OAuth credentials (as DEV has) |
+
+**PROD-only external (long lead time — start early)**
+| # | Item |
+|---|------|
+| 15 | **KSeF production authorization** (token/certificate for the company NIP). Point PROD `KSeF:BaseUrl` at `ksef.mf.gov.pl` only once this exists. |
+
+### GitHub secrets to set in this repo (per env — `_TEST` shown, `_PROD` mirrors)
+- **Auction:** `AZURE_CLIENT_ID_TEST`, `AZURE_TENANT_ID_TEST`, `AZURE_SUBSCRIPTION_ID_TEST`,
+  `AZURE_FUNCTIONAPP_NAME_TEST`, `AZURE_RESOURCE_GROUP_TEST`, `AZURE_SWA_TOKEN_TEST`,
+  `AZURE_SWA_TOKEN_CATALOG_TEST`, `API_BASE_URL_TEST`
+- **KSeF:** `KSEF_FUNCTIONAPP_NAME_TEST`, `KSEF_RESOURCE_GROUP_TEST` (reuses the auction's
+  `AZURE_CLIENT_ID_TEST` / `AZURE_TENANT_ID_TEST` / `AZURE_SUBSCRIPTION_ID_TEST`)
+
+### App settings (not resources, but required) per function app
+- **Auction:** SQL connection string, BC creds, `AUTH_ENFORCE=true`.
+- **KSeF:** `KSeF:BaseUrl` (Test URL for TEST, `ksef.mf.gov.pl` for PROD) + the KSeF auth secret.
 
 ---
 
