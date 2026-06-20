@@ -104,8 +104,11 @@ e.HasIndex(r => new { r.SoldToBuyerId, r.AuctionId });
 e.HasIndex(r => r.LotNumber);
 ```
 
-- [ ] `dotnet ef migrations add AddAuctionResultCompositeIndexes`
-- [ ] Apply on deploy (migration step / `database update`). Safe to apply to DEV too once validated.
+**DONE** (rides `dev`→`test`→`prod`): the composites are declared in `AuctionDbContext.cs` and created via
+**idempotent startup SQL** in `Program.cs` (create the two `(*, AuctionId)` composites, then drop the
+superseded standalone `IX_AuctionResults_BrokerId` / `IX_AuctionResults_SoldToBuyerId`). NOT via
+`dotnet ef migrations add` — the EF migration snapshot is frozen at the 2026-05-28 baseline and
+scaffolding a catch-up corrupts it; all schema patches go through the startup raw-SQL blocks.
 
 ### E2. Blazor WASM startup
 - [ ] Confirm SWA serves **Brotli/gzip** for `_framework/*` (Standard does this automatically — verify

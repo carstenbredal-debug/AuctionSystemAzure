@@ -309,6 +309,23 @@ using (var scope = host.Services.CreateScope())
                     ON auction.TypistEntries (AuctionId, LotNumber, TypistSlot) WHERE IsResolved = 0;
             END
         ");
+        // Phase E1 (TEST/PROD perf): composite (owner + auction) indexes for the broker/buyer grids,
+        // which now filter by both. They supersede the standalone BrokerId / SoldToBuyerId indexes (a
+        // composite on (Col, AuctionId) also serves Col-only lookups via the leftmost-prefix rule), so
+        // drop those once the composites exist. Idempotent; safe to re-run. Indexes go via startup SQL,
+        // NOT EF migrations — the migration snapshot is frozen at the 2026-05-28 baseline.
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_AuctionResults_BrokerId_AuctionId' AND object_id = OBJECT_ID('auction.AuctionResults'))
+                CREATE INDEX IX_AuctionResults_BrokerId_AuctionId ON auction.AuctionResults(BrokerId, AuctionId);
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_AuctionResults_SoldToBuyerId_AuctionId' AND object_id = OBJECT_ID('auction.AuctionResults'))
+                CREATE INDEX IX_AuctionResults_SoldToBuyerId_AuctionId ON auction.AuctionResults(SoldToBuyerId, AuctionId);
+            IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_AuctionResults_BrokerId' AND object_id = OBJECT_ID('auction.AuctionResults'))
+               AND EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_AuctionResults_BrokerId_AuctionId' AND object_id = OBJECT_ID('auction.AuctionResults'))
+                DROP INDEX IX_AuctionResults_BrokerId ON auction.AuctionResults;
+            IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_AuctionResults_SoldToBuyerId' AND object_id = OBJECT_ID('auction.AuctionResults'))
+               AND EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_AuctionResults_SoldToBuyerId_AuctionId' AND object_id = OBJECT_ID('auction.AuctionResults'))
+                DROP INDEX IX_AuctionResults_SoldToBuyerId ON auction.AuctionResults;
+        ");
         // AuctionTransactions table
         db.Database.ExecuteSqlRaw(@"
             IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'AuctionTransactions')

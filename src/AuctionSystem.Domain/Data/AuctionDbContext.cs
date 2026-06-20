@@ -188,8 +188,12 @@ public class AuctionDbContext : DbContext
             e.HasKey(r => r.Id);
             e.HasOne(r => r.Broker).WithMany().HasForeignKey(r => r.BrokerId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(r => r.SoldToBuyer).WithMany().HasForeignKey(r => r.SoldToBuyerId).OnDelete(DeleteBehavior.Restrict);
-            e.HasIndex(r => r.BrokerId);
-            e.HasIndex(r => r.SoldToBuyerId);
+            // Composite (owner + auction) indexes — the broker/buyer grids filter by both. These supersede
+            // the old standalone BrokerId / SoldToBuyerId indexes (a composite on (Col, AuctionId) also
+            // serves lookups on Col alone via the leftmost-prefix rule). Actually created via startup SQL
+            // (Program.cs) since the EF migration snapshot is frozen; declared here for model accuracy.
+            e.HasIndex(r => new { r.BrokerId, r.AuctionId });
+            e.HasIndex(r => new { r.SoldToBuyerId, r.AuctionId });
             e.HasIndex(r => r.LotNumber);
             e.Property(r => r.PriceEur).HasColumnType("decimal(18,2)");
             e.Property(r => r.SalesType).HasMaxLength(50);
