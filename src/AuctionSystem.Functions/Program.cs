@@ -252,10 +252,6 @@ using (var scope = host.Services.CreateScope())
                 ALTER TABLE auction.Auctions ADD BrokerSimStatus nvarchar(400) NULL;
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Auctions') AND name = 'BrokerSimStopRequested')
                 ALTER TABLE auction.Auctions ADD BrokerSimStopRequested bit NOT NULL DEFAULT 0;
-            -- Per-auction internal document-number counter ('{AuctionNumber}-{NNNNN}' from 00001), shared
-            -- by invoices AND credit notes. Allocated atomically (MERGE+HOLDLOCK) at document creation.
-            IF OBJECT_ID('auction.InvoiceSequences') IS NULL
-                CREATE TABLE auction.InvoiceSequences (AuctionId INT NOT NULL CONSTRAINT PK_InvoiceSequences PRIMARY KEY, NextNumber INT NOT NULL);
         ");
         // TypistEntries table
         db.Database.ExecuteSqlRaw(@"
