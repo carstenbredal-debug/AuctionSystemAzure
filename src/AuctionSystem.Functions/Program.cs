@@ -113,6 +113,11 @@ var host = new HostBuilder()
         services.AddSingleton(sp => new AuctionSystem.Functions.Services.TypistSimQueue(
             storageConnectionString,
             sp.GetRequiredService<ILogger<AuctionSystem.Functions.Services.TypistSimQueue>>()));
+
+        // Background paced broker-robot simulator queue (runs passes server-side until done/stopped).
+        services.AddSingleton(sp => new AuctionSystem.Functions.Services.BrokerSimQueue(
+            storageConnectionString,
+            sp.GetRequiredService<ILogger<AuctionSystem.Functions.Services.BrokerSimQueue>>()));
     })
     .Build();
 
@@ -243,6 +248,10 @@ using (var scope = host.Services.CreateScope())
                 ALTER TABLE auction.Auctions ADD TypistSimStatus nvarchar(400) NULL;
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Auctions') AND name = 'TypistSimStopRequested')
                 ALTER TABLE auction.Auctions ADD TypistSimStopRequested bit NOT NULL DEFAULT 0;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Auctions') AND name = 'BrokerSimStatus')
+                ALTER TABLE auction.Auctions ADD BrokerSimStatus nvarchar(400) NULL;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Auctions') AND name = 'BrokerSimStopRequested')
+                ALTER TABLE auction.Auctions ADD BrokerSimStopRequested bit NOT NULL DEFAULT 0;
         ");
         // TypistEntries table
         db.Database.ExecuteSqlRaw(@"

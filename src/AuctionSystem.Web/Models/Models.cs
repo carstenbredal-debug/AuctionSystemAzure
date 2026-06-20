@@ -22,6 +22,7 @@ public class AuctionDto
     public string? SnapshotStatus { get; set; }
     public DateTime? SnapshotBuiltAt { get; set; }
     public string? TypistSimStatus { get; set; }
+    public string? BrokerSimStatus { get; set; }
     public List<LotDto> Lots { get; set; } = new();
     public int LotCount { get; set; }
 }

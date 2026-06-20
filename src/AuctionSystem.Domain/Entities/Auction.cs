@@ -30,5 +30,13 @@ public class Auction
     // batch, halts without re-enqueuing, then clears it. Reset to false when a new sim is started.
     public bool TypistSimStopRequested { get; set; }
 
+    // Background broker-robot simulator status (paced, runs over time like the typist). Null = idle;
+    // otherwise "Queued" / "Pass N — sold S, invoices I, credits C, errors E" / "Stopped: …" / "Done: …".
+    public string? BrokerSimStatus { get; set; }
+
+    // Set by the broker Stop endpoint; the paced broker-sim worker checks it between passes, halts
+    // without re-enqueuing, then clears it. Reset to false when a new broker sim is started.
+    public bool BrokerSimStopRequested { get; set; }
+
     public ICollection<Lot> Lots { get; set; } = new List<Lot>();
 }

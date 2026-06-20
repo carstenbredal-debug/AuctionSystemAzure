@@ -24,6 +24,7 @@ public class AuctionResultFunctions
     private readonly BusinessCentralSyncService? _bcSyncService;
     private readonly BcPushQueue? _bcPushQueue;
     private readonly IServiceScopeFactory? _scopeFactory;
+    private readonly BrokerSimQueue? _brokerSimQueue;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -31,7 +32,7 @@ public class AuctionResultFunctions
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public AuctionResultFunctions(AuctionDbContext db, CatalogDbContext catalogDb, ILogger<AuctionResultFunctions> logger, BlobStorageService? blobStorage = null, BusinessCentralSyncService? bcSyncService = null, BcPushQueue? bcPushQueue = null, IServiceScopeFactory? scopeFactory = null)
+    public AuctionResultFunctions(AuctionDbContext db, CatalogDbContext catalogDb, ILogger<AuctionResultFunctions> logger, BlobStorageService? blobStorage = null, BusinessCentralSyncService? bcSyncService = null, BcPushQueue? bcPushQueue = null, IServiceScopeFactory? scopeFactory = null, BrokerSimQueue? brokerSimQueue = null)
     {
         _db = db;
         _catalogDb = catalogDb;
@@ -40,6 +41,7 @@ public class AuctionResultFunctions
         _bcSyncService = bcSyncService;
         _bcPushQueue = bcPushQueue;
         _scopeFactory = scopeFactory;
+        _brokerSimQueue = brokerSimQueue;
     }
 
     [Function("SubmitAuctionResult")]
@@ -792,9 +794,39 @@ public class AuctionResultFunctions
 
     private class BrokerSimResult { public int BrokerId; public int Sold; public int Invoices; public int CreditNotes; public int Reinvoiced; public int Errors; }
 
-    // Concurrency simulator: N brokers selling + re-invoicing their own lots AT THE SAME TIME, to stress
-    // the real flow under simultaneous broker activity (atomic claims, invoice creation, the BC drainer,
-    // the credit-note path). Each broker runs in its OWN DbContext scope so the parallelism is genuine.
+    private record BrokerPassResult(int Candidates, int Sold, int Invoices, int CreditNotes, int Reinvoiced, int Errors);
+
+    // The paced broker run state, carried across the worker's re-enqueued passes. Params stay fixed; the
+    // totals accumulate so the status line reads consistently ("Pass N — cumulative …") across passes.
+    private record BrokerSimMessage(int AuctionId, int BrokerCount, decimal Commission, int ReinvoicePercent,
+        int MaxLotsPerInvoice, int PaceSeconds, int Pass, int Sold, int Invoices, int CreditNotes, int Reinvoiced, int Errors);
+
+    // One pass of the concurrency simulator: up to BrokerCount brokers (that have unsold lots AND a linked
+    // buyer) each sell + maybe re-invoice a small batch, all AT THE SAME TIME (each in its own DbContext
+    // scope so the parallelism is genuine). Returns the candidate count (0 = nothing left to sell) and the
+    // aggregated tallies. Shared by the one-shot HTTP endpoint and the paced background worker.
+    private async Task<BrokerPassResult> RunOneBrokerPassAsync(int auctionId, int brokerCount, decimal commission, int reinvPct, int maxPerInvoice)
+    {
+        // Brokers that have unsold lots in this auction AND a linked buyer (only those can sell).
+        var linkedBrokers = (await _db.BrokerBuyers.Select(bb => bb.BrokerId).Distinct().ToListAsync()).ToHashSet();
+        var brokersWithUnsold = await _db.AuctionResults
+            .Where(r => r.AuctionId == auctionId && r.SoldToBuyerId == null)
+            .Select(r => r.BrokerId).Distinct().ToListAsync();
+        var candidates = brokersWithUnsold.Where(linkedBrokers.Contains).Take(brokerCount).ToList();
+        if (candidates.Count == 0)
+            return new BrokerPassResult(0, 0, 0, 0, 0, 0);
+
+        // Fan out — every broker runs concurrently, each in its own scope/context. (deadline is vestigial
+        // now that pacing is handled by the queue's visibility delay; kept for the runner signature.)
+        var deadline = DateTime.UtcNow.AddMinutes(2);
+        var results = await Task.WhenAll(candidates.Select(brokerId =>
+            RunBrokerInScopeAsync(auctionId, brokerId, commission, reinvPct, maxPerInvoice, deadline)));
+        return new BrokerPassResult(candidates.Count, results.Sum(r => r.Sold), results.Sum(r => r.Invoices),
+            results.Sum(r => r.CreditNotes), results.Sum(r => r.Reinvoiced), results.Sum(r => r.Errors));
+    }
+
+    // Concurrency simulator (one-shot): runs a SINGLE pass and returns its tallies. Kept for ad-hoc use;
+    // the page now drives the paced server-side loop via StartBrokerSim/StopBrokerSim instead.
     [Function("SimulateBrokers")]
     public async Task<HttpResponseData> SimulateBrokers(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auction-results/simulate-brokers")] HttpRequestData req)
@@ -805,41 +837,150 @@ public class AuctionResultFunctions
         if (_scopeFactory is null)
             return await SimJson(req, System.Net.HttpStatusCode.InternalServerError, new { error = "Broker simulator unavailable (no scope factory)." });
 
-        // Running concurrently with the typist sim is ALLOWED — see the note in SimulateSell. The double-type
-        // race is prevented by the UX_TypistEntries_Auction_Lot_Slot_Active unique index, not by blocking here.
+        var commission = Math.Max(0m, body.Commission ?? 1.5m);
+        var reinvPct = Math.Clamp(body.ReinvoicePercent ?? 0, 0, 100);
+        var maxPerInvoice = Math.Clamp(body.MaxLotsPerInvoice ?? 10, 1, 100);
+        var brokerCount = Math.Clamp(body.BrokerCount ?? 15, 1, 50);
+
+        var p = await RunOneBrokerPassAsync(body.AuctionId, brokerCount, commission, reinvPct, maxPerInvoice);
+        if (p.Candidates == 0)
+            return await SimJson(req, System.Net.HttpStatusCode.OK, new { auctionId = body.AuctionId, brokers = 0, message = "No brokers with unsold lots and a linked buyer." });
+
+        return await SimJson(req, System.Net.HttpStatusCode.OK, new
+        {
+            auctionId = body.AuctionId, brokers = p.Candidates,
+            sold = p.Sold, invoices = p.Invoices, creditNotes = p.CreditNotes, reinvoiced = p.Reinvoiced, errors = p.Errors
+        });
+    }
+
+    // Start the PACED broker simulator: runs passes server-side (surviving page-close) until every
+    // sellable lot is sold or Stop is pressed. Mirrors the typist's Start endpoint exactly.
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [Function("StartBrokerSim")]
+    public async Task<HttpResponseData> StartBrokerSim(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auction-results/simulate-brokers/start")] HttpRequestData req)
+    {
+        var body = await req.ReadFromJsonAsync<StartBrokerSimRequest>();
+        if (body == null || body.AuctionId <= 0)
+            return await SimJson(req, System.Net.HttpStatusCode.BadRequest, new { error = "auctionId is required." });
+        if (_brokerSimQueue is null || !_brokerSimQueue.IsConfigured)
+            return await SimJson(req, System.Net.HttpStatusCode.InternalServerError, new { error = "Background queue (AzureWebJobsStorage) is not configured — the paced broker simulator needs it." });
+
+        var auction = await _db.Auctions.FindAsync(body.AuctionId);
+        if (auction == null) return await SimJson(req, System.Net.HttpStatusCode.NotFound, new { error = "Auction not found." });
+
+        // One paced broker run per auction at a time — a second start would double the robot load.
+        if (auction.BrokerSimStatus is string st && (st.StartsWith("Queued") || st.StartsWith("Pass")))
+            return await SimJson(req, System.Net.HttpStatusCode.Conflict, new { error = $"A broker simulation is already running for this auction ({st}). Stop it first." });
 
         var commission = Math.Max(0m, body.Commission ?? 1.5m);
         var reinvPct = Math.Clamp(body.ReinvoicePercent ?? 0, 0, 100);
         var maxPerInvoice = Math.Clamp(body.MaxLotsPerInvoice ?? 10, 1, 100);
-        var durationSec = Math.Clamp(body.DurationSeconds ?? 30, 1, 120);
         var brokerCount = Math.Clamp(body.BrokerCount ?? 15, 1, 50);
-        var deadline = DateTime.UtcNow.AddSeconds(durationSec);
+        var pace = Math.Clamp(body.PaceSeconds ?? 15, 1, 120);
 
-        // Brokers that have unsold lots in this auction AND a linked buyer (only those can sell).
-        var linkedBrokers = (await _db.BrokerBuyers.Select(bb => bb.BrokerId).Distinct().ToListAsync()).ToHashSet();
-        var brokersWithUnsold = await _db.AuctionResults
-            .Where(r => r.AuctionId == body.AuctionId && r.SoldToBuyerId == null)
-            .Select(r => r.BrokerId).Distinct().ToListAsync();
-        var candidates = brokersWithUnsold.Where(linkedBrokers.Contains).Take(brokerCount).ToList();
-        if (candidates.Count == 0)
-            return await SimJson(req, System.Net.HttpStatusCode.OK, new { auctionId = body.AuctionId, brokers = 0, message = "No brokers with unsold lots and a linked buyer." });
-
-        // Fan out — every broker runs concurrently, each in its own scope/context.
-        var results = await Task.WhenAll(candidates.Select(brokerId =>
-            RunBrokerInScopeAsync(body.AuctionId, brokerId, commission, reinvPct, maxPerInvoice, deadline)));
+        var msg = new BrokerSimMessage(body.AuctionId, brokerCount, commission, reinvPct, maxPerInvoice, pace, 0, 0, 0, 0, 0, 0);
+        auction.BrokerSimStatus = $"Queued — {brokerCount} brokers, {pace}s/pass";
+        auction.BrokerSimStopRequested = false;   // clear any stale stop request from a previous run
+        await _db.SaveChangesAsync();
+        await _brokerSimQueue.EnqueueAsync(JsonSerializer.Serialize(msg, JsonOptions));
 
         return await SimJson(req, System.Net.HttpStatusCode.OK, new
         {
-            auctionId = body.AuctionId,
-            brokers = results.Length,
-            durationSeconds = durationSec,
-            sold = results.Sum(r => r.Sold),
-            invoices = results.Sum(r => r.Invoices),
-            creditNotes = results.Sum(r => r.CreditNotes),
-            reinvoiced = results.Sum(r => r.Reinvoiced),
-            errors = results.Sum(r => r.Errors),
-            perBroker = results.OrderBy(r => r.BrokerId).Select(r => new { broker = r.BrokerId, r.Sold, r.Invoices, r.CreditNotes, r.Errors })
+            auctionId = body.AuctionId, started = true, brokerCount, paceSeconds = pace,
+            message = $"Started — {brokerCount} broker robots running in the background every {pace}s. Watch the status."
         });
+    }
+
+    // Stop a running paced broker simulation. Raw UPDATE so the flag lands even while the worker is
+    // mid-pass overwriting the status; the worker checks it between passes, halts without re-enqueuing,
+    // and clears it. Already-sold lots stay sold.
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [Function("StopBrokerSim")]
+    public async Task<HttpResponseData> StopBrokerSim(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auction-results/simulate-brokers/stop")] HttpRequestData req)
+    {
+        var body = await req.ReadFromJsonAsync<StopBrokerSimRequest>();
+        if (body == null || body.AuctionId <= 0)
+            return await SimJson(req, System.Net.HttpStatusCode.BadRequest, new { error = "auctionId is required." });
+
+        var n = await _db.Database.ExecuteSqlInterpolatedAsync(
+            $"UPDATE auction.Auctions SET BrokerSimStopRequested = 1 WHERE Id = {body.AuctionId}");
+        if (n == 0) return await SimJson(req, System.Net.HttpStatusCode.NotFound, new { error = "Auction not found." });
+
+        return await SimJson(req, System.Net.HttpStatusCode.OK, new { auctionId = body.AuctionId, stopping = true,
+            message = "Stop requested — the broker simulator will halt after the current pass." });
+    }
+
+    private record StartBrokerSimRequest(int AuctionId, int? BrokerCount, decimal? Commission, int? ReinvoicePercent, int? MaxLotsPerInvoice, int? PaceSeconds);
+    private record StopBrokerSimRequest(int AuctionId);
+
+    // Background worker: runs ONE broker pass, updates the cumulative status, then re-enqueues the next
+    // pass with a visibility delay (= the pace) until there's nothing left to sell or Stop is requested.
+    // Each invocation is short (one pass), so it stays well under the queue's visibility timeout.
+    [Function("BrokerSimWorker")]
+    public async Task BrokerSimWorker(
+        [QueueTrigger(Services.BrokerSimQueue.QueueName, Connection = "AzureWebJobsStorage")] string message)
+    {
+        var msg = JsonSerializer.Deserialize<BrokerSimMessage>(message, JsonOptions);
+        if (msg == null) { _logger.LogWarning("Bad broker-sim message: {Msg}", message); return; }
+        if (_scopeFactory is null || _brokerSimQueue is null) { _logger.LogWarning("Broker-sim worker missing dependencies"); return; }
+
+        var auction = await _db.Auctions.FindAsync(msg.AuctionId);
+        if (auction == null) { _logger.LogWarning("Broker-sim: auction {Id} not found", msg.AuctionId); return; }
+
+        // Stop requested between passes? Halt before doing any work.
+        if (await BrokerStopRequestedAsync(msg.AuctionId)) { await StopBrokerSimAsync(auction, msg); return; }
+
+        BrokerPassResult p;
+        try
+        {
+            p = await RunOneBrokerPassAsync(msg.AuctionId, msg.BrokerCount, msg.Commission, msg.ReinvoicePercent, msg.MaxLotsPerInvoice);
+        }
+        catch (Exception ex)
+        {
+            // A whole-pass failure shouldn't kill the run — count it and try the next pass.
+            _logger.LogError(ex, "Broker-sim pass {Pass} failed for auction {Id}", msg.Pass + 1, msg.AuctionId);
+            p = new BrokerPassResult(-1, 0, 0, 0, 0, 1);
+        }
+
+        var pass = msg.Pass + 1;
+        var next = msg with
+        {
+            Pass = pass,
+            Sold = msg.Sold + p.Sold, Invoices = msg.Invoices + p.Invoices,
+            CreditNotes = msg.CreditNotes + p.CreditNotes, Reinvoiced = msg.Reinvoiced + p.Reinvoiced,
+            Errors = msg.Errors + p.Errors
+        };
+
+        // Nothing left to sell (no broker with unsold lots and a linked buyer) → we're done.
+        if (p.Candidates == 0)
+        {
+            auction.BrokerSimStatus = $"Done — {pass} pass(es): sold {next.Sold}, invoices {next.Invoices}, credits {next.CreditNotes}, errors {next.Errors}. BC posting drains in the background.";
+            await _db.SaveChangesAsync();
+            return;
+        }
+
+        auction.BrokerSimStatus = $"Pass {pass} — cumulative: sold {next.Sold}, invoices {next.Invoices}, re-invoiced {next.Reinvoiced} ({next.CreditNotes} credits), {next.Errors} error(s).";
+        await _db.SaveChangesAsync();
+
+        // Stop pressed during the pass? Halt now without re-enqueuing.
+        if (await BrokerStopRequestedAsync(msg.AuctionId)) { await StopBrokerSimAsync(auction, next); return; }
+
+        // Pace the next pass via the queue's visibility delay (no blocking).
+        await _brokerSimQueue.EnqueueAsync(JsonSerializer.Serialize(next, JsonOptions), TimeSpan.FromSeconds(Math.Clamp(msg.PaceSeconds, 1, 120)));
+    }
+
+    // Fresh (untracked) read of the broker stop flag — the worker's tracked `auction` copy is stale.
+    private async Task<bool> BrokerStopRequestedAsync(int auctionId)
+        => await _db.Auctions.AsNoTracking().Where(a => a.Id == auctionId).Select(a => a.BrokerSimStopRequested).FirstOrDefaultAsync();
+
+    private async Task StopBrokerSimAsync(Auction auction, BrokerSimMessage m)
+    {
+        auction.BrokerSimStatus = $"Stopped after {m.Pass} pass(es): sold {m.Sold}, invoices {m.Invoices}, credits {m.CreditNotes}, errors {m.Errors}.";
+        await _db.SaveChangesAsync();
+        // Clear the flag in the DB (the tracked entity's copy is stale, so SaveChanges wouldn't write it).
+        await _db.Database.ExecuteSqlInterpolatedAsync($"UPDATE auction.Auctions SET BrokerSimStopRequested = 0 WHERE Id = {auction.Id}");
     }
 
     // Run one broker's sell/re-invoice loop on a FRESH scope (own DbContext + services), so 15 of these

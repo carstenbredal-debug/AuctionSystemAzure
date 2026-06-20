@@ -782,6 +782,14 @@ public class AuctionApiClient
     public async Task<HttpResponseMessage> SimulateBrokersAsync(int auctionId, int brokerCount, int durationSeconds, decimal commission, int reinvoicePercent, int maxLotsPerInvoice)
         => await _http.PostAsJsonAsync("api/auction-results/simulate-brokers", new { auctionId, brokerCount, durationSeconds, commission, reinvoicePercent, maxLotsPerInvoice });
 
+    // Paced broker simulator (server-side, survives page-close). Start runs passes in the background until
+    // everything sellable is sold or Stop is pressed; poll AuctionDto.BrokerSimStatus for progress.
+    public async Task<HttpResponseMessage> StartBrokerSimAsync(int auctionId, int brokerCount, decimal commission, int reinvoicePercent, int maxLotsPerInvoice, int paceSeconds)
+        => await _http.PostAsJsonAsync("api/auction-results/simulate-brokers/start", new { auctionId, brokerCount, commission, reinvoicePercent, maxLotsPerInvoice, paceSeconds });
+
+    public async Task<HttpResponseMessage> StopBrokerSimAsync(int auctionId)
+        => await _http.PostAsJsonAsync("api/auction-results/simulate-brokers/stop", new { auctionId });
+
     public async Task<List<FarmerSalesRow>> GetFarmerSalesByAuctionAsync(int auctionId)
         => await _http.GetFromJsonAsync<List<FarmerSalesRow>>($"api/skins/farmer-sales?auctionId={auctionId}") ?? new();
 

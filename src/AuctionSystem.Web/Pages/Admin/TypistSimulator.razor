@@ -158,8 +158,9 @@ else
         Runs N brokers <strong>at the same time</strong>, each selling and re-invoicing its own lots through
         the real path — stressing simultaneous broker activity (atomic claims, invoicing, the BC drainer,
         the credit-note path). Runs concurrently with the typist (real-life scenario). Each pass, every broker
-        buys a small batch and occasionally issues a credit note; loop it to keep that up across the whole
-        typing window at a realistic, paced rate (the buy interval) instead of hammering.
+        buys a small batch and occasionally issues a credit note. <strong>This runs server-side</strong> — once
+        started it keeps going (paced by the interval) until everything sellable is sold or you press Stop, even
+        if you leave this page.
     </p>
     <div class="row g-3" style="max-width:760px">
         <div class="col-md-3">
@@ -167,7 +168,7 @@ else
             <input type="number" min="1" max="50" class="form-control" @bind="_brokerSimCount" />
         </div>
         <div class="col-md-3">
-            <label class="form-label">Buy interval (seconds)</label>
+            <label class="form-label">Pace (seconds/pass)</label>
             <input type="number" min="1" max="120" class="form-control" @bind="_brokerSimDuration" />
         </div>
         <div class="col-md-2">
@@ -183,27 +184,21 @@ else
             <input type="number" min="1" max="100" class="form-control" @bind="_brokerSimMaxLots" />
         </div>
     </div>
-    <div class="form-check mt-3">
-        <input class="form-check-input" type="checkbox" id="brokerLoop" @bind="_brokerSimLoop" disabled="@_brokerSimRunning" />
-        <label class="form-check-label" for="brokerLoop">
-            Loop until the typist is Done — each pass buys a small batch (+ some credit notes), then waits the buy interval
-        </label>
-    </div>
-    <button class="btn btn-warning mt-2" @onclick="RunBrokerSim" disabled="@(_brokerSimRunning || _auctionId <= 0)">
-        @if (_brokerSimRunning)
+    <button class="btn btn-warning mt-3" @onclick="StartBrokerSim" disabled="@(_brokerSimActive || _auctionId <= 0)">
+        @if (_brokerSimActive)
         {
             <span class="spinner-border spinner-border-sm me-1"></span>
         }
-        @(_brokerSimLoop ? "Run brokers — loop until typist Done" : $"Run {_brokerSimCount} brokers once")
+        Start broker robots
     </button>
-    @if (_brokerSimRunning)
+    @if (_brokerSimActive)
     {
-        <button class="btn btn-outline-danger mt-2 ms-2" @onclick="StopBrokerSim">Stop</button>
+        <button class="btn btn-outline-danger mt-3 ms-2" @onclick="StopBrokerSim">Stop robots</button>
     }
 
-    @if (_brokerSimMessage != null)
+    @if (_brokerSimStatus != null)
     {
-        <div class="alert @(_brokerSimError ? "alert-danger" : "alert-success") mt-3" style="max-width:760px">@_brokerSimMessage</div>
+        <div class="alert @(_brokerSimError ? "alert-danger" : "alert-info") mt-3" style="max-width:760px">@_brokerSimStatus</div>
     }
 }
 
@@ -236,18 +231,17 @@ else
     private string? _sellMessage;
     private bool _sellError;
 
-    // Broker concurrency simulator
+    // Broker concurrency simulator (server-side paced run, like the typist — survives page-close)
     private int _brokerSimCount = 15;
-    private int _brokerSimDuration = 30;
+    private int _brokerSimDuration = 15;     // pace: seconds between passes
     private decimal _brokerSimCommission = 1.5m;
     private int _brokerSimReinvoicePct = 10;
     private int _brokerSimMaxLots = 10;
-    private bool _brokerSimRunning;
-    private bool _brokerSimLoop = true;     // loop back-to-back until the typist is Done
-    private bool _brokerSimLoopActive;      // cleared by the Stop button to break the loop
-    private int _brokerSimPasses;
-    private string? _brokerSimMessage;
+    private string? _brokerSimStatus;        // mirror of auction.BrokerSimStatus (polled)
     private bool _brokerSimError;
+    private bool _brokerSimPolling;
+    // Active = the server worker is queued or running passes (drives the Start/Stop buttons).
+    private bool _brokerSimActive => _brokerSimStatus != null && (_brokerSimStatus.StartsWith("Queued") || _brokerSimStatus.StartsWith("Pass"));
 
     protected override async Task OnInitializedAsync()
     {
@@ -401,15 +395,29 @@ else
     private async Task OnAuctionChanged()
     {
         _simStatus = null;
+        _brokerSimStatus = null;
+        _brokerSimError = false;
         if (_auctionId <= 0) return;
         try
         {
             var a = await Api.GetAuctionAsync(_auctionId);
             var st = a?.TypistSimStatus;
-            if (string.IsNullOrEmpty(st)) return;
-            _simStatus = st;                       // show the current/terminal status immediately
-            if (!st.StartsWith("Done") && !st.StartsWith("Failed"))
-                _ = PollSimStatusAsync(_auctionId); // still running -> resume live polling
+            if (!string.IsNullOrEmpty(st))
+            {
+                _simStatus = st;                       // show the current/terminal status immediately
+                if (!st.StartsWith("Done") && !st.StartsWith("Failed"))
+                    _ = PollSimStatusAsync(_auctionId); // still running -> resume live polling
+            }
+
+            // Pick up an in-progress (or finished) broker robot run too, so its live progress shows again.
+            var bst = a?.BrokerSimStatus;
+            if (!string.IsNullOrEmpty(bst))
+            {
+                _brokerSimStatus = bst;
+                _brokerSimError = bst.StartsWith("Failed");
+                if (bst.StartsWith("Queued") || bst.StartsWith("Pass"))
+                    _ = PollBrokerSimStatusAsync(_auctionId);
+            }
         }
         catch { /* transient; ignore */ }
     }
@@ -550,76 +558,63 @@ else
         }
     }
 
-    private void StopBrokerSim() => _brokerSimLoopActive = false;
-
-    private async Task RunBrokerSim()
+    // Start the server-side paced broker run. It keeps running (and surviving page-close) until everything
+    // sellable is sold or Stop is pressed; we just kick it off and poll BrokerSimStatus for progress.
+    private async Task StartBrokerSim()
     {
         if (_auctionId <= 0) return;
-        _brokerSimRunning = true;
-        _brokerSimLoopActive = true;
         _brokerSimError = false;
-        _brokerSimPasses = 0;
-        int totSold = 0, totInv = 0, totCN = 0, totReinv = 0, totErr = 0;
         try
         {
-            // Keep the brokers hammering for the WHOLE typist window. Each server call is capped at 120s, so
-            // we re-fire back-to-back until the typist sim is Done/Failed, then a couple of final passes to
-            // sweep lots typed right at the end. Single-burst mode (checkbox off) runs exactly one pass.
-            var typistDone = false;
-            var drainPasses = 0;
-            do
+            var resp = await Api.StartBrokerSimAsync(_auctionId, _brokerSimCount, _brokerSimCommission, _brokerSimReinvoicePct, _brokerSimMaxLots, _brokerSimDuration);
+            var json = await resp.Content.ReadAsStringAsync();
+            var root = JsonDocument.Parse(json).RootElement;
+            if (!resp.IsSuccessStatusCode)
             {
-                var resp = await Api.SimulateBrokersAsync(_auctionId, _brokerSimCount, _brokerSimDuration, _brokerSimCommission, _brokerSimReinvoicePct, _brokerSimMaxLots);
-                var json = await resp.Content.ReadAsStringAsync();
-                if (!resp.IsSuccessStatusCode)
-                {
-                    _brokerSimMessage = $"Failed: {(int)resp.StatusCode} {resp.ReasonPhrase}. {json}";
-                    _brokerSimError = true;
-                    break;
-                }
-                var root = JsonDocument.Parse(json).RootElement;
-                if (root.TryGetProperty("error", out var errEl) && errEl.ValueKind == JsonValueKind.String)
-                {
-                    _brokerSimMessage = errEl.GetString();
-                    _brokerSimError = true;
-                    break;
-                }
-                int Get(string p) => root.TryGetProperty(p, out var e) && e.ValueKind == JsonValueKind.Number ? e.GetInt32() : 0;
-                totSold += Get("sold"); totInv += Get("invoices"); totCN += Get("creditNotes");
-                totReinv += Get("reinvoiced"); totErr += Get("errors");
-                _brokerSimPasses++;
-                if (totErr > 0) _brokerSimError = true;
-
-                // Is the typist still typing? (drain two more passes after it finishes to sweep the tail.)
-                string? st = null;
-                try { var a = await Api.GetAuctionAsync(_auctionId); st = a?.TypistSimStatus; } catch { }
-                typistDone = string.IsNullOrEmpty(st) || st.StartsWith("Done") || st.StartsWith("Failed");
-                if (typistDone) drainPasses++;
-
-                _brokerSimMessage = $"Pass {_brokerSimPasses} — cumulative: {totSold} sold, {totInv} invoice(s), {totReinv} re-invoiced ({totCN} credit note(s)), {totErr} error(s). Typist: {st ?? "n/a"}{(typistDone ? " (draining)" : " (typing)")}.";
-                StateHasChanged();
-
-                if (!_brokerSimLoop) break;   // single-pass mode
-
-                // Pace it: wait the buy interval before the next batch, so the brokers buy periodically
-                // (real-life) instead of hammering back-to-back. Stop takes effect after the current wait.
-                if (_brokerSimLoopActive && (!typistDone || drainPasses < 2))
-                    await Task.Delay(Math.Max(1, _brokerSimDuration) * 1000);
+                _brokerSimStatus = root.TryGetProperty("error", out var e) && e.ValueKind == JsonValueKind.String
+                    ? e.GetString() : $"Failed: {(int)resp.StatusCode} {resp.ReasonPhrase}. {json}";
+                _brokerSimError = true;
+                return;
             }
-            while (_brokerSimLoopActive && (!typistDone || drainPasses < 2));
+            _brokerSimStatus = "Queued…";
+            _ = PollBrokerSimStatusAsync(_auctionId);
+        }
+        catch (Exception ex) { _brokerSimStatus = $"Error: {ex.Message}"; _brokerSimError = true; }
+    }
 
-            if (!_brokerSimError)
-                _brokerSimMessage = $"Finished — {_brokerSimPasses} pass(es): {totSold} sold, {totInv} invoice(s), {totReinv} re-invoiced ({totCN} credit note(s)), {totErr} error(s). BC posting runs in the background.";
-        }
-        catch (Exception ex)
+    // Ask the server to stop; the worker halts after its current pass and writes a "Stopped: …" status.
+    private async Task StopBrokerSim()
+    {
+        if (_auctionId <= 0) return;
+        try
         {
-            _brokerSimMessage = $"Error: {ex.Message}";
-            _brokerSimError = true;
+            await Api.StopBrokerSimAsync(_auctionId);
+            _brokerSimStatus = "Stopping… (halts after the current pass)";
         }
-        finally
+        catch (Exception ex) { _brokerSimStatus = $"Error: {ex.Message}"; _brokerSimError = true; }
+    }
+
+    private async Task PollBrokerSimStatusAsync(int auctionId)
+    {
+        if (_brokerSimPolling) return;
+        _brokerSimPolling = true;
+        try
         {
-            _brokerSimRunning = false;
-            _brokerSimLoopActive = false;
+            await InvokeAsync(StateHasChanged);
+            for (var i = 0; i < 5000; i++)
+            {
+                await Task.Delay(3000);
+                try
+                {
+                    var a = await Api.GetAuctionAsync(auctionId);
+                    _brokerSimStatus = a?.BrokerSimStatus ?? _brokerSimStatus;
+                    _brokerSimError = _brokerSimStatus != null && _brokerSimStatus.StartsWith("Failed");
+                }
+                catch { /* transient; keep polling */ }
+                await InvokeAsync(StateHasChanged);
+                if (_brokerSimStatus != null && (_brokerSimStatus.StartsWith("Done") || _brokerSimStatus.StartsWith("Stopped") || _brokerSimStatus.StartsWith("Failed"))) break;
+            }
         }
+        finally { _brokerSimPolling = false; }
     }
 }
