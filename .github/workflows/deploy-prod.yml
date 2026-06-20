@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - prod
+    paths-ignore:
+      - 'ksef/**'
   pull_request:
     types: [opened, synchronize, reopened, closed]
     branches:

@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AzureFunctionsVersion>v4</AzureFunctionsVersion>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Azure.Functions.Worker" Version="1.21.0" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Http" Version="3.1.0" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" Version="1.17.4" OutputItemType="Analyzer" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Schemas\schemat.xsd" />
+    <EmbeddedResource Include="Schemas\KodyKrajow_v13-0E.xsd" />
+    <EmbeddedResource Include="Schemas\KodyUrzedowSkarbowych_v8-0E.xsd" />
+    <EmbeddedResource Include="Schemas\StrukturyDanych_v12-0E.xsd" />
+    <!-- FA(3) invoice schema (namespace .../2025/06/25/13775/) + its eD dependency chain -->
+    <EmbeddedResource Include="Schemas\FA3\schemat.xsd" />
+    <EmbeddedResource Include="Schemas\FA3\StrukturyDanych_v10-0E.xsd" />
+    <EmbeddedResource Include="Schemas\FA3\ElementarneTypyDanych_v10-0E.xsd" />
+    <EmbeddedResource Include="Schemas\FA3\KodyKrajow_v10-0E.xsd" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="host.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="local.settings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>
+

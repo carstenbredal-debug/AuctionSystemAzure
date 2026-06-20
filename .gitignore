@@ -28,3 +28,10 @@ bc-extension/.alpackages/
 bc-extension/.config/
 bc-extension/*.app
 bc-extension/deploy_temp.sh
+
+# KSeF (moved from KSeFIntegration repo) — BC extension build artifacts & symbols
+ksef/KSeF.BCExtension/.alpackages/
+ksef/KSeF.BCExtension/output/
+ksef/KSeF.BCExtension/*.app
+ksef/**/bin/
+ksef/**/obj/

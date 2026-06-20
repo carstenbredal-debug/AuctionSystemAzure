@@ -1,0 +1,99 @@
+name: Build BC Extension
+
+on:
+  push:
+    branches:
+      - dev
+      - test
+      - prod
+    paths:
+      - 'ksef/KSeF.BCExtension/**'
+      - '.github/workflows/ksef-build-bc-extension.yml'
+  workflow_dispatch:
+
+env:
+  AL_PROJECT: 'ksef/KSeF.BCExtension'
+  BC_VERSION: '28.1'
+  BC_COUNTRY: 'w1'
+  MS_SYMBOLS_FEED: 'https://dynamicssmb2.pkgs.visualstudio.com/DynamicsBCPublicFeeds/_packaging/MSSymbols/nuget/v3/index.json'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    name: Compile AL extension
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0'
+
+      - name: Install AL compiler
+        shell: pwsh
+        run: |
+          dotnet tool install Microsoft.Dynamics.BusinessCentral.Development.Tools `
+            --tool-path "${{ runner.temp }}/altool" `
+            --add-source "${{ env.MS_SYMBOLS_FEED }}" `
+            --prerelease
+
+      - name: Download BC symbols
+        shell: pwsh
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          Install-PackageProvider -Name NuGet -Force -ForceBootstrap -Scope CurrentUser | Out-Null
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted -ErrorAction SilentlyContinue
+          Install-Module BcContainerHelper -Scope CurrentUser -Force -AllowClobber
+          Import-Module BcContainerHelper -DisableNameChecking -WarningAction SilentlyContinue
+
+          $url = Get-BCArtifactUrl -type sandbox -version '${{ env.BC_VERSION }}' -country '${{ env.BC_COUNTRY }}' -select Latest
+          Write-Host "Artifact: $url"
+          # The BC platform artifact download is large and intermittently flaky on the runner.
+          # Retry the whole call a few times before failing the build.
+          $paths = $null
+          for ($attempt = 1; $attempt -le 5; $attempt++) {
+            try {
+              $paths = Download-Artifacts -artifactUrl $url -includePlatform -force
+              break
+            } catch {
+              Write-Host "Download attempt $attempt failed: $($_.Exception.Message)"
+              if ($attempt -eq 5) { throw }
+              Start-Sleep -Seconds (15 * $attempt)
+            }
+          }
+          $appArtifact = $paths[0]
+          $platformArtifact = $paths[1]
+
+          $alp = "${{ github.workspace }}/${{ env.AL_PROJECT }}/.alpackages"
+          New-Item -ItemType Directory -Force -Path $alp | Out-Null
+
+          $system = Get-ChildItem -Path $platformArtifact -Recurse -Filter 'System.app' | Select-Object -First 1
+          Copy-Item $system.FullName $alp
+          foreach ($name in @('Microsoft_Application', 'Microsoft_Base Application', 'Microsoft_Business Foundation', 'Microsoft_System Application')) {
+            Get-ChildItem -Path (Join-Path $appArtifact 'Extensions') -Filter "$name`_*.app" | Copy-Item -Destination $alp
+          }
+          Write-Host "Symbols staged:"; Get-ChildItem $alp | Select-Object Name, Length
+
+      - name: Compile
+        shell: pwsh
+        run: |
+          $alc = Get-ChildItem "${{ runner.temp }}/altool" -Recurse -Filter 'alc.exe' |
+                 Where-Object { $_.FullName -like '*net8.0*' } | Select-Object -First 1
+          $version = (Get-Content "${{ env.AL_PROJECT }}/app.json" -Raw | ConvertFrom-Json).version
+          $out = "${{ github.workspace }}/KPHG_Auction_Compliance_$version.app"
+          $log = & $alc.FullName `
+            /project:"${{ github.workspace }}/${{ env.AL_PROJECT }}" `
+            /packagecachepath:"${{ github.workspace }}/${{ env.AL_PROJECT }}/.alpackages" `
+            /out:"$out" 2>&1
+          $log | ForEach-Object { Write-Host $_ }
+          # alc.exe does not set a non-zero exit code on errors, so detect them in the log.
+          if ($log -match 'error AL') { Write-Error 'AL compilation reported errors.'; exit 1 }
+          if (-not (Test-Path $out)) { Write-Error 'No .app produced.'; exit 1 }
+          Write-Host "Built $out"
+
+      - name: Upload extension
+        uses: actions/upload-artifact@v4
+        with:
+          name: KPHG_Auction_Compliance
+          path: '*.app'
+          if-no-files-found: error

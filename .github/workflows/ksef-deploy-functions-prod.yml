@@ -1,0 +1,57 @@
+name: Deploy KSeF Functions (PROD)
+
+on:
+  push:
+    branches:
+      - prod
+    paths:
+      - 'ksef/KSeF.Functions/**'
+      - '.github/workflows/ksef-deploy-functions-prod.yml'
+
+env:
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: 'ksef/KSeF.Functions'
+  DOTNET_VERSION: '8.0'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    name: Build and Deploy KSeF Functions (PROD)
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET ${{ env.DOTNET_VERSION }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies
+        run: dotnet restore ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
+
+      - name: Build
+        run: dotnet build ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }} --configuration Release --no-restore
+
+      - name: Publish
+        run: dotnet publish ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }} --configuration Release --output ./output --no-build
+
+      - name: Create deployment package
+        run: |
+          cd output
+          zip -r ${{ github.workspace }}/deploy.zip .
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID_PROD }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID_PROD }}
+
+      - name: Deploy to Azure Functions
+        run: |
+          az functionapp deployment source config-zip \
+            --name ${{ secrets.AZURE_FUNCTIONAPP_NAME_PROD }} \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_PROD }} \
+            --src ${{ github.workspace }}/deploy.zip
