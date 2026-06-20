@@ -548,6 +548,19 @@ public class BusinessCentralApiClient
         return await GetListAsync<BcCustomerLedgerEntry>(url);
     }
 
+    // Find a POSTED sales document's BC number by its EXTERNAL document number, via the customer ledger.
+    // The ledger entry is written synchronously when the doc posts, and our custom customerLedgerEntries API
+    // page exposes externalDocumentNo as a real, server-side-filterable field — unlike standard
+    // salesInvoices?$filter=externalDocumentNumber, which this BC ignores (returns 0). documentType is
+    // "Invoice" or "Credit Memo". Returns the posted Document No. (e.g. SI-2026-...), or null if not posted.
+    public async Task<string?> GetPostedDocNumberByExternalDocAsync(Guid companyId, string externalDocNumber, string documentType)
+    {
+        var filter = $"externalDocumentNo eq '{externalDocNumber}' and documentType eq '{documentType}'";
+        var url = $"{_options.CustomApiBaseUrl}/companies({companyId})/customerLedgerEntries?$filter={Uri.EscapeDataString(filter)}";
+        var entries = await GetListAsync<BcCustomerLedgerEntry>(url);
+        return entries.Select(e => e.DocumentNo).FirstOrDefault(n => !string.IsNullOrEmpty(n));
+    }
+
     public async Task<BcPaymentApplication> ApplyPaymentToInvoiceAsync(Guid companyId, string customerNo, int paymentEntryNo, string invoiceDocumentNo, decimal amountToApply = 0)
     {
         var url = $"{_options.CustomApiBaseUrl}/companies({companyId})/paymentApplications";
