@@ -710,7 +710,23 @@ public class BusinessCentralSyncService
 
             if (creditMemoEntry == null)
             {
-                _logger.LogWarning("Credit note {Id}: credit memo entry not found in BC ledger for {BcNumber}",
+                // Not in the OPEN list — the credit memo may ALREADY be applied (closed) in BC, just never
+                // confirmed locally (e.g. the push-time apply succeeded in BC but the local status update
+                // didn't persist). Re-check INCLUDING closed entries: if it's closed, it's applied — so
+                // reconcile the local status to Alloted instead of leaving it stuck at Issued forever.
+                var allCmEntries = await _bcClient.GetCustomerLedgerEntriesByCustomerAsync(
+                    companyId, buyerNumber, "Credit Memo", openOnly: false);
+                var closedCm = allCmEntries.FirstOrDefault(e => e.DocumentNo == creditNote.BcInvoiceNumber);
+                if (closedCm != null && !closedCm.Open)
+                {
+                    creditNote.Status = Domain.Enums.InvoiceStatus.Alloted;
+                    await UpdateOriginalInvoiceCreditStatusAsync(originalInvoice);
+                    await _db.SaveChangesAsync();
+                    _logger.LogInformation("Credit note {Id}: already applied (closed) in BC as {BcNumber}; reconciled local status to Alloted",
+                        creditNote.Id, creditNote.BcInvoiceNumber);
+                    return;
+                }
+                _logger.LogWarning("Credit note {Id}: credit memo entry not found (open or closed) in BC ledger for {BcNumber}",
                     creditNote.Id, creditNote.BcInvoiceNumber);
                 return;
             }
@@ -732,26 +748,9 @@ public class BusinessCentralSyncService
                 _logger.LogInformation("Credit note {Id}: applied to invoice {InvNo} in BC — {Msg}",
                     creditNote.Id, originalInvoice.BcInvoiceNumber, result.ResultMessage);
 
-                // Mark the credit note as alloted (applied in BC)
+                // Mark the credit note as alloted (applied in BC) + update the original invoice's status.
                 creditNote.Status = Domain.Enums.InvoiceStatus.Alloted;
-
-                // Update original invoice status based on credited lots
-                var originalLotNumbers = await _db.Set<Domain.Entities.InvoiceLine>()
-                    .Where(l => l.InvoiceId == originalInvoice.Id)
-                    .Select(l => l.LotNumber)
-                    .ToListAsync();
-
-                var creditedLotNumbers = await _db.Set<Domain.Entities.InvoiceLine>()
-                    .Where(l => l.Invoice.OriginalInvoiceId == originalInvoice.Id && l.Invoice.IsCreditNote)
-                    .Select(l => l.LotNumber)
-                    .Distinct()
-                    .ToListAsync();
-
-                if (originalLotNumbers.Count > 0 && creditedLotNumbers.Count >= originalLotNumbers.Count)
-                    originalInvoice.Status = Domain.Enums.InvoiceStatus.FullyCredited;
-                else if (creditedLotNumbers.Count > 0)
-                    originalInvoice.Status = Domain.Enums.InvoiceStatus.PartiallyCredited;
-
+                await UpdateOriginalInvoiceCreditStatusAsync(originalInvoice);
                 await _db.SaveChangesAsync();
             }
         }
@@ -759,6 +758,26 @@ public class BusinessCentralSyncService
         {
             _logger.LogWarning(ex, "Credit note {Id}: failed to apply credit memo in BC", creditNote.Id);
         }
+    }
+
+    // Set the original invoice's status from how many of its lots have been credited (Fully/Partially).
+    private async Task UpdateOriginalInvoiceCreditStatusAsync(Invoice originalInvoice)
+    {
+        var originalLotNumbers = await _db.Set<Domain.Entities.InvoiceLine>()
+            .Where(l => l.InvoiceId == originalInvoice.Id)
+            .Select(l => l.LotNumber)
+            .ToListAsync();
+
+        var creditedLotNumbers = await _db.Set<Domain.Entities.InvoiceLine>()
+            .Where(l => l.Invoice.OriginalInvoiceId == originalInvoice.Id && l.Invoice.IsCreditNote)
+            .Select(l => l.LotNumber)
+            .Distinct()
+            .ToListAsync();
+
+        if (originalLotNumbers.Count > 0 && creditedLotNumbers.Count >= originalLotNumbers.Count)
+            originalInvoice.Status = Domain.Enums.InvoiceStatus.FullyCredited;
+        else if (creditedLotNumbers.Count > 0)
+            originalInvoice.Status = Domain.Enums.InvoiceStatus.PartiallyCredited;
     }
 
     /// <summary>
