@@ -395,7 +395,9 @@ public class BusinessCentralSyncService
 
             creditNote.BcInvoiceNumber = posted.Number;
             creditNote.BcInvoiceId = posted.Id;
-            creditNote.InvoiceNumber = posted.Number;
+            // Keep the internal document number ({AuctionNumber}-{NNNNN}); only fill it from BC for legacy
+            // docs that were created before internal numbering (InvoiceNumber still empty).
+            if (string.IsNullOrEmpty(creditNote.InvoiceNumber)) creditNote.InvoiceNumber = posted.Number;
 
             _logger.LogInformation("Posted credit memo {Number} (id {Id})", posted.Number, posted.Id);
 
@@ -405,7 +407,7 @@ public class BusinessCentralSyncService
             await _db.SaveChangesAsync();
 
             _logger.LogInformation("Created and posted BC sales credit memo {BcNumber} (customer={Customer})",
-                creditNote.InvoiceNumber, buyer.Value.BuyerNumber);
+                creditNote.BcInvoiceNumber, buyer.Value.BuyerNumber);
 
             // Apply credit memo against original invoice in BC
             await TryApplyCreditMemoToInvoiceAsync(companyId, creditNote, buyer.Value.BuyerNumber);
@@ -902,7 +904,9 @@ public class BusinessCentralSyncService
 
             invoice.BcInvoiceNumber = posted.Number;
             invoice.BcInvoiceId = posted.Id;
-            invoice.InvoiceNumber = posted.Number;
+            // Keep the internal document number ({AuctionNumber}-{NNNNN}); only fill it from BC for legacy
+            // docs that were created before internal numbering (InvoiceNumber still empty).
+            if (string.IsNullOrEmpty(invoice.InvoiceNumber)) invoice.InvoiceNumber = posted.Number;
 
             _logger.LogInformation("Posted invoice {Number} (id {Id})", posted.Number, posted.Id);
 

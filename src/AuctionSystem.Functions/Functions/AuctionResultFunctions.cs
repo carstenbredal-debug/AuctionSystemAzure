@@ -10,6 +10,7 @@ using AuctionSystem.Functions.Services;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -478,6 +479,35 @@ public class AuctionResultFunctions
     // commission), marks its lot Sold, records sales history, then creates the invoice. The atomic
     // "WHERE SoldToBuyerId IS NULL" guard means a lot can never be sold or invoiced twice. Invoicing is
     // NOT gated on BC — a sale always bills locally; the BC push is gated on the queue inside the helper.
+    // Atomically allocate the next per-auction internal document number ("{AuctionNumber}-{NNNNN}", from
+    // 00001), shared by invoices AND credit notes so every internal document gets a unique sequential
+    // number. MERGE WITH (HOLDLOCK) is race-safe and creates the counter row on first use. Runs on the
+    // caller's current transaction/connection, so a rollback reclaims the number (gap-free) and it only
+    // serialises briefly per auction. This number is also what the BC push sends as externalDocumentNumber.
+    private async Task<string> AllocateDocNumberAsync(int auctionId)
+    {
+        var auctionNumber = await _db.Auctions.AsNoTracking().Where(a => a.Id == auctionId).Select(a => a.AuctionNumber).FirstAsync();
+
+        var conn = _db.Database.GetDbConnection();
+        if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.Transaction = _db.Database.CurrentTransaction?.GetDbTransaction();
+        cmd.CommandText = @"
+SET NOCOUNT ON;
+DECLARE @n INT;
+MERGE auction.InvoiceSequences WITH (HOLDLOCK) AS t
+USING (VALUES(@aid)) AS s(AuctionId) ON t.AuctionId = s.AuctionId
+WHEN MATCHED THEN UPDATE SET @n = t.NextNumber, NextNumber = t.NextNumber + 1
+WHEN NOT MATCHED THEN INSERT (AuctionId, NextNumber) VALUES (@aid, 2);
+SELECT ISNULL(@n, 1);";
+        var p = cmd.CreateParameter();
+        p.ParameterName = "@aid";
+        p.Value = auctionId;
+        cmd.Parameters.Add(p);
+        var seq = Convert.ToInt32(await cmd.ExecuteScalarAsync());
+        return $"{auctionNumber}-{seq:D5}";
+    }
+
     private async Task<(List<AuctionResult> Claimed, int? InvoiceId, string? BcError)> SellResultsCoreAsync(
         List<AuctionResult> results, int buyerId, Buyer buyer, string? commissionType, decimal? commissionValue, string? initials)
     {
@@ -566,6 +596,8 @@ public class AuctionResultFunctions
                 .ToListAsync();
 
             var brokerId = results.First().BrokerId;
+            // Internal document number ("{AuctionNumber}-{NNNNN}"); also the BC external document number.
+            var docNumber = await AllocateDocNumberAsync(results.First().AuctionId);
             var auctionFeeParam = await _db.SystemParameters.FirstOrDefaultAsync(p => p.Key == "AuctionFee");
             var handlingFeeParam = await _db.SystemParameters.FirstOrDefaultAsync(p => p.Key == "HandlingFee");
             var auctionFeePercent = auctionFeeParam != null ? decimal.Parse(auctionFeeParam.Value, CultureInfo.InvariantCulture) : 0m;
@@ -573,7 +605,7 @@ public class AuctionResultFunctions
 
             var invoice = new Invoice
             {
-                InvoiceNumber = "",
+                InvoiceNumber = docNumber,
                 InvoiceDate = DateTime.UtcNow,
                 BrokerId = brokerId,
                 BuyerId = buyerId,
@@ -1656,15 +1688,19 @@ public class AuctionResultFunctions
         var handlingFeePerSkin = handlingFeeParam != null ? decimal.Parse(handlingFeeParam.Value, CultureInfo.InvariantCulture) : 0m;
 
         var createdCreditNotes = new List<Invoice>();
+        // Credit notes draw from the SAME per-auction document sequence as invoices.
+        var cnAuctionId = await _db.AuctionResults.Where(r => r.Id == invoiceLines.First().AuctionResultId).Select(r => r.AuctionId).FirstAsync();
 
         // One credit note per original invoice → the correct buyer + OriginalInvoiceId for each.
         foreach (var grp in invoiceLines.GroupBy(l => l.InvoiceId))
         {
             var originalInvoice = grp.First().Invoice;
 
+            // Internal document number ("{AuctionNumber}-{NNNNN}"); also the BC external document number.
+            var cnDocNumber = await AllocateDocNumberAsync(cnAuctionId);
             var creditNote = new Invoice
             {
-                InvoiceNumber = "",
+                InvoiceNumber = cnDocNumber,
                 InvoiceDate = DateTime.UtcNow,
                 BrokerId = originalInvoice.BrokerId,
                 BuyerId = originalInvoice.BuyerId,
