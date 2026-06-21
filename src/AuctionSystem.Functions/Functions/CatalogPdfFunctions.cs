@@ -359,6 +359,13 @@ public class CatalogPdfFunctions
             await response.Body.WriteAsync(pdfBytes, 0, pdfBytes.Length);
             return response;
         }
+        catch (SqlException ex) when (ex.Number == 208)
+        {
+            // Catalog table not created yet (no lot generation has run) -> treat as no lots, not a 500.
+            var none = req.CreateResponse(HttpStatusCode.NotFound);
+            await none.WriteStringAsync("No catalogue available yet.");
+            return none;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating PDF");

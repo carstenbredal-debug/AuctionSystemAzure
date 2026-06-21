@@ -119,6 +119,14 @@ public class CatalogApiFunctions
             await response.WriteStringAsync(JsonSerializer.Serialize(filters));
             return response;
         }
+        catch (SqlException ex) when (ex.Number == 208)
+        {
+            // Catalog table not created yet (no lot generation has run) -> empty filters, not a 500.
+            var empty = req.CreateResponse(HttpStatusCode.OK);
+            empty.Headers.Add("Content-Type", "application/json");
+            await empty.WriteStringAsync(JsonSerializer.Serialize(new Dictionary<string, List<string>>()));
+            return empty;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error loading filters");
@@ -199,6 +207,14 @@ public class CatalogApiFunctions
             await response.WriteStringAsync(JsonSerializer.Serialize(lots));
             return response;
         }
+        catch (SqlException ex) when (ex.Number == 208)
+        {
+            // Catalog table not created yet -> empty list, not a 500.
+            var empty = req.CreateResponse(HttpStatusCode.OK);
+            empty.Headers.Add("Content-Type", "application/json");
+            await empty.WriteStringAsync("[]");
+            return empty;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error loading catalog lots");
@@ -241,6 +257,13 @@ public class CatalogApiFunctions
             var response = req.CreateResponse(HttpStatusCode.OK);
             await response.WriteStringAsync($"Found {count} catalog lots matching your filters.");
             return response;
+        }
+        catch (SqlException ex) when (ex.Number == 208)
+        {
+            // Catalog table not created yet -> 0, not a 500.
+            var resp = req.CreateResponse(HttpStatusCode.OK);
+            await resp.WriteStringAsync("Found 0 catalog lots matching your filters.");
+            return resp;
         }
         catch (Exception ex)
         {
