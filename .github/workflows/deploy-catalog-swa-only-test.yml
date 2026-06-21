@@ -1,0 +1,33 @@
+name: Deploy Catalog SWA ONLY (TEST)
+
+# Manual, catalog-web-only deploy for standing up TEST — deploys just the public
+# LotCatalogWeb Static Web App. It is public (no auth/linked-backend) and calls the
+# TEST function cross-origin via ApiBaseUrl = API_BASE_URL_TEST. Run from the Actions
+# tab -> "Run workflow". Requires the function's CORS to allow this SWA's origin.
+on:
+  workflow_dispatch:
+
+jobs:
+  build_and_deploy_catalog_swa:
+    runs-on: ubuntu-latest
+    name: Build and Deploy Catalog SWA (TEST, manual)
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          lfs: false
+
+      - name: Set environment-specific API URL
+        run: |
+          echo '{ "ApiBaseUrl": "${{ secrets.API_BASE_URL_TEST }}" }' > src/LotCatalogWeb/wwwroot/appsettings.json
+
+      - name: Build And Deploy
+        id: builddeploy
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_SWA_TOKEN_CATALOG_TEST }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: "upload"
+          app_location: "src/LotCatalogWeb"
+          api_location: ""
+          output_location: "wwwroot"
