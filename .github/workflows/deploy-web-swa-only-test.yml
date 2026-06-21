@@ -1,0 +1,32 @@
+name: Deploy Web SWA ONLY (TEST)
+
+# Manual, admin-web-only deploy for standing up TEST — deploys just the AuctionSystem.Web
+# Static Web App (no function, no catalog, no KSeF), so you can validate the admin SWA +
+# its linked-backend API connection in isolation. Run from the Actions tab → "Run workflow".
+on:
+  workflow_dispatch:
+
+jobs:
+  build_and_deploy_web_swa:
+    runs-on: ubuntu-latest
+    name: Build and Deploy Admin SWA (TEST, manual)
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          lfs: false
+
+      - name: Set environment-specific API URL
+        run: |
+          echo '{ "ApiBaseUrl": "" }' > src/AuctionSystem.Web/wwwroot/appsettings.json
+
+      - name: Build And Deploy
+        id: builddeploy
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_SWA_TOKEN_TEST }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: "upload"
+          app_location: "src/AuctionSystem.Web"
+          api_location: ""
+          output_location: "wwwroot"
