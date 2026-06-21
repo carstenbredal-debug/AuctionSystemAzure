@@ -1,0 +1,54 @@
+name: Deploy KSeF Functions ONLY (TEST)
+
+# Manual, KSeF-function-only deploy for standing up TEST — deploys just the KSeF
+# Azure Function (ksef/KSeF.Functions), so you can validate it in isolation before the
+# test branch exists. Run from the Actions tab -> "Run workflow" (branch dev).
+on:
+  workflow_dispatch:
+
+env:
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: 'ksef/KSeF.Functions'
+  DOTNET_VERSION: '8.0'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    name: Build and Deploy KSeF Functions (TEST, manual)
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET ${{ env.DOTNET_VERSION }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
+
+      - name: Build
+        run: dotnet build ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }} --configuration Release --no-restore
+
+      - name: Publish
+        run: dotnet publish ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }} --configuration Release --output ./output --no-build
+
+      - name: Create deployment package
+        run: |
+          cd output
+          zip -r ${{ github.workspace }}/deploy.zip .
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID_TEST }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID_TEST }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID_TEST }}
+
+      - name: Deploy to Azure Functions
+        run: |
+          az functionapp deployment source config-zip \
+            --name ${{ secrets.KSEF_FUNCTIONAPP_NAME_TEST }} \
+            --resource-group ${{ secrets.KSEF_RESOURCE_GROUP_TEST }} \
+            --src ${{ github.workspace }}/deploy.zip
