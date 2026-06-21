@@ -10,6 +10,7 @@ on:
     types: [opened, synchronize, reopened, closed]
     branches:
       - test
+  workflow_dispatch:
 
 env:
   AZURE_FUNCTIONAPP_PACKAGE_PATH: 'src/AuctionSystem.Functions'
@@ -21,7 +22,7 @@ env:
 
 jobs:
   build_and_deploy_functions:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     name: Build and Deploy Functions (TEST)
     permissions:
@@ -63,7 +64,7 @@ jobs:
             --build-remote false
 
   build_and_deploy_swa:
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.action != 'closed')
     runs-on: ubuntu-latest
     name: Build and Deploy SWA (TEST)
     steps:
@@ -102,7 +103,7 @@ jobs:
           output_location: "wwwroot"
 
   build_and_deploy_catalog_swa:
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.action != 'closed')
     runs-on: ubuntu-latest
     name: Build and Deploy Catalog SWA (TEST)
     steps:
