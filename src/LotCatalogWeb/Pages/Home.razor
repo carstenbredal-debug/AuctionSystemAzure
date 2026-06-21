@@ -278,31 +278,14 @@
 
         try
         {
+            // The catalogue is generated server-side (admin action / 15-min timer). This public site
+            // only *reads* the active auction's catalogue with the chosen filters — it never triggers
+            // generation (that endpoint is locked). So "Generate" here just applies the filters.
             var query = BuildQueryString();
-            var response = await Http.PostAsync($"api/lots/generate?{query}", null);
-            var content = await response.Content.ReadAsStringAsync();
-
-            if (response.IsSuccessStatusCode)
-            {
-                ResultMessage = content;
-
-                try
-                {
-                    var lots = await Http.GetFromJsonAsync<List<CatalogLotRow>>(
-                        $"api/catalog/lots?{query}");
-                    if (lots != null)
-                        CatalogLots = lots;
-                }
-                catch
-                {
-                    // Catalog lots endpoint not available
-                }
-            }
-            else
-            {
-                IsError = true;
-                ResultMessage = $"Error: {content}";
-            }
+            var lots = await Http.GetFromJsonAsync<List<CatalogLotRow>>(
+                $"api/catalog/lots?{query}");
+            if (lots != null)
+                CatalogLots = lots;
         }
         catch (Exception ex)
         {

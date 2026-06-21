@@ -4,11 +4,13 @@ using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Dapper;
+using AuctionSystem.Functions.Auth;
 using AuctionSystem.Functions.Models;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using System.Net;
+using System.Text.RegularExpressions;
 
 namespace AuctionSystem.Functions.Functions;
 
@@ -39,10 +41,14 @@ public class CatalogPdfFunctions
             ?? "";
     }
 
+    // See CatalogApiFunctions: auctionNumber is interpolated into a table name, so it must be
+    // whitelisted before use. Anything invalid falls back to the live (active-auction) catalog.
+    private static readonly Regex AuctionNumberPattern = new("^[A-Za-z0-9]{1,20}$", RegexOptions.Compiled);
+
     private static string GetCatalogTable(System.Collections.Specialized.NameValueCollection query)
     {
         var auctionNumber = query["auctionNumber"];
-        if (!string.IsNullOrEmpty(auctionNumber))
+        if (!string.IsNullOrEmpty(auctionNumber) && AuctionNumberPattern.IsMatch(auctionNumber))
             return $"auction.[{auctionNumber}.Lots]";
         return "auction.cataloglots";
     }
@@ -67,6 +73,9 @@ public class CatalogPdfFunctions
         _fontsRegistered = true;
     }
 
+    // Public, read-only catalog PDF (the active auction). Safe to expose: auctionNumber is whitelisted
+    // (GetCatalogTable) and all filters are parameterized.
+    [AllowAnonymous]
     [Function("GenerateCatalogPdf")]
     public async Task<HttpResponseData> GeneratePdf(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "catalog/pdf")]

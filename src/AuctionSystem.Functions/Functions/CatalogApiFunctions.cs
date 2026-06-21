@@ -4,9 +4,11 @@ using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Dapper;
+using AuctionSystem.Functions.Auth;
 using AuctionSystem.Functions.Models;
 using System.Net;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace AuctionSystem.Functions.Functions;
 
@@ -30,14 +32,25 @@ public class CatalogApiFunctions
             ?? "";
     }
 
+    // The auctionNumber is interpolated into a table name (it can't be parameterized), so it MUST be
+    // validated before use — otherwise it's an injection vector, especially now these endpoints are
+    // anonymous. Only a short alphanumeric token is allowed; anything else falls back to the live
+    // catalog (auction.cataloglots), which is the active auction's catalog. This is the single guard
+    // that makes catalog/* safe to expose publicly.
+    private static readonly Regex AuctionNumberPattern = new("^[A-Za-z0-9]{1,20}$", RegexOptions.Compiled);
+
     private static string GetCatalogTable(System.Collections.Specialized.NameValueCollection query)
     {
         var auctionNumber = query["auctionNumber"];
-        if (!string.IsNullOrEmpty(auctionNumber))
+        if (!string.IsNullOrEmpty(auctionNumber) && AuctionNumberPattern.IsMatch(auctionNumber))
             return $"auction.[{auctionNumber}.Lots]";
         return "auction.cataloglots";
     }
 
+    // Public, read-only catalog data (the active auction). [AllowAnonymous] opts out of AUTH_ENFORCE;
+    // safe because the only interpolated value (auctionNumber) is whitelisted in GetCatalogTable and
+    // all filters are parameterized.
+    [AllowAnonymous]
     [Function("GetCatalogFilters")]
     public async Task<HttpResponseData> GetFilters(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "catalog/filters")]
@@ -115,6 +128,7 @@ public class CatalogApiFunctions
         }
     }
 
+    [AllowAnonymous]
     [Function("GetCatalogLotsApi")]
     public async Task<HttpResponseData> GetCatalogLots(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "catalog/lots")]
