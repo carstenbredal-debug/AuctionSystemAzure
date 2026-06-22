@@ -50,6 +50,7 @@ codeunit 50201 "KPHG KSeF Management"
 
         // Mark as Processing before the HTTP call
         SalesInvHeader."KPHG KSeF Status" := SalesInvHeader."KPHG KSeF Status"::Processing;
+        SalesInvHeader."KPHG KSeF Send Attempts" := SalesInvHeader."KPHG KSeF Send Attempts" + 1;
         SalesInvHeader."KPHG KSeF Error Message" := '';
         SalesInvHeader.Modify(true);
         Commit();
@@ -114,6 +115,9 @@ codeunit 50201 "KPHG KSeF Management"
         TextValue: Text;
         JsonResponse: JsonObject;
         Success: Boolean;
+        NewStatus: Enum "KPHG KSeF Status";
+        ErrText: Text;
+        DupNumber: Text;
     begin
         if not SalesInvHeader."KPHG KSeF Required" then
             exit;
@@ -135,6 +139,7 @@ codeunit 50201 "KPHG KSeF Management"
         Client.DefaultRequestHeaders().Add('x-functions-key', Setup."Azure Function Key");
 
         SalesInvHeader."KPHG KSeF Status" := SalesInvHeader."KPHG KSeF Status"::Processing;
+        SalesInvHeader."KPHG KSeF Send Attempts" := SalesInvHeader."KPHG KSeF Send Attempts" + 1;
         SalesInvHeader."KPHG KSeF Error Message" := '';
         SalesInvHeader.Modify(true);
         Commit();
@@ -142,7 +147,11 @@ codeunit 50201 "KPHG KSeF Management"
         Success := Client.Post(Setup."Azure Function URL" + '/invoice/submit', Content, ResponseMessage);
 
         if not Success then begin
-            SalesInvHeader."KPHG KSeF Status" := SalesInvHeader."KPHG KSeF Status"::Error;
+            // Couldn't reach the function — transient; retry until the cap, then give up.
+            if SalesInvHeader."KPHG KSeF Send Attempts" < MaxSendAttempts() then
+                SalesInvHeader."KPHG KSeF Status" := SalesInvHeader."KPHG KSeF Status"::Error
+            else
+                SalesInvHeader."KPHG KSeF Status" := SalesInvHeader."KPHG KSeF Status"::Rejected;
             SalesInvHeader."KPHG KSeF Error Message" := 'Auto-send failed: HTTP request failed.';
             SalesInvHeader.Modify(true);
             exit;
@@ -176,11 +185,15 @@ codeunit 50201 "KPHG KSeF Management"
 
             SalesInvHeader.Modify(true);
         end else begin
-            SalesInvHeader."KPHG KSeF Status" := SalesInvHeader."KPHG KSeF Status"::Error;
-            if TryGetJsonText(JsonResponse, 'error', TextValue) then
-                SalesInvHeader."KPHG KSeF Error Message" := CopyStr('Auto-send: ' + FormatErrorMessage(TextValue), 1, 250)
-            else
-                SalesInvHeader."KPHG KSeF Error Message" := 'Auto-send failed: Unknown error.';
+            // Non-success: classify terminal vs transient (and duplicate => already accepted).
+            NewStatus := ClassifyFailure(JsonResponse, SalesInvHeader."KPHG KSeF Send Attempts", ErrText, DupNumber);
+            SalesInvHeader."KPHG KSeF Status" := NewStatus;
+            SalesInvHeader."KPHG KSeF Error Message" := CopyStr('Auto-send: ' + ErrText, 1, 250);
+            if NewStatus = NewStatus::Accepted then begin
+                if DupNumber <> '' then
+                    SalesInvHeader."KPHG KSeF Number" := CopyStr(DupNumber, 1, 100);
+                SalesInvHeader."KPHG KSeF Acceptance DT" := CurrentDateTime();
+            end;
             SalesInvHeader.Modify(true);
         end;
     end;
@@ -197,6 +210,9 @@ codeunit 50201 "KPHG KSeF Management"
         TextValue: Text;
         JsonResponse: JsonObject;
         Success: Boolean;
+        NewStatus: Enum "KPHG KSeF Status";
+        ErrText: Text;
+        DupNumber: Text;
     begin
         if not SalesCrMemoHeader."KPHG KSeF Required" then
             exit;
@@ -218,6 +234,7 @@ codeunit 50201 "KPHG KSeF Management"
         Client.DefaultRequestHeaders().Add('x-functions-key', Setup."Azure Function Key");
 
         SalesCrMemoHeader."KPHG KSeF Status" := SalesCrMemoHeader."KPHG KSeF Status"::Processing;
+        SalesCrMemoHeader."KPHG KSeF Send Attempts" := SalesCrMemoHeader."KPHG KSeF Send Attempts" + 1;
         SalesCrMemoHeader."KPHG KSeF Error Message" := '';
         SalesCrMemoHeader.Modify(true);
         Commit();
@@ -225,7 +242,11 @@ codeunit 50201 "KPHG KSeF Management"
         Success := Client.Post(Setup."Azure Function URL" + '/invoice/submit', Content, ResponseMessage);
 
         if not Success then begin
-            SalesCrMemoHeader."KPHG KSeF Status" := SalesCrMemoHeader."KPHG KSeF Status"::Error;
+            // Couldn't reach the function — transient; retry until the cap, then give up.
+            if SalesCrMemoHeader."KPHG KSeF Send Attempts" < MaxSendAttempts() then
+                SalesCrMemoHeader."KPHG KSeF Status" := SalesCrMemoHeader."KPHG KSeF Status"::Error
+            else
+                SalesCrMemoHeader."KPHG KSeF Status" := SalesCrMemoHeader."KPHG KSeF Status"::Rejected;
             SalesCrMemoHeader."KPHG KSeF Error Message" := 'Auto-send failed: HTTP request failed.';
             SalesCrMemoHeader.Modify(true);
             exit;
@@ -259,13 +280,54 @@ codeunit 50201 "KPHG KSeF Management"
 
             SalesCrMemoHeader.Modify(true);
         end else begin
-            SalesCrMemoHeader."KPHG KSeF Status" := SalesCrMemoHeader."KPHG KSeF Status"::Error;
-            if TryGetJsonText(JsonResponse, 'error', TextValue) then
-                SalesCrMemoHeader."KPHG KSeF Error Message" := CopyStr('Auto-send: ' + FormatErrorMessage(TextValue), 1, 250)
-            else
-                SalesCrMemoHeader."KPHG KSeF Error Message" := 'Auto-send failed: Unknown error.';
+            // Non-success: classify terminal vs transient (and duplicate => already accepted).
+            NewStatus := ClassifyFailure(JsonResponse, SalesCrMemoHeader."KPHG KSeF Send Attempts", ErrText, DupNumber);
+            SalesCrMemoHeader."KPHG KSeF Status" := NewStatus;
+            SalesCrMemoHeader."KPHG KSeF Error Message" := CopyStr('Auto-send: ' + ErrText, 1, 250);
+            if NewStatus = NewStatus::Accepted then begin
+                if DupNumber <> '' then
+                    SalesCrMemoHeader."KPHG KSeF Number" := CopyStr(DupNumber, 1, 100);
+                SalesCrMemoHeader."KPHG KSeF Acceptance DT" := CurrentDateTime();
+            end;
             SalesCrMemoHeader.Modify(true);
         end;
+    end;
+
+    // Map a non-success KSeF response to a TERMINAL or RETRYABLE status, using the function's
+    // 'duplicate' / 'retryable' flags. Duplicate => Accepted (it IS in KSeF). A genuinely terminal
+    // failure (validation / KSeF reject) => Rejected. A transient failure => Error until the attempt
+    // cap, then Rejected — so a failing document can never loop forever.
+    local procedure ClassifyFailure(JsonResponse: JsonObject; CurrentAttempts: Integer; var ErrorMsg: Text; var DuplicateKSeFNumber: Text): Enum "KPHG KSeF Status"
+    var
+        ResultStatus: Enum "KPHG KSeF Status";
+        FlagValue: Text;
+        TextValue: Text;
+    begin
+        DuplicateKSeFNumber := '';
+        if TryGetJsonText(JsonResponse, 'error', TextValue) then
+            ErrorMsg := FormatErrorMessage(TextValue)
+        else
+            ErrorMsg := 'Unknown error from Azure Function.';
+
+        if not TryGetJsonText(JsonResponse, 'duplicate', FlagValue) then
+            FlagValue := '';
+        if FlagValue = 'true' then begin
+            if TryGetJsonText(JsonResponse, 'kSeFReferenceNumber', TextValue) then
+                DuplicateKSeFNumber := TextValue;
+            ErrorMsg := 'Already in KSeF (duplicate).';
+            exit(ResultStatus::Accepted);
+        end;
+
+        if not TryGetJsonText(JsonResponse, 'retryable', FlagValue) then
+            FlagValue := '';
+        if (FlagValue = 'true') and (CurrentAttempts < MaxSendAttempts()) then
+            exit(ResultStatus::Error);     // transient — eligible for another run
+        exit(ResultStatus::Rejected);      // terminal, or out of retries
+    end;
+
+    local procedure MaxSendAttempts(): Integer
+    begin
+        exit(5);
     end;
 
     procedure CheckStatus(var SalesInvHeader: Record "Sales Invoice Header")
@@ -402,6 +464,7 @@ codeunit 50201 "KPHG KSeF Management"
         Client.DefaultRequestHeaders().Add('x-functions-key', Setup."Azure Function Key");
 
         SalesCrMemoHeader."KPHG KSeF Status" := SalesCrMemoHeader."KPHG KSeF Status"::Processing;
+        SalesCrMemoHeader."KPHG KSeF Send Attempts" := SalesCrMemoHeader."KPHG KSeF Send Attempts" + 1;
         SalesCrMemoHeader."KPHG KSeF Error Message" := '';
         SalesCrMemoHeader.Modify(true);
         Commit();

@@ -2,7 +2,7 @@
     "id": "bbfb3e90-e2a3-4e0f-84ad-b742f569a582",
     "name": "KPHG Auction Compliance",
     "publisher": "KPHG",
-    "version": "2.31.0.0",
+    "version": "2.32.0.0",
     "brief": "KSeF and auction metadata fields for Business Central.",
     "description": "Adds KSeF integration with Azure Functions middleware, KSeF status tracking, GTU codes, PKWiU, auction line metadata, and credit memo support to sales invoices and posted sales invoices.",
     "platform": "28.0.0.0",
