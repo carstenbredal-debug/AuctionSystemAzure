@@ -237,7 +237,7 @@ public class KSeFApiClient
         if (!sessionResp.IsSuccessStatusCode)
         {
             _logger.LogError("KSeF session open failed: {Status} {Body}", sessionResp.StatusCode, sessionRespBody);
-            throw new Exception($"KSeF session open failed: {sessionResp.StatusCode} - {sessionRespBody}");
+            throw KSeFException.FromResponse("KSeF session open failed", sessionResp.StatusCode, sessionRespBody);
         }
 
         using var sessionDoc = JsonDocument.Parse(sessionRespBody);
@@ -314,7 +314,7 @@ public class KSeFApiClient
         if (!response.IsSuccessStatusCode)
         {
             _logger.LogError("KSeF invoice send failed: {Status} {Body}", response.StatusCode, responseBody);
-            throw new Exception($"KSeF invoice send failed: {response.StatusCode} - {responseBody}");
+            throw KSeFException.FromResponse("KSeF invoice send failed", response.StatusCode, responseBody);
         }
 
         using var doc = JsonDocument.Parse(responseBody);
@@ -350,7 +350,7 @@ public class KSeFApiClient
         if (!response.IsSuccessStatusCode)
         {
             _logger.LogError("KSeF status check failed: {Status} {Body}", response.StatusCode, responseBody);
-            throw new Exception($"KSeF status check failed: {response.StatusCode} - {TruncateForLog(responseBody)}");
+            throw KSeFException.FromResponse("KSeF status check failed", response.StatusCode, responseBody);
         }
 
         using var doc = JsonDocument.Parse(responseBody);
