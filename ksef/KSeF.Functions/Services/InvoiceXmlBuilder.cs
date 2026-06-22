@@ -158,7 +158,7 @@ public class InvoiceXmlBuilder
 
         var identyfikacyjne = new XElement(Ns + "DaneIdentyfikacyjne");
 
-        if (isPolish)
+        if (isPolish && !string.IsNullOrWhiteSpace(vatNumber))
         {
             identyfikacyjne.Add(new XElement(Ns + "NIP", CleanNip(vatNumber)));
         }
