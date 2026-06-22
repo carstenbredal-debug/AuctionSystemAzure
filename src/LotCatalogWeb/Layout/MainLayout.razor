@@ -1,8 +1,13 @@
 @inherits LayoutComponentBase
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 
 <div class="page">
-    <div class="dev-banner dev-banner-right">TEST</div>
-    <div class="dev-banner dev-banner-left">TEST</div>
+    @{ var env = Configuration["Environment"]; }
+    @if (!string.IsNullOrWhiteSpace(env) && !string.Equals(env, "PROD", StringComparison.OrdinalIgnoreCase))
+    {
+        <div class="dev-banner dev-banner-right">@env</div>
+        <div class="dev-banner dev-banner-left">@env</div>
+    }
     <NavMenu />
 
     <main>

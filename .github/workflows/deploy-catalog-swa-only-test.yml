@@ -19,7 +19,7 @@ jobs:
 
       - name: Set environment-specific API URL
         run: |
-          echo '{ "ApiBaseUrl": "${{ secrets.API_BASE_URL_TEST }}" }' > src/LotCatalogWeb/wwwroot/appsettings.json
+          echo '{ "ApiBaseUrl": "${{ secrets.API_BASE_URL_TEST }}", "Environment": "TEST" }' > src/LotCatalogWeb/wwwroot/appsettings.json
 
       - name: Build And Deploy
         id: builddeploy

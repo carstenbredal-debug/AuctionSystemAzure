@@ -71,7 +71,7 @@ jobs:
 
       - name: Set environment-specific API URL
         run: |
-          echo '{ "ApiBaseUrl": "" }' > src/AuctionSystem.Web/wwwroot/appsettings.json
+          echo '{ "ApiBaseUrl": "", "Environment": "PROD" }' > src/AuctionSystem.Web/wwwroot/appsettings.json
 
       - name: Build And Deploy
         id: builddeploy
@@ -96,7 +96,7 @@ jobs:
 
       - name: Set environment-specific API URL
         run: |
-          echo '{ "ApiBaseUrl": "${{ secrets.API_BASE_URL_PROD }}" }' > src/LotCatalogWeb/wwwroot/appsettings.json
+          echo '{ "ApiBaseUrl": "${{ secrets.API_BASE_URL_PROD }}", "Environment": "PROD" }' > src/LotCatalogWeb/wwwroot/appsettings.json
 
       - name: Build And Deploy
         id: builddeploy

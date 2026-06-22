@@ -24,7 +24,7 @@ jobs:
 
       - name: Set environment-specific API URL
         run: |
-          echo '{ "ApiBaseUrl": "" }' > src/AuctionSystem.Web/wwwroot/appsettings.json
+          echo '{ "ApiBaseUrl": "", "Environment": "TEST" }' > src/AuctionSystem.Web/wwwroot/appsettings.json
 
       - name: Point auth providers at the TEST tenants
         run: |
