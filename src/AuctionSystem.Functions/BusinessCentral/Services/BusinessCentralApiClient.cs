@@ -535,7 +535,7 @@ public class BusinessCentralApiClient
 
     public async Task<List<BcCustomerLedgerEntry>> GetCustomerLedgerEntriesAsync(Guid companyId)
     {
-        var url = $"{_options.CustomApiBaseUrl}/companies({companyId})/customerLedgerEntries?$top=5000&$orderby=postingDate desc";
+        var url = $"{_options.CustomApiBaseUrl}/companies({companyId})/customerLedgerEntries?$top=50000&$orderby=postingDate desc";
         return await GetListAsync<BcCustomerLedgerEntry>(url);
     }
 

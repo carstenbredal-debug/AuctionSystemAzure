@@ -726,7 +726,7 @@ public class SettlementFunctions
             try
             {
                 var companyId = await _bcClient.ResolveCompanyIdAsync();
-                var bcInvoices = await _bcClient.GetSalesInvoicesAsync(companyId, 5000);
+                var bcInvoices = await _bcClient.GetSalesInvoicesAsync(companyId, 50000);
                 foreach (var bci in bcInvoices)
                     if (!string.IsNullOrEmpty(bci.Number))
                         bcRemainingMap[bci.Number] = bci.RemainingAmount;
