@@ -705,7 +705,7 @@ public class BusinessCentralFunctions
         var all = new List<object>();
         try
         {
-            var invoices = await _bcClient!.GetSalesInvoicesAsync(companyId, 5000);
+            var invoices = await _bcClient!.GetSalesInvoicesAsync(companyId, 50000);
             foreach (var inv in invoices)
             {
                 var entry = new
