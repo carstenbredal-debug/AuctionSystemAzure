@@ -52,5 +52,10 @@ tableextension 50204 "KPHG Sales Cr Memo Hdr Ext" extends "Sales Cr.Memo Header"
             Caption = 'KSeF QR Reference';
             DataClassification = CustomerContent;
         }
+        field(50220; "KPHG KSeF Send Attempts"; Integer)
+        {
+            Caption = 'KSeF Send Attempts';
+            DataClassification = CustomerContent;
+        }
     }
 }

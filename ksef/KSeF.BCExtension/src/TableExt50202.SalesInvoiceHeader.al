@@ -57,5 +57,10 @@ tableextension 50202 "KPHG Sales Inv Header Ext" extends "Sales Invoice Header"
             Caption = 'KSeF Session Reference No.';
             DataClassification = CustomerContent;
         }
+        field(50220; "KPHG KSeF Send Attempts"; Integer)
+        {
+            Caption = 'KSeF Send Attempts';
+            DataClassification = CustomerContent;
+        }
     }
 }
