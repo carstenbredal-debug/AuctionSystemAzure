@@ -12,6 +12,9 @@ public class Skin
     public long Barcode { get; set; }
     public string? DeliveryNote { get; set; }
     public string? Farmer { get; set; }
+    // Stable farmer link key (dbo.SkinTable.farmerGUID) — replaces name matching against the Farmer
+    // master (auction.Farmers.FarmerGUID). Nullable until the import backfills every skin.
+    public Guid? FarmerGUID { get; set; }
     public string? Farm { get; set; }
     public string? BoxType { get; set; }
     public string? BoxStatus { get; set; }
