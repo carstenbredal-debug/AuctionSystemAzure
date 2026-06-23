@@ -74,21 +74,9 @@ public class LotGenerationFunctions
         }
     }
 
-    // Runs the lot generation every 15 minutes (internal timer — bypasses the HTTP auth middleware and
-    // needs no api-key; no external scheduler required).
-    [Function("GenerateLotsTimer")]
-    public async Task GenerateLotsTimer([TimerTrigger("0 */15 * * * *")] TimerInfo timer)
-    {
-        try
-        {
-            var summary = await RunLotGenerationAsync();
-            _logger.LogInformation("Scheduled lot generation (15-min): {Summary}", summary);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Scheduled lot generation failed");
-        }
-    }
+    // The 15-minute auto lot-generation timer was removed — catalogue generation is now manual/deliberate
+    // (via the GenerateLots HTTP endpoint). This prevents an auto-run from TRUNCATE-ing and regenerating a
+    // catalogue that's already in flight or snapshotted for an auction.
 
     // Shared generation worker for both the HTTP endpoint and the 15-minute timer. Serializes via a SQL
     // app-lock (skip if already running) so a scheduled run can't race a manual one on the TRUNCATE +
