@@ -11,6 +11,73 @@
 <h3>Generate Catalogue</h3>
 
 <div class="catalogue-page">
+
+    <div class="card mb-4">
+        <div class="card-header py-2">
+            <strong>Catalog Drafts</strong>
+            <span class="text-muted small">— frozen from the imported lots (pre-auction), by Sales Type / Gender / Group</span>
+        </div>
+        <div class="card-body">
+            <div class="row g-2 align-items-end" style="max-width:780px">
+                <div class="col">
+                    <label class="form-label mb-0">Sales Type</label>
+                    <select @bind="DraftSalesType" class="form-select form-select-sm">
+                        <option value="">All</option>
+                        @foreach (var val in SalesTypes) { <option value="@val">@val</option> }
+                    </select>
+                </div>
+                <div class="col">
+                    <label class="form-label mb-0">Gender</label>
+                    <select @bind="DraftGender" class="form-select form-select-sm">
+                        <option value="">All</option>
+                        @foreach (var val in Genders) { <option value="@val">@val</option> }
+                    </select>
+                </div>
+                <div class="col">
+                    <label class="form-label mb-0">Group</label>
+                    <select @bind="DraftGroup" class="form-select form-select-sm">
+                        <option value="">All</option>
+                        @foreach (var val in Groups) { <option value="@val">@val</option> }
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-success btn-sm" @onclick="CreateDraft" disabled="@IsCreatingDraft">
+                        @(IsCreatingDraft ? "Saving..." : "Save as Draft")
+                    </button>
+                </div>
+            </div>
+            @if (!string.IsNullOrEmpty(DraftMessage))
+            {
+                <div class="alert @(DraftIsError ? "alert-danger" : "alert-success") mt-2 mb-0 py-1">@DraftMessage</div>
+            }
+
+            @if (Drafts.Any())
+            {
+                <table class="table table-sm table-hover mt-3" style="max-width:840px">
+                    <thead class="table-dark">
+                        <tr><th>Name</th><th class="text-end">Lots</th><th class="text-end">Skins</th><th>Created</th><th class="text-end">Actions</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var d in Drafts)
+                        {
+                            <tr>
+                                <td>@d.Name</td>
+                                <td class="text-end">@d.LotCount.ToString("N0")</td>
+                                <td class="text-end">@d.SkinCount.ToString("N0")</td>
+                                <td>@d.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                                <td class="text-end">
+                                    <button class="btn btn-sm btn-outline-primary" @onclick="() => ViewDraft(d.Id)">View</button>
+                                    <button class="btn btn-sm btn-outline-dark ms-1" @onclick="() => DownloadDraftPdf(d.Id)">PDF</button>
+                                    <button class="btn btn-sm btn-outline-danger ms-1" @onclick="() => DeleteDraft(d.Id)">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+
     <div class="mb-3">
         <label class="form-label fw-bold">Auction Number <span class="text-danger">*</span></label>
         <select class="form-select" style="max-width: 400px;" @bind="SelectedAuctionId" @bind:after="OnAuctionChanged">
@@ -107,10 +174,6 @@
         <button class="btn btn-dark ms-2" @onclick="DownloadPdf" disabled="@IsPdfLoading">
             @(IsPdfLoading ? "Creating PDF..." : "Download PDF")
         </button>
-        <button class="btn btn-success ms-2" @onclick="CreateDraft" disabled="@IsCreatingDraft"
-                title="Freeze the current Sales Type / Gender / Group selection as a catalog draft">
-            @(IsCreatingDraft ? "Saving..." : "Save as Draft")
-        </button>
     </div>
 
     @if (!string.IsNullOrEmpty(ResultMessage))
@@ -118,34 +181,6 @@
         <div class="alert @(IsError ? "alert-danger" : "alert-success") mt-2">@ResultMessage</div>
     }
     }@* end SelectedAuctionId != 0 *@
-
-    @if (Drafts.Any())
-    {
-        <div class="results-section mt-3">
-            <h6 class="mb-2">Catalog Drafts</h6>
-            <table class="table table-sm table-hover" style="max-width:820px">
-                <thead class="table-dark">
-                    <tr><th>Name</th><th class="text-end">Lots</th><th class="text-end">Skins</th><th>Created</th><th class="text-end">Actions</th></tr>
-                </thead>
-                <tbody>
-                    @foreach (var d in Drafts)
-                    {
-                        <tr>
-                            <td>@d.Name</td>
-                            <td class="text-end">@d.LotCount.ToString("N0")</td>
-                            <td class="text-end">@d.SkinCount.ToString("N0")</td>
-                            <td>@d.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
-                            <td class="text-end">
-                                <button class="btn btn-sm btn-outline-primary" @onclick="() => ViewDraft(d.Id)">View</button>
-                                <button class="btn btn-sm btn-outline-dark ms-1" @onclick="() => DownloadDraftPdf(d.Id)">PDF</button>
-                                <button class="btn btn-sm btn-outline-danger ms-1" @onclick="() => DeleteDraft(d.Id)">Delete</button>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    }
 
     @if (CatalogLots.Any())
     {
@@ -255,10 +290,16 @@
             Auctions = (await Api.GetAuctionsAsync()).Where(a => a.Status != AuctionStatus.Draft).ToList();
         }
         catch { }
+        await LoadFilters();   // Sales Type / Gender / Group from cataloglots — available pre-auction
         await LoadDrafts();
     }
 
     private bool IsCreatingDraft;
+    private string DraftSalesType = "";
+    private string DraftGender = "";
+    private string DraftGroup = "";
+    private string DraftMessage = "";
+    private bool DraftIsError;
     private List<CatalogDraftRow> Drafts = new();
 
     private async Task LoadDrafts()
@@ -269,15 +310,15 @@
 
     private async Task CreateDraft()
     {
-        IsCreatingDraft = true; ResultMessage = ""; IsError = false;
+        IsCreatingDraft = true; DraftMessage = ""; DraftIsError = false;
         try
         {
             var resp = await Http.PostAsJsonAsync("api/catalog/drafts",
-                new { salesType = SelectedSalesType, gender = SelectedGender, group = SelectedGroup });
-            if (resp.IsSuccessStatusCode) { ResultMessage = "Catalog draft saved."; await LoadDrafts(); }
-            else { ResultMessage = $"Failed to save draft: {(int)resp.StatusCode}"; IsError = true; }
+                new { salesType = DraftSalesType, gender = DraftGender, group = DraftGroup });
+            if (resp.IsSuccessStatusCode) { DraftMessage = "Catalog draft saved."; await LoadDrafts(); }
+            else { DraftMessage = $"Failed to save draft: {(int)resp.StatusCode}"; DraftIsError = true; }
         }
-        catch (Exception ex) { ResultMessage = $"Failed to save draft: {ex.Message}"; IsError = true; }
+        catch (Exception ex) { DraftMessage = $"Failed to save draft: {ex.Message}"; DraftIsError = true; }
         finally { IsCreatingDraft = false; }
     }
 
