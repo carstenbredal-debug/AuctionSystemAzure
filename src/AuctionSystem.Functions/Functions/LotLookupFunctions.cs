@@ -1,35 +1,47 @@
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Dapper;
 using AuctionSystem.Functions.Auth;
+using AuctionSystem.Domain.Data;
+using AuctionSystem.Domain.Enums;
 using System.Net;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace AuctionSystem.Functions.Functions;
 
 // General box/barcode -> lot lookup for the second app. Unlike /api/showlot (which is showlot-only),
-// this resolves ANY box to the lot it belongs to in the live catalogue, by either:
+// this resolves ANY box to the lot it belongs to in the ACTIVE auction, by either:
 //   GET /api/lot?barcode=12345   (scanned barcode -> the skin's box -> lot)
 //   GET /api/lot?box=678         (raw box number -> lot)
-// Returns the lot + grading attributes, plus boxNumber/boxType and an isShowlot flag so the caller
-// can decide. Both inputs are validated as integers, so the cataloglots match stays injection-safe.
+// It answers from the active auction's FROZEN snapshot (auction.[{AuctionNumber}.Lots]) — the stable
+// source of truth, since the live auction.cataloglots gets rewritten by catalogue regeneration. Falls
+// back to cataloglots only if the snapshot hasn't been built yet. Returns the lot + grading attributes
+// plus boxNumber/boxType/isShowlot.
 public class LotLookupFunctions
 {
     private readonly IConfiguration _configuration;
     private readonly ILogger<LotLookupFunctions> _logger;
+    private readonly AuctionDbContext _db;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    public LotLookupFunctions(IConfiguration configuration, ILogger<LotLookupFunctions> logger)
+    // The auction number is interpolated into a table name (it can't be parameterized), so it must be
+    // whitelisted before use — even though it comes from our own Auctions table, not user input.
+    private static readonly Regex AuctionNumberPattern = new("^[A-Za-z0-9]{1,20}$", RegexOptions.Compiled);
+
+    public LotLookupFunctions(IConfiguration configuration, ILogger<LotLookupFunctions> logger, AuctionDbContext db)
     {
         _configuration = configuration;
         _logger = logger;
+        _db = db;
     }
 
     private string GetConnectionString() =>
@@ -50,6 +62,15 @@ public class LotLookupFunctions
 
         try
         {
+            // 0. Resolve the ACTIVE auction (via EF, so the Status enum storage doesn't matter).
+            var auctionNumber = await _db.Auctions
+                .Where(a => a.Status == AuctionStatus.Active)
+                .Select(a => a.AuctionNumber)
+                .FirstOrDefaultAsync();
+
+            if (string.IsNullOrWhiteSpace(auctionNumber) || !AuctionNumberPattern.IsMatch(auctionNumber))
+                return await Json(req, new { found = false, message = "No active auction." });
+
             var connectionString = GetConnectionString();
             if (string.IsNullOrWhiteSpace(connectionString))
             {
@@ -95,18 +116,24 @@ public class LotLookupFunctions
                 return await Json(req, new { found = false, message = "Provide a 'barcode' or 'box' parameter." });
             }
 
-            // box -> the lot it belongs to (live catalogue). IncludedBoxNumbers is a CSV; strip spaces
-            // and match the box number as a whole token.
+            // box -> lot from the active auction's FROZEN snapshot; fall back to the live catalogue only
+            // if the snapshot hasn't been built yet.
+            var snapshotExists = await connection.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = @name",
+                new { name = $"{auctionNumber}.Lots" }) > 0;
+
+            var lotsTable = snapshotExists ? $"auction.[{auctionNumber}.Lots]" : "auction.cataloglots";
+
             LotRow? lot;
             try
             {
                 lot = await connection.QueryFirstOrDefaultAsync<LotRow>(
-                    @"SELECT TOP 1 LotNumber, SalesType, Gender, [Group], HairLength, Size, Quality, Color, Clarity, Damages
-                      FROM auction.cataloglots
-                      WHERE ',' + REPLACE(IncludedBoxNumbers, ' ', '') + ',' LIKE '%,' + @box + ',%'",
+                    $@"SELECT TOP 1 LotNumber, SalesType, Gender, [Group], HairLength, Size, Quality, Color, Clarity, Damages
+                       FROM {lotsTable}
+                       WHERE ',' + REPLACE(IncludedBoxNumbers, ' ', '') + ',' LIKE '%,' + @box + ',%'",
                     new { box = boxNumber.ToString() });
             }
-            catch (SqlException ex) when (ex.Number == 208) // catalogue table not built yet
+            catch (SqlException ex) when (ex.Number == 208) // table not built yet
             {
                 return await Json(req, new { found = false, boxNumber, boxType, message = "No catalogue available yet." });
             }
@@ -117,6 +144,7 @@ public class LotLookupFunctions
             return await Json(req, new
             {
                 found = true,
+                auctionNumber,
                 boxNumber,
                 boxType,
                 isShowlot = string.Equals(boxType, "Showlot", StringComparison.OrdinalIgnoreCase),
