@@ -18,6 +18,12 @@
             <span class="text-muted small">— frozen from the imported lots (pre-auction), by Sales Type / Gender / Group</span>
         </div>
         <div class="card-body">
+            <div class="mb-3">
+                <button class="btn btn-warning btn-sm text-white" @onclick="GenerateCatalogNow" disabled="@IsGeneratingCatalog">
+                    @(IsGeneratingCatalog ? "Generating..." : "Generate Lots")
+                </button>
+                <span class="text-muted small ms-2">Rebuilds the catalogue (cataloglots) from the imported boxes.</span>
+            </div>
             <div class="row g-2 align-items-end" style="max-width:780px">
                 <div class="col">
                     <label class="form-label mb-0">Sales Type</label>
@@ -295,6 +301,7 @@
     }
 
     private bool IsCreatingDraft;
+    private bool IsGeneratingCatalog;
     private string DraftSalesType = "";
     private string DraftGender = "";
     private string DraftGroup = "";
@@ -306,6 +313,20 @@
     {
         try { Drafts = await Http.GetFromJsonAsync<List<CatalogDraftRow>>("api/catalog/drafts") ?? new(); }
         catch { Drafts = new(); }
+    }
+
+    private async Task GenerateCatalogNow()
+    {
+        IsGeneratingCatalog = true; DraftMessage = ""; DraftIsError = false;
+        try
+        {
+            var resp = await Http.PostAsync("api/lots/generate-admin", null);
+            var content = await resp.Content.ReadAsStringAsync();
+            if (resp.IsSuccessStatusCode) { DraftMessage = string.IsNullOrWhiteSpace(content) ? "Lots generated." : content; await LoadFilters(); }
+            else { DraftMessage = $"Generation failed: {(int)resp.StatusCode}"; DraftIsError = true; }
+        }
+        catch (Exception ex) { DraftMessage = $"Generation failed: {ex.Message}"; DraftIsError = true; }
+        finally { IsGeneratingCatalog = false; }
     }
 
     private async Task CreateDraft()
@@ -404,7 +425,7 @@
 
         try
         {
-            var response = await Http.PostAsync($"api/lots/generate?{BuildQueryString()}", null);
+            var response = await Http.PostAsync("api/lots/generate-admin", null);
             var content = await response.Content.ReadAsStringAsync();
 
             if (response.IsSuccessStatusCode)
