@@ -4,6 +4,9 @@ public class Farmer
 {
     public int Id { get; set; }
     public string FarmerNumber { get; set; } = string.Empty;
+    // Stable unique link key (auction.Farmers.farmerid, uniqueidentifier). Matches dbo.SkinTable.farmerid;
+    // replaces fragile name-based skin<->farmer matching. Nullable during the name->id migration.
+    public Guid? FarmerId { get; set; }
     public string Name { get; set; } = string.Empty;
     public string Name2 { get; set; } = string.Empty;
     public string SearchName { get; set; } = string.Empty;

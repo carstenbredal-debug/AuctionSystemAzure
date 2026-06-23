@@ -59,6 +59,10 @@ else
                         <label class="form-label fw-bold">No. <span class="text-danger">*</span></label>
                         <input class="form-control" @bind="_editDto!.FarmerNumber" />
                     </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Farmer ID</label>
+                        <input class="form-control bg-light" value="@(_editDto?.FarmerId?.ToString() ?? "—")" readonly title="Stable link key to skins (read-only)" />
+                    </div>
                     <div class="col-md-5">
                         <label class="form-label fw-bold">Name <span class="text-danger">*</span></label>
                         <input class="form-control" @bind="_editDto!.Name" />
@@ -381,7 +385,8 @@ else
             BankCountry = _farmer.BankCountry, Assignee = _farmer.Assignee,
             AssignmentOfReceivable = _farmer.AssignmentOfReceivable,
             CreditLimit = _farmer.CreditLimit, Blocked = _farmer.Blocked,
-            IsActive = _farmer.IsActive, Address = _farmer.Address
+            IsActive = _farmer.IsActive, Address = _farmer.Address,
+            FarmerId = _farmer.FarmerId
         };
     }
 
