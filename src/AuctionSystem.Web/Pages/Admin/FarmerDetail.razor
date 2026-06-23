@@ -61,7 +61,7 @@ else
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Farmer ID</label>
-                        <input class="form-control bg-light" value="@(_editDto?.FarmerId?.ToString() ?? "—")" readonly title="Stable link key to skins (read-only)" />
+                        <input class="form-control bg-light" value="@(_editDto?.FarmerGUID?.ToString() ?? "—")" readonly title="Stable link key to skins (read-only)" />
                     </div>
                     <div class="col-md-5">
                         <label class="form-label fw-bold">Name <span class="text-danger">*</span></label>
@@ -386,7 +386,7 @@ else
             AssignmentOfReceivable = _farmer.AssignmentOfReceivable,
             CreditLimit = _farmer.CreditLimit, Blocked = _farmer.Blocked,
             IsActive = _farmer.IsActive, Address = _farmer.Address,
-            FarmerId = _farmer.FarmerId
+            FarmerGUID = _farmer.FarmerGUID
         };
     }
 
