@@ -137,11 +137,20 @@ public class CatalogPdfFunctions
                         PARTITION BY StringNumber
                     ) AS StringBoxCount
 
-                FROM " + GetCatalogTable(query) + @"
+                FROM " + (int.TryParse(query["draftId"], out var draftId) && draftId > 0 ? "auction.CatalogDraftLots" : GetCatalogTable(query)) + @"
                 WHERE 1=1";
 
             var parameters = new DynamicParameters();
-            AddFilterParameters(query, ref sql, parameters);
+            if (draftId > 0)
+            {
+                // Frozen catalogue draft — source the frozen lots, no other filters.
+                sql += " AND DraftId = @DraftId";
+                parameters.Add("DraftId", draftId);
+            }
+            else
+            {
+                AddFilterParameters(query, ref sql, parameters);
+            }
 
             sql += " ORDER BY CatalogSortOrder";
 

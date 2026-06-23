@@ -1,8 +1,10 @@
 using AuctionSystem.Domain.Data;
 using AuctionSystem.Domain.Entities;
 using AuctionSystem.Functions.Auth;
+using Dapper;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System.Net;
@@ -99,6 +101,30 @@ public class CatalogDraftFunctions
         _db.CatalogDrafts.Remove(draft); // cascade removes the frozen lots
         await _db.SaveChangesAsync();
         return req.CreateResponse(HttpStatusCode.NoContent);
+    }
+
+    // The frozen lots for a draft — same shape as catalog/lots (window fields included) so the catalogue
+    // view renders identically.
+    [RequireRole("Admin")]
+    [Function("GetCatalogDraftLots")]
+    public async Task<HttpResponseData> GetLots(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "catalog/drafts/{id:int}/lots")] HttpRequestData req, int id)
+    {
+        const string sql = @"
+            SELECT LotNumber, StringNumber, CatalogSortOrder, SalesType, Gender, [Group], Color, Quality,
+                   Clarity, Size, HairLength, Damages, TotalSkins, BoxCount,
+                   CASE WHEN IsShow = 'Yes' THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS IsShow,
+                   COUNT(*) OVER (PARTITION BY StringNumber) AS LotsInString,
+                   ROW_NUMBER() OVER (PARTITION BY StringNumber ORDER BY CatalogSortOrder) AS LotSequenceInString,
+                   SUM(TotalSkins) OVER (PARTITION BY StringNumber) AS StringTotalSkins
+            FROM auction.CatalogDraftLots
+            WHERE DraftId = @id
+            ORDER BY CatalogSortOrder";
+
+        await using var conn = new SqlConnection(_db.Database.GetConnectionString());
+        await conn.OpenAsync();
+        var lots = (await conn.QueryAsync(sql, new { id })).ToList();
+        return await Json(req, lots);
     }
 
     private static object ToDto(CatalogDraft d) => new

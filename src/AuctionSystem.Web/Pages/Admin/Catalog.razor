@@ -107,6 +107,10 @@
         <button class="btn btn-dark ms-2" @onclick="DownloadPdf" disabled="@IsPdfLoading">
             @(IsPdfLoading ? "Creating PDF..." : "Download PDF")
         </button>
+        <button class="btn btn-success ms-2" @onclick="CreateDraft" disabled="@IsCreatingDraft"
+                title="Freeze the current Sales Type / Gender / Group selection as a catalog draft">
+            @(IsCreatingDraft ? "Saving..." : "Save as Draft")
+        </button>
     </div>
 
     @if (!string.IsNullOrEmpty(ResultMessage))
@@ -114,6 +118,34 @@
         <div class="alert @(IsError ? "alert-danger" : "alert-success") mt-2">@ResultMessage</div>
     }
     }@* end SelectedAuctionId != 0 *@
+
+    @if (Drafts.Any())
+    {
+        <div class="results-section mt-3">
+            <h6 class="mb-2">Catalog Drafts</h6>
+            <table class="table table-sm table-hover" style="max-width:820px">
+                <thead class="table-dark">
+                    <tr><th>Name</th><th class="text-end">Lots</th><th class="text-end">Skins</th><th>Created</th><th class="text-end">Actions</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var d in Drafts)
+                    {
+                        <tr>
+                            <td>@d.Name</td>
+                            <td class="text-end">@d.LotCount.ToString("N0")</td>
+                            <td class="text-end">@d.SkinCount.ToString("N0")</td>
+                            <td>@d.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-primary" @onclick="() => ViewDraft(d.Id)">View</button>
+                                <button class="btn btn-sm btn-outline-dark ms-1" @onclick="() => DownloadDraftPdf(d.Id)">PDF</button>
+                                <button class="btn btn-sm btn-outline-danger ms-1" @onclick="() => DeleteDraft(d.Id)">Delete</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
 
     @if (CatalogLots.Any())
     {
@@ -223,6 +255,60 @@
             Auctions = (await Api.GetAuctionsAsync()).Where(a => a.Status != AuctionStatus.Draft).ToList();
         }
         catch { }
+        await LoadDrafts();
+    }
+
+    private bool IsCreatingDraft;
+    private List<CatalogDraftRow> Drafts = new();
+
+    private async Task LoadDrafts()
+    {
+        try { Drafts = await Http.GetFromJsonAsync<List<CatalogDraftRow>>("api/catalog/drafts") ?? new(); }
+        catch { Drafts = new(); }
+    }
+
+    private async Task CreateDraft()
+    {
+        IsCreatingDraft = true; ResultMessage = ""; IsError = false;
+        try
+        {
+            var resp = await Http.PostAsJsonAsync("api/catalog/drafts",
+                new { salesType = SelectedSalesType, gender = SelectedGender, group = SelectedGroup });
+            if (resp.IsSuccessStatusCode) { ResultMessage = "Catalog draft saved."; await LoadDrafts(); }
+            else { ResultMessage = $"Failed to save draft: {(int)resp.StatusCode}"; IsError = true; }
+        }
+        catch (Exception ex) { ResultMessage = $"Failed to save draft: {ex.Message}"; IsError = true; }
+        finally { IsCreatingDraft = false; }
+    }
+
+    private async Task DeleteDraft(int id)
+    {
+        try { await Http.DeleteAsync($"api/catalog/drafts/{id}"); await LoadDrafts(); } catch { }
+    }
+
+    private async Task ViewDraft(int id)
+    {
+        IsLoading = true; CatalogLots = new();
+        try { CatalogLots = await Http.GetFromJsonAsync<List<CatalogLotRow>>($"api/catalog/drafts/{id}/lots") ?? new(); }
+        catch { CatalogLots = new(); }
+        finally { IsLoading = false; }
+    }
+
+    private async Task DownloadDraftPdf(int id)
+    {
+        try { await JS.InvokeVoidAsync("open", $"api/catalog/pdf?draftId={id}", "_blank"); } catch { }
+    }
+
+    private class CatalogDraftRow
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        public string? SalesType { get; set; }
+        public string? Gender { get; set; }
+        public string? Group { get; set; }
+        public int LotCount { get; set; }
+        public int SkinCount { get; set; }
+        public DateTime CreatedAt { get; set; }
     }
 
     private async Task LoadFilters()
