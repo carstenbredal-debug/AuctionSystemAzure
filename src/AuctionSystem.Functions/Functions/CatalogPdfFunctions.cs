@@ -149,7 +149,8 @@ public class CatalogPdfFunctions
 
             // Filter by farmer if specified
             var farmerName = query["farmerName"];
-            var isFarmerCatalog = !string.IsNullOrEmpty(farmerName);
+            var hasFarmerGuid = Guid.TryParse(query["farmerGuid"], out var farmerGuidVal);
+            var isFarmerCatalog = hasFarmerGuid || !string.IsNullOrEmpty(farmerName);
             var lotSaleData = new Dictionary<int, LotSaleInfo>();
 
             if (isFarmerCatalog)
@@ -160,8 +161,11 @@ public class CatalogPdfFunctions
                     var skinsTable = $"auction.[{auctionNumber}.Skins]";
                     var farmerBoxes = new HashSet<int>();
                     var farmerSkinsByBox = new Dictionary<int, int>();
-                    var boxSql = $"SELECT BoxNumber, COUNT(*) AS Cnt FROM {skinsTable} WHERE Farmer = @Farmer GROUP BY BoxNumber";
-                    var boxRows = await connection.QueryAsync<dynamic>(boxSql, new { Farmer = farmerName });
+                    // Prefer the stable farmerGUID; fall back to the legacy Farmer name.
+                    var farmerClause = hasFarmerGuid ? "farmerGUID = @FarmerKey" : "Farmer = @FarmerKey";
+                    object farmerKey = hasFarmerGuid ? farmerGuidVal : (object)(farmerName ?? "");
+                    var boxSql = $"SELECT BoxNumber, COUNT(*) AS Cnt FROM {skinsTable} WHERE {farmerClause} GROUP BY BoxNumber";
+                    var boxRows = await connection.QueryAsync<dynamic>(boxSql, new { FarmerKey = farmerKey });
                     foreach (var b in boxRows)
                     {
                         farmerBoxes.Add((int)b.BoxNumber);

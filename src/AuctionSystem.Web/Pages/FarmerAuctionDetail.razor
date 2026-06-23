@@ -230,10 +230,20 @@ else
     [Microsoft.AspNetCore.Components.SupplyParameterFromQuery]
     public string? Farmer { get; set; }
 
+    // Preferred admin key: ?farmerGuid= (stable). Legacy ?farmer=Name still works during the migration.
+    [Parameter]
+    [Microsoft.AspNetCore.Components.SupplyParameterFromQuery(Name = "farmerGuid")]
+    public string? FarmerGuidParam { get; set; }
+
     private bool _adminView;
     private bool _loading = true;
     private string _auctionNumber = "";
     private string _farmerName = "";
+    private Guid? _farmerGuid;
+
+    // Farmer key for API URLs — prefer the stable GUID, fall back to the legacy name.
+    private string FarmerKeyQuery() =>
+        _farmerGuid.HasValue ? $"farmerGuid={_farmerGuid}" : $"farmerName={Uri.EscapeDataString(_farmerName)}";
     private int _totalSkins;
     private int _soldSkins;
     private decimal _totalValue;
@@ -264,17 +274,22 @@ else
     protected override async Task OnInitializedAsync()
     {
         var auth = await AuthState.GetAuthenticationStateAsync();
-        if (!string.IsNullOrWhiteSpace(Farmer) && auth.User.IsInRole("Admin"))
+        if ((FarmerGuidParam != null || !string.IsNullOrWhiteSpace(Farmer)) && auth.User.IsInRole("Admin"))
         {
-            _farmerName = Farmer;       // admin viewing a specific farmer (from Finance > Farmers)
+            // admin viewing a specific farmer (from Finance > Farmers)
+            _farmerGuid = Guid.TryParse(FarmerGuidParam, out var fg) ? fg : (Guid?)null;
+            _farmerName = Farmer ?? "";   // may be empty when only a GUID was passed — filled from the detail load
             _adminView = true;
         }
         else
         {
-            _farmerName = await ResolveFarmerNameAsync() ?? "";
+            // farmer portal: the logged-in user's own farmer
+            var ownFarmer = await ResolveOwnFarmerAsync();
+            _farmerGuid = ownFarmer?.FarmerGUID;
+            _farmerName = ownFarmer?.Name ?? "";
         }
 
-        if (string.IsNullOrEmpty(_farmerName))
+        if (_farmerGuid == null && string.IsNullOrEmpty(_farmerName))
         {
             Nav.NavigateTo("/");
             return;
@@ -313,11 +328,13 @@ else
 
         try
         {
-            var url = $"api/skins/farmer-auction-detail?farmerName={Uri.EscapeDataString(_farmerName)}&auctionId={AuctionId}";
+            var url = $"api/skins/farmer-auction-detail?{FarmerKeyQuery()}&auctionId={AuctionId}";
             var json = await Http.GetStringAsync(url);
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
             _auctionNumber = root.GetProperty("auctionNumber").GetString() ?? $"{AuctionId}";
+            if (root.TryGetProperty("farmerName", out var fn) && fn.GetString() is { Length: > 0 } resolvedName)
+                _farmerName = resolvedName;   // canonical name from the Farmer master
             _totalSkins = root.GetProperty("totalSkins").GetInt32();
             _soldSkins = root.GetProperty("soldSkins").GetInt32();
             _totalValue = root.GetProperty("totalValue").GetDecimal();
@@ -326,7 +343,7 @@ else
 
         try
         {
-            var lotsUrl = $"api/skins/farmer-auction-lots?farmerName={Uri.EscapeDataString(_farmerName)}&auctionId={AuctionId}";
+            var lotsUrl = $"api/skins/farmer-auction-lots?{FarmerKeyQuery()}&auctionId={AuctionId}";
             var lotsJson = await Http.GetStringAsync(lotsUrl);
             _lots = JsonSerializer.Deserialize<List<LotRow>>(lotsJson, JsonOpts) ?? new();
         }
@@ -430,7 +447,7 @@ else
 
         try
         {
-            var pdfUrl = $"api/catalog/pdf?auctionNumber={Uri.EscapeDataString(_auctionNumber)}&farmerName={Uri.EscapeDataString(_farmerName)}";
+            var pdfUrl = $"api/catalog/pdf?auctionNumber={Uri.EscapeDataString(_auctionNumber)}&{FarmerKeyQuery()}";
             await JS.InvokeVoidAsync("open", pdfUrl, "_blank");
         }
         finally
@@ -448,7 +465,7 @@ else
         return string.Join(" / ", parts.Where(x => !string.IsNullOrWhiteSpace(x)));
     }
 
-    private async Task<string?> ResolveFarmerNameAsync()
+    private async Task<FarmerDto?> ResolveOwnFarmerAsync()
     {
         var auth = await AuthState.GetAuthenticationStateAsync();
         var oid = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
@@ -462,8 +479,7 @@ else
 
         if (user?.FarmerId == null) return null;
 
-        var farmer = await Api.GetFarmerAsync(user.FarmerId.Value);
-        return farmer?.Name;
+        return await Api.GetFarmerAsync(user.FarmerId.Value);
     }
 
     private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNameCaseInsensitive = true };
