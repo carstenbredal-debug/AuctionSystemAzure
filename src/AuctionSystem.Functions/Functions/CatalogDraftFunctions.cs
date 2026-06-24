@@ -116,6 +116,28 @@ public class CatalogDraftFunctions
         return await Json(req, drafts.Select(d => ToDto(d, showCounts.TryGetValue(d.Id, out var c) ? c : 0)));
     }
 
+    // Activate a catalogue (Draft -> Active): it becomes usable for an auction. (Freezing the catalogue's
+    // skins/boxes/lots happens here in the next step.) Idempotent for an already-Active catalogue; an
+    // In-Auction catalogue is locked.
+    [RequireRole("Admin")]
+    [Function("ActivateCatalogDraft")]
+    public async Task<HttpResponseData> Activate(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "catalog/drafts/{id:int}/activate")] HttpRequestData req, int id)
+    {
+        var draft = await _db.CatalogDrafts.FindAsync(id);
+        if (draft == null) return req.CreateResponse(HttpStatusCode.NotFound);
+        if (draft.Status == "InAuction")
+            return await Json(req, new { error = "Catalogue is already in an auction and cannot be changed." }, HttpStatusCode.BadRequest);
+
+        if (draft.Status != "Active")
+        {
+            draft.Status = "Active";
+            await _db.SaveChangesAsync();
+            _logger.LogInformation("Activated catalogue draft {Id} '{Name}'", draft.Id, draft.Name);
+        }
+        return await Json(req, ToDto(draft, await ShowCount(id)));
+    }
+
     [RequireRole("Admin")]
     [Function("DeleteCatalogDraft")]
     public async Task<HttpResponseData> Delete(
@@ -123,6 +145,8 @@ public class CatalogDraftFunctions
     {
         var draft = await _db.CatalogDrafts.FindAsync(id);
         if (draft == null) return req.CreateResponse(HttpStatusCode.NotFound);
+        if (draft.Status == "InAuction")
+            return await Json(req, new { error = "Catalogue is in an auction and cannot be deleted." }, HttpStatusCode.BadRequest);
         _db.CatalogDrafts.Remove(draft); // cascade removes the frozen lots
         await _db.SaveChangesAsync();
         return req.CreateResponse(HttpStatusCode.NoContent);
@@ -154,8 +178,11 @@ public class CatalogDraftFunctions
 
     private static object ToDto(CatalogDraft d, int showLotCount) => new
     {
-        d.Id, d.Name, d.SalesType, d.Gender, d.Group, d.LotCount, showLotCount, d.SkinCount, d.CreatedAt
+        d.Id, d.Name, d.SalesType, d.Gender, d.Group, d.LotCount, showLotCount, d.SkinCount, d.Status, d.CreatedAt
     };
+
+    private Task<int> ShowCount(int draftId) =>
+        _db.CatalogDraftLots.CountAsync(l => l.DraftId == draftId && l.IsShow == "Yes");
 
     private static async Task<HttpResponseData> Json(HttpRequestData req, object body, HttpStatusCode status = HttpStatusCode.OK)
     {

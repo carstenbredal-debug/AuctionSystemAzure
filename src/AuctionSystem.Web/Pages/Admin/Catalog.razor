@@ -65,7 +65,7 @@
             {
                 <table class="table table-sm table-hover mt-3" style="max-width:840px">
                     <thead class="table-dark">
-                        <tr><th>Name</th><th class="text-end">Lots</th><th class="text-end">Show</th><th class="text-end">Skins</th><th>Created</th><th class="text-end">Actions</th></tr>
+                        <tr><th>Name</th><th class="text-end">Lots</th><th class="text-end">Show</th><th class="text-end">Skins</th><th>Status</th><th>Created</th><th class="text-end">Actions</th></tr>
                     </thead>
                     <tbody>
                         @foreach (var d in Drafts)
@@ -75,11 +75,25 @@
                                 <td class="text-end">@d.LotCount.ToString("N0")</td>
                                 <td class="text-end">@d.ShowLotCount.ToString("N0")</td>
                                 <td class="text-end">@d.SkinCount.ToString("N0")</td>
+                                <td>
+                                    @{
+                                        var badge = d.Status switch { "Active" => "bg-success", "InAuction" => "bg-secondary", _ => "bg-warning text-dark" };
+                                        var label = d.Status == "InAuction" ? "In Auction" : d.Status;
+                                    }
+                                    <span class="badge @badge">@label</span>
+                                </td>
                                 <td>@d.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
                                 <td class="text-end">
-                                    <button class="btn btn-sm btn-outline-primary" @onclick="() => ViewDraft(d.Id)">View</button>
+                                    @if (d.Status == "Draft")
+                                    {
+                                        <button class="btn btn-sm btn-success" @onclick="() => ActivateDraft(d.Id)">Activate</button>
+                                    }
+                                    <button class="btn btn-sm btn-outline-primary ms-1" @onclick="() => ViewDraft(d.Id)">View</button>
                                     <button class="btn btn-sm btn-outline-dark ms-1" @onclick="() => DownloadDraftPdf(d.Id)">PDF</button>
-                                    <button class="btn btn-sm btn-outline-danger ms-1" @onclick="() => DeleteDraft(d.Id)">Delete</button>
+                                    @if (d.Status != "InAuction")
+                                    {
+                                        <button class="btn btn-sm btn-outline-danger ms-1" @onclick="() => DeleteDraft(d.Id)">Delete</button>
+                                    }
                                 </td>
                             </tr>
                         }
@@ -221,6 +235,18 @@
         try { await Http.DeleteAsync($"api/catalog/drafts/{id}"); await LoadDrafts(); } catch { }
     }
 
+    private async Task ActivateDraft(int id)
+    {
+        DraftMessage = ""; DraftIsError = false;
+        try
+        {
+            var resp = await Http.PostAsync($"api/catalog/drafts/{id}/activate", null);
+            if (resp.IsSuccessStatusCode) { await LoadDrafts(); }
+            else { DraftMessage = $"Activate failed: {await resp.Content.ReadAsStringAsync()}"; DraftIsError = true; }
+        }
+        catch (Exception ex) { DraftMessage = $"Activate failed: {ex.Message}"; DraftIsError = true; }
+    }
+
     private async Task ViewDraft(int id)
     {
         IsLoading = true; CatalogLots = new();
@@ -244,6 +270,7 @@
         public int LotCount { get; set; }
         public int ShowLotCount { get; set; }
         public int SkinCount { get; set; }
+        public string Status { get; set; } = "Draft";
         public DateTime CreatedAt { get; set; }
     }
 

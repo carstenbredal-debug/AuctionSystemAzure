@@ -318,6 +318,11 @@ using (var scope = host.Services.CreateScope())
                 CREATE INDEX IX_CatalogDraftLots_DraftId ON auction.CatalogDraftLots(DraftId);
             END
         ");
+        // Catalogue lifecycle status: Draft -> Active -> InAuction.
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.CatalogDrafts') AND name = 'Status')
+                ALTER TABLE auction.CatalogDrafts ADD Status NVARCHAR(20) NOT NULL DEFAULT 'Draft';
+        ");
         // TypistEntries: add AuctionId column
         db.Database.ExecuteSqlRaw(@"
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.TypistEntries') AND name = 'AuctionId')

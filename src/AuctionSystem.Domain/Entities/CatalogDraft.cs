@@ -11,6 +11,8 @@ public class CatalogDraft
     public string? Group { get; set; }
     public int LotCount { get; set; }
     public int SkinCount { get; set; }
+    // Lifecycle: Draft (editable) -> Active (frozen skins/boxes/lots, usable for an auction) -> InAuction (consumed, locked).
+    public string Status { get; set; } = "Draft";
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public List<CatalogDraftLot> Lots { get; set; } = new();
