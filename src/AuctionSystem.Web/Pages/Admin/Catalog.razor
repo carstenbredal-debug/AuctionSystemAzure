@@ -125,8 +125,8 @@
             <table class="table table-sm table-bordered align-middle">
                 <thead class="table-dark">
                     <tr>
-                        <th style="width:55px">Lot #</th><th style="width:55px">String</th><th style="width:65px">Rack</th><th style="width:280px">Description</th><th class="text-end" style="width:55px">Skins</th>
-                        <th style="width:85px">Estimate</th><th style="width:85px">Red Limit</th><th>Remarks</th><th style="width:120px"></th>
+                        <th style="width:55px">Lot #</th><th style="width:55px">String</th><th style="width:65px">Rack</th><th style="width:480px">Description</th><th class="text-end" style="width:55px">Skins</th>
+                        <th style="width:85px">Estimate</th><th style="width:85px">Red Limit</th><th style="width:200px">Remarks</th><th style="width:120px"></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -150,11 +150,11 @@
                             }
                             else
                             {
-                                <td><div style="max-width:280px; white-space:normal; word-break:break-word;">@(string.IsNullOrWhiteSpace(lot.Description) ? BuildDescription(lot) : lot.Description)</div></td>
+                                <td><div style="max-width:480px; white-space:normal; word-break:break-word;">@(string.IsNullOrWhiteSpace(lot.Description) ? BuildDescription(lot) : lot.Description)</div></td>
                                 <td class="text-end">@lot.TotalSkins.ToString("N0")</td>
                                 <td>@lot.Estimate</td>
                                 <td>@lot.RedLimit</td>
-                                <td>@lot.Remarks</td>
+                                <td><div style="max-width:200px; white-space:normal; word-break:break-word;">@lot.Remarks</div></td>
                                 <td>
                                     @if (viewingDraftStatus == "Draft")
                                     {
