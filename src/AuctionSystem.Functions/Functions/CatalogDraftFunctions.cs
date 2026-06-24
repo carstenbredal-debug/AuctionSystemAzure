@@ -175,27 +175,30 @@ public class CatalogDraftFunctions
         var skins = $"Cat_{draftId}.Skins";
         var boxes = $"Cat_{draftId}.Boxes";
 
+        // Each statement runs in its OWN batch so every table reference is to an already-committed table
+        // (a SELECT ... INTO target referenced later in the SAME batch fails compile-time name resolution).
+
         // 1. Lots — full cataloglots shape for this catalogue's lot numbers.
+        await ExecSql(conn, $"IF OBJECT_ID('auction.[{lots}]', 'U') IS NOT NULL DROP TABLE auction.[{lots}];");
         await ExecSql(conn, $@"
-            IF OBJECT_ID('auction.[{lots}]', 'U') IS NOT NULL DROP TABLE auction.[{lots}];
             SELECT * INTO auction.[{lots}] FROM auction.cataloglots
             WHERE LotNumber IN (SELECT LotNumber FROM auction.CatalogDraftLots WHERE DraftId = {draftId});");
 
         // 2. Skins — live SkinTable for those lots' boxes, frozen now (TRY_CAST: one bad IncludedBoxNumbers
         //    value must not abort the whole statement).
+        await ExecSql(conn, $"IF OBJECT_ID('auction.[{skins}]', 'U') IS NOT NULL DROP TABLE auction.[{skins}];");
         await ExecSql(conn, $@"
-            IF OBJECT_ID('auction.[{skins}]', 'U') IS NOT NULL DROP TABLE auction.[{skins}];
             SELECT s.* INTO auction.[{skins}]
             FROM dbo.SkinTable s
             WHERE s.IsActive = 1 AND s.BoxNumber IN (
                 SELECT TRY_CAST(LTRIM(RTRIM(value)) AS INT)
                 FROM auction.[{lots}] CROSS APPLY STRING_SPLIT(IncludedBoxNumbers, ',')
-                WHERE TRY_CAST(LTRIM(RTRIM(value)) AS INT) > 0);
-            UPDATE auction.[{skins}] SET Farmer = 'Unknow' WHERE Farmer IS NULL OR LTRIM(RTRIM(Farmer)) = '';");
+                WHERE TRY_CAST(LTRIM(RTRIM(value)) AS INT) > 0);");
+        await ExecSql(conn, $"UPDATE auction.[{skins}] SET Farmer = 'Unknow' WHERE Farmer IS NULL OR LTRIM(RTRIM(Farmer)) = '';");
 
         // 3. Boxes — aggregated from the frozen skins + location/weight.
+        await ExecSql(conn, $"IF OBJECT_ID('auction.[{boxes}]', 'U') IS NOT NULL DROP TABLE auction.[{boxes}];");
         await ExecSql(conn, $@"
-            IF OBJECT_ID('auction.[{boxes}]', 'U') IS NOT NULL DROP TABLE auction.[{boxes}];
             SELECT s.BoxNumber, s.BoxType, s.BoxStatus, s.SalesType, s.[Group], s.Gender, s.Size, s.HairLength,
                    s.Color, s.Quality, s.Clarity, s.Damages, COUNT(*) AS Skins,
                    ISNULL(b.BoxLocation, '') AS BoxLocation, CAST(ISNULL(b.Weight, 0) AS DECIMAL(18,2)) AS BoxWeight
