@@ -86,7 +86,9 @@
                                 <td class="text-end">
                                     @if (d.Status == "Draft")
                                     {
-                                        <button class="btn btn-sm btn-success" @onclick="() => ActivateDraft(d.Id)">Activate</button>
+                                        <button class="btn btn-sm btn-success" @onclick="() => ActivateDraft(d.Id)" disabled="@(activatingId != null)">
+                                            @(activatingId == d.Id ? "Activating..." : "Activate")
+                                        </button>
                                     }
                                     <button class="btn btn-sm btn-outline-primary ms-1" @onclick="() => ViewDraft(d.Id)">View</button>
                                     <button class="btn btn-sm btn-outline-dark ms-1" @onclick="() => DownloadDraftPdf(d.Id)">PDF</button>
@@ -235,8 +237,12 @@
         try { await Http.DeleteAsync($"api/catalog/drafts/{id}"); await LoadDrafts(); } catch { }
     }
 
+    private int? activatingId;
+
     private async Task ActivateDraft(int id)
     {
+        if (activatingId != null) return;   // ignore re-clicks: a concurrent freeze races the table drops
+        activatingId = id;
         DraftMessage = ""; DraftIsError = false;
         try
         {
@@ -245,6 +251,7 @@
             else { DraftMessage = $"Activate failed: {await resp.Content.ReadAsStringAsync()}"; DraftIsError = true; }
         }
         catch (Exception ex) { DraftMessage = $"Activate failed: {ex.Message}"; DraftIsError = true; }
+        finally { activatingId = null; }
     }
 
     private async Task ViewDraft(int id)
