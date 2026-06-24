@@ -6,6 +6,7 @@ using AuctionSystem.Domain.Enums;
 using AuctionSystem.Functions.Auth;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -788,6 +789,42 @@ public class TypistEntryFunctions
         });
     }
 
+    // Option A: a lot's DISPLAY text/skins come from the frozen snapshot auction.[{Num}.Lots] (the
+    // authoritative catalogue), not the materialised Lot.Description. Returns null -> caller falls back to
+    // the Lot row (no auction scope, or the snapshot isn't built yet).
+    private async Task<(string Description, string? Category, int Quantity)?> SnapshotLotDisplayAsync(int auctionId, int lotNumber)
+    {
+        if (auctionId <= 0) return null;
+        var auctionNum = await _db.Auctions.Where(a => a.Id == auctionId).Select(a => a.AuctionNumber).FirstOrDefaultAsync();
+        if (string.IsNullOrEmpty(auctionNum)) return null;
+
+        await using var conn = new SqlConnection(_catalogDb.Database.GetConnectionString());
+        await conn.OpenAsync();
+
+        await using (var check = new SqlCommand("SELECT OBJECT_ID(@t, 'U')", conn))
+        {
+            check.Parameters.AddWithValue("@t", $"auction.[{auctionNum}.Lots]");
+            if (await check.ExecuteScalarAsync() is null or System.DBNull) return null;   // not imported yet
+        }
+
+        await using var cmd = new SqlCommand(
+            $@"SELECT TOP 1 SalesType, Gender, [Group], HairLength, Size, Quality, Color, Clarity, Damages, TotalSkins
+               FROM auction.[{auctionNum}.Lots] WHERE LotNumber = @ln", conn);
+        cmd.Parameters.AddWithValue("@ln", lotNumber);
+        await using var r = await cmd.ExecuteReaderAsync();
+        if (!await r.ReadAsync()) return null;
+
+        string? S(int i) => r.IsDBNull(i) ? null : r.GetString(i).Trim();
+        var group = S(2);
+        var damages = S(8);
+        var parts = new[] { S(0), S(1), group, S(3), S(4), S(5), S(6), S(7),
+            (damages != null && !damages.Equals("None", System.StringComparison.OrdinalIgnoreCase)) ? damages : null }
+            .Where(p => !string.IsNullOrWhiteSpace(p));
+        var description = string.Join(" ", parts);
+        var totalSkins = r.IsDBNull(9) ? 0 : r.GetInt32(9);
+        return (description, group, totalSkins);
+    }
+
     [Function("GetNextUnsoldLotForTypist")]
     public async Task<HttpResponseData> GetNextUnsoldLot(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "typist-entries/next-unsold-lot")] HttpRequestData req)
@@ -824,7 +861,15 @@ public class TypistEntryFunctions
         if (nextLot == null)
             return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
 
-        return await CreateJsonResponse(req, nextLot);
+        var snap = await SnapshotLotDisplayAsync(auctionId, nextLot.LotNumber);
+        return await CreateJsonResponse(req, new
+        {
+            nextLot.LotNumber,
+            Description = snap?.Description ?? nextLot.Description,
+            Category = snap?.Category ?? nextLot.Category,
+            Quantity = snap?.Quantity ?? nextLot.Quantity,
+            nextLot.Unit
+        });
     }
 
     [Function("GetTypistLot")]
@@ -861,7 +906,15 @@ public class TypistEntryFunctions
                 return await CreateJsonResponse(req, new { error = $"You have already entered Lot {lotNumber}." }, System.Net.HttpStatusCode.Conflict);
         }
 
-        return await CreateJsonResponse(req, new { lot.LotNumber, lot.Description, lot.Category, lot.Quantity, lot.Unit });
+        var snap = await SnapshotLotDisplayAsync(auctionId, lotNumber);
+        return await CreateJsonResponse(req, new
+        {
+            lot.LotNumber,
+            Description = snap?.Description ?? lot.Description,
+            Category = snap?.Category ?? lot.Category,
+            Quantity = snap?.Quantity ?? lot.Quantity,
+            lot.Unit
+        });
     }
 
     [Function("GetRecentMatchedEntries")]
