@@ -142,7 +142,7 @@ public class CatalogLabelFunctions
         }
     }
 
-    // Simpler label: just the Lot # (as large as fits) for each showlot lot, on 100x30mm labels, 2-up on A4.
+    // Simpler label: just the Lot # (as large as fits) for each showlot lot — one 100x30mm page per label.
     [RequireRole("Admin")]
     [Function("GenerateLotNumberLabelsPdf")]
     public async Task<HttpResponseData> GenerateLotNumberLabels(
@@ -173,33 +173,19 @@ public class CatalogLabelFunctions
             if (lotNumbers.Count == 0)
                 return await Text(req, HttpStatusCode.NotFound, "No showlot lots in this catalogue.");
 
+            // One 100x30mm page per label (for a label printer/roll), Lot # as large as fits.
             byte[] pdf = Document.Create(container =>
             {
-                container.Page(page =>
+                foreach (var ln in lotNumbers)
                 {
-                    page.Size(PageSizes.A4);
-                    page.Margin(6, Unit.Millimetre);
-                    page.DefaultTextStyle(x => x.FontFamily(FontName));
-
-                    page.Content().Column(col =>
+                    container.Page(page =>
                     {
-                        col.Spacing(2, Unit.Millimetre);
-                        for (var i = 0; i < lotNumbers.Count; i += 2)
-                        {
-                            var pair = lotNumbers.Skip(i).Take(2).ToList();
-                            col.Item().Row(row =>
-                            {
-                                row.Spacing(2, Unit.Millimetre);
-                                foreach (var ln in pair)
-                                    row.ConstantItem(100, Unit.Millimetre).Element(cell =>
-                                        cell.Height(30, Unit.Millimetre)
-                                            .Border(1).BorderColor(Colors.Grey.Darken1)
-                                            .AlignCenter().AlignMiddle()
-                                            .Text(ln.ToString()).FontSize(64).Bold());
-                            });
-                        }
+                        page.Size(100, 30, Unit.Millimetre);
+                        page.Margin(1, Unit.Millimetre);
+                        page.DefaultTextStyle(x => x.FontFamily(FontName));
+                        page.Content().AlignCenter().AlignMiddle().Text(ln.ToString()).FontSize(64).Bold();
                     });
-                });
+                }
             }).GeneratePdf();
 
             _logger.LogInformation("Generated {Count} lot-number labels for draft {Id}", lotNumbers.Count, draftId);
