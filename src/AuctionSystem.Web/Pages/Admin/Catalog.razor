@@ -18,12 +18,16 @@
             <span class="text-muted small">— frozen from the imported lots (pre-auction), by Sales Type / Gender / Group</span>
         </div>
         <div class="card-body">
-            <div class="mb-3">
+            <div class="mb-2">
                 <button class="btn btn-warning btn-sm text-white" @onclick="GenerateCatalogNow" disabled="@IsGeneratingCatalog">
                     @(IsGeneratingCatalog ? "Generating..." : "Generate Lots")
                 </button>
                 <span class="text-muted small ms-2">Rebuilds the catalogue (cataloglots) from the imported boxes.</span>
             </div>
+
+            <hr class="my-3" />
+
+            <div class="mb-2 fw-bold small text-muted">Create catalog draft</div>
             <div class="row g-2 align-items-end" style="max-width:780px">
                 <div class="col">
                     <label class="form-label mb-0">Sales Type</label>

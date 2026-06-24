@@ -43,41 +43,56 @@ public class CatalogDraftFunctions
         string? gender = string.IsNullOrWhiteSpace(body?.Gender) ? null : body!.Gender!.Trim();
         string? group = string.IsNullOrWhiteSpace(body?.Group) ? null : body!.Group!.Trim();
 
-        var draft = new CatalogDraft
+        try
         {
-            Name = $"{salesType ?? "All"} - {gender ?? "All"} - {group ?? "All"}",
-            SalesType = salesType,
-            Gender = gender,
-            Group = group,
-            CreatedAt = DateTime.UtcNow
-        };
-        _db.CatalogDrafts.Add(draft);
-        await _db.SaveChangesAsync();
+            var draft = new CatalogDraft
+            {
+                Name = $"{salesType ?? "All"} - {gender ?? "All"} - {group ?? "All"}",
+                SalesType = salesType,
+                Gender = gender,
+                Group = group,
+                CreatedAt = DateTime.UtcNow
+            };
+            _db.CatalogDrafts.Add(draft);
+            await _db.SaveChangesAsync();
 
-        // Freeze the matching cataloglots rows (server-side copy — blank filter = no restriction).
-        await _db.Database.ExecuteSqlRawAsync(@"
-            INSERT INTO auction.CatalogDraftLots
-                (DraftId, StringNumber, LotNumber, CatalogSortOrder, IsShow, SalesType, Gender, [Group],
-                 HairLength, Size, Quality, Color, Clarity, Damages, IncludedBoxNumbers, BoxCount, TotalSkins)
-            SELECT {0}, StringNumber, LotNumber, CatalogSortOrder, IsShow, SalesType, Gender, [Group],
-                   HairLength, Size, Quality, Color, Clarity, Damages, IncludedBoxNumbers, BoxCount, TotalSkins
-            FROM auction.cataloglots
-            WHERE ({1} IS NULL OR SalesType = {1})
-              AND ({2} IS NULL OR Gender = {2})
-              AND ({3} IS NULL OR [Group] = {3})",
-            draft.Id,
-            (object?)salesType ?? DBNull.Value,
-            (object?)gender ?? DBNull.Value,
-            (object?)group ?? DBNull.Value);
+            // Freeze the matching cataloglots rows. Build the WHERE from only the provided filters so we
+            // never bind an untyped DBNull parameter — those are fragile in ExecuteSqlRaw comparisons and
+            // were the cause of the 500. A blank filter simply omits its clause (= "all").
+            var conditions = new List<string>();
+            var args = new List<object> { draft.Id };
+            int p = 1;
+            if (salesType != null) { conditions.Add($"SalesType = {{{p}}}"); args.Add(salesType); p++; }
+            if (gender != null) { conditions.Add($"Gender = {{{p}}}"); args.Add(gender); p++; }
+            if (group != null) { conditions.Add($"[Group] = {{{p}}}"); args.Add(group); p++; }
+            var where = conditions.Count > 0 ? "WHERE " + string.Join(" AND ", conditions) : "";
 
-        draft.LotCount = await _db.CatalogDraftLots.CountAsync(l => l.DraftId == draft.Id);
-        draft.SkinCount = await _db.CatalogDraftLots.Where(l => l.DraftId == draft.Id).SumAsync(l => (int?)l.TotalSkins) ?? 0;
-        await _db.SaveChangesAsync();
+            var sql = $@"
+                INSERT INTO auction.CatalogDraftLots
+                    (DraftId, StringNumber, LotNumber, CatalogSortOrder, IsShow, SalesType, Gender, [Group],
+                     HairLength, Size, Quality, Color, Clarity, Damages, IncludedBoxNumbers, BoxCount, TotalSkins)
+                SELECT {{0}}, StringNumber, LotNumber, CatalogSortOrder, IsShow, SalesType, Gender, [Group],
+                       HairLength, Size, Quality, Color, Clarity, Damages, IncludedBoxNumbers, BoxCount, TotalSkins
+                FROM auction.cataloglots
+                {where}";
+            await _db.Database.ExecuteSqlRawAsync(sql, args.ToArray());
 
-        _logger.LogInformation("Created catalogue draft {Id} '{Name}' ({Lots} lots, {Skins} skins)",
-            draft.Id, draft.Name, draft.LotCount, draft.SkinCount);
+            draft.LotCount = await _db.CatalogDraftLots.CountAsync(l => l.DraftId == draft.Id);
+            draft.SkinCount = await _db.CatalogDraftLots.Where(l => l.DraftId == draft.Id).SumAsync(l => (int?)l.TotalSkins) ?? 0;
+            await _db.SaveChangesAsync();
 
-        return await Json(req, ToDto(draft), HttpStatusCode.Created);
+            _logger.LogInformation("Created catalogue draft {Id} '{Name}' ({Lots} lots, {Skins} skins)",
+                draft.Id, draft.Name, draft.LotCount, draft.SkinCount);
+
+            return await Json(req, ToDto(draft), HttpStatusCode.Created);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "CreateCatalogDraft failed");
+            var resp = req.CreateResponse(HttpStatusCode.InternalServerError);
+            await resp.WriteStringAsync("CreateCatalogDraft failed: " + ex.Message);
+            return resp;
+        }
     }
 
     [RequireRole("Admin")]
