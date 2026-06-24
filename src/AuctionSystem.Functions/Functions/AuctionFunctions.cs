@@ -304,50 +304,24 @@ public class AuctionFunctions
     }
 
     // Create auction.Lots rows from the just-built [{Num}.Lots] snapshot (the typist / selling source).
-    // Skips lot numbers already present so a re-import doesn't duplicate or disturb sold lots.
+    // ONE set-based INSERT (the per-row EF loop timed out for big catalogues -> "IFeatureCollection has
+    // been disposed"). Skips lot numbers already present so a re-import doesn't duplicate or disturb sold lots.
+    // Status 0 = LotStatus.Pending.
     private async Task CreateAuctionLotsFromSnapshotAsync(int auctionId, string auctionNum)
     {
-        var existing = (await _db.Lots.Where(l => l.AuctionId == auctionId).Select(l => l.LotNumber).ToListAsync())
-            .ToHashSet();
-
-        var rows = new List<(int LotNumber, string? SalesType, string? Gender, string? Color, string? Quality, string? Group, int TotalSkins)>();
-        using (var conn = new Microsoft.Data.SqlClient.SqlConnection(_catalogDb.Database.GetConnectionString()))
-        {
-            await conn.OpenAsync();
-            using var cmd = new Microsoft.Data.SqlClient.SqlCommand(
-                $"SELECT LotNumber, SalesType, Gender, Color, Quality, [Group], TotalSkins FROM auction.[{auctionNum}.Lots]", conn)
-            { CommandTimeout = 120 };
-            using var reader = await cmd.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
-                rows.Add((
-                    reader.GetInt32(0),
-                    reader.IsDBNull(1) ? null : reader.GetString(1),
-                    reader.IsDBNull(2) ? null : reader.GetString(2),
-                    reader.IsDBNull(3) ? null : reader.GetString(3),
-                    reader.IsDBNull(4) ? null : reader.GetString(4),
-                    reader.IsDBNull(5) ? null : reader.GetString(5),
-                    reader.IsDBNull(6) ? 0 : reader.GetInt32(6)));
-        }
-
-        var added = 0;
-        foreach (var r in rows)
-        {
-            if (existing.Contains(r.LotNumber)) continue;
-            _db.Lots.Add(new Lot
-            {
-                AuctionId = auctionId,
-                LotNumber = r.LotNumber,
-                Description = $"{r.SalesType} {r.Gender} {r.Color} {r.Quality}".Trim(),
-                Category = r.Group,
-                Quantity = r.TotalSkins,
-                Unit = "skins",
-                StartingPrice = 0,
-                Status = LotStatus.Pending
-            });
-            added++;
-        }
-        if (added > 0) await _db.SaveChangesAsync();
-        _logger.LogInformation("Created {Added} auction.Lots rows for auction {Num} (typist/selling source)", added, auctionNum);
+        using var conn = new Microsoft.Data.SqlClient.SqlConnection(_catalogDb.Database.GetConnectionString());
+        await conn.OpenAsync();
+        using var cmd = new Microsoft.Data.SqlClient.SqlCommand($@"
+            INSERT INTO auction.Lots (LotNumber, Description, Category, Quantity, Unit, StartingPrice, Status, AuctionId, CreatedAt)
+            SELECT s.LotNumber,
+                   LTRIM(RTRIM(CONCAT(ISNULL(s.SalesType,''),' ',ISNULL(s.Gender,''),' ',ISNULL(s.Color,''),' ',ISNULL(s.Quality,'')))),
+                   s.[Group], s.TotalSkins, 'skins', 0, 0, @auctionId, SYSUTCDATETIME()
+            FROM auction.[{auctionNum}.Lots] s
+            WHERE s.LotNumber NOT IN (SELECT LotNumber FROM auction.Lots WHERE AuctionId = @auctionId);", conn)
+        { CommandTimeout = 300 };
+        cmd.Parameters.AddWithValue("@auctionId", auctionId);
+        var added = await cmd.ExecuteNonQueryAsync();
+        _logger.LogInformation("Created {Added} auction.Lots rows for auction {Num} (set-based)", added, auctionNum);
     }
 
     // Rebuild [{Num}.Lots/.Skins/.Boxes] from the union of the catalogues' frozen tables. The derived-table
