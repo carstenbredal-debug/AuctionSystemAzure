@@ -69,7 +69,7 @@ public class CatalogLabelFunctions
 
             // Showlot lots in this draft (in catalogue order).
             var lots = (await connection.QueryAsync<LotRow>(
-                @"SELECT LotNumber, ISNULL(IncludedBoxNumbers,'') AS IncludedBoxNumbers
+                @"SELECT LotNumber, ISNULL(IncludedBoxNumbers,'') AS IncludedBoxNumbers, ISNULL(RackPosition,'') AS RackPosition
                   FROM auction.CatalogDraftLots
                   WHERE DraftId = @draftId AND IsShow = 'Yes'
                   ORDER BY CatalogSortOrder, LotNumber",
@@ -97,7 +97,7 @@ public class CatalogLabelFunctions
             foreach (var l in lots)
             {
                 var showBox = ParseBoxes(l.IncludedBoxNumbers).FirstOrDefault(b => showBoxes.Contains(b));
-                labels.Add(new LabelData { LotNumber = l.LotNumber, ShowBox = showBox });
+                labels.Add(new LabelData { LotNumber = l.LotNumber, ShowBox = showBox, Rack = l.RackPosition });
             }
 
             byte[] pdf = Document.Create(container =>
@@ -156,7 +156,10 @@ public class CatalogLabelFunctions
 
                 // Barcode encodes the showlot BOX NUMBER (no separate box-barcode field exists).
                 if (d.ShowBox > 0)
-                    c.Item().PaddingTop(10).Height(50).Element(e => RenderBarcode(e, d.ShowBox.ToString()));
+                    c.Item().PaddingTop(10).Height(48).Element(e => RenderBarcode(e, d.ShowBox.ToString()));
+
+                if (!string.IsNullOrWhiteSpace(d.Rack))
+                    c.Item().AlignCenter().PaddingTop(4).Text($"Rack {d.Rack}").FontSize(16).Bold();
             });
     }
 
@@ -187,12 +190,14 @@ public class CatalogLabelFunctions
     {
         public int LotNumber { get; set; }
         public string IncludedBoxNumbers { get; set; } = "";
+        public string RackPosition { get; set; } = "";
     }
 
     private sealed class LabelData
     {
         public int LotNumber { get; set; }
         public int ShowBox { get; set; }
+        public string Rack { get; set; } = "";
     }
 }
 
