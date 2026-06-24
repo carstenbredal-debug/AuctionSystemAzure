@@ -131,9 +131,18 @@ public class CatalogDraftFunctions
 
         if (draft.Status != "Active")
         {
+            try
+            {
+                await FreezeCatalogAsync(id);   // capture skins/boxes/lots into auction.[Cat_{id}.X]
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Activate freeze failed for catalogue {Id}", id);
+                return await Json(req, new { error = "Activate failed: " + ex.Message }, HttpStatusCode.InternalServerError);
+            }
             draft.Status = "Active";
             await _db.SaveChangesAsync();
-            _logger.LogInformation("Activated catalogue draft {Id} '{Name}'", draft.Id, draft.Name);
+            _logger.LogInformation("Activated + froze catalogue draft {Id} '{Name}'", draft.Id, draft.Name);
         }
         return await Json(req, ToDto(draft, await ShowCount(id)));
     }
@@ -147,9 +156,72 @@ public class CatalogDraftFunctions
         if (draft == null) return req.CreateResponse(HttpStatusCode.NotFound);
         if (draft.Status == "InAuction")
             return await Json(req, new { error = "Catalogue is in an auction and cannot be deleted." }, HttpStatusCode.BadRequest);
-        _db.CatalogDrafts.Remove(draft); // cascade removes the frozen lots
+        await DropFrozenCatalogAsync(id);   // drop [Cat_{id}.Lots/.Skins/.Boxes] if it was activated
+        _db.CatalogDrafts.Remove(draft);    // cascade removes the frozen draft lots
         await _db.SaveChangesAsync();
         return req.CreateResponse(HttpStatusCode.NoContent);
+    }
+
+    // ---- Freeze (Activate): capture a catalogue's skins/boxes/lots into auction.[Cat_{id}.X] so it is a
+    // stable, reusable unit. Mirrors AuctionFunctions.BuildSnapshotAsync but scoped to this catalogue's
+    // lot numbers, so importing the catalogue into an auction is a straight INSERT ... SELECT * (matching
+    // shapes) and per-auction reporting keeps reading identically-shaped tables.
+    private async Task FreezeCatalogAsync(int draftId)
+    {
+        await using var conn = new SqlConnection(_db.Database.GetConnectionString());
+        await conn.OpenAsync();
+
+        var lots = $"Cat_{draftId}.Lots";
+        var skins = $"Cat_{draftId}.Skins";
+        var boxes = $"Cat_{draftId}.Boxes";
+
+        // 1. Lots — full cataloglots shape for this catalogue's lot numbers.
+        await ExecSql(conn, $@"
+            IF OBJECT_ID('auction.[{lots}]', 'U') IS NOT NULL DROP TABLE auction.[{lots}];
+            SELECT * INTO auction.[{lots}] FROM auction.cataloglots
+            WHERE LotNumber IN (SELECT LotNumber FROM auction.CatalogDraftLots WHERE DraftId = {draftId});");
+
+        // 2. Skins — live SkinTable for those lots' boxes, frozen now (TRY_CAST: one bad IncludedBoxNumbers
+        //    value must not abort the whole statement).
+        await ExecSql(conn, $@"
+            IF OBJECT_ID('auction.[{skins}]', 'U') IS NOT NULL DROP TABLE auction.[{skins}];
+            SELECT s.* INTO auction.[{skins}]
+            FROM dbo.SkinTable s
+            WHERE s.IsActive = 1 AND s.BoxNumber IN (
+                SELECT TRY_CAST(LTRIM(RTRIM(value)) AS INT)
+                FROM auction.[{lots}] CROSS APPLY STRING_SPLIT(IncludedBoxNumbers, ',')
+                WHERE TRY_CAST(LTRIM(RTRIM(value)) AS INT) > 0);
+            UPDATE auction.[{skins}] SET Farmer = 'Unknow' WHERE Farmer IS NULL OR LTRIM(RTRIM(Farmer)) = '';");
+
+        // 3. Boxes — aggregated from the frozen skins + location/weight.
+        await ExecSql(conn, $@"
+            IF OBJECT_ID('auction.[{boxes}]', 'U') IS NOT NULL DROP TABLE auction.[{boxes}];
+            SELECT s.BoxNumber, s.BoxType, s.BoxStatus, s.SalesType, s.[Group], s.Gender, s.Size, s.HairLength,
+                   s.Color, s.Quality, s.Clarity, s.Damages, COUNT(*) AS Skins,
+                   ISNULL(b.BoxLocation, '') AS BoxLocation, CAST(ISNULL(b.Weight, 0) AS DECIMAL(18,2)) AS BoxWeight
+            INTO auction.[{boxes}]
+            FROM auction.[{skins}] s
+            LEFT JOIN dbo.boxstatingfromkphg b ON b.BoxNumber = s.BoxNumber
+            GROUP BY s.BoxNumber, s.BoxType, s.BoxStatus, s.SalesType, s.[Group], s.Gender, s.Size, s.HairLength,
+                     s.Color, s.Quality, s.Clarity, s.Damages, b.BoxLocation, b.Weight;");
+
+        _logger.LogInformation("Froze catalogue {Id} into auction.[Cat_{Id}.Lots/.Skins/.Boxes]", draftId);
+    }
+
+    private async Task DropFrozenCatalogAsync(int draftId)
+    {
+        await using var conn = new SqlConnection(_db.Database.GetConnectionString());
+        await conn.OpenAsync();
+        await ExecSql(conn, $@"
+            IF OBJECT_ID('auction.[Cat_{draftId}.Boxes]', 'U') IS NOT NULL DROP TABLE auction.[Cat_{draftId}.Boxes];
+            IF OBJECT_ID('auction.[Cat_{draftId}.Skins]', 'U') IS NOT NULL DROP TABLE auction.[Cat_{draftId}.Skins];
+            IF OBJECT_ID('auction.[Cat_{draftId}.Lots]', 'U')  IS NOT NULL DROP TABLE auction.[Cat_{draftId}.Lots];");
+    }
+
+    private static async Task ExecSql(SqlConnection conn, string sql)
+    {
+        using var cmd = new SqlCommand(sql, conn) { CommandTimeout = 300 };
+        await cmd.ExecuteNonQueryAsync();
     }
 
     // The frozen lots for a draft — same shape as catalog/lots (window fields included) so the catalogue
