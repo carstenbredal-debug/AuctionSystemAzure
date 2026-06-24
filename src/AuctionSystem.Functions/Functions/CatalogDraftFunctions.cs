@@ -208,7 +208,7 @@ public class CatalogDraftFunctions
             GROUP BY s.BoxNumber, s.BoxType, s.BoxStatus, s.SalesType, s.[Group], s.Gender, s.Size, s.HairLength,
                      s.Color, s.Quality, s.Clarity, s.Damages, b.BoxLocation, b.Weight;");
 
-        _logger.LogInformation("Froze catalogue {Id} into auction.[Cat_{Id}.Lots/.Skins/.Boxes]", draftId);
+        _logger.LogInformation("Froze catalogue {Id} (lots/skins/boxes) into per-catalogue snapshot tables", draftId);
     }
 
     private async Task DropFrozenCatalogAsync(int draftId)
