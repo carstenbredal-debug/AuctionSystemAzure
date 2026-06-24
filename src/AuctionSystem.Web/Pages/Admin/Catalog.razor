@@ -96,6 +96,7 @@
                                     }
                                     <button class="btn btn-sm btn-outline-primary ms-1" @onclick="() => ViewDraft(d)">View</button>
                                     <button class="btn btn-sm btn-outline-dark ms-1" @onclick="() => DownloadDraftPdf(d.Id)">PDF</button>
+                                    <button class="btn btn-sm btn-outline-secondary ms-1" @onclick="() => DownloadDraftAucPdf(d.Id)" title="Auctioneer catalogue — adds estimated price + remarks">Auc PDF</button>
                                     @if (d.Status != "InAuction")
                                     {
                                         <button class="btn btn-sm btn-outline-danger ms-1" @onclick="() => DeleteDraft(d.Id)">Delete</button>
@@ -332,6 +333,11 @@
     private async Task DownloadDraftPdf(int id)
     {
         try { await JS.InvokeVoidAsync("open", $"api/catalog/pdf?draftId={id}", "_blank"); } catch { }
+    }
+
+    private async Task DownloadDraftAucPdf(int id)
+    {
+        try { await JS.InvokeVoidAsync("open", $"api/catalog/pdf?draftId={id}&auc=true", "_blank"); } catch { }
     }
 
     private class CatalogDraftRow

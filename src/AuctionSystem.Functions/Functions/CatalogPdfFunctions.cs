@@ -101,6 +101,12 @@ public class CatalogPdfFunctions
 
             var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
 
+            int.TryParse(query["draftId"], out var draftId);
+            // Auctioneer variant: add estimated price + remarks per lot (draft-only — those fields live on
+            // CatalogDraftLots). The customer catalogue (no &auc=true) is unchanged.
+            bool includeAuc = string.Equals(query["auc"], "true", StringComparison.OrdinalIgnoreCase) && draftId > 0;
+            var sourceTable = draftId > 0 ? "auction.CatalogDraftLots" : GetCatalogTable(query);
+
             var sql = @"
                 SELECT
                     CatalogSortOrder,
@@ -136,8 +142,8 @@ public class CatalogPdfFunctions
                     SUM(BoxCount) OVER (
                         PARTITION BY StringNumber
                     ) AS StringBoxCount
-
-                FROM " + (int.TryParse(query["draftId"], out var draftId) && draftId > 0 ? "auction.CatalogDraftLots" : GetCatalogTable(query)) + @"
+                " + (includeAuc ? ", ISNULL(Estimate, '') AS Estimate, ISNULL(Remarks, '') AS Remarks" : "") + @"
+                FROM " + sourceTable + @"
                 WHERE 1=1";
 
             var parameters = new DynamicParameters();
@@ -485,8 +491,9 @@ public class CatalogPdfFunctions
         }
         else
         {
-            table.Cell().Element(CellStyle).Text("");
-            table.Cell().Element(CellStyle).Text("");
+            // Price = estimated price, Comments = remarks (auctioneer PDF); empty on the customer catalogue.
+            table.Cell().Element(CellStyle).Text(row.Estimate ?? "");
+            table.Cell().Element(CellStyle).Text(row.Remarks ?? "");
         }
     }
 
@@ -542,8 +549,8 @@ public class CatalogPdfFunctions
             }
             else
             {
-                Cell().Text("");
-                Cell().Text("");
+                Cell().Text(row.Estimate ?? "");
+                Cell().Text(row.Remarks ?? "");
             }
         }
     }
