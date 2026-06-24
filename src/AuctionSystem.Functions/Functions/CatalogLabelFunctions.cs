@@ -83,28 +83,21 @@ public class CatalogLabelFunctions
                 .SelectMany(l => ParseBoxes(l.IncludedBoxNumbers))
                 .Distinct().ToList();
 
-            var showByBox = new Dictionary<int, string?>();
+            var showBoxes = new HashSet<int>();
             if (allBoxes.Count > 0)
             {
-                var boxRows = await connection.QueryAsync<BoxRow>(
-                    @"SELECT BoxNumber, MAX(CAST(Barcode AS NVARCHAR(60))) AS Barcode
-                      FROM dbo.SkinTable
-                      WHERE BoxType = 'Showlot' AND IsActive = 1 AND BoxNumber IN @boxes
-                      GROUP BY BoxNumber",
+                var boxNums = await connection.QueryAsync<int>(
+                    @"SELECT DISTINCT BoxNumber FROM dbo.SkinTable
+                      WHERE BoxType = 'Showlot' AND IsActive = 1 AND BoxNumber IN @boxes",
                     new { boxes = allBoxes });
-                foreach (var b in boxRows) showByBox[b.BoxNumber] = b.Barcode;
+                foreach (var n in boxNums) showBoxes.Add(n);
             }
 
             var labels = new List<LabelData>();
             foreach (var l in lots)
             {
-                var showBox = ParseBoxes(l.IncludedBoxNumbers).FirstOrDefault(b => showByBox.ContainsKey(b));
-                labels.Add(new LabelData
-                {
-                    LotNumber = l.LotNumber,
-                    ShowBox = showBox,
-                    Barcode = showBox > 0 ? showByBox[showBox] : null
-                });
+                var showBox = ParseBoxes(l.IncludedBoxNumbers).FirstOrDefault(b => showBoxes.Contains(b));
+                labels.Add(new LabelData { LotNumber = l.LotNumber, ShowBox = showBox });
             }
 
             byte[] pdf = Document.Create(container =>
@@ -161,11 +154,9 @@ public class CatalogLabelFunctions
                 if (d.ShowBox > 0)
                     c.Item().AlignCenter().PaddingTop(2).Text($"Box {d.ShowBox}").FontSize(22);
 
-                if (!string.IsNullOrWhiteSpace(d.Barcode))
-                {
-                    c.Item().PaddingTop(8).Height(42).Element(e => RenderBarcode(e, d.Barcode!));
-                    c.Item().AlignCenter().Text(d.Barcode).FontSize(10);
-                }
+                // Barcode encodes the showlot BOX NUMBER (no separate box-barcode field exists).
+                if (d.ShowBox > 0)
+                    c.Item().PaddingTop(10).Height(50).Element(e => RenderBarcode(e, d.ShowBox.ToString()));
             });
     }
 
@@ -198,17 +189,10 @@ public class CatalogLabelFunctions
         public string IncludedBoxNumbers { get; set; } = "";
     }
 
-    private sealed class BoxRow
-    {
-        public int BoxNumber { get; set; }
-        public string? Barcode { get; set; }
-    }
-
     private sealed class LabelData
     {
         public int LotNumber { get; set; }
         public int ShowBox { get; set; }
-        public string? Barcode { get; set; }
     }
 }
 
