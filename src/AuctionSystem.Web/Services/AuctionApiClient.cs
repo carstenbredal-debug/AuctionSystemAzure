@@ -387,6 +387,12 @@ public class AuctionApiClient
     public async Task<HttpResponseMessage> ImportLotsSnapshotAsync(int auctionId, List<int> lotNumbers)
         => await _http.PostAsJsonAsync($"api/auctions/{auctionId}/import-lots", new { lotNumbers });
 
+    public async Task<List<CatalogDraftDto>> GetCatalogsAsync()
+        => await _http.GetFromJsonAsync<List<CatalogDraftDto>>("api/catalog/drafts") ?? new();
+
+    public async Task<HttpResponseMessage> ImportCatalogsAsync(int auctionId, List<int> catalogIds)
+        => await _http.PostAsJsonAsync($"api/auctions/{auctionId}/import-catalogs", new { catalogIds });
+
     // Auction Results
     public async Task<List<AuctionResultDto>> GetAuctionResultsAsync()
         => await _http.GetFromJsonAsync<List<AuctionResultDto>>("api/auction-results") ?? new();

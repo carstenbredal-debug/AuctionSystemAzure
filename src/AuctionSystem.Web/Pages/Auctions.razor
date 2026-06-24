@@ -270,6 +270,40 @@
             }
 
             <div class="section-container mb-3">
+                <div class="section-header"><strong>Import Catalogs</strong> <span class="text-muted small">— pick Active catalogs to build this auction's lots, boxes &amp; skins</span></div>
+                <div class="section-body p-3">
+                    @if (activeCatalogs.Count == 0)
+                    {
+                        <div class="text-muted">No Active catalogs. Create and Activate catalogs on the <a href="/admin/catalog">Catalog</a> page first.</div>
+                    }
+                    else
+                    {
+                        <table class="table table-sm table-hover" style="max-width:760px">
+                            <thead class="table-dark">
+                                <tr><th></th><th>Name</th><th class="text-end">Lots</th><th class="text-end">Show</th><th class="text-end">Skins</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var c in activeCatalogs)
+                                {
+                                    <tr>
+                                        <td><input type="checkbox" checked="@selectedCatalogIds.Contains(c.Id)" @onchange="e => ToggleCatalog(c.Id, e)" /></td>
+                                        <td>@c.Name</td>
+                                        <td class="text-end">@c.LotCount.ToString("N0")</td>
+                                        <td class="text-end">@c.ShowLotCount.ToString("N0")</td>
+                                        <td class="text-end">@c.SkinCount.ToString("N0")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        <button class="btn btn-primary" @onclick="ImportSelectedCatalogs" disabled="@(importingCatalogs || selectedCatalogIds.Count == 0)">
+                            @(importingCatalogs ? "Importing..." : $"Import {selectedCatalogIds.Count} Catalog(s)")
+                        </button>
+                        <span class="text-muted small ms-2">Rebuilds the 3 snapshot tables and locks the chosen catalogs.</span>
+                    }
+                </div>
+            </div>
+
+            <div class="section-container mb-3">
                 <div class="section-header"><strong>Filter Catalog Lots</strong></div>
                 <div class="section-body p-3">
                     <div class="row g-3 align-items-end">
@@ -743,9 +777,52 @@ else
         public int? LotNumber { get; set; }
     }
 
+    private List<CatalogDraftDto> activeCatalogs = new();
+    private HashSet<int> selectedCatalogIds = new();
+    private bool importingCatalogs;
+
+    private void ToggleCatalog(int id, ChangeEventArgs e)
+    {
+        if (e.Value is bool b && b) selectedCatalogIds.Add(id);
+        else selectedCatalogIds.Remove(id);
+    }
+
+    private async Task LoadActiveCatalogs()
+    {
+        try { activeCatalogs = (await Api.GetCatalogsAsync()).Where(c => c.Status == "Active").ToList(); }
+        catch { activeCatalogs = new(); }
+    }
+
+    private async Task ImportSelectedCatalogs()
+    {
+        if (selectedCatalogIds.Count == 0 || Id == null) return;
+        importingCatalogs = true; importMessage = null;
+        try
+        {
+            var resp = await Api.ImportCatalogsAsync(Id.Value, selectedCatalogIds.ToList());
+            if (resp.IsSuccessStatusCode)
+            {
+                var n = selectedCatalogIds.Count;
+                selectedCatalogIds.Clear();
+                importMessage = $"Imported {n} catalog(s). Building snapshot…";
+                importIsError = false;
+                await LoadActiveCatalogs();
+                _ = PollSnapshotAsync(Id.Value);
+            }
+            else
+            {
+                importMessage = $"Import failed: {await resp.Content.ReadAsStringAsync()}";
+                importIsError = true;
+            }
+        }
+        catch (Exception ex) { importMessage = $"Error: {ex.Message}"; importIsError = true; }
+        finally { importingCatalogs = false; }
+    }
+
     private async Task OpenImportTab()
     {
         activeTab = "import";
+        await LoadActiveCatalogs();
         if (catalogLots.Count == 0)
         {
             loadingCatalog = true;

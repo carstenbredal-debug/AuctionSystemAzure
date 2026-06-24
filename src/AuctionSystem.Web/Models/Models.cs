@@ -7,6 +7,16 @@ public enum AllocationStatus { Pending, Allocated, Delivered, Cancelled }
 public enum InvoiceStatus { Draft, Issued, Sent, Downpayment, Paid, Overdue, Cancelled, PartiallyCredited, FullyCredited, Alloted, ReleasedToShip, Closed }
 public enum SettlementStatus { Pending, InvoiceGenerated, PaymentReceived, SettledWithFarmer, Completed, Disputed }
 
+public class CatalogDraftDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public string Status { get; set; } = "Draft";
+    public int LotCount { get; set; }
+    public int ShowLotCount { get; set; }
+    public int SkinCount { get; set; }
+}
+
 public class AuctionDto
 {
     public int Id { get; set; }
