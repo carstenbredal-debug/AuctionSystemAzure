@@ -59,6 +59,9 @@ public class AuctionFunctions
         var auction = await req.ReadFromJsonAsync<Auction>();
         if (auction == null) return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
         var created = await _service.CreateAuctionAsync(auction);
+        // Create the 3 per-auction snapshot tables empty up front; Import Catalogs fills them. Non-fatal.
+        try { await CreateEmptySnapshotTablesAsync(created.AuctionNumber); }
+        catch (Exception ex) { _logger.LogError(ex, "Failed to create empty snapshot tables for auction {Num}", created.AuctionNumber); }
         return await CreateJsonResponse(req, created, System.Net.HttpStatusCode.Created);
     }
 
@@ -233,6 +236,32 @@ public class AuctionFunctions
     }
 
     private static string SnapshotErr(Exception ex) => ex.Message.Length > 300 ? ex.Message[..300] : ex.Message;
+
+    // Create the 3 per-auction snapshot tables EMPTY (right shape, no rows) at auction creation. Import
+    // Catalogs later INSERTs frozen catalogue rows into them. Shapes match the frozen auction.[Cat_{id}.X]
+    // tables (and BuildSnapshotAsync), so the import is a straight INSERT ... SELECT *.
+    private async Task CreateEmptySnapshotTablesAsync(string auctionNum)
+    {
+        using var conn = new Microsoft.Data.SqlClient.SqlConnection(_catalogDb.Database.GetConnectionString());
+        await conn.OpenAsync();
+        await ExecuteSql(conn, $@"
+            IF OBJECT_ID('auction.[{auctionNum}.Lots]', 'U') IS NULL
+                SELECT * INTO auction.[{auctionNum}.Lots] FROM auction.cataloglots WHERE 1 = 0;
+            IF OBJECT_ID('auction.[{auctionNum}.Skins]', 'U') IS NULL
+                SELECT * INTO auction.[{auctionNum}.Skins] FROM dbo.SkinTable WHERE 1 = 0;
+            IF OBJECT_ID('auction.[{auctionNum}.Boxes]', 'U') IS NULL
+                SELECT s.BoxNumber, s.BoxType, s.BoxStatus, s.SalesType, s.[Group], s.Gender, s.Size, s.HairLength,
+                       s.Color, s.Quality, s.Clarity, s.Damages, COUNT(*) AS Skins,
+                       ISNULL(b.BoxLocation, '') AS BoxLocation, CAST(ISNULL(b.Weight, 0) AS DECIMAL(18,2)) AS BoxWeight
+                INTO auction.[{auctionNum}.Boxes]
+                FROM dbo.SkinTable s
+                LEFT JOIN dbo.boxstatingfromkphg b ON b.BoxNumber = s.BoxNumber
+                WHERE 1 = 0
+                GROUP BY s.BoxNumber, s.BoxType, s.BoxStatus, s.SalesType, s.[Group], s.Gender, s.Size, s.HairLength,
+                         s.Color, s.Quality, s.Clarity, s.Damages, b.BoxLocation, b.Weight;
+        ");
+        _logger.LogInformation("Created empty snapshot tables for auction {Num}", auctionNum);
+    }
 
     // Build the per-auction Lots/Boxes/Skins snapshot tables for the given lots. Returns the row counts.
     private async Task<(int Lots, int Boxes, int Skins)> BuildSnapshotAsync(int auctionId, List<int> lotNumbers)
