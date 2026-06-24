@@ -174,7 +174,7 @@ public class CatalogDraftFunctions
         // Serialize concurrent activations of the same catalogue. A double-click otherwise runs two freezes
         // that race the DROP/SELECT INTO on the same Cat_{id}.X tables -> "Invalid object name". The session
         // lock is released when this connection is disposed/reset.
-        await ExecSql(conn, $"EXEC sp_getapplock @Resource = N'freeze_catalog_{draftId}', @LockMode = 'Exclusive', @LockOwnerType = 'Session', @LockTimeout = 120000;");
+        await ExecSql(conn, $"EXEC sp_getapplock @Resource = N'freeze_catalog_{draftId}', @LockMode = 'Exclusive', @LockOwner = 'Session', @LockTimeout = 120000;");
 
         var lots = $"Cat_{draftId}.Lots";
         var skins = $"Cat_{draftId}.Skins";
