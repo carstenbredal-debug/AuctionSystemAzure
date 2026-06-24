@@ -343,6 +343,12 @@ public class CatalogDraftFunctions
         }
         ws.Columns().AdjustToContents();
 
+        // Read-only Lot..Group + header row: everything is locked by default, so unlock only the 4 editable
+        // data cells, then protect the sheet. No password — a user can still unprotect if truly needed.
+        if (lots.Count > 0)
+            ws.Range(2, 6, r - 1, 9).Style.Protection.Locked = false;
+        ws.Protect();
+
         using var ms = new MemoryStream();
         wb.SaveAs(ms);
 
