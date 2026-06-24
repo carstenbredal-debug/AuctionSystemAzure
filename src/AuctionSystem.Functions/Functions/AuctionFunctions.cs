@@ -284,6 +284,9 @@ public class AuctionFunctions
         try
         {
             var (lots, boxes, skins) = await ImportCatalogsSnapshotAsync(auction.AuctionNumber, ids);
+            // The typist / selling flow reads auction.Lots — create those rows from the snapshot we just
+            // built (kept in sync with [{Num}.Lots]), or the typist sees "no unsold lots".
+            await CreateAuctionLotsFromSnapshotAsync(auctionId, auction.AuctionNumber);
             foreach (var c in catalogs) c.Status = "InAuction";
             await _catalogDb.SaveChangesAsync();
             auction.SnapshotStatus = $"Done: {lots} lots, {boxes} boxes, {skins} skins";
@@ -298,6 +301,53 @@ public class AuctionFunctions
             await _db.SaveChangesAsync();
             return await CreateJsonResponse(req, new { error = ex.Message }, System.Net.HttpStatusCode.InternalServerError);
         }
+    }
+
+    // Create auction.Lots rows from the just-built [{Num}.Lots] snapshot (the typist / selling source).
+    // Skips lot numbers already present so a re-import doesn't duplicate or disturb sold lots.
+    private async Task CreateAuctionLotsFromSnapshotAsync(int auctionId, string auctionNum)
+    {
+        var existing = (await _db.Lots.Where(l => l.AuctionId == auctionId).Select(l => l.LotNumber).ToListAsync())
+            .ToHashSet();
+
+        var rows = new List<(int LotNumber, string? SalesType, string? Gender, string? Color, string? Quality, string? Group, int TotalSkins)>();
+        using (var conn = new Microsoft.Data.SqlClient.SqlConnection(_catalogDb.Database.GetConnectionString()))
+        {
+            await conn.OpenAsync();
+            using var cmd = new Microsoft.Data.SqlClient.SqlCommand(
+                $"SELECT LotNumber, SalesType, Gender, Color, Quality, [Group], TotalSkins FROM auction.[{auctionNum}.Lots]", conn)
+            { CommandTimeout = 120 };
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+                rows.Add((
+                    reader.GetInt32(0),
+                    reader.IsDBNull(1) ? null : reader.GetString(1),
+                    reader.IsDBNull(2) ? null : reader.GetString(2),
+                    reader.IsDBNull(3) ? null : reader.GetString(3),
+                    reader.IsDBNull(4) ? null : reader.GetString(4),
+                    reader.IsDBNull(5) ? null : reader.GetString(5),
+                    reader.IsDBNull(6) ? 0 : reader.GetInt32(6)));
+        }
+
+        var added = 0;
+        foreach (var r in rows)
+        {
+            if (existing.Contains(r.LotNumber)) continue;
+            _db.Lots.Add(new Lot
+            {
+                AuctionId = auctionId,
+                LotNumber = r.LotNumber,
+                Description = $"{r.SalesType} {r.Gender} {r.Color} {r.Quality}".Trim(),
+                Category = r.Group,
+                Quantity = r.TotalSkins,
+                Unit = "skins",
+                StartingPrice = 0,
+                Status = LotStatus.Pending
+            });
+            added++;
+        }
+        if (added > 0) await _db.SaveChangesAsync();
+        _logger.LogInformation("Created {Added} auction.Lots rows for auction {Num} (typist/selling source)", added, auctionNum);
     }
 
     // Rebuild [{Num}.Lots/.Skins/.Boxes] from the union of the catalogues' frozen tables. The derived-table
