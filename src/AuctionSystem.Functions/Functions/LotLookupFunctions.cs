@@ -15,13 +15,12 @@ using System.Text.RegularExpressions;
 namespace AuctionSystem.Functions.Functions;
 
 // General box/barcode -> lot lookup for the second app. Unlike /api/showlot (which is showlot-only),
-// this resolves ANY box to the lot it belongs to in the ACTIVE auction, by either:
+// this resolves ANY box to the lot it belongs to across ALL ACTIVE catalogues, by either:
 //   GET /api/lot?barcode=12345   (scanned barcode -> the skin's box -> lot)
 //   GET /api/lot?box=678         (raw box number -> lot)
-// It answers from the active auction's FROZEN snapshot (auction.[{AuctionNumber}.Lots]) — the stable
-// source of truth, since the live auction.cataloglots gets rewritten by catalogue regeneration. Falls
-// back to cataloglots only if the snapshot hasn't been built yet. Returns the lot + grading attributes
-// plus boxNumber/boxType/isShowlot.
+// It answers from the Active catalogues (CatalogDraftLots of CatalogDrafts with Status='Active') — the
+// pre-auction source of truth for racking. Returns the lot + rackPosition + grading attributes + the
+// editable fields, plus boxNumber/boxType/isShowlot.
 public class LotLookupFunctions
 {
     private readonly IConfiguration _configuration;
@@ -32,10 +31,6 @@ public class LotLookupFunctions
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
-
-    // The auction number is interpolated into a table name (it can't be parameterized), so it must be
-    // whitelisted before use — even though it comes from our own Auctions table, not user input.
-    private static readonly Regex AuctionNumberPattern = new("^[A-Za-z0-9]{1,20}$", RegexOptions.Compiled);
 
     public LotLookupFunctions(IConfiguration configuration, ILogger<LotLookupFunctions> logger, AuctionDbContext db)
     {
@@ -62,15 +57,6 @@ public class LotLookupFunctions
 
         try
         {
-            // 0. Resolve the ACTIVE auction (via EF, so the Status enum storage doesn't matter).
-            var auctionNumber = await _db.Auctions
-                .Where(a => a.Status == AuctionStatus.Active)
-                .Select(a => a.AuctionNumber)
-                .FirstOrDefaultAsync();
-
-            if (string.IsNullOrWhiteSpace(auctionNumber) || !AuctionNumberPattern.IsMatch(auctionNumber))
-                return await Json(req, new { found = false, message = "No active auction." });
-
             var connectionString = GetConnectionString();
             if (string.IsNullOrWhiteSpace(connectionString))
             {
@@ -116,27 +102,18 @@ public class LotLookupFunctions
                 return await Json(req, new { found = false, message = "Provide a 'barcode' or 'box' parameter." });
             }
 
-            // box -> lot from the active auction's FROZEN snapshot; fall back to the live catalogue only
-            // if the snapshot hasn't been built yet.
-            var snapshotExists = await connection.ExecuteScalarAsync<int>(
-                "SELECT COUNT(*) FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = @name",
-                new { name = $"{auctionNumber}.Lots" }) > 0;
-
-            var lotsTable = snapshotExists ? $"auction.[{auctionNumber}.Lots]" : "auction.cataloglots";
-
-            LotRow? lot;
-            try
-            {
-                lot = await connection.QueryFirstOrDefaultAsync<LotRow>(
-                    $@"SELECT TOP 1 LotNumber, SalesType, Gender, [Group], HairLength, Size, Quality, Color, Clarity, Damages
-                       FROM {lotsTable}
-                       WHERE ',' + REPLACE(IncludedBoxNumbers, ' ', '') + ',' LIKE '%,' + @box + ',%'",
-                    new { box = boxNumber.ToString() });
-            }
-            catch (SqlException ex) when (ex.Number == 208) // table not built yet
-            {
-                return await Json(req, new { found = false, boxNumber, boxType, message = "No catalogue available yet." });
-            }
+            // box -> lot across ALL ACTIVE catalogues (CatalogDraftLots of Active CatalogDrafts). A box
+            // normally belongs to one catalogue; if it overlaps, the lowest lot number wins.
+            var lot = await connection.QueryFirstOrDefaultAsync<LotRow>(
+                @"SELECT TOP 1 dl.LotNumber, dl.SalesType, dl.Gender, dl.[Group], dl.HairLength, dl.Size,
+                         dl.Quality, dl.Color, dl.Clarity, dl.Damages, dl.RackPosition, dl.Description,
+                         dl.Estimate, dl.RedLimit, dl.Remarks, d.Name AS CatalogName
+                  FROM auction.CatalogDraftLots dl
+                  JOIN auction.CatalogDrafts d ON d.Id = dl.DraftId
+                  WHERE d.Status = 'Active'
+                    AND ',' + REPLACE(dl.IncludedBoxNumbers, ' ', '') + ',' LIKE '%,' + @box + ',%'
+                  ORDER BY dl.LotNumber",
+                new { box = boxNumber.ToString() });
 
             if (lot is null)
                 return await Json(req, new { found = false, boxNumber, boxType, message = "Do not exist" });
@@ -144,11 +121,12 @@ public class LotLookupFunctions
             return await Json(req, new
             {
                 found = true,
-                auctionNumber,
+                catalog = lot.CatalogName,
                 boxNumber,
                 boxType,
                 isShowlot = string.Equals(boxType, "Showlot", StringComparison.OrdinalIgnoreCase),
                 lotNumber = lot.LotNumber,
+                rackPosition = lot.RackPosition,
                 salesType = lot.SalesType,
                 gender = lot.Gender,
                 group = lot.Group,
@@ -157,7 +135,11 @@ public class LotLookupFunctions
                 quality = lot.Quality,
                 color = lot.Color,
                 clarity = lot.Clarity,
-                damages = lot.Damages
+                damages = lot.Damages,
+                description = lot.Description,
+                estimate = lot.Estimate,
+                redLimit = lot.RedLimit,
+                remarks = lot.Remarks
             });
         }
         catch (Exception ex)
@@ -195,5 +177,11 @@ public class LotLookupFunctions
         public string? Color { get; set; }
         public string? Clarity { get; set; }
         public string? Damages { get; set; }
+        public string? RackPosition { get; set; }
+        public string? Description { get; set; }
+        public string? Estimate { get; set; }
+        public string? RedLimit { get; set; }
+        public string? Remarks { get; set; }
+        public string? CatalogName { get; set; }
     }
 }
