@@ -263,6 +263,67 @@ public class AuctionFunctions
         _logger.LogInformation("Created empty snapshot tables for auction {Num}", auctionNum);
     }
 
+    // Import one or more ACTIVE catalogues into this auction: rebuild the 3 snapshot tables from the union
+    // of the catalogues' frozen [Cat_{id}.X] tables, then lock those catalogues (InAuction). All-at-once.
+    [Function("ImportCatalogsToAuction")]
+    public async Task<HttpResponseData> ImportCatalogs(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auctions/{auctionId:int}/import-catalogs")] HttpRequestData req, int auctionId)
+    {
+        var auction = await _db.Auctions.FindAsync(auctionId);
+        if (auction == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        var body = await req.ReadFromJsonAsync<ImportCatalogsRequest>();
+        if (body?.CatalogIds == null || body.CatalogIds.Count == 0)
+            return await CreateJsonResponse(req, new { error = "catalogIds required" }, System.Net.HttpStatusCode.BadRequest);
+
+        var ids = body.CatalogIds.Distinct().ToList();
+        var catalogs = await _catalogDb.CatalogDrafts.Where(d => ids.Contains(d.Id)).ToListAsync();
+        if (catalogs.Count != ids.Count || catalogs.Any(c => c.Status != "Active"))
+            return await CreateJsonResponse(req, new { error = "All selected catalogues must exist and be Active." }, System.Net.HttpStatusCode.BadRequest);
+
+        try
+        {
+            var (lots, boxes, skins) = await ImportCatalogsSnapshotAsync(auction.AuctionNumber, ids);
+            foreach (var c in catalogs) c.Status = "InAuction";
+            await _catalogDb.SaveChangesAsync();
+            auction.SnapshotStatus = $"Done: {lots} lots, {boxes} boxes, {skins} skins";
+            auction.SnapshotBuiltAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+            return await CreateJsonResponse(req, new { success = true, counts = new { lots, boxes, skins } });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Import catalogues failed for auction {AuctionId}", auctionId);
+            auction.SnapshotStatus = $"Failed: {SnapshotErr(ex)}";
+            await _db.SaveChangesAsync();
+            return await CreateJsonResponse(req, new { error = ex.Message }, System.Net.HttpStatusCode.InternalServerError);
+        }
+    }
+
+    // Rebuild [{Num}.Lots/.Skins/.Boxes] from the union of the catalogues' frozen tables. The derived-table
+    // SELECT INTO yields fresh tables (no identity carried over) whose shapes match today's snapshot.
+    private async Task<(int Lots, int Boxes, int Skins)> ImportCatalogsSnapshotAsync(string auctionNum, List<int> ids)
+    {
+        string Union(string tbl) => string.Join(" UNION ALL ", ids.Select(i => $"SELECT * FROM auction.[Cat_{i}.{tbl}]"));
+
+        using var conn = new Microsoft.Data.SqlClient.SqlConnection(_catalogDb.Database.GetConnectionString());
+        await conn.OpenAsync();
+        await ExecuteSql(conn, $@"
+            IF OBJECT_ID('auction.[{auctionNum}.Lots]', 'U') IS NOT NULL DROP TABLE auction.[{auctionNum}.Lots];
+            SELECT * INTO auction.[{auctionNum}.Lots] FROM ( {Union("Lots")} ) x;
+            IF OBJECT_ID('auction.[{auctionNum}.Skins]', 'U') IS NOT NULL DROP TABLE auction.[{auctionNum}.Skins];
+            SELECT * INTO auction.[{auctionNum}.Skins] FROM ( {Union("Skins")} ) x;
+            IF OBJECT_ID('auction.[{auctionNum}.Boxes]', 'U') IS NOT NULL DROP TABLE auction.[{auctionNum}.Boxes];
+            SELECT * INTO auction.[{auctionNum}.Boxes] FROM ( {Union("Boxes")} ) x;
+        ");
+        var l = await GetScalar(conn, $"SELECT COUNT(*) FROM auction.[{auctionNum}.Lots]");
+        var b = await GetScalar(conn, $"SELECT COUNT(*) FROM auction.[{auctionNum}.Boxes]");
+        var s = await GetScalar(conn, $"SELECT COUNT(*) FROM auction.[{auctionNum}.Skins]");
+        _logger.LogInformation("Imported {Count} catalogue(s) into auction {Num}: {Lots} lots, {Boxes} boxes, {Skins} skins",
+            ids.Count, auctionNum, l, b, s);
+        return (l, b, s);
+    }
+
     // Build the per-auction Lots/Boxes/Skins snapshot tables for the given lots. Returns the row counts.
     private async Task<(int Lots, int Boxes, int Skins)> BuildSnapshotAsync(int auctionId, List<int> lotNumbers)
     {
@@ -525,3 +586,4 @@ public class AuctionFunctions
 
 public record HammerRequest(decimal HammerPrice, int WinningBrokerId);
 public record ImportLotsRequest(List<int> LotNumbers);
+public record ImportCatalogsRequest(List<int>? CatalogIds);
