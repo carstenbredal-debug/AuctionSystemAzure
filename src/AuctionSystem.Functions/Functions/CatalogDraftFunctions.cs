@@ -323,7 +323,7 @@ public class CatalogDraftFunctions
 
         using var wb = new XLWorkbook();
         var ws = wb.AddWorksheet("Lots");
-        var headers = new[] { "Lot #", "Rack", "Auto Description", "Description", "Estimate", "Red Limit", "Remarks" };
+        var headers = new[] { "Lot #", "Rack", "Type", "Gender", "Group", "Description", "Estimate", "Red Limit", "Remarks" };
         for (int c = 0; c < headers.Length; c++) ws.Cell(1, c + 1).Value = headers[c];
         ws.Row(1).Style.Font.Bold = true;
 
@@ -332,11 +332,13 @@ public class CatalogDraftFunctions
         {
             ws.Cell(r, 1).Value = l.LotNumber;
             ws.Cell(r, 2).Value = l.RackPosition ?? "";
-            ws.Cell(r, 3).Value = AutoDescription(l);
-            ws.Cell(r, 4).Value = l.Description ?? "";
-            ws.Cell(r, 5).Value = l.Estimate ?? "";
-            ws.Cell(r, 6).Value = l.RedLimit ?? "";
-            ws.Cell(r, 7).Value = l.Remarks ?? "";
+            ws.Cell(r, 3).Value = l.SalesType ?? "";
+            ws.Cell(r, 4).Value = l.Gender ?? "";
+            ws.Cell(r, 5).Value = l.Group ?? "";
+            ws.Cell(r, 6).Value = l.Description ?? "";
+            ws.Cell(r, 7).Value = l.Estimate ?? "";
+            ws.Cell(r, 8).Value = l.RedLimit ?? "";
+            ws.Cell(r, 9).Value = l.Remarks ?? "";
             r++;
         }
         ws.Columns().AdjustToContents();
@@ -403,13 +405,6 @@ public class CatalogDraftFunctions
         return await Json(req, new { updated });
     }
 
-    private static string AutoDescription(CatalogDraftLot l)
-    {
-        var parts = new[] { l.SalesType, l.Gender, l.Group, l.HairLength, l.Size, l.Quality, l.Color, l.Clarity,
-            (l.Damages != null && !l.Damages.Equals("None", StringComparison.OrdinalIgnoreCase)) ? l.Damages : null }
-            .Where(p => !string.IsNullOrWhiteSpace(p));
-        return string.Join(" ", parts);
-    }
 
     private static object ToDto(CatalogDraft d, int showLotCount) => new
     {
