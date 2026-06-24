@@ -498,7 +498,11 @@ public class AuctionFunctions
                 "ShipmentLines", "Shipments",
                 "LotSalesHistories", "AuctionTransactions", "TypistEntries",
                 "InvoiceLines", "Invoices",
-                "TakebackRequests", "LotAllocations", "AuctionResults", "Settlements", "Bids", "Lots", "Auctions" };
+                "TakebackRequests", "LotAllocations", "AuctionResults", "Settlements", "Bids", "Lots", "Auctions",
+                // Catalogue lifecycle (child before parent). The frozen [Cat_{id}.Lots/.Skins/.Boxes] tables
+                // are dropped below by the %.Lots/%.Boxes/%.Skins sweep; here we clear the draft records so a
+                // reset can't leave an Active catalogue pointing at a dropped frozen table.
+                "CatalogDraftLots", "CatalogDrafts" };
 
             // Entity tables (only deleted if keepEntities=false). BrokerCustomerRequests is kept with
             // keepEntities=true: it's a broker<->buyer RELATIONSHIP record (the link's status, joined
