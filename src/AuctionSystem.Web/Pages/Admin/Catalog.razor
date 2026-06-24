@@ -111,8 +111,8 @@
             <h6 class="mb-2">
                 @viewingDraftName
                 @if (viewingDraftStatus == "InAuction") { <span class="badge bg-secondary ms-1">In Auction — locked</span> }
-                else if (viewingDraftStatus == "Active") { <span class="badge bg-success ms-1">Active</span> }
-                else { <span class="badge bg-warning text-dark ms-1">Draft</span> }
+                else if (viewingDraftStatus == "Active") { <span class="badge bg-success ms-1">Active — locked</span> }
+                else { <span class="badge bg-warning text-dark ms-1">Draft — editable</span> }
             </h6>
             @if (!string.IsNullOrEmpty(DraftMessage))
             {
@@ -121,8 +121,8 @@
             <table class="table table-sm table-bordered align-middle">
                 <thead class="table-dark">
                     <tr>
-                        <th>Lot #</th><th>String</th><th style="width:280px">Description</th><th class="text-end">Skins</th>
-                        <th>Estimate</th><th>Red Limit</th><th>Remarks</th><th style="width:130px"></th>
+                        <th style="width:55px">Lot #</th><th style="width:55px">String</th><th style="width:280px">Description</th><th class="text-end" style="width:55px">Skins</th>
+                        <th style="width:85px">Estimate</th><th style="width:85px">Red Limit</th><th>Remarks</th><th style="width:120px"></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -151,7 +151,7 @@
                                 <td>@lot.RedLimit</td>
                                 <td>@lot.Remarks</td>
                                 <td>
-                                    @if (viewingDraftStatus != "InAuction")
+                                    @if (viewingDraftStatus == "Draft")
                                     {
                                         <button class="btn btn-sm btn-outline-primary" @onclick="() => StartEditLot(lot)">Edit</button>
                                     }

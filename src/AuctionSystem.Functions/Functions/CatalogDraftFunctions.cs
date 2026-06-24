@@ -270,8 +270,8 @@ public class CatalogDraftFunctions
         return await Json(req, lots);
     }
 
-    // Edit a single lot's Description / Estimate / Red Limit / Remarks. Allowed while Draft or Active;
-    // an In-Auction catalogue is locked.
+    // Edit a single lot's Description / Estimate / Red Limit / Remarks. Allowed only while Draft —
+    // activating freezes the catalogue, so Active / In-Auction are read-only.
     [RequireRole("Admin")]
     [Function("UpdateCatalogDraftLot")]
     public async Task<HttpResponseData> UpdateLot(
@@ -279,8 +279,8 @@ public class CatalogDraftFunctions
     {
         var draft = await _db.CatalogDrafts.FindAsync(id);
         if (draft == null) return req.CreateResponse(HttpStatusCode.NotFound);
-        if (draft.Status == "InAuction")
-            return await Json(req, new { error = "Catalogue is in an auction and cannot be edited." }, HttpStatusCode.BadRequest);
+        if (draft.Status != "Draft")
+            return await Json(req, new { error = "Only a Draft catalogue can be edited; activating locks it." }, HttpStatusCode.BadRequest);
 
         var lot = await _db.CatalogDraftLots.FirstOrDefaultAsync(l => l.Id == lotRowId && l.DraftId == id);
         if (lot == null) return req.CreateResponse(HttpStatusCode.NotFound);
