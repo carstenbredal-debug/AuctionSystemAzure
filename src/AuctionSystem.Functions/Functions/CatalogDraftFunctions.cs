@@ -335,7 +335,9 @@ public class CatalogDraftFunctions
             ws.Cell(r, 3).Value = l.SalesType ?? "";
             ws.Cell(r, 4).Value = l.Gender ?? "";
             ws.Cell(r, 5).Value = l.Group ?? "";
-            ws.Cell(r, 6).Value = l.Description ?? "";
+            // Show the effective description (custom override, else the auto-built catalogue line) so the
+            // column isn't blank; whatever's here on import becomes the lot's Description.
+            ws.Cell(r, 6).Value = string.IsNullOrWhiteSpace(l.Description) ? AutoDescription(l) : l.Description;
             ws.Cell(r, 7).Value = l.Estimate ?? "";
             ws.Cell(r, 8).Value = l.RedLimit ?? "";
             ws.Cell(r, 9).Value = l.Remarks ?? "";
@@ -419,6 +421,15 @@ public class CatalogDraftFunctions
 
     private Task<int> ShowCount(int draftId) =>
         _db.CatalogDraftLots.CountAsync(l => l.DraftId == draftId && l.IsShow == "Yes");
+
+    // The auto-built catalogue line from a lot's grading attributes (matches the web BuildDescription).
+    private static string AutoDescription(CatalogDraftLot l)
+    {
+        var parts = new[] { l.SalesType, l.Gender, l.Group, l.HairLength, l.Size, l.Quality, l.Color, l.Clarity,
+            (l.Damages != null && !l.Damages.Equals("None", StringComparison.OrdinalIgnoreCase)) ? l.Damages : null }
+            .Where(p => !string.IsNullOrWhiteSpace(p));
+        return string.Join(" ", parts);
+    }
 
     private static async Task<HttpResponseData> Json(HttpRequestData req, object body, HttpStatusCode status = HttpStatusCode.OK)
     {
