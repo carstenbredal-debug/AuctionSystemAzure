@@ -285,8 +285,8 @@ public class CatalogDraftFunctions
         return await Json(req, lots);
     }
 
-    // Edit a single lot's Description / Estimate / Red Limit / Remarks. Allowed only while Draft —
-    // activating freezes the catalogue, so Active / In-Auction are read-only.
+    // Edit a single lot's Description / Estimate / Red Limit / Remarks. Allowed while Draft or Active
+    // (an Active edit also syncs the frozen copy so it flows to auctions); only In-Auction is locked.
     [RequireRole("Admin")]
     [Function("UpdateCatalogDraftLot")]
     public async Task<HttpResponseData> UpdateLot(
@@ -294,8 +294,8 @@ public class CatalogDraftFunctions
     {
         var draft = await _db.CatalogDrafts.FindAsync(id);
         if (draft == null) return req.CreateResponse(HttpStatusCode.NotFound);
-        if (draft.Status != "Draft")
-            return await Json(req, new { error = "Only a Draft catalogue can be edited; activating locks it." }, HttpStatusCode.BadRequest);
+        if (draft.Status == "InAuction")
+            return await Json(req, new { error = "Catalogue is in an auction and cannot be edited." }, HttpStatusCode.BadRequest);
 
         var lot = await _db.CatalogDraftLots.FirstOrDefaultAsync(l => l.Id == lotRowId && l.DraftId == id);
         if (lot == null) return req.CreateResponse(HttpStatusCode.NotFound);
@@ -307,7 +307,25 @@ public class CatalogDraftFunctions
         lot.RedLimit = Clean(body?.RedLimit);
         lot.Remarks = Clean(body?.Remarks);
         await _db.SaveChangesAsync();
+
+        // Active = frozen; mirror the edit into [Cat_{id}.Lots] so it reaches the auction on import.
+        if (draft.Status == "Active") await SyncFrozenFieldsAsync(id);
+
         return await Json(req, new { ok = true });
+    }
+
+    // Re-copy the 4 editable fields from CatalogDraftLots into the frozen [Cat_{id}.Lots] (no-op if not frozen).
+    private async Task SyncFrozenFieldsAsync(int draftId)
+    {
+        await using var conn = new SqlConnection(_db.Database.GetConnectionString());
+        await conn.OpenAsync();
+        await using var cmd = new SqlCommand($@"
+            IF OBJECT_ID('auction.[Cat_{draftId}.Lots]', 'U') IS NOT NULL
+            UPDATE t SET t.Description = d.Description, t.Estimate = d.Estimate,
+                         t.RedLimit = d.RedLimit, t.Remarks = d.Remarks
+            FROM auction.[Cat_{draftId}.Lots] t
+            JOIN auction.CatalogDraftLots d ON d.DraftId = {draftId} AND d.LotNumber = t.LotNumber;", conn);
+        await cmd.ExecuteNonQueryAsync();
     }
 
     // Export a draft's lots to .xlsx for bulk-editing the 4 fields (matched back on Lot # at import).
@@ -371,8 +389,8 @@ public class CatalogDraftFunctions
     {
         var draft = await _db.CatalogDrafts.FindAsync(id);
         if (draft == null) return req.CreateResponse(HttpStatusCode.NotFound);
-        if (draft.Status != "Draft")
-            return await Json(req, new { error = "Only a Draft catalogue can be edited; activating locks it." }, HttpStatusCode.BadRequest);
+        if (draft.Status == "InAuction")
+            return await Json(req, new { error = "Catalogue is in an auction and cannot be edited." }, HttpStatusCode.BadRequest);
 
         using var ms = new MemoryStream();
         await req.Body.CopyToAsync(ms);
@@ -410,6 +428,7 @@ public class CatalogDraftFunctions
             updated++;
         }
         await _db.SaveChangesAsync();
+        if (draft.Status == "Active") await SyncFrozenFieldsAsync(id);
         _logger.LogInformation("Imported xlsx into catalogue {Id}: {Updated} lots updated", id, updated);
         return await Json(req, new { updated });
     }

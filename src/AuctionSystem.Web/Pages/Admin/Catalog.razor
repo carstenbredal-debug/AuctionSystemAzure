@@ -117,12 +117,12 @@
             <h6 class="mb-2">
                 @viewingDraftName
                 @if (viewingDraftStatus == "InAuction") { <span class="badge bg-secondary ms-1">In Auction — locked</span> }
-                else if (viewingDraftStatus == "Active") { <span class="badge bg-success ms-1">Active — locked</span> }
+                else if (viewingDraftStatus == "Active") { <span class="badge bg-success ms-1">Active — editable</span> }
                 else { <span class="badge bg-warning text-dark ms-1">Draft — editable</span> }
             </h6>
             <div class="mb-2">
                 <button class="btn btn-sm btn-outline-success" @onclick="ExportDraft">Export to Excel</button>
-                @if (viewingDraftStatus == "Draft")
+                @if (viewingDraftStatus != "InAuction")
                 {
                     <label class="btn btn-sm btn-outline-primary ms-1 mb-0">
                         Import Excel
@@ -169,7 +169,7 @@
                                 <td>@lot.RedLimit</td>
                                 <td><div style="max-width:200px; white-space:normal; word-break:break-word;">@lot.Remarks</div></td>
                                 <td>
-                                    @if (viewingDraftStatus == "Draft")
+                                    @if (viewingDraftStatus != "InAuction")
                                     {
                                         <button class="btn btn-sm btn-outline-primary" @onclick="() => StartEditLot(lot)">Edit</button>
                                     }
