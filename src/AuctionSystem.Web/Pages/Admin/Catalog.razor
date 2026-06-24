@@ -337,7 +337,7 @@
 
     private async Task DownloadDraftAucPdf(int id)
     {
-        try { await JS.InvokeVoidAsync("open", $"api/catalog/pdf?draftId={id}&auc=true", "_blank"); } catch { }
+        try { await JS.InvokeVoidAsync("open", $"api/catalog/pdf-auc?draftId={id}", "_blank"); } catch { }
     }
 
     private class CatalogDraftRow

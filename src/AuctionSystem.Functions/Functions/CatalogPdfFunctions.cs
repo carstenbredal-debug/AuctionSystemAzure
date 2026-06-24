@@ -73,13 +73,23 @@ public class CatalogPdfFunctions
         _fontsRegistered = true;
     }
 
-    // Public, read-only catalog PDF (the active auction). Safe to expose: auctionNumber is whitelisted
-    // (GetCatalogTable) and all filters are parameterized.
+    // Customer catalogue PDF (no prices). Public; auctionNumber is whitelisted (GetCatalogTable) and all
+    // filters are parameterized.
     [AllowAnonymous]
     [Function("GenerateCatalogPdf")]
-    public async Task<HttpResponseData> GeneratePdf(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "catalog/pdf")]
-        HttpRequestData req)
+    public Task<HttpResponseData> GeneratePdf(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "catalog/pdf")] HttpRequestData req)
+        => RenderAsync(req, allowAuc: false);
+
+    // Auctioneer catalogue PDF (estimated price + remarks). Admin-only — the priced variant is reachable
+    // ONLY through this endpoint, never the public one.
+    [RequireRole("Admin")]
+    [Function("GenerateAucCatalogPdf")]
+    public Task<HttpResponseData> GenerateAucPdf(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "catalog/pdf-auc")] HttpRequestData req)
+        => RenderAsync(req, allowAuc: true);
+
+    private async Task<HttpResponseData> RenderAsync(HttpRequestData req, bool allowAuc)
     {
         try
         {
@@ -103,8 +113,8 @@ public class CatalogPdfFunctions
 
             int.TryParse(query["draftId"], out var draftId);
             // Auctioneer variant: add estimated price + remarks per lot (draft-only — those fields live on
-            // CatalogDraftLots). The customer catalogue (no &auc=true) is unchanged.
-            bool includeAuc = string.Equals(query["auc"], "true", StringComparison.OrdinalIgnoreCase) && draftId > 0;
+            // CatalogDraftLots). Only the admin-gated catalog/pdf-auc endpoint sets allowAuc.
+            bool includeAuc = allowAuc && draftId > 0;
             var sourceTable = draftId > 0 ? "auction.CatalogDraftLots" : GetCatalogTable(query);
 
             var sql = @"
