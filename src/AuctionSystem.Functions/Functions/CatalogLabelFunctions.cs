@@ -157,7 +157,7 @@ public class CatalogLabelFunctions
             .Padding(6).AlignMiddle()
             .Column(c =>
             {
-                c.Item().AlignCenter().Text(d.LotNumber.ToString()).FontSize(60).Bold();
+                c.Item().AlignCenter().Text(d.LotNumber.ToString()).FontSize(46).Bold();
                 if (d.ShowBox > 0)
                     c.Item().AlignCenter().PaddingTop(2).Text($"Box {d.ShowBox}").FontSize(22);
 
