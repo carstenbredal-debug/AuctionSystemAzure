@@ -422,13 +422,14 @@ public class CatalogDraftFunctions
     private Task<int> ShowCount(int draftId) =>
         _db.CatalogDraftLots.CountAsync(l => l.DraftId == draftId && l.IsShow == "Yes");
 
-    // The auto-built catalogue line from a lot's grading attributes (matches the web BuildDescription).
+    // The auto-built catalogue line — matches the grid's BuildDescription exactly: grading attributes only
+    // (Type/Gender/Group are separate columns), joined by " / ".
     private static string AutoDescription(CatalogDraftLot l)
     {
-        var parts = new[] { l.SalesType, l.Gender, l.Group, l.HairLength, l.Size, l.Quality, l.Color, l.Clarity,
+        var parts = new[] { l.HairLength, l.Size, l.Quality, l.Color, l.Clarity,
             (l.Damages != null && !l.Damages.Equals("None", StringComparison.OrdinalIgnoreCase)) ? l.Damages : null }
             .Where(p => !string.IsNullOrWhiteSpace(p));
-        return string.Join(" ", parts);
+        return string.Join(" / ", parts);
     }
 
     private static async Task<HttpResponseData> Json(HttpRequestData req, object body, HttpStatusCode status = HttpStatusCode.OK)
