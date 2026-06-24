@@ -142,6 +142,83 @@ public class CatalogLabelFunctions
         }
     }
 
+    // Simpler label: just the Lot # (as large as fits) for each showlot lot, on 100x30mm labels, 2-up on A4.
+    [RequireRole("Admin")]
+    [Function("GenerateLotNumberLabelsPdf")]
+    public async Task<HttpResponseData> GenerateLotNumberLabels(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "catalog/lot-labels-pdf")] HttpRequestData req)
+    {
+        try
+        {
+            var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+            if (!int.TryParse(query["draftId"], out var draftId) || draftId <= 0)
+                return await Text(req, HttpStatusCode.BadRequest, "draftId required.");
+
+            QuestPDF.Settings.License = LicenseType.Community;
+            RegisterFonts();
+
+            var connectionString = GetConnectionString();
+            if (string.IsNullOrWhiteSpace(connectionString))
+                return await Text(req, HttpStatusCode.InternalServerError, "Connection string missing.");
+
+            using var connection = new SqlConnection(connectionString);
+            await connection.OpenAsync();
+
+            var lotNumbers = (await connection.QueryAsync<int>(
+                @"SELECT LotNumber FROM auction.CatalogDraftLots
+                  WHERE DraftId = @draftId AND IsShow = 'Yes'
+                  ORDER BY CatalogSortOrder, LotNumber",
+                new { draftId })).ToList();
+
+            if (lotNumbers.Count == 0)
+                return await Text(req, HttpStatusCode.NotFound, "No showlot lots in this catalogue.");
+
+            byte[] pdf = Document.Create(container =>
+            {
+                container.Page(page =>
+                {
+                    page.Size(PageSizes.A4);
+                    page.Margin(6, Unit.Millimetre);
+                    page.DefaultTextStyle(x => x.FontFamily(FontName));
+
+                    page.Content().Column(col =>
+                    {
+                        col.Spacing(2, Unit.Millimetre);
+                        for (var i = 0; i < lotNumbers.Count; i += 2)
+                        {
+                            var pair = lotNumbers.Skip(i).Take(2).ToList();
+                            col.Item().Row(row =>
+                            {
+                                row.Spacing(2, Unit.Millimetre);
+                                foreach (var ln in pair)
+                                    row.ConstantItem(100, Unit.Millimetre).Element(cell =>
+                                        cell.Height(30, Unit.Millimetre)
+                                            .Border(1).BorderColor(Colors.Grey.Darken1)
+                                            .AlignCenter().AlignMiddle()
+                                            .Text(ln.ToString()).FontSize(64).Bold());
+                            });
+                        }
+                    });
+                });
+            }).GeneratePdf();
+
+            _logger.LogInformation("Generated {Count} lot-number labels for draft {Id}", lotNumbers.Count, draftId);
+
+            var response = req.CreateResponse(HttpStatusCode.OK);
+            response.Headers.Add("Content-Type", "application/pdf");
+            response.Headers.Add("Content-Disposition", $"attachment; filename=lot-labels-{draftId}.pdf");
+            await response.Body.WriteAsync(pdf, 0, pdf.Length);
+            return response;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating lot-number label PDF");
+            var response = req.CreateResponse(HttpStatusCode.InternalServerError);
+            await response.WriteStringAsync(ex.ToString());
+            return response;
+        }
+    }
+
     private static void LabelCell(IContainer cell, LabelData d)
     {
         cell
