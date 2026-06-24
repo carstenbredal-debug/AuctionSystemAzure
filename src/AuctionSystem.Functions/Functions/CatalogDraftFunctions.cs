@@ -1,6 +1,7 @@
 using AuctionSystem.Domain.Data;
 using AuctionSystem.Domain.Entities;
 using AuctionSystem.Functions.Auth;
+using ClosedXML.Excel;
 using Dapper;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
@@ -306,6 +307,108 @@ public class CatalogDraftFunctions
         lot.Remarks = Clean(body?.Remarks);
         await _db.SaveChangesAsync();
         return await Json(req, new { ok = true });
+    }
+
+    // Export a draft's lots to .xlsx for bulk-editing the 4 fields (matched back on Lot # at import).
+    [RequireRole("Admin")]
+    [Function("ExportCatalogDraftLots")]
+    public async Task<HttpResponseData> Export(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "catalog/drafts/{id:int}/export")] HttpRequestData req, int id)
+    {
+        var draft = await _db.CatalogDrafts.FindAsync(id);
+        if (draft == null) return req.CreateResponse(HttpStatusCode.NotFound);
+
+        var lots = await _db.CatalogDraftLots.Where(l => l.DraftId == id)
+            .OrderBy(l => l.CatalogSortOrder).ThenBy(l => l.LotNumber).ToListAsync();
+
+        using var wb = new XLWorkbook();
+        var ws = wb.AddWorksheet("Lots");
+        var headers = new[] { "Lot #", "Rack", "Auto Description", "Description", "Estimate", "Red Limit", "Remarks" };
+        for (int c = 0; c < headers.Length; c++) ws.Cell(1, c + 1).Value = headers[c];
+        ws.Row(1).Style.Font.Bold = true;
+
+        var r = 2;
+        foreach (var l in lots)
+        {
+            ws.Cell(r, 1).Value = l.LotNumber;
+            ws.Cell(r, 2).Value = l.RackPosition ?? "";
+            ws.Cell(r, 3).Value = AutoDescription(l);
+            ws.Cell(r, 4).Value = l.Description ?? "";
+            ws.Cell(r, 5).Value = l.Estimate ?? "";
+            ws.Cell(r, 6).Value = l.RedLimit ?? "";
+            ws.Cell(r, 7).Value = l.Remarks ?? "";
+            r++;
+        }
+        ws.Columns().AdjustToContents();
+
+        using var ms = new MemoryStream();
+        wb.SaveAs(ms);
+
+        var resp = req.CreateResponse(HttpStatusCode.OK);
+        resp.Headers.Add("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        resp.Headers.Add("Content-Disposition", $"attachment; filename=\"catalog-{id}.xlsx\"");
+        await resp.WriteBytesAsync(ms.ToArray());
+        return resp;
+    }
+
+    // Bulk-update Description / Estimate / Red Limit / Remarks from an uploaded .xlsx, matched by Lot #.
+    // Draft-only (activating locks the catalogue). Read-only columns (Rack, Auto Description) are ignored.
+    [RequireRole("Admin")]
+    [Function("ImportCatalogDraftLots")]
+    public async Task<HttpResponseData> Import(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "catalog/drafts/{id:int}/import")] HttpRequestData req, int id)
+    {
+        var draft = await _db.CatalogDrafts.FindAsync(id);
+        if (draft == null) return req.CreateResponse(HttpStatusCode.NotFound);
+        if (draft.Status != "Draft")
+            return await Json(req, new { error = "Only a Draft catalogue can be edited; activating locks it." }, HttpStatusCode.BadRequest);
+
+        using var ms = new MemoryStream();
+        await req.Body.CopyToAsync(ms);
+        ms.Position = 0;
+
+        XLWorkbook wb;
+        try { wb = new XLWorkbook(ms); }
+        catch { return await Json(req, new { error = "Not a valid .xlsx file." }, HttpStatusCode.BadRequest); }
+
+        var ws = wb.Worksheets.FirstOrDefault();
+        if (ws == null) return await Json(req, new { error = "No sheet found in the file." }, HttpStatusCode.BadRequest);
+
+        var cols = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var cell in ws.Row(1).CellsUsed()) cols[cell.GetString().Trim()] = cell.Address.ColumnNumber;
+        int? Col(string name) => cols.TryGetValue(name, out var c) ? c : (int?)null;
+
+        var lotCol = Col("Lot #") ?? Col("Lot") ?? Col("LotNumber");
+        if (lotCol == null) return await Json(req, new { error = "Missing a 'Lot #' column." }, HttpStatusCode.BadRequest);
+        int? descCol = Col("Description"), estCol = Col("Estimate"), redCol = Col("Red Limit"), remCol = Col("Remarks");
+
+        var byLot = (await _db.CatalogDraftLots.Where(l => l.DraftId == id).ToListAsync())
+            .GroupBy(l => l.LotNumber).ToDictionary(g => g.Key, g => g.First());
+
+        static string? Clean(string s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+        var updated = 0;
+        var lastRow = ws.LastRowUsed()?.RowNumber() ?? 1;
+        for (var row = 2; row <= lastRow; row++)
+        {
+            if (!int.TryParse(ws.Cell(row, lotCol.Value).GetString().Trim(), out var lotNum)) continue;
+            if (!byLot.TryGetValue(lotNum, out var lot)) continue;
+            if (descCol != null) lot.Description = Clean(ws.Cell(row, descCol.Value).GetString());
+            if (estCol != null) lot.Estimate = Clean(ws.Cell(row, estCol.Value).GetString());
+            if (redCol != null) lot.RedLimit = Clean(ws.Cell(row, redCol.Value).GetString());
+            if (remCol != null) lot.Remarks = Clean(ws.Cell(row, remCol.Value).GetString());
+            updated++;
+        }
+        await _db.SaveChangesAsync();
+        _logger.LogInformation("Imported xlsx into catalogue {Id}: {Updated} lots updated", id, updated);
+        return await Json(req, new { updated });
+    }
+
+    private static string AutoDescription(CatalogDraftLot l)
+    {
+        var parts = new[] { l.SalesType, l.Gender, l.Group, l.HairLength, l.Size, l.Quality, l.Color, l.Clarity,
+            (l.Damages != null && !l.Damages.Equals("None", StringComparison.OrdinalIgnoreCase)) ? l.Damages : null }
+            .Where(p => !string.IsNullOrWhiteSpace(p));
+        return string.Join(" ", parts);
     }
 
     private static object ToDto(CatalogDraft d, int showLotCount) => new
