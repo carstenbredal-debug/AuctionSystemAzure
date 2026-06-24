@@ -80,11 +80,12 @@ public class CatalogDraftFunctions
             await _db.Database.ExecuteSqlRawAsync(sql, args.ToArray());
 
             // Assign rack-position from the Start Rack #: 20 positions per rack, in catalogue order.
+            // ONLY showlot lots (IsShow='Yes') get a rack place — they're the ones physically racked.
             var startRack = body?.StartRack is int sr && sr > 0 ? sr : 1;
             await _db.Database.ExecuteSqlRawAsync(@"
                 WITH ordered AS (
                     SELECT Id, (ROW_NUMBER() OVER (ORDER BY CatalogSortOrder, LotNumber) - 1) AS rn
-                    FROM auction.CatalogDraftLots WHERE DraftId = {0})
+                    FROM auction.CatalogDraftLots WHERE DraftId = {0} AND IsShow = 'Yes')
                 UPDATE d
                 SET RackPosition = CAST(({1} + o.rn / 20) AS NVARCHAR(10)) + '-' + CAST((o.rn % 20 + 1) AS NVARCHAR(10))
                 FROM auction.CatalogDraftLots d JOIN ordered o ON o.Id = d.Id;",
