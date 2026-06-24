@@ -90,7 +90,7 @@
                                             @(activatingId == d.Id ? "Activating..." : "Activate")
                                         </button>
                                     }
-                                    <button class="btn btn-sm btn-outline-primary ms-1" @onclick="() => ViewDraft(d.Id)">View</button>
+                                    <button class="btn btn-sm btn-outline-primary ms-1" @onclick="() => ViewDraft(d)">View</button>
                                     <button class="btn btn-sm btn-outline-dark ms-1" @onclick="() => DownloadDraftPdf(d.Id)">PDF</button>
                                     @if (d.Status != "InAuction")
                                     {
@@ -108,68 +108,59 @@
     @if (CatalogLots.Any())
     {
         <div class="results-section mt-3">
-            @foreach (var catalogSection in GetSections())
+            <h6 class="mb-2">
+                @viewingDraftName
+                @if (viewingDraftStatus == "InAuction") { <span class="badge bg-secondary ms-1">In Auction — locked</span> }
+                else if (viewingDraftStatus == "Active") { <span class="badge bg-success ms-1">Active</span> }
+                else { <span class="badge bg-warning text-dark ms-1">Draft</span> }
+            </h6>
+            @if (!string.IsNullOrEmpty(DraftMessage))
             {
-                <div class="section-block mb-3">
-                    <div class="section-header bg-dark text-white p-2 fw-bold">@catalogSection.Key</div>
-                    <table class="table table-sm table-bordered mb-0">
-                        <thead class="table-secondary">
-                            <tr>
-                                <th>Lot #</th>
-                                <th>String #</th>
-                                <th>Description</th>
-                                <th>Skins</th>
-                                <th>Price</th>
-                                <th>Comments</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @{
-                                var stringGroups = catalogSection.Value
-                                    .GroupBy(l => l.StringNumber)
-                                    .OrderBy(g => g.Min(l => l.CatalogSortOrder));
-                            }
-                            @foreach (var sg in stringGroups)
-                            {
-                                var sgList = sg.OrderBy(l => l.CatalogSortOrder).ToList();
-                                var isMulti = sgList.Count > 1;
-                                @for (int i = 0; i < sgList.Count; i++)
-                                {
-                                    var lot = sgList[i];
-                                    var isFirst = (i == 0);
-                                    var isLast = (i == sgList.Count - 1);
-                                    var cssClass = "";
-                                    if (isMulti)
-                                    {
-                                        cssClass = "string-row";
-                                        if (isFirst) cssClass += " string-first";
-                                        if (isLast) cssClass += " string-last";
-                                    }
-                                    if (lot.IsShow) cssClass += " table-warning";
-
-                                    var desc = BuildDescription(lot);
-                                    if (isMulti && !isFirst)
-                                    {
-                                        if (isLast)
-                                            desc = $"{sgList.Sum(l => l.TotalSkins):N0} skins";
-                                        else
-                                            desc = (i + 1).ToString();
-                                    }
-
-                                    <tr class="@cssClass">
-                                        <td>@lot.LotNumber</td>
-                                        <td>@lot.StringNumber</td>
-                                        <td>@desc</td>
-                                        <td>@lot.TotalSkins.ToString("N0")</td>
-                                        <td></td>
-                                        <td></td>
-                                    </tr>
-                                }
-                            }
-                        </tbody>
-                    </table>
-                </div>
+                <div class="alert @(DraftIsError ? "alert-danger" : "alert-success") py-1">@DraftMessage</div>
             }
+            <table class="table table-sm table-bordered align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Lot #</th><th>String</th><th>Description</th><th class="text-end">Skins</th>
+                        <th>Estimate</th><th>Red Limit</th><th>Remarks</th><th style="width:130px"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var lot in CatalogLots.OrderBy(l => l.CatalogSortOrder))
+                    {
+                        <tr class="@(lot.IsShow ? "table-warning" : "")">
+                            <td>@lot.LotNumber</td>
+                            <td>@lot.StringNumber</td>
+                            @if (editingLotId == lot.Id)
+                            {
+                                <td><input class="form-control form-control-sm" @bind="editDescription" placeholder="@BuildDescription(lot)" /></td>
+                                <td class="text-end">@lot.TotalSkins.ToString("N0")</td>
+                                <td><input class="form-control form-control-sm" @bind="editEstimate" /></td>
+                                <td><input class="form-control form-control-sm" @bind="editRedLimit" /></td>
+                                <td><input class="form-control form-control-sm" @bind="editRemarks" /></td>
+                                <td>
+                                    <button class="btn btn-sm btn-success" @onclick="() => SaveLot(lot)">Save</button>
+                                    <button class="btn btn-sm btn-outline-secondary ms-1" @onclick="CancelEditLot">✕</button>
+                                </td>
+                            }
+                            else
+                            {
+                                <td>@(string.IsNullOrWhiteSpace(lot.Description) ? BuildDescription(lot) : lot.Description)</td>
+                                <td class="text-end">@lot.TotalSkins.ToString("N0")</td>
+                                <td>@lot.Estimate</td>
+                                <td>@lot.RedLimit</td>
+                                <td>@lot.Remarks</td>
+                                <td>
+                                    @if (viewingDraftStatus != "InAuction")
+                                    {
+                                        <button class="btn btn-sm btn-outline-primary" @onclick="() => StartEditLot(lot)">Edit</button>
+                                    }
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
         </div>
     }
 </div>
@@ -254,12 +245,46 @@
         finally { activatingId = null; }
     }
 
-    private async Task ViewDraft(int id)
+    private int viewingDraftId;
+    private string viewingDraftName = "";
+    private string viewingDraftStatus = "Draft";
+    private int? editingLotId;
+    private string editDescription = "", editEstimate = "", editRedLimit = "", editRemarks = "";
+
+    private async Task ViewDraft(CatalogDraftRow d)
     {
-        IsLoading = true; CatalogLots = new();
-        try { CatalogLots = await Http.GetFromJsonAsync<List<CatalogLotRow>>($"api/catalog/drafts/{id}/lots") ?? new(); }
+        IsLoading = true; CatalogLots = new(); editingLotId = null; DraftMessage = ""; DraftIsError = false;
+        viewingDraftId = d.Id; viewingDraftName = d.Name; viewingDraftStatus = d.Status;
+        try { CatalogLots = await Http.GetFromJsonAsync<List<CatalogLotRow>>($"api/catalog/drafts/{d.Id}/lots") ?? new(); }
         catch { CatalogLots = new(); }
         finally { IsLoading = false; }
+    }
+
+    private void StartEditLot(CatalogLotRow lot)
+    {
+        editingLotId = lot.Id;
+        editDescription = lot.Description; editEstimate = lot.Estimate;
+        editRedLimit = lot.RedLimit; editRemarks = lot.Remarks;
+    }
+
+    private void CancelEditLot() => editingLotId = null;
+
+    private async Task SaveLot(CatalogLotRow lot)
+    {
+        DraftMessage = ""; DraftIsError = false;
+        try
+        {
+            var resp = await Http.PutAsJsonAsync($"api/catalog/drafts/{viewingDraftId}/lots/{lot.Id}",
+                new { description = editDescription, estimate = editEstimate, redLimit = editRedLimit, remarks = editRemarks });
+            if (resp.IsSuccessStatusCode)
+            {
+                lot.Description = editDescription; lot.Estimate = editEstimate;
+                lot.RedLimit = editRedLimit; lot.Remarks = editRemarks;
+                editingLotId = null;
+            }
+            else { DraftMessage = $"Save failed: {await resp.Content.ReadAsStringAsync()}"; DraftIsError = true; }
+        }
+        catch (Exception ex) { DraftMessage = $"Save failed: {ex.Message}"; DraftIsError = true; }
     }
 
     private async Task DownloadDraftPdf(int id)
@@ -331,6 +356,11 @@
 
     public class CatalogLotRow
     {
+        public int Id { get; set; }
+        public string Description { get; set; } = "";
+        public string Estimate { get; set; } = "";
+        public string RedLimit { get; set; } = "";
+        public string Remarks { get; set; } = "";
         public int LotNumber { get; set; }
         public int StringNumber { get; set; }
         public int CatalogSortOrder { get; set; }

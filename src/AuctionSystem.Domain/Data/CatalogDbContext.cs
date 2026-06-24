@@ -119,6 +119,10 @@ public class CatalogDbContext : DbContext
             e.Property(l => l.Color).HasMaxLength(50);
             e.Property(l => l.Clarity).HasMaxLength(50);
             e.Property(l => l.Damages).HasMaxLength(50);
+            e.Property(l => l.Description).HasMaxLength(500);
+            e.Property(l => l.Estimate).HasMaxLength(100);
+            e.Property(l => l.RedLimit).HasMaxLength(100);
+            e.Property(l => l.Remarks).HasMaxLength(500);
         });
     }
 }

@@ -22,4 +22,11 @@ public class CatalogDraftLot
     public string? IncludedBoxNumbers { get; set; }
     public int BoxCount { get; set; }
     public int TotalSkins { get; set; }
+
+    // Editable per-lot fields (catalogue-only; not part of the frozen [Cat_{id}.Lots] snapshot).
+    // Description overrides the auto-built catalogue line when set.
+    public string? Description { get; set; }
+    public string? Estimate { get; set; }
+    public string? RedLimit { get; set; }
+    public string? Remarks { get; set; }
 }

@@ -32,6 +32,7 @@ public class CatalogDraftFunctions
     }
 
     public record CreateDraftRequest(string? SalesType, string? Gender, string? Group);
+    public record UpdateDraftLotRequest(string? Description, string? Estimate, string? RedLimit, string? Remarks);
 
     [RequireRole("Admin")]
     [Function("CreateCatalogDraft")]
@@ -240,8 +241,10 @@ public class CatalogDraftFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "catalog/drafts/{id:int}/lots")] HttpRequestData req, int id)
     {
         const string sql = @"
-            SELECT LotNumber, StringNumber, CatalogSortOrder, SalesType, Gender, [Group], Color, Quality,
+            SELECT Id, LotNumber, StringNumber, CatalogSortOrder, SalesType, Gender, [Group], Color, Quality,
                    Clarity, Size, HairLength, Damages, TotalSkins, BoxCount,
+                   ISNULL(Description, '') AS Description, ISNULL(Estimate, '') AS Estimate,
+                   ISNULL(RedLimit, '') AS RedLimit, ISNULL(Remarks, '') AS Remarks,
                    CASE WHEN IsShow = 'Yes' THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS IsShow,
                    COUNT(*) OVER (PARTITION BY StringNumber) AS LotsInString,
                    ROW_NUMBER() OVER (PARTITION BY StringNumber ORDER BY CatalogSortOrder) AS LotSequenceInString,
@@ -254,6 +257,31 @@ public class CatalogDraftFunctions
         await conn.OpenAsync();
         var lots = (await conn.QueryAsync(sql, new { id })).ToList();
         return await Json(req, lots);
+    }
+
+    // Edit a single lot's Description / Estimate / Red Limit / Remarks. Allowed while Draft or Active;
+    // an In-Auction catalogue is locked.
+    [RequireRole("Admin")]
+    [Function("UpdateCatalogDraftLot")]
+    public async Task<HttpResponseData> UpdateLot(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "catalog/drafts/{id:int}/lots/{lotRowId:int}")] HttpRequestData req, int id, int lotRowId)
+    {
+        var draft = await _db.CatalogDrafts.FindAsync(id);
+        if (draft == null) return req.CreateResponse(HttpStatusCode.NotFound);
+        if (draft.Status == "InAuction")
+            return await Json(req, new { error = "Catalogue is in an auction and cannot be edited." }, HttpStatusCode.BadRequest);
+
+        var lot = await _db.CatalogDraftLots.FirstOrDefaultAsync(l => l.Id == lotRowId && l.DraftId == id);
+        if (lot == null) return req.CreateResponse(HttpStatusCode.NotFound);
+
+        var body = await req.ReadFromJsonAsync<UpdateDraftLotRequest>();
+        static string? Clean(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+        lot.Description = Clean(body?.Description);
+        lot.Estimate = Clean(body?.Estimate);
+        lot.RedLimit = Clean(body?.RedLimit);
+        lot.Remarks = Clean(body?.Remarks);
+        await _db.SaveChangesAsync();
+        return await Json(req, new { ok = true });
     }
 
     private static object ToDto(CatalogDraft d, int showLotCount) => new

@@ -323,6 +323,17 @@ using (var scope = host.Services.CreateScope())
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.CatalogDrafts') AND name = 'Status')
                 ALTER TABLE auction.CatalogDrafts ADD Status NVARCHAR(20) NOT NULL DEFAULT 'Draft';
         ");
+        // Editable per-lot catalogue fields.
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.CatalogDraftLots') AND name = 'Description')
+                ALTER TABLE auction.CatalogDraftLots ADD Description NVARCHAR(500) NULL;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.CatalogDraftLots') AND name = 'Estimate')
+                ALTER TABLE auction.CatalogDraftLots ADD Estimate NVARCHAR(100) NULL;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.CatalogDraftLots') AND name = 'RedLimit')
+                ALTER TABLE auction.CatalogDraftLots ADD RedLimit NVARCHAR(100) NULL;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.CatalogDraftLots') AND name = 'Remarks')
+                ALTER TABLE auction.CatalogDraftLots ADD Remarks NVARCHAR(500) NULL;
+        ");
         // TypistEntries: add AuctionId column
         db.Database.ExecuteSqlRaw(@"
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.TypistEntries') AND name = 'AuctionId')
