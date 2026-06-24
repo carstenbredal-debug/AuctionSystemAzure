@@ -73,13 +73,23 @@ public class CatalogPdfFunctions
         _fontsRegistered = true;
     }
 
-    // Public, read-only catalog PDF (the active auction). Safe to expose: auctionNumber is whitelisted
-    // (GetCatalogTable) and all filters are parameterized.
+    // Customer catalogue PDF (no prices). Public; auctionNumber is whitelisted (GetCatalogTable) and all
+    // filters are parameterized.
     [AllowAnonymous]
     [Function("GenerateCatalogPdf")]
-    public async Task<HttpResponseData> GeneratePdf(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "catalog/pdf")]
-        HttpRequestData req)
+    public Task<HttpResponseData> GeneratePdf(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "catalog/pdf")] HttpRequestData req)
+        => RenderAsync(req, allowAuc: false);
+
+    // Auctioneer catalogue PDF (estimated price + remarks). Admin-only — the priced variant is reachable
+    // ONLY through this endpoint, never the public one.
+    [RequireRole("Admin")]
+    [Function("GenerateAucCatalogPdf")]
+    public Task<HttpResponseData> GenerateAucPdf(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "catalog/pdf-auc")] HttpRequestData req)
+        => RenderAsync(req, allowAuc: true);
+
+    private async Task<HttpResponseData> RenderAsync(HttpRequestData req, bool allowAuc)
     {
         try
         {
@@ -100,6 +110,12 @@ public class CatalogPdfFunctions
             await connection.OpenAsync();
 
             var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+
+            int.TryParse(query["draftId"], out var draftId);
+            // Auctioneer variant: add estimated price + remarks per lot (draft-only — those fields live on
+            // CatalogDraftLots). Only the admin-gated catalog/pdf-auc endpoint sets allowAuc.
+            bool includeAuc = allowAuc && draftId > 0;
+            var sourceTable = draftId > 0 ? "auction.CatalogDraftLots" : GetCatalogTable(query);
 
             var sql = @"
                 SELECT
@@ -136,12 +152,21 @@ public class CatalogPdfFunctions
                     SUM(BoxCount) OVER (
                         PARTITION BY StringNumber
                     ) AS StringBoxCount
-
-                FROM " + GetCatalogTable(query) + @"
+                " + (includeAuc ? ", ISNULL(Estimate, '') AS Estimate, ISNULL(Remarks, '') AS Remarks" : "") + @"
+                FROM " + sourceTable + @"
                 WHERE 1=1";
 
             var parameters = new DynamicParameters();
-            AddFilterParameters(query, ref sql, parameters);
+            if (draftId > 0)
+            {
+                // Frozen catalogue draft — source the frozen lots, no other filters.
+                sql += " AND DraftId = @DraftId";
+                parameters.Add("DraftId", draftId);
+            }
+            else
+            {
+                AddFilterParameters(query, ref sql, parameters);
+            }
 
             sql += " ORDER BY CatalogSortOrder";
 
@@ -149,7 +174,8 @@ public class CatalogPdfFunctions
 
             // Filter by farmer if specified
             var farmerName = query["farmerName"];
-            var isFarmerCatalog = !string.IsNullOrEmpty(farmerName);
+            var hasFarmerGuid = Guid.TryParse(query["farmerGuid"], out var farmerGuidVal);
+            var isFarmerCatalog = hasFarmerGuid || !string.IsNullOrEmpty(farmerName);
             var lotSaleData = new Dictionary<int, LotSaleInfo>();
 
             if (isFarmerCatalog)
@@ -160,8 +186,11 @@ public class CatalogPdfFunctions
                     var skinsTable = $"auction.[{auctionNumber}.Skins]";
                     var farmerBoxes = new HashSet<int>();
                     var farmerSkinsByBox = new Dictionary<int, int>();
-                    var boxSql = $"SELECT BoxNumber, COUNT(*) AS Cnt FROM {skinsTable} WHERE Farmer = @Farmer GROUP BY BoxNumber";
-                    var boxRows = await connection.QueryAsync<dynamic>(boxSql, new { Farmer = farmerName });
+                    // Prefer the stable farmerGUID; fall back to the legacy Farmer name.
+                    var farmerClause = hasFarmerGuid ? "farmerGUID = @FarmerKey" : "Farmer = @FarmerKey";
+                    object farmerKey = hasFarmerGuid ? farmerGuidVal : (object)(farmerName ?? "");
+                    var boxSql = $"SELECT BoxNumber, COUNT(*) AS Cnt FROM {skinsTable} WHERE {farmerClause} GROUP BY BoxNumber";
+                    var boxRows = await connection.QueryAsync<dynamic>(boxSql, new { FarmerKey = farmerKey });
                     foreach (var b in boxRows)
                     {
                         farmerBoxes.Add((int)b.BoxNumber);
@@ -472,8 +501,9 @@ public class CatalogPdfFunctions
         }
         else
         {
-            table.Cell().Element(CellStyle).Text("");
-            table.Cell().Element(CellStyle).Text("");
+            // Price = estimated price, Comments = remarks (auctioneer PDF); empty on the customer catalogue.
+            table.Cell().Element(CellStyle).Text(row.Estimate ?? "");
+            table.Cell().Element(CellStyle).Text(row.Remarks ?? "");
         }
     }
 
@@ -529,8 +559,8 @@ public class CatalogPdfFunctions
             }
             else
             {
-                Cell().Text("");
-                Cell().Text("");
+                Cell().Text(row.Estimate ?? "");
+                Cell().Text(row.Remarks ?? "");
             }
         }
     }

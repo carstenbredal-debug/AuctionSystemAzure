@@ -4,6 +4,11 @@ public class Farmer
 {
     public int Id { get; set; }
     public string FarmerNumber { get; set; } = string.Empty;
+    // Stable unique link key (auction.Farmers.FarmerGUID, uniqueidentifier). Matches dbo.SkinTable's
+    // farmer GUID; replaces fragile name-based skin<->farmer matching. Named FarmerGUID (not FarmerId)
+    // to avoid clashing with the int Farmer.Id used by Settlement.FarmerId / AppUser.FarmerId. Nullable
+    // during the name->id migration.
+    public Guid? FarmerGUID { get; set; }
     public string Name { get; set; } = string.Empty;
     public string Name2 { get; set; } = string.Empty;
     public string SearchName { get; set; } = string.Empty;

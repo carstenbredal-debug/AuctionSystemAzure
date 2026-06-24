@@ -11,367 +11,374 @@
 <h3>Generate Catalogue</h3>
 
 <div class="catalogue-page">
-    <div class="mb-3">
-        <label class="form-label fw-bold">Auction Number <span class="text-danger">*</span></label>
-        <select class="form-select" style="max-width: 400px;" @bind="SelectedAuctionId" @bind:after="OnAuctionChanged">
-            <option value="0">— Select Auction —</option>
-            @foreach (var a in Auctions)
-            {
-                <option value="@a.Id">@a.AuctionNumber — @a.Title</option>
-            }
-        </select>
-    </div>
 
-    @if (SelectedAuctionId == 0)
-    {
-        <div class="alert alert-info">Please select an auction to generate or view the catalogue.</div>
-    }
-    else
-    {
-    <div class="filter-section">
-        <div class="filter-grid">
-            <div class="filter-item">
-                <label>Sales Type</label>
-                <select @bind="SelectedSalesType" class="form-select form-select-sm">
-                    <option value="">All</option>
-                    @foreach (var val in SalesTypes) { <option value="@val">@val</option> }
-                </select>
+    <div class="card mb-4">
+        <div class="card-header py-2">
+            <strong>Catalog Drafts</strong>
+            <span class="text-muted small">— frozen from the imported lots (pre-auction), by Sales Type / Gender / Group</span>
+        </div>
+        <div class="card-body">
+            <div class="mb-2">
+                <button class="btn btn-warning btn-sm text-white" @onclick="GenerateCatalogNow" disabled="@IsGeneratingCatalog">
+                    @(IsGeneratingCatalog ? "Generating..." : "Generate Lots")
+                </button>
+                <span class="text-muted small ms-2">Rebuilds the catalogue (cataloglots) from the imported boxes.</span>
             </div>
-            <div class="filter-item">
-                <label>Gender</label>
-                <select @bind="SelectedGender" class="form-select form-select-sm">
-                    <option value="">All</option>
-                    @foreach (var val in Genders) { <option value="@val">@val</option> }
-                </select>
+
+            <hr class="my-3" />
+
+            <div class="mb-2 fw-bold small text-muted">Create catalog draft</div>
+            <div class="row g-2 align-items-end" style="max-width:920px">
+                <div class="col">
+                    <label class="form-label mb-0">Sales Type</label>
+                    <select @bind="DraftSalesType" class="form-select form-select-sm">
+                        <option value="">All</option>
+                        @foreach (var val in SalesTypes) { <option value="@val">@val</option> }
+                    </select>
+                </div>
+                <div class="col">
+                    <label class="form-label mb-0">Gender</label>
+                    <select @bind="DraftGender" class="form-select form-select-sm">
+                        <option value="">All</option>
+                        @foreach (var val in Genders) { <option value="@val">@val</option> }
+                    </select>
+                </div>
+                <div class="col">
+                    <label class="form-label mb-0">Group</label>
+                    <select @bind="DraftGroup" class="form-select form-select-sm">
+                        <option value="">All</option>
+                        @foreach (var val in Groups) { <option value="@val">@val</option> }
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <label class="form-label mb-0">Start Rack #</label>
+                    <input type="number" min="1" @bind="DraftStartRack" class="form-control form-control-sm" style="width:90px" title="First rack number — 20 lots per rack, in catalogue order" />
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-success btn-sm" @onclick="CreateDraft" disabled="@IsCreatingDraft">
+                        @(IsCreatingDraft ? "Saving..." : "Save as Draft")
+                    </button>
+                </div>
             </div>
-            <div class="filter-item">
-                <label>Group</label>
-                <select @bind="SelectedGroup" class="form-select form-select-sm">
-                    <option value="">All</option>
-                    @foreach (var val in Groups) { <option value="@val">@val</option> }
-                </select>
-            </div>
-            <div class="filter-item">
-                <label>Hair Length</label>
-                <select @bind="SelectedHairLength" class="form-select form-select-sm">
-                    <option value="">All</option>
-                    @foreach (var val in HairLengths) { <option value="@val">@val</option> }
-                </select>
-            </div>
-            <div class="filter-item">
-                <label>Size</label>
-                <select @bind="SelectedSize" class="form-select form-select-sm">
-                    <option value="">All</option>
-                    @foreach (var val in Sizes) { <option value="@val">@val</option> }
-                </select>
-            </div>
-            <div class="filter-item">
-                <label>Color</label>
-                <select @bind="SelectedColor" class="form-select form-select-sm">
-                    <option value="">All</option>
-                    @foreach (var val in Colors) { <option value="@val">@val</option> }
-                </select>
-            </div>
-            <div class="filter-item">
-                <label>Quality</label>
-                <select @bind="SelectedQuality" class="form-select form-select-sm">
-                    <option value="">All</option>
-                    @foreach (var val in Qualities) { <option value="@val">@val</option> }
-                </select>
-            </div>
-            <div class="filter-item">
-                <label>Clarity</label>
-                <select @bind="SelectedClarity" class="form-select form-select-sm">
-                    <option value="">All</option>
-                    @foreach (var val in Clarities) { <option value="@val">@val</option> }
-                </select>
-            </div>
-            <div class="filter-item">
-                <label>Damages</label>
-                <select @bind="SelectedDamages" class="form-select form-select-sm">
-                    <option value="">All</option>
-                    @foreach (var val in Damages) { <option value="@val">@val</option> }
-                </select>
-            </div>
+            @if (!string.IsNullOrEmpty(DraftMessage))
+            {
+                <div class="alert @(DraftIsError ? "alert-danger" : "alert-success") mt-2 mb-0 py-1">@DraftMessage</div>
+            }
+
+            @if (Drafts.Any())
+            {
+                <table class="table table-sm table-hover mt-3" style="max-width:840px">
+                    <thead class="table-dark">
+                        <tr><th>Name</th><th class="text-end">Lots</th><th class="text-end">Show</th><th class="text-end">Skins</th><th>Status</th><th>Created</th><th class="text-end">Actions</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var d in Drafts)
+                        {
+                            <tr>
+                                <td>@d.Name</td>
+                                <td class="text-end">@d.LotCount.ToString("N0")</td>
+                                <td class="text-end">@d.ShowLotCount.ToString("N0")</td>
+                                <td class="text-end">@d.SkinCount.ToString("N0")</td>
+                                <td>
+                                    @{
+                                        var badge = d.Status switch { "Active" => "bg-success", "InAuction" => "bg-secondary", _ => "bg-warning text-dark" };
+                                        var label = d.Status == "InAuction" ? "In Auction" : d.Status;
+                                    }
+                                    <span class="badge @badge">@label</span>
+                                </td>
+                                <td>@d.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                                <td class="text-end">
+                                    @if (d.Status == "Draft")
+                                    {
+                                        <button class="btn btn-sm btn-success" @onclick="() => ActivateDraft(d.Id)" disabled="@(activatingId != null)">
+                                            @(activatingId == d.Id ? "Activating..." : "Activate")
+                                        </button>
+                                    }
+                                    <button class="btn btn-sm btn-outline-primary ms-1" @onclick="() => ViewDraft(d)">View</button>
+                                    <button class="btn btn-sm btn-outline-dark ms-1" @onclick="() => DownloadDraftPdf(d.Id)">PDF</button>
+                                    <button class="btn btn-sm btn-outline-secondary ms-1" @onclick="() => DownloadDraftAucPdf(d.Id)" title="Auctioneer catalogue — adds estimated price + remarks">Auc PDF</button>
+                                    <button class="btn btn-sm btn-outline-info ms-1" @onclick="() => DownloadDraftLabels(d.Id)" title="Showlot labels (Lot # + showlot box + barcode), 2-up on A4">Labels</button>
+                                    <button class="btn btn-sm btn-outline-info ms-1" @onclick="() => DownloadDraftLotLabels(d.Id)" title="Lot # only labels, 100x30mm, showlots">Lot Labels</button>
+                                    @if (d.Status != "InAuction")
+                                    {
+                                        <button class="btn btn-sm btn-outline-danger ms-1" @onclick="() => DeleteDraft(d.Id)">Delete</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
         </div>
     </div>
-
-    <div class="action-row mt-3 mb-3">
-        <button class="btn btn-outline-secondary" @onclick="ResetFilters">Reset</button>
-        <button class="btn btn-warning text-white ms-2" @onclick="GenerateLots" disabled="@IsGenerating">
-            @(IsGenerating ? "Generating..." : "Generate Lots")
-        </button>
-        <button class="btn btn-primary ms-2" @onclick="LoadCatalog" disabled="@IsLoading">
-            @(IsLoading ? "Loading..." : "View Catalog")
-        </button>
-        <button class="btn btn-dark ms-2" @onclick="DownloadPdf" disabled="@IsPdfLoading">
-            @(IsPdfLoading ? "Creating PDF..." : "Download PDF")
-        </button>
-    </div>
-
-    @if (!string.IsNullOrEmpty(ResultMessage))
-    {
-        <div class="alert @(IsError ? "alert-danger" : "alert-success") mt-2">@ResultMessage</div>
-    }
-    }@* end SelectedAuctionId != 0 *@
 
     @if (CatalogLots.Any())
     {
         <div class="results-section mt-3">
-            @foreach (var catalogSection in GetSections())
+            <h6 class="mb-2">
+                @viewingDraftName
+                @if (viewingDraftStatus == "InAuction") { <span class="badge bg-secondary ms-1">In Auction — locked</span> }
+                else if (viewingDraftStatus == "Active") { <span class="badge bg-success ms-1">Active — editable</span> }
+                else { <span class="badge bg-warning text-dark ms-1">Draft — editable</span> }
+            </h6>
+            <div class="mb-2">
+                <button class="btn btn-sm btn-outline-success" @onclick="ExportDraft">Export to Excel</button>
+                @if (viewingDraftStatus != "InAuction")
+                {
+                    <label class="btn btn-sm btn-outline-primary ms-1 mb-0">
+                        Import Excel
+                        <InputFile OnChange="OnImportFile" accept=".xlsx" style="display:none" />
+                    </label>
+                    <span class="text-muted small ms-2">Edit the 4 fields in Excel, then re-import (matched on Lot #).</span>
+                }
+            </div>
+            @if (!string.IsNullOrEmpty(DraftMessage))
             {
-                <div class="section-block mb-3">
-                    <div class="section-header bg-dark text-white p-2 fw-bold">@catalogSection.Key</div>
-                    <table class="table table-sm table-bordered mb-0">
-                        <thead class="table-secondary">
-                            <tr>
-                                <th>Lot #</th>
-                                <th>String #</th>
-                                <th>Description</th>
-                                <th>Skins</th>
-                                <th>Price</th>
-                                <th>Comments</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @{
-                                var stringGroups = catalogSection.Value
-                                    .GroupBy(l => l.StringNumber)
-                                    .OrderBy(g => g.Min(l => l.CatalogSortOrder));
-                            }
-                            @foreach (var sg in stringGroups)
-                            {
-                                var sgList = sg.OrderBy(l => l.CatalogSortOrder).ToList();
-                                var isMulti = sgList.Count > 1;
-                                @for (int i = 0; i < sgList.Count; i++)
-                                {
-                                    var lot = sgList[i];
-                                    var isFirst = (i == 0);
-                                    var isLast = (i == sgList.Count - 1);
-                                    var cssClass = "";
-                                    if (isMulti)
-                                    {
-                                        cssClass = "string-row";
-                                        if (isFirst) cssClass += " string-first";
-                                        if (isLast) cssClass += " string-last";
-                                    }
-                                    if (lot.IsShow) cssClass += " table-warning";
-
-                                    var desc = BuildDescription(lot);
-                                    if (isMulti && !isFirst)
-                                    {
-                                        if (isLast)
-                                            desc = $"{sgList.Sum(l => l.TotalSkins):N0} skins";
-                                        else
-                                            desc = (i + 1).ToString();
-                                    }
-
-                                    <tr class="@cssClass">
-                                        <td>@lot.LotNumber</td>
-                                        <td>@lot.StringNumber</td>
-                                        <td>@desc</td>
-                                        <td>@lot.TotalSkins.ToString("N0")</td>
-                                        <td></td>
-                                        <td></td>
-                                    </tr>
-                                }
-                            }
-                        </tbody>
-                    </table>
-                </div>
+                <div class="alert @(DraftIsError ? "alert-danger" : "alert-success") py-1">@DraftMessage</div>
             }
+            <table class="table table-sm table-bordered align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th style="width:55px">Lot #</th><th style="width:55px">String</th><th style="width:65px">Rack</th><th style="width:480px">Description</th><th class="text-end" style="width:55px">Skins</th>
+                        <th style="width:85px">Estimate</th><th style="width:85px">Red Limit</th><th style="width:200px">Remarks</th><th style="width:120px"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var lot in CatalogLots.OrderBy(l => l.CatalogSortOrder))
+                    {
+                        <tr class="@(lot.IsShow ? "table-warning" : "")">
+                            <td>@lot.LotNumber</td>
+                            <td>@lot.StringNumber</td>
+                            <td>@lot.RackPosition</td>
+                            @if (editingLotId == lot.Id)
+                            {
+                                <td><input class="form-control form-control-sm" @bind="editDescription" placeholder="@BuildDescription(lot)" /></td>
+                                <td class="text-end">@lot.TotalSkins.ToString("N0")</td>
+                                <td><input class="form-control form-control-sm" @bind="editEstimate" /></td>
+                                <td><input class="form-control form-control-sm" @bind="editRedLimit" /></td>
+                                <td><input class="form-control form-control-sm" @bind="editRemarks" /></td>
+                                <td>
+                                    <button class="btn btn-sm btn-success" @onclick="() => SaveLot(lot)">Save</button>
+                                    <button class="btn btn-sm btn-outline-secondary ms-1" @onclick="CancelEditLot">✕</button>
+                                </td>
+                            }
+                            else
+                            {
+                                <td><div style="max-width:480px; white-space:normal; word-break:break-word;">@(string.IsNullOrWhiteSpace(lot.Description) ? BuildDescription(lot) : lot.Description)</div></td>
+                                <td class="text-end">@lot.TotalSkins.ToString("N0")</td>
+                                <td>@lot.Estimate</td>
+                                <td>@lot.RedLimit</td>
+                                <td><div style="max-width:200px; white-space:normal; word-break:break-word;">@lot.Remarks</div></td>
+                                <td>
+                                    @if (viewingDraftStatus != "InAuction")
+                                    {
+                                        <button class="btn btn-sm btn-outline-primary" @onclick="() => StartEditLot(lot)">Edit</button>
+                                    }
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
         </div>
     }
 </div>
 
 @code {
-    private int SelectedAuctionId;
-    private List<AuctionDto> Auctions = new();
-
-    private string SelectedSalesType = "";
-    private string SelectedGender = "";
-    private string SelectedGroup = "";
-    private string SelectedHairLength = "";
-    private string SelectedSize = "";
-    private string SelectedQuality = "";
-    private string SelectedColor = "";
-    private string SelectedClarity = "";
-    private string SelectedDamages = "";
-
-    private bool IsGenerating;
     private bool IsLoading;
-    private bool IsPdfLoading;
-    private bool IsError;
-    private string ResultMessage = "";
 
     private List<CatalogLotRow> CatalogLots = new();
 
     private List<string> SalesTypes = new();
     private List<string> Genders = new();
     private List<string> Groups = new();
-    private List<string> HairLengths = new();
-    private List<string> Sizes = new();
-    private List<string> Qualities = new();
-    private List<string> Colors = new();
-    private List<string> Clarities = new();
-    private List<string> Damages = new();
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadFilters();   // Sales Type / Gender / Group from cataloglots
+        await LoadDrafts();
+    }
+
+    private bool IsCreatingDraft;
+    private bool IsGeneratingCatalog;
+    private string DraftSalesType = "";
+    private string DraftGender = "";
+    private string DraftGroup = "";
+    private int DraftStartRack = 1;
+    private string DraftMessage = "";
+    private bool DraftIsError;
+    private List<CatalogDraftRow> Drafts = new();
+
+    private async Task LoadDrafts()
+    {
+        try { Drafts = await Http.GetFromJsonAsync<List<CatalogDraftRow>>("api/catalog/drafts") ?? new(); }
+        catch { Drafts = new(); }
+    }
+
+    private async Task GenerateCatalogNow()
+    {
+        IsGeneratingCatalog = true; DraftMessage = ""; DraftIsError = false;
         try
         {
-            Auctions = (await Api.GetAuctionsAsync()).Where(a => a.Status != AuctionStatus.Draft).ToList();
+            var resp = await Http.PostAsync("api/lots/generate-admin", null);
+            var content = await resp.Content.ReadAsStringAsync();
+            if (resp.IsSuccessStatusCode) { DraftMessage = string.IsNullOrWhiteSpace(content) ? "Lots generated." : content; await LoadFilters(); }
+            else { DraftMessage = $"Generation failed: {(int)resp.StatusCode}"; DraftIsError = true; }
         }
-        catch { }
+        catch (Exception ex) { DraftMessage = $"Generation failed: {ex.Message}"; DraftIsError = true; }
+        finally { IsGeneratingCatalog = false; }
+    }
+
+    private async Task CreateDraft()
+    {
+        IsCreatingDraft = true; DraftMessage = ""; DraftIsError = false;
+        try
+        {
+            var resp = await Http.PostAsJsonAsync("api/catalog/drafts",
+                new { salesType = DraftSalesType, gender = DraftGender, group = DraftGroup, startRack = DraftStartRack });
+            if (resp.IsSuccessStatusCode) { DraftMessage = "Catalog draft saved."; await LoadDrafts(); }
+            else { DraftMessage = $"Failed to save draft: {(int)resp.StatusCode}"; DraftIsError = true; }
+        }
+        catch (Exception ex) { DraftMessage = $"Failed to save draft: {ex.Message}"; DraftIsError = true; }
+        finally { IsCreatingDraft = false; }
+    }
+
+    private async Task DeleteDraft(int id)
+    {
+        try { await Http.DeleteAsync($"api/catalog/drafts/{id}"); await LoadDrafts(); } catch { }
+    }
+
+    private int? activatingId;
+
+    private async Task ActivateDraft(int id)
+    {
+        if (activatingId != null) return;   // ignore re-clicks: a concurrent freeze races the table drops
+        activatingId = id;
+        DraftMessage = ""; DraftIsError = false;
+        try
+        {
+            var resp = await Http.PostAsync($"api/catalog/drafts/{id}/activate", null);
+            if (resp.IsSuccessStatusCode) { await LoadDrafts(); }
+            else { DraftMessage = $"Activate failed: {await resp.Content.ReadAsStringAsync()}"; DraftIsError = true; }
+        }
+        catch (Exception ex) { DraftMessage = $"Activate failed: {ex.Message}"; DraftIsError = true; }
+        finally { activatingId = null; }
+    }
+
+    private int viewingDraftId;
+    private string viewingDraftName = "";
+    private string viewingDraftStatus = "Draft";
+    private int? editingLotId;
+    private string editDescription = "", editEstimate = "", editRedLimit = "", editRemarks = "";
+
+    private async Task ViewDraft(CatalogDraftRow d)
+    {
+        IsLoading = true; CatalogLots = new(); editingLotId = null; DraftMessage = ""; DraftIsError = false;
+        viewingDraftId = d.Id; viewingDraftName = d.Name; viewingDraftStatus = d.Status;
+        try { CatalogLots = await Http.GetFromJsonAsync<List<CatalogLotRow>>($"api/catalog/drafts/{d.Id}/lots") ?? new(); }
+        catch { CatalogLots = new(); }
+        finally { IsLoading = false; }
+    }
+
+    private void StartEditLot(CatalogLotRow lot)
+    {
+        editingLotId = lot.Id;
+        editDescription = lot.Description; editEstimate = lot.Estimate;
+        editRedLimit = lot.RedLimit; editRemarks = lot.Remarks;
+    }
+
+    private void CancelEditLot() => editingLotId = null;
+
+    private async Task ExportDraft()
+    {
+        try { await JS.InvokeVoidAsync("open", $"api/catalog/drafts/{viewingDraftId}/export", "_blank"); }
+        catch (Exception ex) { DraftMessage = $"Export failed: {ex.Message}"; DraftIsError = true; }
+    }
+
+    private async Task OnImportFile(InputFileChangeEventArgs e)
+    {
+        DraftMessage = ""; DraftIsError = false; editingLotId = null;
+        try
+        {
+            using var content = new StreamContent(e.File.OpenReadStream(20_000_000));
+            var resp = await Http.PostAsync($"api/catalog/drafts/{viewingDraftId}/import", content);
+            var bodyTxt = await resp.Content.ReadAsStringAsync();
+            if (resp.IsSuccessStatusCode)
+            {
+                DraftMessage = $"Imported — {bodyTxt}";
+                CatalogLots = await Http.GetFromJsonAsync<List<CatalogLotRow>>($"api/catalog/drafts/{viewingDraftId}/lots") ?? new();
+                await LoadDrafts();
+            }
+            else { DraftMessage = $"Import failed: {bodyTxt}"; DraftIsError = true; }
+        }
+        catch (Exception ex) { DraftMessage = $"Import failed: {ex.Message}"; DraftIsError = true; }
+    }
+
+    private async Task SaveLot(CatalogLotRow lot)
+    {
+        DraftMessage = ""; DraftIsError = false;
+        try
+        {
+            var resp = await Http.PutAsJsonAsync($"api/catalog/drafts/{viewingDraftId}/lots/{lot.Id}",
+                new { description = editDescription, estimate = editEstimate, redLimit = editRedLimit, remarks = editRemarks });
+            if (resp.IsSuccessStatusCode)
+            {
+                lot.Description = editDescription; lot.Estimate = editEstimate;
+                lot.RedLimit = editRedLimit; lot.Remarks = editRemarks;
+                editingLotId = null;
+            }
+            else { DraftMessage = $"Save failed: {await resp.Content.ReadAsStringAsync()}"; DraftIsError = true; }
+        }
+        catch (Exception ex) { DraftMessage = $"Save failed: {ex.Message}"; DraftIsError = true; }
+    }
+
+    private async Task DownloadDraftPdf(int id)
+    {
+        try { await JS.InvokeVoidAsync("open", $"api/catalog/pdf?draftId={id}", "_blank"); } catch { }
+    }
+
+    private async Task DownloadDraftAucPdf(int id)
+    {
+        try { await JS.InvokeVoidAsync("open", $"api/catalog/pdf-auc?draftId={id}", "_blank"); } catch { }
+    }
+
+    private async Task DownloadDraftLabels(int id)
+    {
+        try { await JS.InvokeVoidAsync("open", $"api/catalog/labels-pdf?draftId={id}", "_blank"); } catch { }
+    }
+
+    private async Task DownloadDraftLotLabels(int id)
+    {
+        try { await JS.InvokeVoidAsync("open", $"api/catalog/lot-labels-pdf?draftId={id}", "_blank"); } catch { }
+    }
+
+    private class CatalogDraftRow
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        public string? SalesType { get; set; }
+        public string? Gender { get; set; }
+        public string? Group { get; set; }
+        public int LotCount { get; set; }
+        public int ShowLotCount { get; set; }
+        public int SkinCount { get; set; }
+        public string Status { get; set; } = "Draft";
+        public DateTime CreatedAt { get; set; }
     }
 
     private async Task LoadFilters()
     {
         try
         {
-            var filterUrl = "api/catalog/filters";
-            if (SelectedAuctionId > 0)
-            {
-                var auction = Auctions.FirstOrDefault(a => a.Id == SelectedAuctionId);
-                if (auction != null)
-                    filterUrl += $"?auctionNumber={Uri.EscapeDataString(auction.AuctionNumber)}";
-            }
-            var filters = await Http.GetFromJsonAsync<FilterOptions>(filterUrl);
+            var filters = await Http.GetFromJsonAsync<FilterOptions>("api/catalog/filters");
             if (filters != null)
             {
                 SalesTypes = filters.Types ?? new();
                 Genders = filters.Genders ?? new();
                 Groups = filters.Groups ?? new();
-                HairLengths = filters.HairLengths ?? new();
-                Sizes = filters.Sizes ?? new();
-                Qualities = filters.Qualities ?? new();
-                Colors = filters.Colors ?? new();
-                Clarities = filters.Clarities ?? new();
-                Damages = filters.Damages ?? new();
             }
         }
         catch { }
-    }
-
-    private void ResetFilters()
-    {
-        SelectedSalesType = "";
-        SelectedGender = "";
-        SelectedGroup = "";
-        SelectedHairLength = "";
-        SelectedSize = "";
-        SelectedQuality = "";
-        SelectedColor = "";
-        SelectedClarity = "";
-        SelectedDamages = "";
-        ResultMessage = "";
-        IsError = false;
-        CatalogLots.Clear();
-    }
-
-    private async Task GenerateLots()
-    {
-        IsGenerating = true;
-        IsError = false;
-        ResultMessage = "";
-
-        try
-        {
-            var response = await Http.PostAsync($"api/lots/generate?{BuildQueryString()}", null);
-            var content = await response.Content.ReadAsStringAsync();
-
-            if (response.IsSuccessStatusCode)
-            {
-                ResultMessage = content;
-                await LoadCatalog();
-            }
-            else
-            {
-                IsError = true;
-                ResultMessage = $"Error: {content}";
-            }
-        }
-        catch (Exception ex)
-        {
-            IsError = true;
-            ResultMessage = $"Error: {ex.Message}";
-        }
-        finally
-        {
-            IsGenerating = false;
-        }
-    }
-
-    private async Task LoadCatalog()
-    {
-        IsLoading = true;
-
-        try
-        {
-            var lots = await Http.GetFromJsonAsync<List<CatalogLotRow>>(
-                $"api/catalog/lots?{BuildQueryString()}");
-            if (lots != null)
-                CatalogLots = lots;
-        }
-        catch (Exception ex)
-        {
-            IsError = true;
-            ResultMessage = $"Error loading catalog: {ex.Message}";
-        }
-        finally
-        {
-            IsLoading = false;
-        }
-    }
-
-    private async Task DownloadPdf()
-    {
-        IsPdfLoading = true;
-        IsError = false;
-
-        try
-        {
-            var apiBase = Config["ApiBaseUrl"] ?? Http.BaseAddress?.ToString().TrimEnd('/');
-            var url = $"{apiBase}/api/catalog/pdf?{BuildQueryString()}";
-            await JS.InvokeVoidAsync("downloadFile", url, "lot-catalog.pdf");
-        }
-        catch (Exception ex)
-        {
-            IsError = true;
-            ResultMessage = $"Error: {ex.Message}";
-        }
-        finally
-        {
-            IsPdfLoading = false;
-        }
-    }
-
-    private async Task OnAuctionChanged()
-    {
-        CatalogLots.Clear();
-        ResultMessage = "";
-        IsError = false;
-        await LoadFilters();
-    }
-
-    private string BuildQueryString()
-    {
-        var parts = new List<string>();
-        if (SelectedAuctionId > 0)
-        {
-            var auction = Auctions.FirstOrDefault(a => a.Id == SelectedAuctionId);
-            if (auction != null) parts.Add($"auctionNumber={Uri.EscapeDataString(auction.AuctionNumber)}");
-        }
-        if (!string.IsNullOrEmpty(SelectedSalesType)) parts.Add($"type={Uri.EscapeDataString(SelectedSalesType)}");
-        if (!string.IsNullOrEmpty(SelectedGender)) parts.Add($"gender={Uri.EscapeDataString(SelectedGender)}");
-        if (!string.IsNullOrEmpty(SelectedGroup)) parts.Add($"group={Uri.EscapeDataString(SelectedGroup)}");
-        if (!string.IsNullOrEmpty(SelectedHairLength)) parts.Add($"hairLength={Uri.EscapeDataString(SelectedHairLength)}");
-        if (!string.IsNullOrEmpty(SelectedSize)) parts.Add($"size={Uri.EscapeDataString(SelectedSize)}");
-        if (!string.IsNullOrEmpty(SelectedQuality)) parts.Add($"quality={Uri.EscapeDataString(SelectedQuality)}");
-        if (!string.IsNullOrEmpty(SelectedColor)) parts.Add($"color={Uri.EscapeDataString(SelectedColor)}");
-        if (!string.IsNullOrEmpty(SelectedClarity)) parts.Add($"clarity={Uri.EscapeDataString(SelectedClarity)}");
-        if (!string.IsNullOrEmpty(SelectedDamages)) parts.Add($"damage={Uri.EscapeDataString(SelectedDamages)}");
-        return string.Join("&", parts);
     }
 
     private Dictionary<string, List<CatalogLotRow>> GetSections()
@@ -409,6 +416,12 @@
 
     public class CatalogLotRow
     {
+        public int Id { get; set; }
+        public string Description { get; set; } = "";
+        public string Estimate { get; set; } = "";
+        public string RedLimit { get; set; } = "";
+        public string Remarks { get; set; } = "";
+        public string RackPosition { get; set; } = "";
         public int LotNumber { get; set; }
         public int StringNumber { get; set; }
         public int CatalogSortOrder { get; set; }

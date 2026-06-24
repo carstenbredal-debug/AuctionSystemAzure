@@ -16,6 +16,8 @@ public class CatalogDbContext : DbContext
     public DbSet<StringDefinition> StringDefinitions => Set<StringDefinition>();
     public DbSet<GeneratedLot> GeneratedLots => Set<GeneratedLot>();
     public DbSet<LotGenerationSkippedGroup> SkippedGroups => Set<LotGenerationSkippedGroup>();
+    public DbSet<CatalogDraft> CatalogDrafts => Set<CatalogDraft>();
+    public DbSet<CatalogDraftLot> CatalogDraftLots => Set<CatalogDraftLot>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -90,6 +92,38 @@ public class CatalogDbContext : DbContext
         {
             e.ToTable("lotgenerationskippedgroup", "auction");
             e.HasKey(s => s.SkippedGroupID);
+        });
+
+        modelBuilder.Entity<CatalogDraft>(e =>
+        {
+            e.ToTable("CatalogDrafts", "auction");
+            e.HasKey(d => d.Id);
+            e.Property(d => d.Name).HasMaxLength(150);
+            e.Property(d => d.SalesType).HasMaxLength(50);
+            e.Property(d => d.Gender).HasMaxLength(50);
+            e.Property(d => d.Group).HasMaxLength(50);
+            e.HasMany(d => d.Lots).WithOne().HasForeignKey(l => l.DraftId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<CatalogDraftLot>(e =>
+        {
+            e.ToTable("CatalogDraftLots", "auction");
+            e.HasKey(l => l.Id);
+            e.Property(l => l.IsShow).HasMaxLength(10);
+            e.Property(l => l.SalesType).HasMaxLength(50);
+            e.Property(l => l.Gender).HasMaxLength(50);
+            e.Property(l => l.Group).HasMaxLength(50);
+            e.Property(l => l.HairLength).HasMaxLength(50);
+            e.Property(l => l.Size).HasMaxLength(50);
+            e.Property(l => l.Quality).HasMaxLength(50);
+            e.Property(l => l.Color).HasMaxLength(50);
+            e.Property(l => l.Clarity).HasMaxLength(50);
+            e.Property(l => l.Damages).HasMaxLength(50);
+            e.Property(l => l.Description).HasMaxLength(500);
+            e.Property(l => l.Estimate).HasMaxLength(100);
+            e.Property(l => l.RedLimit).HasMaxLength(100);
+            e.Property(l => l.Remarks).HasMaxLength(500);
+            e.Property(l => l.RackPosition).HasMaxLength(20);
         });
     }
 }

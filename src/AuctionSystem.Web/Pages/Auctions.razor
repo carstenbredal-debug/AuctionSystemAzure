@@ -270,105 +270,39 @@
             }
 
             <div class="section-container mb-3">
-                <div class="section-header"><strong>Filter Catalog Lots</strong></div>
+                <div class="section-header"><strong>Import Catalogs</strong> <span class="text-muted small">— pick Active catalogs to build this auction's lots, boxes &amp; skins</span></div>
                 <div class="section-body p-3">
-                    <div class="row g-3 align-items-end">
-                        <div class="col-md-6">
-                            <label class="form-label">Filter by Type</label>
-                            <select class="form-select" @bind="filterSalesType" @bind:after="ApplyFilters">
-                                <option value="">All Types</option>
-                                @foreach (var t in salesTypes)
-                                {
-                                    <option value="@t">@t</option>
-                                }
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Filter by Gender</label>
-                            <select class="form-select" @bind="filterGender" @bind:after="ApplyFilters">
-                                <option value="">All Genders</option>
-                                @foreach (var g in genders)
-                                {
-                                    <option value="@g">@g</option>
-                                }
-                            </select>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <div>
-                    <strong>Catalog Lots</strong> <span class="badge bg-secondary">@filteredCatalogLots.Count</span>
-                    @if (selectedCatalogLotIds.Count > 0)
+                    @if (activeCatalogs.Count == 0)
                     {
-                        <span class="badge bg-primary ms-2">@selectedCatalogLotIds.Count selected</span>
+                        <div class="text-muted">No Active catalogs. Create and Activate catalogs on the <a href="/admin/catalog">Catalog</a> page first.</div>
                     }
-                </div>
-                <div>
-                    @if (selectedCatalogLotIds.Count > 0)
+                    else
                     {
-                        <button class="btn btn-primary" @onclick="ImportSelectedLots" disabled="@importing">
-                            @(importing ? "Importing..." : $"Import {selectedCatalogLotIds.Count} Lots")
+                        <table class="table table-sm table-hover" style="max-width:760px">
+                            <thead class="table-dark">
+                                <tr><th></th><th>Name</th><th class="text-end">Lots</th><th class="text-end">Show</th><th class="text-end">Skins</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var c in activeCatalogs)
+                                {
+                                    <tr>
+                                        <td><input type="checkbox" checked="@selectedCatalogIds.Contains(c.Id)" @onchange="e => ToggleCatalog(c.Id, e)" /></td>
+                                        <td>@c.Name</td>
+                                        <td class="text-end">@c.LotCount.ToString("N0")</td>
+                                        <td class="text-end">@c.ShowLotCount.ToString("N0")</td>
+                                        <td class="text-end">@c.SkinCount.ToString("N0")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        <button class="btn btn-primary" @onclick="ImportSelectedCatalogs" disabled="@(importingCatalogs || selectedCatalogIds.Count == 0)">
+                            @(importingCatalogs ? "Importing..." : $"Import {selectedCatalogIds.Count} Catalog(s)")
                         </button>
+                        <span class="text-muted small ms-2">Rebuilds the 3 snapshot tables and locks the chosen catalogs.</span>
                     }
                 </div>
             </div>
 
-            <div class="section-container">
-                <div class="section-body">
-                    <table class="table table-striped table-hover mb-0">
-                        <thead class="table-dark">
-                            <tr>
-                                <th><input type="checkbox" @onchange="ToggleSelectAll" checked="@allSelected" /></th>
-                                <th>Lot #</th>
-                                <th>Type</th>
-                                <th>Gender</th>
-                                <th>Color</th>
-                                <th>Quality</th>
-                                <th>Size</th>
-                                <th>Skins</th>
-                                <th>Boxes</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @if (loadingCatalog)
-                            {
-                                <tr><td colspan="9" class="text-center py-4"><em>Loading catalog lots...</em></td></tr>
-                            }
-                            else if (filteredCatalogLots.Count == 0)
-                            {
-                                <tr><td colspan="9" class="text-center text-muted py-4">No catalog lots found.</td></tr>
-                            }
-                            @foreach (var cl in filteredCatalogLots)
-                            {
-                                var isAlreadyImported = importedLotNumbers.Contains(cl.LotNumber);
-                                <tr class="@(isAlreadyImported ? "table-success" : "")">
-                                    <td>
-                                        @if (isAlreadyImported)
-                                        {
-                                            <span class="text-success" title="Already imported">&#10003;</span>
-                                        }
-                                        else
-                                        {
-                                            <input type="checkbox" checked="@selectedCatalogLotIds.Contains(cl.CatalogLotID)"
-                                                   @onchange="e => ToggleLotSelection(cl.CatalogLotID, (bool)(e.Value ?? false))" />
-                                        }
-                                    </td>
-                                    <td><strong>@cl.LotNumber</strong></td>
-                                    <td>@cl.SalesType</td>
-                                    <td>@cl.Gender</td>
-                                    <td>@cl.Color</td>
-                                    <td>@cl.Quality</td>
-                                    <td>@cl.Size</td>
-                                    <td>@cl.TotalSkins</td>
-                                    <td>@cl.BoxCount</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            </div>
         }
     }
 }
@@ -743,18 +677,52 @@ else
         public int? LotNumber { get; set; }
     }
 
+    private List<CatalogDraftDto> activeCatalogs = new();
+    private HashSet<int> selectedCatalogIds = new();
+    private bool importingCatalogs;
+
+    private void ToggleCatalog(int id, ChangeEventArgs e)
+    {
+        if (e.Value is bool b && b) selectedCatalogIds.Add(id);
+        else selectedCatalogIds.Remove(id);
+    }
+
+    private async Task LoadActiveCatalogs()
+    {
+        try { activeCatalogs = (await Api.GetCatalogsAsync()).Where(c => c.Status == "Active").ToList(); }
+        catch { activeCatalogs = new(); }
+    }
+
+    private async Task ImportSelectedCatalogs()
+    {
+        if (selectedCatalogIds.Count == 0 || Id == null) return;
+        importingCatalogs = true; importMessage = null;
+        try
+        {
+            var resp = await Api.ImportCatalogsAsync(Id.Value, selectedCatalogIds.ToList());
+            if (resp.IsSuccessStatusCode)
+            {
+                var n = selectedCatalogIds.Count;
+                selectedCatalogIds.Clear();
+                importMessage = $"Imported {n} catalog(s). Building snapshot…";
+                importIsError = false;
+                await LoadActiveCatalogs();
+                _ = PollSnapshotAsync(Id.Value);
+            }
+            else
+            {
+                importMessage = $"Import failed: {await resp.Content.ReadAsStringAsync()}";
+                importIsError = true;
+            }
+        }
+        catch (Exception ex) { importMessage = $"Error: {ex.Message}"; importIsError = true; }
+        finally { importingCatalogs = false; }
+    }
+
     private async Task OpenImportTab()
     {
         activeTab = "import";
-        if (catalogLots.Count == 0)
-        {
-            loadingCatalog = true;
-            catalogLots = await Api.GetCatalogLotsAsync();
-            salesTypes = catalogLots.Where(c => c.SalesType != null).Select(c => c.SalesType!).Distinct().OrderBy(x => x).ToList();
-            genders = catalogLots.Where(c => c.Gender != null).Select(c => c.Gender!).Distinct().OrderBy(x => x).ToList();
-            ApplyFilters();
-            loadingCatalog = false;
-        }
+        await LoadActiveCatalogs();
     }
 
     private void ApplyFilters()

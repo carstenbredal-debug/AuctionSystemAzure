@@ -279,6 +279,63 @@ using (var scope = host.Services.CreateScope())
                 CREATE INDEX IX_TypistEntries_TypistUserId ON auction.TypistEntries(TypistUserId);
             END
         ");
+        // Catalogue draft tables — a frozen copy of cataloglots filtered by SalesType/Gender/Group.
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'CatalogDrafts')
+                CREATE TABLE auction.CatalogDrafts (
+                    Id INT IDENTITY(1,1) PRIMARY KEY,
+                    Name NVARCHAR(150) NOT NULL,
+                    SalesType NVARCHAR(50) NULL,
+                    Gender NVARCHAR(50) NULL,
+                    [Group] NVARCHAR(50) NULL,
+                    LotCount INT NOT NULL DEFAULT 0,
+                    SkinCount INT NOT NULL DEFAULT 0,
+                    CreatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE()
+                );
+            IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'CatalogDraftLots')
+            BEGIN
+                CREATE TABLE auction.CatalogDraftLots (
+                    Id INT IDENTITY(1,1) PRIMARY KEY,
+                    DraftId INT NOT NULL,
+                    StringNumber INT NOT NULL DEFAULT 0,
+                    LotNumber INT NOT NULL DEFAULT 0,
+                    CatalogSortOrder INT NOT NULL DEFAULT 0,
+                    IsShow NVARCHAR(10) NOT NULL DEFAULT '',
+                    SalesType NVARCHAR(50) NULL,
+                    Gender NVARCHAR(50) NULL,
+                    [Group] NVARCHAR(50) NULL,
+                    HairLength NVARCHAR(50) NULL,
+                    Size NVARCHAR(50) NULL,
+                    Quality NVARCHAR(50) NULL,
+                    Color NVARCHAR(50) NULL,
+                    Clarity NVARCHAR(50) NULL,
+                    Damages NVARCHAR(50) NULL,
+                    IncludedBoxNumbers NVARCHAR(MAX) NULL,
+                    BoxCount INT NOT NULL DEFAULT 0,
+                    TotalSkins INT NOT NULL DEFAULT 0,
+                    CONSTRAINT FK_CatalogDraftLots_Draft FOREIGN KEY (DraftId) REFERENCES auction.CatalogDrafts(Id) ON DELETE CASCADE
+                );
+                CREATE INDEX IX_CatalogDraftLots_DraftId ON auction.CatalogDraftLots(DraftId);
+            END
+        ");
+        // Catalogue lifecycle status: Draft -> Active -> InAuction.
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.CatalogDrafts') AND name = 'Status')
+                ALTER TABLE auction.CatalogDrafts ADD Status NVARCHAR(20) NOT NULL DEFAULT 'Draft';
+        ");
+        // Editable per-lot catalogue fields.
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.CatalogDraftLots') AND name = 'Description')
+                ALTER TABLE auction.CatalogDraftLots ADD Description NVARCHAR(500) NULL;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.CatalogDraftLots') AND name = 'Estimate')
+                ALTER TABLE auction.CatalogDraftLots ADD Estimate NVARCHAR(100) NULL;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.CatalogDraftLots') AND name = 'RedLimit')
+                ALTER TABLE auction.CatalogDraftLots ADD RedLimit NVARCHAR(100) NULL;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.CatalogDraftLots') AND name = 'Remarks')
+                ALTER TABLE auction.CatalogDraftLots ADD Remarks NVARCHAR(500) NULL;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.CatalogDraftLots') AND name = 'RackPosition')
+                ALTER TABLE auction.CatalogDraftLots ADD RackPosition NVARCHAR(20) NULL;
+        ");
         // TypistEntries: add AuctionId column
         db.Database.ExecuteSqlRaw(@"
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.TypistEntries') AND name = 'AuctionId')

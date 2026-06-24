@@ -9,6 +9,7 @@ using AuctionSystem.Functions.BusinessCentral.Services;
 using AuctionSystem.Functions.Services;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -376,20 +377,63 @@ public class AuctionResultFunctions
         var nextLot = await _db.Lots
             .Where(l => l.Status == LotStatus.Pending || l.Status == LotStatus.Active)
             .OrderBy(l => l.LotNumber)
-            .Select(l => new
-            {
-                l.LotNumber,
-                l.Description,
-                l.Category,
-                l.Quantity,
-                l.Unit
-            })
+            .Select(l => new { l.LotNumber, l.AuctionId, l.Description, l.Category, l.Quantity, l.Unit })
             .FirstOrDefaultAsync();
+
+        object? payload = null;
+        if (nextLot != null)
+        {
+            // Display text/skins from the authoritative snapshot auction.[{Num}.Lots]; fall back to the Lot row.
+            var snap = await SnapshotLotDisplayAsync(nextLot.AuctionId, nextLot.LotNumber);
+            payload = new
+            {
+                nextLot.LotNumber,
+                Description = snap?.Description ?? nextLot.Description,
+                Category = snap?.Category ?? nextLot.Category,
+                Quantity = snap?.Quantity ?? nextLot.Quantity,
+                nextLot.Unit
+            };
+        }
 
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
-        await response.WriteStringAsync(JsonSerializer.Serialize(nextLot, JsonOptions));
+        await response.WriteStringAsync(JsonSerializer.Serialize(payload, JsonOptions));
         return response;
+    }
+
+    // Same as the typist's: a lot's DISPLAY text/skins come from the frozen snapshot auction.[{Num}.Lots],
+    // not the materialised Lot.Description. Null -> caller falls back to the Lot row.
+    private async Task<(string Description, string? Category, int Quantity)?> SnapshotLotDisplayAsync(int auctionId, int lotNumber)
+    {
+        if (auctionId <= 0) return null;
+        var auctionNum = await _db.Auctions.Where(a => a.Id == auctionId).Select(a => a.AuctionNumber).FirstOrDefaultAsync();
+        if (string.IsNullOrEmpty(auctionNum)) return null;
+
+        await using var conn = new SqlConnection(_catalogDb.Database.GetConnectionString());
+        await conn.OpenAsync();
+
+        await using (var check = new SqlCommand("SELECT OBJECT_ID(@t, 'U')", conn))
+        {
+            check.Parameters.AddWithValue("@t", $"auction.[{auctionNum}.Lots]");
+            if (await check.ExecuteScalarAsync() is null or System.DBNull) return null;
+        }
+
+        await using var cmd = new SqlCommand(
+            $@"SELECT TOP 1 SalesType, Gender, [Group], HairLength, Size, Quality, Color, Clarity, Damages, TotalSkins
+               FROM auction.[{auctionNum}.Lots] WHERE LotNumber = @ln", conn);
+        cmd.Parameters.AddWithValue("@ln", lotNumber);
+        await using var r = await cmd.ExecuteReaderAsync();
+        if (!await r.ReadAsync()) return null;
+
+        string? S(int i) => r.IsDBNull(i) ? null : r.GetString(i).Trim();
+        var group = S(2);
+        var damages = S(8);
+        var parts = new[] { S(0), S(1), group, S(3), S(4), S(5), S(6), S(7),
+            (damages != null && !damages.Equals("None", System.StringComparison.OrdinalIgnoreCase)) ? damages : null }
+            .Where(p => !string.IsNullOrWhiteSpace(p));
+        var description = string.Join(" ", parts);
+        var totalSkins = r.IsDBNull(9) ? 0 : r.GetInt32(9);
+        return (description, group, totalSkins);
     }
 
     [Function("SellLotsToBuyer")]

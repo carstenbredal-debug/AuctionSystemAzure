@@ -111,6 +111,10 @@ public class CatalogPdfRow
     public int StringTotalSkins { get; set; }
     public int StringBoxCount { get; set; }
 
+    // Auctioneer ("Auc") PDF only — null on the customer catalogue.
+    public string? Estimate { get; set; }
+    public string? Remarks { get; set; }
+
     public bool IsLastLotInString => LotSequenceInString == LotsInString;
     public bool IsMultiLotString => LotsInString > 1;
 }

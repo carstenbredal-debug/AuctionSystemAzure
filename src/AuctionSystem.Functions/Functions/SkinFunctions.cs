@@ -207,14 +207,14 @@ public class SkinFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "skins/farmer-auction-detail")] HttpRequestData req)
     {
         var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
-        var farmerName = query["farmerName"]?.Trim();
+        var (farmerGuid, farmerNameKey, hasFarmer) = ParseFarmerKey(query);
         var auctionIdStr = query["auctionId"];
         int? auctionId = int.TryParse(auctionIdStr, out var aid) ? aid : null;
 
-        if (string.IsNullOrEmpty(farmerName) || auctionId == null)
+        if (!hasFarmer || auctionId == null)
         {
             var badResponse = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
-            await badResponse.WriteStringAsync("farmerName and auctionId query parameters are required");
+            await badResponse.WriteStringAsync("farmerGuid (or legacy farmerName) and auctionId query parameters are required");
             return badResponse;
         }
 
@@ -229,6 +229,7 @@ public class SkinFunctions
         // Read from auction snapshot table: auction.[{auctionNumber}.Skins]
         var skinsTable = $"auction.[{auction.AuctionNumber}.Skins]";
         var connStr = _auctionDb.Database.GetConnectionString()!;
+        var (farmerClause, farmerValue) = FarmerFilter(farmerGuid, farmerNameKey);
 
         int totalSkins = 0;
         var skinsByBox = new Dictionary<int, int>(); // boxNumber → count
@@ -237,9 +238,9 @@ public class SkinFunctions
         {
             await conn.OpenAsync();
 
-            await using (var cmd = new SqlCommand($"SELECT BoxNumber, COUNT(*) AS Cnt FROM {skinsTable} WHERE Farmer = @farmer AND IsActive = 1 GROUP BY BoxNumber", conn))
+            await using (var cmd = new SqlCommand($"SELECT BoxNumber, COUNT(*) AS Cnt FROM {skinsTable} WHERE {farmerClause} AND IsActive = 1 GROUP BY BoxNumber", conn))
             {
-                cmd.Parameters.AddWithValue("@farmer", farmerName);
+                cmd.Parameters.AddWithValue("@farmerKey", farmerValue);
                 await using var reader = await cmd.ExecuteReaderAsync();
                 while (await reader.ReadAsync())
                 {
@@ -265,11 +266,17 @@ public class SkinFunctions
             }
         }
 
+        // Display name from the Farmer master when keyed by GUID; else the legacy name passed in.
+        var displayName = farmerGuid.HasValue
+            ? (await _auctionDb.Farmers.Where(f => f.FarmerGUID == farmerGuid).Select(f => f.Name).FirstOrDefaultAsync() ?? farmerNameKey ?? "Unknown")
+            : (farmerNameKey ?? "Unknown");
+
         var result = new
         {
             auctionId = auctionId.Value,
             auctionNumber = auction.AuctionNumber,
-            farmerName,
+            farmerGuid,
+            farmerName = displayName,
             totalSkins,
             soldSkins = soldSkinCount,
             totalValue
@@ -286,11 +293,11 @@ public class SkinFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "skins/farmer-auction-lots")] HttpRequestData req)
     {
         var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
-        var farmerName = query["farmerName"]?.Trim();
+        var (farmerGuid, farmerNameKey, hasFarmer) = ParseFarmerKey(query);
         var auctionIdStr = query["auctionId"];
         int? auctionId = int.TryParse(auctionIdStr, out var aid) ? aid : null;
 
-        if (string.IsNullOrEmpty(farmerName) || auctionId == null)
+        if (!hasFarmer || auctionId == null)
             return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
 
         var auction = await _auctionDb.Auctions.FindAsync(auctionId.Value);
@@ -322,8 +329,9 @@ public class SkinFunctions
         await using (var preConn = new SqlConnection(connStr))
         {
             await preConn.OpenAsync();
-            await using var preCmd = new SqlCommand($"SELECT BoxNumber, COUNT(*) FROM {skinsTable} WHERE Farmer = @farmer AND IsActive = 1 GROUP BY BoxNumber", preConn);
-            preCmd.Parameters.AddWithValue("@farmer", farmerName);
+            var (farmerClause, farmerValue) = FarmerFilter(farmerGuid, farmerNameKey);
+            await using var preCmd = new SqlCommand($"SELECT BoxNumber, COUNT(*) FROM {skinsTable} WHERE {farmerClause} AND IsActive = 1 GROUP BY BoxNumber", preConn);
+            preCmd.Parameters.AddWithValue("@farmerKey", farmerValue);
             await using var preReader = await preCmd.ExecuteReaderAsync();
             while (await preReader.ReadAsync())
                 farmerSkinsByBox[preReader.GetInt32(0)] = preReader.GetInt32(1);
@@ -412,13 +420,13 @@ public class SkinFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "skins/farmer-auction-boxes")] HttpRequestData req)
     {
         var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
-        var farmerName = query["farmerName"]?.Trim();
+        var (farmerGuid, farmerNameKey, hasFarmer) = ParseFarmerKey(query);
         var auctionIdStr = query["auctionId"];
         var lotNumberStr = query["lotNumber"];
         int? auctionId = int.TryParse(auctionIdStr, out var aid) ? aid : null;
         int? lotNumber = int.TryParse(lotNumberStr, out var ln) ? ln : null;
 
-        if (string.IsNullOrEmpty(farmerName) || auctionId == null || lotNumber == null)
+        if (!hasFarmer || auctionId == null || lotNumber == null)
             return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
 
         var auction = await _auctionDb.Auctions.FindAsync(auctionId.Value);
@@ -449,13 +457,14 @@ public class SkinFunctions
 
         // Get skins per box for this farmer
         var boxes = new List<object>();
+        var (farmerClause, farmerValue) = FarmerFilter(farmerGuid, farmerNameKey);
         await using var cmd = new SqlCommand($@"
             SELECT BoxNumber, BoxType, COUNT(*) AS SkinCount
             FROM {skinsTable}
-            WHERE Farmer = @farmer AND IsActive = 1 AND BoxNumber IN ({string.Join(",", boxNumbers)})
+            WHERE {farmerClause} AND IsActive = 1 AND BoxNumber IN ({string.Join(",", boxNumbers)})
             GROUP BY BoxNumber, BoxType
             ORDER BY BoxNumber", conn);
-        cmd.Parameters.AddWithValue("@farmer", farmerName);
+        cmd.Parameters.AddWithValue("@farmerKey", farmerValue);
 
         await using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
@@ -487,13 +496,13 @@ public class SkinFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "skins/farmer-auction-skins")] HttpRequestData req)
     {
         var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
-        var farmerName = query["farmerName"]?.Trim();
+        var (farmerGuid, farmerNameKey, hasFarmer) = ParseFarmerKey(query);
         var auctionIdStr = query["auctionId"];
         var lotNumberStr = query["lotNumber"];
         int? auctionId = int.TryParse(auctionIdStr, out var aid) ? aid : null;
         int? lotNumber = int.TryParse(lotNumberStr, out var ln) ? ln : null;
 
-        if (string.IsNullOrEmpty(farmerName) || auctionId == null || lotNumber == null)
+        if (!hasFarmer || auctionId == null || lotNumber == null)
             return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
 
         var auction = await _auctionDb.Auctions.FindAsync(auctionId.Value);
@@ -523,12 +532,13 @@ public class SkinFunctions
             .Select(b => int.TryParse(b.Trim(), out var n) ? n : 0).Where(n => n > 0).ToList();
 
         var skins = new List<object>();
+        var (farmerClause, farmerValue) = FarmerFilter(farmerGuid, farmerNameKey);
         await using var cmd = new SqlCommand($@"
             SELECT Barcode, BoxNumber, BoxType, SalesType, Gender, [Group], Size, Color, Quality, Clarity, Damages, HairLength
             FROM {skinsTable}
-            WHERE Farmer = @farmer AND IsActive = 1 AND BoxNumber IN ({string.Join(",", boxNumbers)})
+            WHERE {farmerClause} AND IsActive = 1 AND BoxNumber IN ({string.Join(",", boxNumbers)})
             ORDER BY BoxNumber, Barcode", conn);
-        cmd.Parameters.AddWithValue("@farmer", farmerName);
+        cmd.Parameters.AddWithValue("@farmerKey", farmerValue);
 
         await using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
@@ -564,12 +574,12 @@ public class SkinFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "skins/farmer-summary")] HttpRequestData req)
     {
         var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
-        var farmerName = query["farmerName"]?.Trim();
+        var (farmerGuid, farmerNameKey, hasFarmer) = ParseFarmerKey(query);
 
-        if (string.IsNullOrEmpty(farmerName))
+        if (!hasFarmer)
         {
             var badResponse = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
-            await badResponse.WriteStringAsync("farmerName query parameter is required");
+            await badResponse.WriteStringAsync("farmerGuid (or legacy farmerName) query parameter is required");
             return badResponse;
         }
 
@@ -589,8 +599,9 @@ public class SkinFunctions
                 await using var conn = new SqlConnection(connStr);
                 await conn.OpenAsync();
 
-                await using var cmd = new SqlCommand($"SELECT BoxNumber, COUNT(*) AS Cnt FROM {skinsTable} WHERE Farmer = @farmer AND IsActive = 1 GROUP BY BoxNumber", conn);
-                cmd.Parameters.AddWithValue("@farmer", farmerName);
+                var (farmerClause, farmerValue) = FarmerFilter(farmerGuid, farmerNameKey);
+                await using var cmd = new SqlCommand($"SELECT BoxNumber, COUNT(*) AS Cnt FROM {skinsTable} WHERE {farmerClause} AND IsActive = 1 GROUP BY BoxNumber", conn);
+                cmd.Parameters.AddWithValue("@farmerKey", farmerValue);
                 await using var reader = await cmd.ExecuteReaderAsync();
                 while (await reader.ReadAsync())
                 {
@@ -658,31 +669,35 @@ public class SkinFunctions
         if (auction != null)
         {
             var saleInfoByBox = await GetSoldBoxSaleInfoAsync(auctionId);
-            var perFarmer = new Dictionary<string, (int Skins, decimal Value)>();
+            var perFarmer = new Dictionary<string, (Guid? Guid, string Name, int Skins, decimal Value)>();
             try
             {
                 await using var conn = new SqlConnection(_auctionDb.Database.GetConnectionString()!);
                 await conn.OpenAsync();
-                await using var cmd = new SqlCommand($"SELECT Farmer, BoxNumber, COUNT(*) AS Cnt FROM auction.[{auction.AuctionNumber}.Skins] WHERE IsActive = 1 GROUP BY Farmer, BoxNumber", conn);
+                // Group by the stable farmerGUID, carrying MAX(Farmer) as the display name. A skin with no
+                // GUID falls back to its name as the key so it still surfaces (catch-all 'Unknow').
+                await using var cmd = new SqlCommand($"SELECT farmerGUID, MAX(Farmer) AS Farmer, BoxNumber, COUNT(*) AS Cnt FROM auction.[{auction.AuctionNumber}.Skins] WHERE IsActive = 1 GROUP BY farmerGUID, BoxNumber", conn);
                 await using var reader = await cmd.ExecuteReaderAsync();
                 while (await reader.ReadAsync())
                 {
-                    var farmerRaw = reader.IsDBNull(0) ? null : reader.GetString(0);
-                    var farmer = string.IsNullOrWhiteSpace(farmerRaw) ? "Unknow" : farmerRaw; // catch-all farmer for skins with no farmer
-                    var box = reader.GetInt32(1);
-                    var cnt = reader.GetInt32(2);
+                    var guid = reader.IsDBNull(0) ? (Guid?)null : reader.GetGuid(0);
+                    var nameRaw = reader.IsDBNull(1) ? null : reader.GetString(1);
+                    var name = string.IsNullOrWhiteSpace(nameRaw) ? "Unknow" : nameRaw;
+                    var box = reader.GetInt32(2);
+                    var cnt = reader.GetInt32(3);
                     if (saleInfoByBox.TryGetValue(box, out var info)) // only sold boxes count
                     {
-                        var cur = perFarmer.TryGetValue(farmer, out var v) ? v : (0, 0m);
-                        perFarmer[farmer] = (cur.Item1 + cnt, cur.Item2 + cnt * info.PriceEur);
+                        var key = guid?.ToString() ?? ("name:" + name);
+                        var cur = perFarmer.TryGetValue(key, out var v) ? v : (guid, name, 0, 0m);
+                        perFarmer[key] = (cur.Item1, cur.Item2, cur.Item3 + cnt, cur.Item4 + cnt * info.PriceEur);
                     }
                 }
             }
-            catch { /* snapshot table may not exist for this auction */ }
+            catch { /* snapshot table may not exist / lacks farmerGUID for this auction */ }
 
             rows = perFarmer
-                .OrderByDescending(kv => kv.Value.Value)
-                .Select(kv => (object)new { farmer = kv.Key, skinsSold = kv.Value.Skins, totalValue = kv.Value.Value })
+                .OrderByDescending(kv => kv.Value.Item4)
+                .Select(kv => (object)new { farmerGuid = kv.Value.Item1, farmer = kv.Value.Item2, skinsSold = kv.Value.Item3, totalValue = kv.Value.Item4 })
                 .ToList();
         }
 
@@ -690,6 +705,22 @@ public class SkinFunctions
         resp.Headers.Add("Content-Type", "application/json");
         await resp.WriteStringAsync(JsonSerializer.Serialize(rows, JsonOptions));
         return resp;
+    }
+
+    // Farmer filter for skin queries — prefers the stable farmerGUID, falls back to the legacy Farmer
+    // name during the name->GUID migration. Returns the SQL predicate + the parameter value to bind to
+    // @farmerKey. Callers splice {clause} into their WHERE and add ("@farmerKey", value).
+    private static (string Clause, object Value) FarmerFilter(Guid? farmerGuid, string? farmerName) =>
+        farmerGuid.HasValue
+            ? ("farmerGUID = @farmerKey", farmerGuid.Value)
+            : ("Farmer = @farmerKey", (object)(farmerName ?? string.Empty));
+
+    // Parse the farmer key from the query (either ?farmerGuid= or legacy ?farmerName=).
+    private static (Guid? Guid, string? Name, bool Provided) ParseFarmerKey(System.Collections.Specialized.NameValueCollection query)
+    {
+        var guid = Guid.TryParse(query["farmerGuid"], out var fg) ? fg : (Guid?)null;
+        var name = query["farmerName"]?.Trim();
+        return (guid, name, guid.HasValue || !string.IsNullOrEmpty(name));
     }
 
     private async Task<Dictionary<int, BoxSaleInfo>> GetSoldBoxSaleInfoAsync(int? auctionId = null)

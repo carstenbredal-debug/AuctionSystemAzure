@@ -74,21 +74,32 @@ public class LotGenerationFunctions
         }
     }
 
-    // Runs the lot generation every 15 minutes (internal timer — bypasses the HTTP auth middleware and
-    // needs no api-key; no external scheduler required).
-    [Function("GenerateLotsTimer")]
-    public async Task GenerateLotsTimer([TimerTrigger("0 */15 * * * *")] TimerInfo timer)
+    // Admin-triggered lot generation (the "Generate Lots" button) — same RunLotGenerationAsync as the
+    // api-key endpoint, but authenticated via the SWA admin principal so the UI needs no shared key.
+    [RequireRole("Admin")]
+    [Function("GenerateLotsAdmin")]
+    public async Task<HttpResponseData> GenerateLotsAdmin(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "lots/generate-admin")] HttpRequestData req)
     {
         try
         {
             var summary = await RunLotGenerationAsync();
-            _logger.LogInformation("Scheduled lot generation (15-min): {Summary}", summary);
+            var ok = req.CreateResponse(HttpStatusCode.OK);
+            await ok.WriteStringAsync(summary);
+            return ok;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Scheduled lot generation failed");
+            _logger.LogError(ex, "Error in GenerateLotsAdmin");
+            var response = req.CreateResponse(HttpStatusCode.InternalServerError);
+            await response.WriteStringAsync(ex.ToString());
+            return response;
         }
     }
+
+    // The 15-minute auto lot-generation timer was removed — catalogue generation is now manual/deliberate
+    // (via the GenerateLots / GenerateLotsAdmin endpoints). This prevents an auto-run from TRUNCATE-ing and
+    // regenerating a catalogue that's already in flight or snapshotted for an auction.
 
     // Shared generation worker for both the HTTP endpoint and the 15-minute timer. Serializes via a SQL
     // app-lock (skip if already running) so a scheduled run can't race a manual one on the TRUNCATE +
