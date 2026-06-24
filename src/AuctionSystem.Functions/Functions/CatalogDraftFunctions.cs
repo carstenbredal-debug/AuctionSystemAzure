@@ -79,12 +79,13 @@ public class CatalogDraftFunctions
 
             draft.LotCount = await _db.CatalogDraftLots.CountAsync(l => l.DraftId == draft.Id);
             draft.SkinCount = await _db.CatalogDraftLots.Where(l => l.DraftId == draft.Id).SumAsync(l => (int?)l.TotalSkins) ?? 0;
+            var showLotCount = await _db.CatalogDraftLots.CountAsync(l => l.DraftId == draft.Id && l.IsShow == "Yes");
             await _db.SaveChangesAsync();
 
-            _logger.LogInformation("Created catalogue draft {Id} '{Name}' ({Lots} lots, {Skins} skins)",
-                draft.Id, draft.Name, draft.LotCount, draft.SkinCount);
+            _logger.LogInformation("Created catalogue draft {Id} '{Name}' ({Lots} lots, {Show} show, {Skins} skins)",
+                draft.Id, draft.Name, draft.LotCount, showLotCount, draft.SkinCount);
 
-            return await Json(req, ToDto(draft), HttpStatusCode.Created);
+            return await Json(req, ToDto(draft, showLotCount), HttpStatusCode.Created);
         }
         catch (Exception ex)
         {
@@ -103,7 +104,16 @@ public class CatalogDraftFunctions
         var drafts = await _db.CatalogDrafts.AsNoTracking()
             .OrderByDescending(d => d.CreatedAt)
             .ToListAsync();
-        return await Json(req, drafts.Select(ToDto));
+
+        // Showlot count per draft (IsShow = 'Yes'), computed on the fly so existing drafts are correct too.
+        var showCounts = (await _db.CatalogDraftLots
+                .Where(l => l.IsShow == "Yes")
+                .GroupBy(l => l.DraftId)
+                .Select(g => new { DraftId = g.Key, Count = g.Count() })
+                .ToListAsync())
+            .ToDictionary(x => x.DraftId, x => x.Count);
+
+        return await Json(req, drafts.Select(d => ToDto(d, showCounts.TryGetValue(d.Id, out var c) ? c : 0)));
     }
 
     [RequireRole("Admin")]
@@ -142,9 +152,9 @@ public class CatalogDraftFunctions
         return await Json(req, lots);
     }
 
-    private static object ToDto(CatalogDraft d) => new
+    private static object ToDto(CatalogDraft d, int showLotCount) => new
     {
-        d.Id, d.Name, d.SalesType, d.Gender, d.Group, d.LotCount, d.SkinCount, d.CreatedAt
+        d.Id, d.Name, d.SalesType, d.Gender, d.Group, d.LotCount, showLotCount, d.SkinCount, d.CreatedAt
     };
 
     private static async Task<HttpResponseData> Json(HttpRequestData req, object body, HttpStatusCode status = HttpStatusCode.OK)
