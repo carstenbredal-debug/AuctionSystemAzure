@@ -184,11 +184,22 @@ public class CatalogDraftFunctions
         // Each statement runs in its OWN batch so every table reference is to an already-committed table
         // (a SELECT ... INTO target referenced later in the SAME batch fails compile-time name resolution).
 
-        // 1. Lots — full cataloglots shape for this catalogue's lot numbers.
+        // 1. Lots — full cataloglots shape for this catalogue's lot numbers, plus the editable per-lot
+        //    fields (Description/Estimate/RedLimit/Remarks) carried over from CatalogDraftLots so they flow
+        //    into the auction's [{Num}.Lots] when the catalogue is imported. (ALTER + UPDATE in separate
+        //    batches: a just-added column can't be referenced in the same batch.)
         await ExecSql(conn, $"IF OBJECT_ID('auction.[{lots}]', 'U') IS NOT NULL DROP TABLE auction.[{lots}];");
         await ExecSql(conn, $@"
             SELECT * INTO auction.[{lots}] FROM auction.cataloglots
             WHERE LotNumber IN (SELECT LotNumber FROM auction.CatalogDraftLots WHERE DraftId = {draftId});");
+        await ExecSql(conn, $@"
+            ALTER TABLE auction.[{lots}] ADD Description NVARCHAR(500) NULL, Estimate NVARCHAR(100) NULL,
+                                             RedLimit NVARCHAR(100) NULL, Remarks NVARCHAR(500) NULL;");
+        await ExecSql(conn, $@"
+            UPDATE t SET t.Description = d.Description, t.Estimate = d.Estimate,
+                         t.RedLimit = d.RedLimit, t.Remarks = d.Remarks
+            FROM auction.[{lots}] t
+            JOIN auction.CatalogDraftLots d ON d.DraftId = {draftId} AND d.LotNumber = t.LotNumber;");
 
         // 2. Skins — live SkinTable for those lots' boxes, frozen now (TRY_CAST: one bad IncludedBoxNumbers
         //    value must not abort the whole statement).

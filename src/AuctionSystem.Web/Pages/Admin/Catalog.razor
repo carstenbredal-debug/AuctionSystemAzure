@@ -121,7 +121,7 @@
             <table class="table table-sm table-bordered align-middle">
                 <thead class="table-dark">
                     <tr>
-                        <th>Lot #</th><th>String</th><th>Description</th><th class="text-end">Skins</th>
+                        <th>Lot #</th><th>String</th><th style="width:280px">Description</th><th class="text-end">Skins</th>
                         <th>Estimate</th><th>Red Limit</th><th>Remarks</th><th style="width:130px"></th>
                     </tr>
                 </thead>
@@ -145,7 +145,7 @@
                             }
                             else
                             {
-                                <td>@(string.IsNullOrWhiteSpace(lot.Description) ? BuildDescription(lot) : lot.Description)</td>
+                                <td><div style="max-width:280px; white-space:normal; word-break:break-word;">@(string.IsNullOrWhiteSpace(lot.Description) ? BuildDescription(lot) : lot.Description)</div></td>
                                 <td class="text-end">@lot.TotalSkins.ToString("N0")</td>
                                 <td>@lot.Estimate</td>
                                 <td>@lot.RedLimit</td>
