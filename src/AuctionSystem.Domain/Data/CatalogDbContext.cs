@@ -123,6 +123,7 @@ public class CatalogDbContext : DbContext
             e.Property(l => l.Estimate).HasMaxLength(100);
             e.Property(l => l.RedLimit).HasMaxLength(100);
             e.Property(l => l.Remarks).HasMaxLength(500);
+            e.Property(l => l.RackPosition).HasMaxLength(20);
         });
     }
 }

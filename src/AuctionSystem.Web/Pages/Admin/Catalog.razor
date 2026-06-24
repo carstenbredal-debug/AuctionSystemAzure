@@ -28,7 +28,7 @@
             <hr class="my-3" />
 
             <div class="mb-2 fw-bold small text-muted">Create catalog draft</div>
-            <div class="row g-2 align-items-end" style="max-width:780px">
+            <div class="row g-2 align-items-end" style="max-width:920px">
                 <div class="col">
                     <label class="form-label mb-0">Sales Type</label>
                     <select @bind="DraftSalesType" class="form-select form-select-sm">
@@ -49,6 +49,10 @@
                         <option value="">All</option>
                         @foreach (var val in Groups) { <option value="@val">@val</option> }
                     </select>
+                </div>
+                <div class="col-auto">
+                    <label class="form-label mb-0">Start Rack #</label>
+                    <input type="number" min="1" @bind="DraftStartRack" class="form-control form-control-sm" style="width:90px" title="First rack number — 20 lots per rack, in catalogue order" />
                 </div>
                 <div class="col-auto">
                     <button class="btn btn-success btn-sm" @onclick="CreateDraft" disabled="@IsCreatingDraft">
@@ -121,7 +125,7 @@
             <table class="table table-sm table-bordered align-middle">
                 <thead class="table-dark">
                     <tr>
-                        <th style="width:55px">Lot #</th><th style="width:55px">String</th><th style="width:280px">Description</th><th class="text-end" style="width:55px">Skins</th>
+                        <th style="width:55px">Lot #</th><th style="width:55px">String</th><th style="width:65px">Rack</th><th style="width:280px">Description</th><th class="text-end" style="width:55px">Skins</th>
                         <th style="width:85px">Estimate</th><th style="width:85px">Red Limit</th><th>Remarks</th><th style="width:120px"></th>
                     </tr>
                 </thead>
@@ -131,6 +135,7 @@
                         <tr class="@(lot.IsShow ? "table-warning" : "")">
                             <td>@lot.LotNumber</td>
                             <td>@lot.StringNumber</td>
+                            <td>@lot.RackPosition</td>
                             @if (editingLotId == lot.Id)
                             {
                                 <td><input class="form-control form-control-sm" @bind="editDescription" placeholder="@BuildDescription(lot)" /></td>
@@ -185,6 +190,7 @@
     private string DraftSalesType = "";
     private string DraftGender = "";
     private string DraftGroup = "";
+    private int DraftStartRack = 1;
     private string DraftMessage = "";
     private bool DraftIsError;
     private List<CatalogDraftRow> Drafts = new();
@@ -215,7 +221,7 @@
         try
         {
             var resp = await Http.PostAsJsonAsync("api/catalog/drafts",
-                new { salesType = DraftSalesType, gender = DraftGender, group = DraftGroup });
+                new { salesType = DraftSalesType, gender = DraftGender, group = DraftGroup, startRack = DraftStartRack });
             if (resp.IsSuccessStatusCode) { DraftMessage = "Catalog draft saved."; await LoadDrafts(); }
             else { DraftMessage = $"Failed to save draft: {(int)resp.StatusCode}"; DraftIsError = true; }
         }
@@ -361,6 +367,7 @@
         public string Estimate { get; set; } = "";
         public string RedLimit { get; set; } = "";
         public string Remarks { get; set; } = "";
+        public string RackPosition { get; set; } = "";
         public int LotNumber { get; set; }
         public int StringNumber { get; set; }
         public int CatalogSortOrder { get; set; }

@@ -333,6 +333,8 @@ using (var scope = host.Services.CreateScope())
                 ALTER TABLE auction.CatalogDraftLots ADD RedLimit NVARCHAR(100) NULL;
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.CatalogDraftLots') AND name = 'Remarks')
                 ALTER TABLE auction.CatalogDraftLots ADD Remarks NVARCHAR(500) NULL;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.CatalogDraftLots') AND name = 'RackPosition')
+                ALTER TABLE auction.CatalogDraftLots ADD RackPosition NVARCHAR(20) NULL;
         ");
         // TypistEntries: add AuctionId column
         db.Database.ExecuteSqlRaw(@"

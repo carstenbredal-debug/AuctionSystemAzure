@@ -31,7 +31,7 @@ public class CatalogDraftFunctions
         _logger = logger;
     }
 
-    public record CreateDraftRequest(string? SalesType, string? Gender, string? Group);
+    public record CreateDraftRequest(string? SalesType, string? Gender, string? Group, int? StartRack);
     public record UpdateDraftLotRequest(string? Description, string? Estimate, string? RedLimit, string? Remarks);
 
     [RequireRole("Admin")]
@@ -77,6 +77,17 @@ public class CatalogDraftFunctions
                 FROM auction.cataloglots
                 {where}";
             await _db.Database.ExecuteSqlRawAsync(sql, args.ToArray());
+
+            // Assign rack-position from the Start Rack #: 20 positions per rack, in catalogue order.
+            var startRack = body?.StartRack is int sr && sr > 0 ? sr : 1;
+            await _db.Database.ExecuteSqlRawAsync(@"
+                WITH ordered AS (
+                    SELECT Id, (ROW_NUMBER() OVER (ORDER BY CatalogSortOrder, LotNumber) - 1) AS rn
+                    FROM auction.CatalogDraftLots WHERE DraftId = {0})
+                UPDATE d
+                SET RackPosition = CAST(({1} + o.rn / 20) AS NVARCHAR(10)) + '-' + CAST((o.rn % 20 + 1) AS NVARCHAR(10))
+                FROM auction.CatalogDraftLots d JOIN ordered o ON o.Id = d.Id;",
+                draft.Id, startRack);
 
             draft.LotCount = await _db.CatalogDraftLots.CountAsync(l => l.DraftId == draft.Id);
             draft.SkinCount = await _db.CatalogDraftLots.Where(l => l.DraftId == draft.Id).SumAsync(l => (int?)l.TotalSkins) ?? 0;
@@ -194,10 +205,11 @@ public class CatalogDraftFunctions
             WHERE LotNumber IN (SELECT LotNumber FROM auction.CatalogDraftLots WHERE DraftId = {draftId});");
         await ExecSql(conn, $@"
             ALTER TABLE auction.[{lots}] ADD Description NVARCHAR(500) NULL, Estimate NVARCHAR(100) NULL,
-                                             RedLimit NVARCHAR(100) NULL, Remarks NVARCHAR(500) NULL;");
+                                             RedLimit NVARCHAR(100) NULL, Remarks NVARCHAR(500) NULL,
+                                             RackPosition NVARCHAR(20) NULL;");
         await ExecSql(conn, $@"
             UPDATE t SET t.Description = d.Description, t.Estimate = d.Estimate,
-                         t.RedLimit = d.RedLimit, t.Remarks = d.Remarks
+                         t.RedLimit = d.RedLimit, t.Remarks = d.Remarks, t.RackPosition = d.RackPosition
             FROM auction.[{lots}] t
             JOIN auction.CatalogDraftLots d ON d.DraftId = {draftId} AND d.LotNumber = t.LotNumber;");
 
@@ -256,6 +268,7 @@ public class CatalogDraftFunctions
                    Clarity, Size, HairLength, Damages, TotalSkins, BoxCount,
                    ISNULL(Description, '') AS Description, ISNULL(Estimate, '') AS Estimate,
                    ISNULL(RedLimit, '') AS RedLimit, ISNULL(Remarks, '') AS Remarks,
+                   ISNULL(RackPosition, '') AS RackPosition,
                    CASE WHEN IsShow = 'Yes' THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS IsShow,
                    COUNT(*) OVER (PARTITION BY StringNumber) AS LotsInString,
                    ROW_NUMBER() OVER (PARTITION BY StringNumber ORDER BY CatalogSortOrder) AS LotSequenceInString,

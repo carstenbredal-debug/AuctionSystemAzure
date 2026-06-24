@@ -29,4 +29,8 @@ public class CatalogDraftLot
     public string? Estimate { get; set; }
     public string? RedLimit { get; set; }
     public string? Remarks { get; set; }
+
+    // Physical storage location "rack-position" (e.g. "1-1", "2-3"), auto-assigned from the draft's
+    // Start Rack # at creation: 20 positions per rack, in catalogue order.
+    public string? RackPosition { get; set; }
 }
