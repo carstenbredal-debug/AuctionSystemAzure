@@ -112,10 +112,14 @@ public class CatalogPdfFunctions
             var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
 
             int.TryParse(query["draftId"], out var draftId);
-            // Auctioneer variant: add estimated price + remarks per lot (draft-only — those fields live on
-            // CatalogDraftLots). Only the admin-gated catalog/pdf-auc endpoint sets allowAuc.
-            bool includeAuc = allowAuc && draftId > 0;
             var sourceTable = draftId > 0 ? "auction.CatalogDraftLots" : GetCatalogTable(query);
+            // Auctioneer variant (only the admin pdf-auc endpoint sets allowAuc): add estimated price +
+            // remarks. CatalogDraftLots always has them; an auction snapshot only if it was catalog-imported,
+            // so probe for the Estimate column first to stay safe on old-flow snapshots.
+            bool includeAuc = false;
+            if (allowAuc)
+                includeAuc = draftId > 0
+                    || await connection.ExecuteScalarAsync<int?>("SELECT COL_LENGTH(@t, 'Estimate')", new { t = sourceTable }) != null;
 
             var sql = @"
                 SELECT
