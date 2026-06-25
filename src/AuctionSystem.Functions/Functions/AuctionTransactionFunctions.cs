@@ -40,7 +40,9 @@ public class AuctionTransactionFunctions
             q = q.Where(t => t.AuctionId == auctionId);
 
         var transactions = await q
-            .OrderBy(t => t.LotNumber)
+            .OrderBy(t => _db.Lots.Where(l => l.AuctionId == t.AuctionId && l.LotNumber == t.LotNumber)
+                                  .Select(l => l.CatalogSortOrder).FirstOrDefault())
+            .ThenBy(t => t.LotNumber)
             .ThenBy(t => t.TransactionType)
             .Select(t => new
             {
