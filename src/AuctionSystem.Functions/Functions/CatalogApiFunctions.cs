@@ -47,6 +47,18 @@ public class CatalogApiFunctions
         return "auction.cataloglots";
     }
 
+    // When activeAuction=true (and no explicit auctionNumber), resolve the active auction and inject its
+    // number so the catalogue reads its snapshot [{Num}.Lots] (the combined imported catalogue, sales order)
+    // instead of live cataloglots. Used by the public LotCatalogWeb. Status 1 = AuctionStatus.Active.
+    private static async Task ResolveActiveAuctionIntoQueryAsync(System.Collections.Specialized.NameValueCollection query, SqlConnection connection)
+    {
+        if (!string.IsNullOrEmpty(query["auctionNumber"])) return;
+        if (!string.Equals(query["activeAuction"], "true", StringComparison.OrdinalIgnoreCase)) return;
+        var num = await connection.ExecuteScalarAsync<string?>(
+            "SELECT TOP 1 AuctionNumber FROM auction.Auctions WHERE Status = 1 ORDER BY Id DESC");
+        if (!string.IsNullOrEmpty(num)) query["auctionNumber"] = num;
+    }
+
     // Public, read-only catalog data (the active auction). [AllowAnonymous] opts out of AUTH_ENFORCE;
     // safe because the only interpolated value (auctionNumber) is whitelisted in GetCatalogTable and
     // all filters are parameterized.
@@ -72,6 +84,7 @@ public class CatalogApiFunctions
             await connection.OpenAsync();
 
             var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+            await ResolveActiveAuctionIntoQueryAsync(query, connection);
             var table = GetCatalogTable(query);
 
             var filters = new Dictionary<string, List<string>>();
@@ -157,6 +170,7 @@ public class CatalogApiFunctions
             await connection.OpenAsync();
 
             var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+            await ResolveActiveAuctionIntoQueryAsync(query, connection);
 
             var sql = @"
                 SELECT

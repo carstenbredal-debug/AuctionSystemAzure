@@ -53,6 +53,16 @@ public class CatalogPdfFunctions
         return "auction.cataloglots";
     }
 
+    // activeAuction=true (no explicit auctionNumber) -> read the active auction's snapshot. Status 1 = Active.
+    private static async Task ResolveActiveAuctionIntoQueryAsync(System.Collections.Specialized.NameValueCollection query, SqlConnection connection)
+    {
+        if (!string.IsNullOrEmpty(query["auctionNumber"])) return;
+        if (!string.Equals(query["activeAuction"], "true", StringComparison.OrdinalIgnoreCase)) return;
+        var num = await connection.ExecuteScalarAsync<string?>(
+            "SELECT TOP 1 AuctionNumber FROM auction.Auctions WHERE Status = 1 ORDER BY Id DESC");
+        if (!string.IsNullOrEmpty(num)) query["auctionNumber"] = num;
+    }
+
     private static void RegisterFonts()
     {
         if (_fontsRegistered) return;
@@ -111,6 +121,7 @@ public class CatalogPdfFunctions
 
             var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
 
+            await ResolveActiveAuctionIntoQueryAsync(query, connection);
             int.TryParse(query["draftId"], out var draftId);
             var sourceTable = draftId > 0 ? "auction.CatalogDraftLots" : GetCatalogTable(query);
             // Auctioneer variant (only the admin pdf-auc endpoint sets allowAuc): add estimated price +
