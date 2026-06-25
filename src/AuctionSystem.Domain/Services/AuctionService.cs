@@ -59,7 +59,7 @@ public class AuctionService
 
     public async Task<List<Lot>> GetLotsByAuctionAsync(int auctionId)
         => await _db.Lots.Where(l => l.AuctionId == auctionId)
-            .OrderBy(l => l.LotNumber).ToListAsync();
+            .OrderBy(l => l.CatalogSortOrder).ThenBy(l => l.LotNumber).ToListAsync();
 
     public async Task<Lot?> GetLotAsync(int id)
         => await _db.Lots.Include(l => l.Farmer).Include(l => l.Bids).ThenInclude(b => b.Broker)

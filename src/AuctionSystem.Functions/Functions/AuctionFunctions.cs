@@ -350,10 +350,10 @@ public class AuctionFunctions
         using var conn = new Microsoft.Data.SqlClient.SqlConnection(_catalogDb.Database.GetConnectionString());
         await conn.OpenAsync();
         using var cmd = new Microsoft.Data.SqlClient.SqlCommand($@"
-            INSERT INTO auction.Lots (LotNumber, Description, Category, Quantity, Unit, StartingPrice, Status, AuctionId, CreatedAt)
+            INSERT INTO auction.Lots (LotNumber, Description, Category, Quantity, Unit, StartingPrice, Status, AuctionId, CatalogSortOrder, CreatedAt)
             SELECT s.LotNumber,
                    LTRIM(RTRIM(CONCAT(ISNULL(s.SalesType,''),' ',ISNULL(s.Gender,''),' ',ISNULL(s.Color,''),' ',ISNULL(s.Quality,'')))),
-                   s.[Group], s.TotalSkins, 'skins', 0, 0, @auctionId, SYSUTCDATETIME()
+                   s.[Group], s.TotalSkins, 'skins', 0, 0, @auctionId, s.CatalogSortOrder, SYSUTCDATETIME()
             FROM auction.[{auctionNum}.Lots] s
             WHERE s.LotNumber NOT IN (SELECT LotNumber FROM auction.Lots WHERE AuctionId = @auctionId);", conn)
         { CommandTimeout = 300 };

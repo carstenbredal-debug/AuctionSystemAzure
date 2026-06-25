@@ -341,6 +341,11 @@ using (var scope = host.Services.CreateScope())
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.CatalogDraftLots') AND name = 'RackPosition')
                 ALTER TABLE auction.CatalogDraftLots ADD RackPosition NVARCHAR(20) NULL;
         ");
+        // auction.Lots: catalogue sort order (sales order) so lots/transactions sort like the PDF.
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Lots') AND name = 'CatalogSortOrder')
+                ALTER TABLE auction.Lots ADD CatalogSortOrder INT NOT NULL DEFAULT 0;
+        ");
         // TypistEntries: add AuctionId column
         db.Database.ExecuteSqlRaw(@"
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.TypistEntries') AND name = 'AuctionId')

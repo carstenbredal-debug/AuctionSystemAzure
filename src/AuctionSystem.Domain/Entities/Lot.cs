@@ -14,6 +14,8 @@ public class Lot
     public decimal? ReservePrice { get; set; }
     public decimal? HammerPrice { get; set; }
     public LotStatus Status { get; set; } = LotStatus.Pending;
+    // Catalogue sales order (copied from the snapshot [{Num}.Lots] at import) so lots/transactions sort like the PDF.
+    public int CatalogSortOrder { get; set; }
 
     public int AuctionId { get; set; }
     public Auction Auction { get; set; } = null!;
