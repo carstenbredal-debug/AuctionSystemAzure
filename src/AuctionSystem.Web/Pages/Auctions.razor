@@ -53,6 +53,7 @@
                     @(deletingAuction ? "Deleting..." : "Delete Auction")
                 </button>
             }
+            <button class="btn btn-outline-dark btn-sm" @onclick="DownloadAuctionCatalogPdf" title="Combined catalogue (all imported catalogs) in sales order">Catalog PDF</button>
         </div>
         @if (!string.IsNullOrEmpty(deleteError))
         {
@@ -691,6 +692,13 @@ else
     {
         try { activeCatalogs = (await Api.GetCatalogsAsync()).Where(c => c.Status == "Active").ToList(); }
         catch { activeCatalogs = new(); }
+    }
+
+    private async Task DownloadAuctionCatalogPdf()
+    {
+        if (selectedAuction == null) return;
+        try { await JS.InvokeVoidAsync("open", $"api/catalog/pdf?auctionNumber={Uri.EscapeDataString(selectedAuction.AuctionNumber)}", "_blank"); }
+        catch { }
     }
 
     private async Task ImportSelectedCatalogs()
