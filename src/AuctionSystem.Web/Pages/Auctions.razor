@@ -54,6 +54,7 @@
                 </button>
             }
             <button class="btn btn-outline-dark btn-sm" @onclick="DownloadAuctionCatalogPdf" title="Combined catalogue (all imported catalogs) in sales order">Catalog PDF</button>
+            <button class="btn btn-outline-secondary btn-sm" @onclick="DownloadAuctionAucPdf" title="Auctioneer catalogue — estimated price + remarks">Auc PDF</button>
         </div>
         @if (!string.IsNullOrEmpty(deleteError))
         {
@@ -698,6 +699,13 @@ else
     {
         if (selectedAuction == null) return;
         try { await JS.InvokeVoidAsync("open", $"api/catalog/pdf?auctionNumber={Uri.EscapeDataString(selectedAuction.AuctionNumber)}", "_blank"); }
+        catch { }
+    }
+
+    private async Task DownloadAuctionAucPdf()
+    {
+        if (selectedAuction == null) return;
+        try { await JS.InvokeVoidAsync("open", $"api/catalog/pdf-auc?auctionNumber={Uri.EscapeDataString(selectedAuction.AuctionNumber)}", "_blank"); }
         catch { }
     }
 
