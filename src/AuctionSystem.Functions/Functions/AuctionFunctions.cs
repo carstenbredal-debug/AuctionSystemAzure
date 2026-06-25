@@ -19,6 +19,7 @@ public class AuctionFunctions
     private readonly CatalogDbContext _catalogDb;
     private readonly ILogger<AuctionFunctions> _logger;
     private readonly SnapshotBuildQueue _snapshotQueue;
+    private readonly CatalogImportQueue _catalogImportQueue;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -26,13 +27,14 @@ public class AuctionFunctions
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public AuctionFunctions(AuctionService service, AuctionDbContext db, CatalogDbContext catalogDb, ILogger<AuctionFunctions> logger, SnapshotBuildQueue snapshotQueue)
+    public AuctionFunctions(AuctionService service, AuctionDbContext db, CatalogDbContext catalogDb, ILogger<AuctionFunctions> logger, SnapshotBuildQueue snapshotQueue, CatalogImportQueue catalogImportQueue)
     {
         _service = service;
         _db = db;
         _catalogDb = catalogDb;
         _logger = logger;
         _snapshotQueue = snapshotQueue;
+        _catalogImportQueue = catalogImportQueue;
     }
 
     [Function("GetAuctions")]
@@ -281,25 +283,61 @@ public class AuctionFunctions
         if (catalogs.Count != ids.Count || catalogs.Any(c => c.Status != "Active"))
             return await CreateJsonResponse(req, new { error = "All selected catalogues must exist and be Active." }, System.Net.HttpStatusCode.BadRequest);
 
+        // Building the snapshot for 2+ real-size catalogues overruns the gateway timeout (the request is
+        // disposed mid-flight). Queue it and return immediately; the worker builds it and updates
+        // SnapshotStatus (which the page polls). Synchronous fallback when no queue (local dev).
+        if (_catalogImportQueue.IsConfigured)
+        {
+            auction.SnapshotStatus = "Queued";
+            auction.SnapshotBuiltAt = null;
+            await _db.SaveChangesAsync();
+            await _catalogImportQueue.EnqueueAsync(auctionId, ids);
+            return await CreateJsonResponse(req, new
+            {
+                queued = true,
+                message = "Import queued. Watch the auction's snapshotStatus for progress."
+            }, System.Net.HttpStatusCode.Accepted);
+        }
+
+        await RunCatalogImportAsync(auctionId, ids);
+        var done = (await _db.Auctions.FindAsync(auctionId))?.SnapshotStatus ?? "";
+        return await CreateJsonResponse(req, new { success = !done.StartsWith("Failed"), status = done });
+    }
+
+    // Off-request-thread import worker: 2+ catalogues otherwise time out the HTTP request.
+    [Function("CatalogImportWorker")]
+    public async Task CatalogImportWorker(
+        [QueueTrigger(CatalogImportQueue.QueueName, Connection = "AzureWebJobsStorage")] string message)
+    {
+        var msg = JsonSerializer.Deserialize<CatalogImportMessage>(message);
+        if (msg == null) { _logger.LogWarning("Bad catalog-import message: {Msg}", message); return; }
+        await RunCatalogImportAsync(msg.AuctionId, msg.CatalogIds);
+    }
+
+    // The actual import: build the 3 snapshot tables from the catalogues, create auction.Lots, lock the
+    // catalogues, and record the result on the auction's SnapshotStatus. No HTTP — safe for the queue worker.
+    private async Task RunCatalogImportAsync(int auctionId, List<int> ids)
+    {
+        var auction = await _db.Auctions.FindAsync(auctionId);
+        if (auction == null) { _logger.LogWarning("Catalog import: auction {Id} not found", auctionId); return; }
+
         try
         {
+            var catalogs = await _catalogDb.CatalogDrafts.Where(d => ids.Contains(d.Id)).ToListAsync();
             var (lots, boxes, skins) = await ImportCatalogsSnapshotAsync(auction.AuctionNumber, ids);
-            // The typist / selling flow reads auction.Lots — create those rows from the snapshot we just
-            // built (kept in sync with [{Num}.Lots]), or the typist sees "no unsold lots".
+            // The typist / selling flow reads auction.Lots — create them from the snapshot we just built.
             await CreateAuctionLotsFromSnapshotAsync(auctionId, auction.AuctionNumber);
             foreach (var c in catalogs) c.Status = "InAuction";
             await _catalogDb.SaveChangesAsync();
             auction.SnapshotStatus = $"Done: {lots} lots, {boxes} boxes, {skins} skins";
             auction.SnapshotBuiltAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
-            return await CreateJsonResponse(req, new { success = true, counts = new { lots, boxes, skins } });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Import catalogues failed for auction {AuctionId}", auctionId);
+            _logger.LogError(ex, "Catalog import failed for auction {AuctionId}", auctionId);
             auction.SnapshotStatus = $"Failed: {SnapshotErr(ex)}";
             await _db.SaveChangesAsync();
-            return await CreateJsonResponse(req, new { error = ex.Message }, System.Net.HttpStatusCode.InternalServerError);
         }
     }
 

@@ -109,6 +109,11 @@ var host = new HostBuilder()
             storageConnectionString,
             sp.GetRequiredService<ILogger<AuctionSystem.Functions.Services.SnapshotBuildQueue>>()));
 
+        // Background catalogue-import queue (2+ catalogues overrun the gateway timeout). Sync fallback.
+        services.AddSingleton(sp => new AuctionSystem.Functions.Services.CatalogImportQueue(
+            storageConnectionString,
+            sp.GetRequiredService<ILogger<AuctionSystem.Functions.Services.CatalogImportQueue>>()));
+
         // Background paced typist-simulator queue (runs over time at a configurable delay).
         services.AddSingleton(sp => new AuctionSystem.Functions.Services.TypistSimQueue(
             storageConnectionString,
