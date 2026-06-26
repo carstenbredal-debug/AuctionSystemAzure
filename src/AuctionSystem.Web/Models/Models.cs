@@ -15,6 +15,8 @@ public class CatalogDraftDto
     public int LotCount { get; set; }
     public int ShowLotCount { get; set; }
     public int SkinCount { get; set; }
+    // Live count of skins currently eligible for this catalogue's type filter (vs SkinCount frozen at activate).
+    public int AvailableSkins { get; set; }
 }
 
 public class AuctionDto

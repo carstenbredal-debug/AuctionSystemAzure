@@ -69,7 +69,7 @@
             {
                 <table class="table table-sm table-hover mt-3" style="max-width:840px">
                     <thead class="table-dark">
-                        <tr><th>Name</th><th class="text-end">Lots</th><th class="text-end">Show</th><th class="text-end">Skins</th><th>Status</th><th>Created</th><th class="text-end">Actions</th></tr>
+                        <tr><th>Name</th><th class="text-end">Lots</th><th class="text-end">Show</th><th class="text-end">Skins</th><th class="text-end" title="Skins eligible for this catalogue's type right now (live). Compare to Skins frozen at activate.">Available</th><th>Status</th><th>Created</th><th class="text-end">Actions</th></tr>
                     </thead>
                     <tbody>
                         @foreach (var d in Drafts)
@@ -79,6 +79,12 @@
                                 <td class="text-end">@d.LotCount.ToString("N0")</td>
                                 <td class="text-end">@d.ShowLotCount.ToString("N0")</td>
                                 <td class="text-end">@d.SkinCount.ToString("N0")</td>
+                                <td class="text-end">
+                                    <span class="@(d.AvailableSkins > d.SkinCount && d.Status != "Draft" ? "text-warning fw-bold" : "")"
+                                          title="@(d.AvailableSkins > d.SkinCount && d.Status != "Draft" ? $"{d.AvailableSkins - d.SkinCount:N0} more skins of this type are available than were frozen into this catalogue." : "Skins eligible for this type right now (live).")">
+                                        @d.AvailableSkins.ToString("N0")
+                                    </span>
+                                </td>
                                 <td>
                                     @{
                                         var badge = d.Status switch { "Active" => "bg-success", "InAuction" => "bg-secondary", _ => "bg-warning text-dark" };
@@ -362,6 +368,7 @@
         public int LotCount { get; set; }
         public int ShowLotCount { get; set; }
         public int SkinCount { get; set; }
+        public int AvailableSkins { get; set; }
         public string Status { get; set; } = "Draft";
         public DateTime CreatedAt { get; set; }
     }

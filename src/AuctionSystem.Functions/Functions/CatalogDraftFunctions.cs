@@ -99,7 +99,7 @@ public class CatalogDraftFunctions
             _logger.LogInformation("Created catalogue draft {Id} '{Name}' ({Lots} lots, {Show} show, {Skins} skins)",
                 draft.Id, draft.Name, draft.LotCount, showLotCount, draft.SkinCount);
 
-            return await Json(req, ToDto(draft, showLotCount), HttpStatusCode.Created);
+            return await Json(req, ToDto(draft, showLotCount, await AvailableSkinsAsync(salesType, gender, group)), HttpStatusCode.Created);
         }
         catch (Exception ex)
         {
@@ -127,7 +127,25 @@ public class CatalogDraftFunctions
                 .ToListAsync())
             .ToDictionary(x => x.DraftId, x => x.Count);
 
-        return await Json(req, drafts.Select(d => ToDto(d, showCounts.TryGetValue(d.Id, out var c) ? c : 0)));
+        // Live "could have been" pool: skins currently eligible (active, Showlot/Storage) for each type
+        // slice. One grouped scan, then summed per draft respecting blank (= all) filters. Comparing this to
+        // the frozen SkinCount shows when more skins of a catalogue's type have arrived since it was activated.
+        List<EligibleGroup> eligible;
+        await using (var conn = new SqlConnection(_db.Database.GetConnectionString()))
+        {
+            eligible = (await conn.QueryAsync<EligibleGroup>(@"
+                SELECT SalesType, Gender, [Group] AS GroupName, COUNT(*) AS Cnt
+                FROM dbo.SkinTable
+                WHERE IsActive = 1 AND BoxStatus IN ('Showlot','Storage')
+                GROUP BY SalesType, Gender, [Group]")).ToList();
+        }
+        int Available(CatalogDraft d) => eligible
+            .Where(g => (d.SalesType == null || string.Equals(g.SalesType?.Trim(), d.SalesType, StringComparison.OrdinalIgnoreCase))
+                     && (d.Gender    == null || string.Equals(g.Gender?.Trim(),    d.Gender,    StringComparison.OrdinalIgnoreCase))
+                     && (d.Group     == null || string.Equals(g.GroupName?.Trim(), d.Group,     StringComparison.OrdinalIgnoreCase)))
+            .Sum(g => g.Cnt);
+
+        return await Json(req, drafts.Select(d => ToDto(d, showCounts.TryGetValue(d.Id, out var c) ? c : 0, Available(d))));
     }
 
     // Activate a catalogue (Draft -> Active): it becomes usable for an auction. (Freezing the catalogue's
@@ -158,7 +176,7 @@ public class CatalogDraftFunctions
             await _db.SaveChangesAsync();
             _logger.LogInformation("Activated + froze catalogue draft {Id} '{Name}'", draft.Id, draft.Name);
         }
-        return await Json(req, ToDto(draft, await ShowCount(id)));
+        return await Json(req, ToDto(draft, await ShowCount(id), await AvailableSkinsAsync(draft.SalesType, draft.Gender, draft.Group)));
     }
 
     [RequireRole("Admin")]
@@ -434,13 +452,35 @@ public class CatalogDraftFunctions
     }
 
 
-    private static object ToDto(CatalogDraft d, int showLotCount) => new
+    private static object ToDto(CatalogDraft d, int showLotCount, int availableSkins) => new
     {
-        d.Id, d.Name, d.SalesType, d.Gender, d.Group, d.LotCount, showLotCount, d.SkinCount, d.Status, d.CreatedAt
+        d.Id, d.Name, d.SalesType, d.Gender, d.Group, d.LotCount, showLotCount, d.SkinCount, availableSkins, d.Status, d.CreatedAt
     };
 
     private Task<int> ShowCount(int draftId) =>
         _db.CatalogDraftLots.CountAsync(l => l.DraftId == draftId && l.IsShow == "Yes");
+
+    // Live count of skins currently eligible for a catalogue's type filter — the same eligibility the
+    // auction.Boxes view uses (active, BoxStatus Showlot/Storage). A blank filter (null) means "all".
+    private async Task<int> AvailableSkinsAsync(string? salesType, string? gender, string? group)
+    {
+        await using var conn = new SqlConnection(_db.Database.GetConnectionString());
+        const string sql = @"
+            SELECT COUNT(*) FROM dbo.SkinTable
+            WHERE IsActive = 1 AND BoxStatus IN ('Showlot','Storage')
+              AND (@salesType IS NULL OR SalesType = @salesType)
+              AND (@gender    IS NULL OR Gender    = @gender)
+              AND (@grp       IS NULL OR [Group]   = @grp)";
+        return await conn.ExecuteScalarAsync<int>(sql, new { salesType, gender, grp = group });
+    }
+
+    private class EligibleGroup
+    {
+        public string? SalesType { get; set; }
+        public string? Gender { get; set; }
+        public string? GroupName { get; set; }
+        public int Cnt { get; set; }
+    }
 
     // The auto-built catalogue line — matches the grid's BuildDescription exactly: grading attributes only
     // (Type/Gender/Group are separate columns), joined by " / ".
