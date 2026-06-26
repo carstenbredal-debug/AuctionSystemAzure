@@ -29,27 +29,28 @@ Live tracking doc for the Production stand-up. Companion to
 
 ---
 
-## Phase 0 — Facts (fill before Phase A)
+## Phase 0 — Facts (PROVISIONED)
 | Item | Value |
 |------|-------|
-| PROD subscription id | _TBD_ |
-| PROD tenant id | _TBD_ |
-| Region | polandcentral (proposed) |
-| SQL Entra admin (UPN / object-id) | _TBD_ |
+| PROD subscription id | `6161e948-e1d3-4c77-b77b-ab35491b2948` |
+| PROD tenant id | `982dbb71-b602-4c81-a7a7-d2244f22bc65` |
+| Region | polandcentral (SWAs in westeurope — SWA not in PL Central) |
+| SQL Entra admin | set at create (`--enable-ad-only-auth`, verified `azureAdOnlyAuthentication=true`) |
 
-**Proposed names** (clean convention):
+**Actual resource names** (created):
 | Resource | Name |
 |---|---|
-| Resource group | `rg-auctionsystem-prod` |
-| Auction Function App | `func-auctionsystem-prod` |
-| KSeF Function App | `func-ksef-prod` |
-| Admin SWA | `swa-auction-prod` |
-| Catalog SWA | `swa-auctioncatalog-prod` |
-| SQL server / db | `sql-auctionsystem-prod` / `auctiondb` |
-| VNet (10.20.0.0/16) | `vnet-auction-prod` — subnets `snet-pe`, `snet-runner`, `snet-func` |
-| Key Vault | `kv-auction-prod` |
-| Storage (auction func) | `stauctionprod…` (identity-based) |
-| Storage (ksef func) | `stksefprod…` (identity-based) |
+| Resource group | `Auction_Production` |
+| Auction Function App | `func-auctionsystem-prod` (Flex FC1, plan `ASP-AuctionProduction-a351`) |
+| KSeF Function App | `func-ksef-prod-86679` (Flex FC1) — reused/rebuilt in this RG |
+| Admin SWA | `swa-auction-prod` → `lemon-grass-026391103.7.azurestaticapps.net` |
+| Catalog SWA | `swa-auctioncatalog-prod` → `calm-river-0efbdc903.7.azurestaticapps.net` |
+| SQL server / db | `sql-auctionsystem-prod` / `auctiondb` (GP serverless, 4 vCore, no auto-pause) |
+| VNet (10.20.0.0/16) | `vnet-auction-prod` — `snet-pe`, `snet-runner`, `snet-func` (delegated `Microsoft.App/environments`) |
+| Key Vault | `kv-auction-prod` (RBAC) |
+| Storage (auction func) | `stauctionprod48422` (identity-based runtime storage) |
+| Storage (ksef func) | `stksefprod26226` (identity-based runtime storage) |
+| CI/OIDC app reg | `github-oidc-auction-prod` (federated to `prod` branch, Contributor on RG) |
 
 ---
 
@@ -75,11 +76,20 @@ Live tracking doc for the Production stand-up. Companion to
 - [ ] `AZURE_SWA_TOKEN_PROD`, `AZURE_SWA_TOKEN_CATALOG_PROD`, `API_BASE_URL_PROD`
 - [ ] `KSEF_FUNCTIONAPP_NAME_PROD`, `KSEF_RESOURCE_GROUP_PROD`
 
-## Phase B — Network lock  *(you)*
+## Phase B — Network lock + hardening  *(you, + me for decisions)*
+- [ ] **Deployment-storage → identity** on BOTH funcs. Created with key-based
+      `DEPLOYMENT_STORAGE_CONNECTION_STRING` (the other half of the TEST key-rotation outage).
+      `--deployment-storage-auth-type SystemAssignedIdentity` is a create-time flag → one clean
+      recreate of each (no code deployed yet). Runtime `AzureWebJobsStorage` already identity ✅.
+- [ ] **DECISION — catalog-web reachability under the lock.** Public catalog SWA reaches the
+      auction func cross-origin today; that breaks when public access is disabled. Options: (a)
+      catalog SWA own private linked backend; (b) Front Door/App Gateway WAF over the private func;
+      (c) separate public catalog API over the VNet. Settle before disabling public access.
+      Sets `API_BASE_URL_PROD`.
 - [ ] Private endpoint on **auction** func (sub-resource `sites`) in `snet-pe`;
       `privatelink.azurewebsites.net` DNS zone linked to the VNet.
 - [ ] Auction func → Networking → **Public network access = Disabled**.
-- [ ] SWA → linked backend re-linked over the private endpoint (Standard private backend).
+- [ ] Admin SWA → linked backend re-linked over the private endpoint (Standard private backend).
 - [ ] **KSeF func stays public** (function key; optional BC IP restriction).
 - [ ] Verify: direct `https://func-auctionsystem-prod.azurewebsites.net/api/brokers` unreachable;
       app via the SWA hostname works.
@@ -125,3 +135,8 @@ Live tracking doc for the Production stand-up. Companion to
 
 ## Status log
 - _(start)_ — PROD greenfield; `prod` branch 89 commits behind `test`. Plan locked, provisioning not started.
+- **Phase A DONE** — all core resources provisioned in `Auction_Production` (see Phase 0 table), both
+  funcs on Flex FC1 with identity-based runtime storage, SQL Entra-only verified, CI/OIDC app reg +
+  federated `prod`-branch credential created, all 9 `*_PROD` GitHub secrets set (`API_BASE_URL_PROD`
+  deferred to the Phase B catalog decision). Open: deployment-storage→identity (both funcs) +
+  catalog-web reachability, both folded into Phase B before first deploy.
