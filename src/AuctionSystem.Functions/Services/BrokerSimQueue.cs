@@ -17,14 +17,10 @@ public sealed class BrokerSimQueue
     private readonly QueueClient? _queue;
     private readonly ILogger<BrokerSimQueue> _logger;
 
-    public BrokerSimQueue(string? storageConnectionString, ILogger<BrokerSimQueue> logger)
+    public BrokerSimQueue(QueueClient? queue, ILogger<BrokerSimQueue> logger)
     {
         _logger = logger;
-        if (!string.IsNullOrEmpty(storageConnectionString) && storageConnectionString != "UseDevelopmentStorage=true")
-        {
-            _queue = new QueueClient(storageConnectionString, QueueName,
-                new QueueClientOptions { MessageEncoding = QueueMessageEncoding.Base64 });
-        }
+        _queue = queue;
     }
 
     /// <summary>When false the caller should run synchronously (no storage configured, e.g. local dev).</summary>

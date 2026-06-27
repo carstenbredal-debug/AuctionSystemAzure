@@ -17,14 +17,10 @@ public sealed class TypistSimQueue
     private readonly QueueClient? _queue;
     private readonly ILogger<TypistSimQueue> _logger;
 
-    public TypistSimQueue(string? storageConnectionString, ILogger<TypistSimQueue> logger)
+    public TypistSimQueue(QueueClient? queue, ILogger<TypistSimQueue> logger)
     {
         _logger = logger;
-        if (!string.IsNullOrEmpty(storageConnectionString) && storageConnectionString != "UseDevelopmentStorage=true")
-        {
-            _queue = new QueueClient(storageConnectionString, QueueName,
-                new QueueClientOptions { MessageEncoding = QueueMessageEncoding.Base64 });
-        }
+        _queue = queue;
     }
 
     /// <summary>When false the caller should run synchronously (no storage configured, e.g. local dev).</summary>

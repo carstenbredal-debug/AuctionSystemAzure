@@ -90,38 +90,67 @@ var host = new HostBuilder()
         services.AddScoped<LotGenerationService>();
         services.AddScoped<CatalogBuildService>();
 
+        // Storage clients: a connection string (local dev / key-based) OR the func's managed identity.
+        // In Azure (PROD/TEST) we use identity-based AzureWebJobsStorage (`__accountName`, no key/connection
+        // string), so build blob + queue clients with DefaultAzureCredential against the account endpoints.
         var storageConnectionString = context.Configuration["AzureWebJobsStorage"]
             ?? context.Configuration["Values:AzureWebJobsStorage"];
-        if (!string.IsNullOrEmpty(storageConnectionString) && storageConnectionString != "UseDevelopmentStorage=true")
+        var storageAccountName = context.Configuration["AzureWebJobsStorage:accountName"]
+            ?? context.Configuration["AzureWebJobsStorage__accountName"]
+            ?? context.Configuration["Values:AzureWebJobsStorage:accountName"];
+        var hasStorageConn = !string.IsNullOrEmpty(storageConnectionString) && storageConnectionString != "UseDevelopmentStorage=true";
+
+        Azure.Storage.Queues.QueueClient? MakeQueue(string name)
+        {
+            var opts = new Azure.Storage.Queues.QueueClientOptions { MessageEncoding = Azure.Storage.Queues.QueueMessageEncoding.Base64 };
+            if (hasStorageConn)
+                return new Azure.Storage.Queues.QueueClient(storageConnectionString, name, opts);
+            if (!string.IsNullOrEmpty(storageAccountName))
+                return new Azure.Storage.Queues.QueueClient(
+                    new Uri($"https://{storageAccountName}.queue.core.windows.net/{name}"),
+                    new Azure.Identity.DefaultAzureCredential(), opts);
+            return null;
+        }
+
+        // Blob storage (invoice PDFs): connection string or managed identity.
+        if (hasStorageConn)
         {
             services.AddSingleton(sp => new BlobStorageService(
-                storageConnectionString,
+                new Azure.Storage.Blobs.BlobServiceClient(storageConnectionString),
+                sp.GetRequiredService<ILogger<BlobStorageService>>()));
+        }
+        else if (!string.IsNullOrEmpty(storageAccountName))
+        {
+            services.AddSingleton(sp => new BlobStorageService(
+                new Azure.Storage.Blobs.BlobServiceClient(
+                    new Uri($"https://{storageAccountName}.blob.core.windows.net"),
+                    new Azure.Identity.DefaultAzureCredential()),
                 sp.GetRequiredService<ILogger<BlobStorageService>>()));
         }
 
         // Background BC push queue (enqueue side). No-ops if storage is unconfigured.
         services.AddSingleton(sp => new AuctionSystem.Functions.BusinessCentral.Services.BcPushQueue(
-            storageConnectionString,
+            MakeQueue(AuctionSystem.Functions.BusinessCentral.Services.BcPushQueue.QueueName),
             sp.GetRequiredService<ILogger<AuctionSystem.Functions.BusinessCentral.Services.BcPushQueue>>()));
 
         // Background snapshot-build queue (large auction imports). Synchronous fallback if unconfigured.
         services.AddSingleton(sp => new AuctionSystem.Functions.Services.SnapshotBuildQueue(
-            storageConnectionString,
+            MakeQueue(AuctionSystem.Functions.Services.SnapshotBuildQueue.QueueName),
             sp.GetRequiredService<ILogger<AuctionSystem.Functions.Services.SnapshotBuildQueue>>()));
 
         // Background catalogue-import queue (2+ catalogues overrun the gateway timeout). Sync fallback.
         services.AddSingleton(sp => new AuctionSystem.Functions.Services.CatalogImportQueue(
-            storageConnectionString,
+            MakeQueue(AuctionSystem.Functions.Services.CatalogImportQueue.QueueName),
             sp.GetRequiredService<ILogger<AuctionSystem.Functions.Services.CatalogImportQueue>>()));
 
         // Background paced typist-simulator queue (runs over time at a configurable delay).
         services.AddSingleton(sp => new AuctionSystem.Functions.Services.TypistSimQueue(
-            storageConnectionString,
+            MakeQueue(AuctionSystem.Functions.Services.TypistSimQueue.QueueName),
             sp.GetRequiredService<ILogger<AuctionSystem.Functions.Services.TypistSimQueue>>()));
 
         // Background paced broker-robot simulator queue (runs passes server-side until done/stopped).
         services.AddSingleton(sp => new AuctionSystem.Functions.Services.BrokerSimQueue(
-            storageConnectionString,
+            MakeQueue(AuctionSystem.Functions.Services.BrokerSimQueue.QueueName),
             sp.GetRequiredService<ILogger<AuctionSystem.Functions.Services.BrokerSimQueue>>()));
     })
     .Build();
