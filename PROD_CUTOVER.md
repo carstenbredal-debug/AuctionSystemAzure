@@ -140,3 +140,10 @@ Live tracking doc for the Production stand-up. Companion to
   federated `prod`-branch credential created, all 9 `*_PROD` GitHub secrets set (`API_BASE_URL_PROD`
   deferred to the Phase B catalog decision). Open: deployment-storage→identity (both funcs) +
   catalog-web reachability, both folded into Phase B before first deploy.
+- **First deploy GREEN + verified** — `test`→`prod` merged & pushed; `deploy-prod.yml` + KSeF prod deploy
+  both green (after fixing a mangled OIDC federated-credential subject — PowerShell `$REPO:ref` scope-parse
+  ate the value; recreated cleanly). Func boots, builds full schema over managed identity (36 auction tables),
+  `auction.Boxes` view + SystemParameters defaults seeded on a clean restart; lot-gen config seeded manually
+  (`seed_lotgen_config.sql`: LotSizeRule 53, CatalogNumberRule 143). All 4 endpoints 200 (func/admin SWA/
+  catalog SWA/KSeF func). Func still PUBLIC (pre-lock). Remaining data/config (SystemParameters, master data,
+  AuctionFee 6.75%) populated from TEST — mind BC-env-specific values. NEXT: Phase B (lock + Front Door).
