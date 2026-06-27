@@ -15,6 +15,10 @@ env:
   AZURE_FUNCTIONAPP_PACKAGE_PATH: 'src/AuctionSystem.Functions'
   DOTNET_VERSION: '8.0'
   ENVIRONMENT: 'prod'
+  # PROD auth tenants (not secrets) — rewrite the SWA auth config per-environment.
+  # The shipped staticwebapp.config.json holds DEV's tenants; we overwrite them here (mirrors deploy-test.yml).
+  AAD_ISSUER_TENANT_PROD: '982dbb71-b602-4c81-a7a7-d2244f22bc65'
+  EXTERNAL_CIAM_TENANT_PROD: '8de8e158-e70a-49e4-b28b-7cf70917dc4a'
 
 jobs:
   build_and_deploy_functions:
@@ -72,6 +76,20 @@ jobs:
       - name: Set environment-specific API URL
         run: |
           echo '{ "ApiBaseUrl": "", "Environment": "PROD" }' > src/AuctionSystem.Web/wwwroot/appsettings.json
+
+      - name: Point auth providers at the PROD tenants
+        run: |
+          CFG=src/AuctionSystem.Web/wwwroot/staticwebapp.config.json
+          WK="https://${EXTERNAL_CIAM_TENANT_PROD}.ciamlogin.com/${EXTERNAL_CIAM_TENANT_PROD}/v2.0/.well-known/openid-configuration"
+          jq --arg iss "https://login.microsoftonline.com/${AAD_ISSUER_TENANT_PROD}/v2.0" \
+             --arg wk "$WK" \
+             '.auth.identityProviders.azureActiveDirectory.registration.openIdIssuer = $iss
+              | .auth.identityProviders.customOpenIdConnectProviders.externalid.registration.openIdConnectConfiguration.wellKnownOpenIdConfiguration = $wk' \
+             "$CFG" > "$CFG.tmp" && mv "$CFG.tmp" "$CFG"
+          echo "internal openIdIssuer:"
+          jq -r '.auth.identityProviders.azureActiveDirectory.registration.openIdIssuer' "$CFG"
+          echo "external wellKnownOpenIdConfiguration:"
+          jq -r '.auth.identityProviders.customOpenIdConnectProviders.externalid.registration.openIdConnectConfiguration.wellKnownOpenIdConfiguration' "$CFG"
 
       - name: Build And Deploy
         id: builddeploy
