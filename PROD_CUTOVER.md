@@ -147,3 +147,19 @@ Live tracking doc for the Production stand-up. Companion to
   (`seed_lotgen_config.sql`: LotSizeRule 53, CatalogNumberRule 143). All 4 endpoints 200 (func/admin SWA/
   catalog SWA/KSeF func). Func still PUBLIC (pre-lock). Remaining data/config (SystemParameters, master data,
   AuctionFee 6.75%) populated from TEST — mind BC-env-specific values. NEXT: Phase B (lock + Front Door).
+- **Schema gap fixed** — startup migration block (`Program.cs`) aborts early on a fresh DB and the `catch`
+  *swallows* it, so `Migrate()` ran (entity tables) but raw-SQL adds after the abort didn't: `BoxTypeDimensions`
+  table + columns like `BrokerCustomerRequests.InitiatedBy` were missing → random 500s. Fixed by creating the
+  missing objects / syncing schema from TEST. **Latent risk:** that swallowing catch should fail loud or be
+  per-statement resilient so fresh envs can't half-build.
+- **NETWORK LOCK ABANDONED → app-level security (matches TEST).** Built Phase C (NAT + no-public-IP VM
+  self-hosted runner `vm-prod-runner`, label `prod-vnet`) and the private endpoint (`pe-func-auction`,
+  `privatelink.azurewebsites.net`, func resolves to 10.20.1.4 in-VNet) — runner deploy proven green. But on
+  disabling public access the **admin SWA broke with 403**: SWA Standard is a managed service *not in the VNet*,
+  so its linked backend can only reach the func's PUBLIC endpoint — it cannot reach a private-only func. The
+  runbook's "SWA Standard private backend" premise doesn't hold. Decision: **func stays PUBLIC; rely on
+  AUTH_ENFORCE + per-user data scoping** (identical to DEV/TEST). Reverted deploy-prod Functions job to
+  `ubuntu-latest`; catalog goes direct cross-origin (`API_BASE_URL_PROD` = func URL + CORS allow for the catalog
+  SWA origin). Lock infra (VM/NIC/disk, NAT gw + pip, private endpoint, private DNS zone) to be **torn down**.
+  A true lock would need Front Door for ALL traffic + re-architecting admin auth to validate the SWA token
+  server-side instead of trusting the injected `x-ms-client-principal` header — deferred, not pursued.
