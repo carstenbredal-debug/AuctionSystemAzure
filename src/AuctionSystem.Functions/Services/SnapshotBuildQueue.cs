@@ -16,15 +16,10 @@ public sealed class SnapshotBuildQueue
     private readonly QueueClient? _queue;
     private readonly ILogger<SnapshotBuildQueue> _logger;
 
-    public SnapshotBuildQueue(string? storageConnectionString, ILogger<SnapshotBuildQueue> logger)
+    public SnapshotBuildQueue(QueueClient? queue, ILogger<SnapshotBuildQueue> logger)
     {
         _logger = logger;
-        if (!string.IsNullOrEmpty(storageConnectionString) && storageConnectionString != "UseDevelopmentStorage=true")
-        {
-            // Base64 matches the Functions queue-trigger encoding pinned in host.json.
-            _queue = new QueueClient(storageConnectionString, QueueName,
-                new QueueClientOptions { MessageEncoding = QueueMessageEncoding.Base64 });
-        }
+        _queue = queue;
     }
 
     /// <summary>When false the caller should build synchronously (no storage configured, e.g. local dev).</summary>

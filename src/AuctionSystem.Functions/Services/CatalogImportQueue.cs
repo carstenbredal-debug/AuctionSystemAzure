@@ -18,14 +18,10 @@ public sealed class CatalogImportQueue
     private readonly QueueClient? _queue;
     private readonly ILogger<CatalogImportQueue> _logger;
 
-    public CatalogImportQueue(string? storageConnectionString, ILogger<CatalogImportQueue> logger)
+    public CatalogImportQueue(QueueClient? queue, ILogger<CatalogImportQueue> logger)
     {
         _logger = logger;
-        if (!string.IsNullOrEmpty(storageConnectionString) && storageConnectionString != "UseDevelopmentStorage=true")
-        {
-            _queue = new QueueClient(storageConnectionString, QueueName,
-                new QueueClientOptions { MessageEncoding = QueueMessageEncoding.Base64 });
-        }
+        _queue = queue;
     }
 
     /// <summary>When false the caller imports synchronously (no storage configured, e.g. local dev).</summary>

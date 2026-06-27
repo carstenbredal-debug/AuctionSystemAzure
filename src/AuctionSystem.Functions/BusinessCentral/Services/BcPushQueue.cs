@@ -24,15 +24,10 @@ public sealed class BcPushQueue
     private readonly QueueClient? _queue;
     private readonly ILogger<BcPushQueue> _logger;
 
-    public BcPushQueue(string? storageConnectionString, ILogger<BcPushQueue> logger)
+    public BcPushQueue(QueueClient? queue, ILogger<BcPushQueue> logger)
     {
         _logger = logger;
-        if (!string.IsNullOrEmpty(storageConnectionString) && storageConnectionString != "UseDevelopmentStorage=true")
-        {
-            // Base64 matches the Functions queue-trigger encoding pinned in host.json.
-            _queue = new QueueClient(storageConnectionString, QueueName,
-                new QueueClientOptions { MessageEncoding = QueueMessageEncoding.Base64 });
-        }
+        _queue = queue;
     }
 
     public async Task EnqueueAsync(string type, int id)

@@ -14,9 +14,13 @@ public class BlobStorageService
     private bool _packingContainerEnsured;
 
     public BlobStorageService(string connectionString, ILogger<BlobStorageService> logger, string containerName = "invoices")
+        : this(new BlobServiceClient(connectionString), logger, containerName) { }
+
+    // Identity path (PROD/TEST in Azure): a BlobServiceClient built with the func's managed identity.
+    public BlobStorageService(BlobServiceClient serviceClient, ILogger<BlobStorageService> logger, string containerName = "invoices")
     {
         _logger = logger;
-        _serviceClient = new BlobServiceClient(connectionString);
+        _serviceClient = serviceClient;
         _container = _serviceClient.GetBlobContainerClient(containerName);
     }
 
