@@ -23,9 +23,7 @@ env:
 jobs:
   build_and_deploy_functions:
     if: github.event_name == 'push'
-    # In-VNet self-hosted runner: reaches the func over the private endpoint once public access is off.
-    # Only THIS job needs private network access; the SWA jobs stay on ubuntu-latest.
-    runs-on: [self-hosted, prod-vnet]
+    runs-on: ubuntu-latest
     name: Build and Deploy Functions (PROD)
     permissions:
       id-token: write
