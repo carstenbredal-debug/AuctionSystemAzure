@@ -278,6 +278,22 @@ using (var scope = host.Services.CreateScope())
         ");
         // (No VAT backfill: existing invoices keep VatAmount/TotalAmountInclVat = 0 until regenerated.
         // New invoices/credit notes compute these at creation from the buyer's VAT Bus. Posting Group.)
+        // Supporting index for the eligible-skin grouped count (catalog list + activate). Without it the
+        // GROUP BY over a multi-million-row SkinTable full-scans and overruns the HTTP timeout. Isolated in
+        // its own try/catch so a one-time index build hiccup can never abort the rest of the migration.
+        try
+        {
+            db.Database.ExecuteSqlRaw(@"
+                IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_SkinTable_Eligible' AND object_id = OBJECT_ID('dbo.SkinTable'))
+                    CREATE NONCLUSTERED INDEX IX_SkinTable_Eligible
+                        ON dbo.SkinTable (IsActive, BoxStatus, SalesType, Gender, [Group]);
+            ");
+        }
+        catch (Exception ixEx)
+        {
+            scope.ServiceProvider.GetRequiredService<ILogger<Program>>()
+                .LogError(ixEx, "IX_SkinTable_Eligible creation failed; continuing startup");
+        }
         // Auction snapshot-build status columns (background import)
         db.Database.ExecuteSqlRaw(@"
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Auctions') AND name = 'SnapshotStatus')
