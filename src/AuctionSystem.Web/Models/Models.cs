@@ -428,6 +428,8 @@ public class InvoiceSummaryDto
     public decimal AuctionFee { get; set; }
     public decimal Commission { get; set; }
     public decimal TotalAmount { get; set; }
+    public decimal VatAmount { get; set; }
+    public decimal TotalAmountInclVat { get; set; }
     public string Currency { get; set; } = "EUR";
     public string Status { get; set; } = "";
     public string? BcInvoiceNumber { get; set; }

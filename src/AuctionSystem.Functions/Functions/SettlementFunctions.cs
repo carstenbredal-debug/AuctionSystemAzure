@@ -48,7 +48,7 @@ public class SettlementFunctions
         return await CreateJsonResponse(req, invoices.Select(i => new
         {
             i.Id, i.InvoiceNumber, i.InvoiceDate, i.SubTotal, i.AuctionFee, i.Commission,
-            i.TotalAmount, i.Currency, Status = i.Status.ToString(),
+            i.TotalAmount, i.VatAmount, i.TotalAmountInclVat, i.Currency, Status = i.Status.ToString(),
             BuyerName = i.Buyer?.Name, LinesCount = i.Lines.Count,
             i.IsCreditNote, OriginalInvoiceNumber = i.OriginalInvoice?.InvoiceNumber,
             i.PdfUrl
@@ -698,7 +698,7 @@ public class SettlementFunctions
             .Select(i => new
             {
                 i.Id, i.InvoiceNumber, i.InvoiceDate, i.SubTotal, i.AuctionFee, i.Commission,
-                i.TotalAmount, i.Currency, Status = i.Status.ToString(),
+                i.TotalAmount, i.VatAmount, i.TotalAmountInclVat, i.Currency, Status = i.Status.ToString(),
                 BrokerName = i.Broker.CompanyName, LinesCount = i.Lines.Count,
                 i.IsCreditNote, OriginalInvoiceNumber = i.OriginalInvoice != null ? i.OriginalInvoice.InvoiceNumber : null,
                 i.PdfUrl, i.BcInvoiceNumber
@@ -793,7 +793,7 @@ public class SettlementFunctions
             return new
             {
                 i.Id, i.InvoiceNumber, i.InvoiceDate, i.SubTotal, i.AuctionFee, i.Commission,
-                i.TotalAmount, i.Currency, Status = i.Status.ToString(),
+                i.TotalAmount, i.VatAmount, i.TotalAmountInclVat, i.Currency, Status = i.Status.ToString(),
                 BrokerName = i.Broker?.CompanyName, BrokerNumber = i.Broker?.BrokerNumber, BuyerName = i.Buyer?.Name, BuyerNumber = i.Buyer?.BuyerNumber, LinesCount = i.Lines.Count,
                 i.IsCreditNote, OriginalInvoiceNumber = i.OriginalInvoice?.InvoiceNumber,
                 i.PdfUrl, i.BcInvoiceNumber, i.ShippingStatus,
@@ -939,7 +939,7 @@ public class SettlementFunctions
             .Select(i => new
             {
                 i.Id, i.InvoiceNumber, i.InvoiceDate, i.SubTotal, i.AuctionFee, i.Commission,
-                i.TotalAmount, i.Currency, Status = i.Status.ToString(),
+                i.TotalAmount, i.VatAmount, i.TotalAmountInclVat, i.Currency, Status = i.Status.ToString(),
                 BuyerName = i.Buyer.Name, LinesCount = i.Lines.Count,
                 i.IsCreditNote, OriginalInvoiceNumber = i.OriginalInvoice != null ? i.OriginalInvoice.InvoiceNumber : null,
                 i.PdfUrl, i.BcInvoiceNumber
@@ -957,7 +957,7 @@ public class SettlementFunctions
             .Select(i => new
             {
                 i.Id, i.InvoiceNumber, i.InvoiceDate, i.SubTotal, i.AuctionFee, i.Commission,
-                i.TotalAmount, i.Currency, Status = i.Status.ToString(),
+                i.TotalAmount, i.VatAmount, i.TotalAmountInclVat, i.Currency, Status = i.Status.ToString(),
                 BrokerName = i.Broker.CompanyName, BuyerName = i.Buyer.Name, LinesCount = i.Lines.Count
             }).ToListAsync();
         return await CreateJsonResponse(req, invoices);
@@ -973,7 +973,7 @@ public class SettlementFunctions
             .Select(i => new
             {
                 i.Id, i.InvoiceNumber, i.InvoiceDate, i.SubTotal, i.AuctionFee, i.Commission,
-                i.TotalAmount, i.Currency, Status = i.Status.ToString(),
+                i.TotalAmount, i.VatAmount, i.TotalAmountInclVat, i.Currency, Status = i.Status.ToString(),
                 BrokerName = i.Broker.CompanyName, BuyerName = i.Buyer.Name, LinesCount = i.Lines.Count
             }).ToListAsync();
         return await CreateJsonResponse(req, creditNotes);

@@ -654,6 +654,8 @@ public class AuctionResultFunctions
             invoice.AuctionFee = totalAuctionFee;
             invoice.Commission = totalCommission;
             invoice.TotalAmount = subTotal + totalAuctionFee + totalCommission;
+            (invoice.VatAmount, invoice.TotalAmountInclVat) =
+                AuctionSystem.Domain.Services.VatRules.Compute(invoice.TotalAmount, buyer.VatBusPostingGroup);
             invoice.Buyer = buyer;
 
             _db.Invoices.Add(invoice);
@@ -1747,6 +1749,8 @@ public class AuctionResultFunctions
             creditNote.AuctionFee = totalAuctionFee;
             creditNote.Commission = totalCommission;
             creditNote.TotalAmount = subTotal + totalAuctionFee + totalCommission;
+            (creditNote.VatAmount, creditNote.TotalAmountInclVat) =
+                AuctionSystem.Domain.Services.VatRules.Compute(creditNote.TotalAmount, originalInvoice.Buyer?.VatBusPostingGroup);
 
             creditNote.Buyer = originalInvoice.Buyer;
             creditNote.OriginalInvoice = originalInvoice;

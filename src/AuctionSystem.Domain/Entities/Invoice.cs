@@ -19,6 +19,12 @@ public class Invoice
     public decimal AuctionFee { get; set; }
     public decimal Commission { get; set; }
     public decimal TotalAmount { get; set; }
+    // VAT is owned/posted by Business Central; these mirror it for display so the app shows
+    // Net (TotalAmount) / VAT / Total incl. VAT and reconciles against BC's gross RemainingAmount.
+    // Set at creation from the buyer's VAT Bus. Posting Group (see VatRules). Columns added via the
+    // startup raw-SQL block in Program.cs, not EF migrations.
+    public decimal VatAmount { get; set; }
+    public decimal TotalAmountInclVat { get; set; }
     public string Currency { get; set; } = "EUR";
 
     public InvoiceStatus Status { get; set; } = InvoiceStatus.Draft;

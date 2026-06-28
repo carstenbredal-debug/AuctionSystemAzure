@@ -271,7 +271,13 @@ using (var scope = host.Services.CreateScope())
                 ALTER TABLE auction.Invoices ADD BcSyncError nvarchar(1000) NULL;
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Invoices') AND name = 'BcSyncErrorAt')
                 ALTER TABLE auction.Invoices ADD BcSyncErrorAt datetime2 NULL;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Invoices') AND name = 'VatAmount')
+                ALTER TABLE auction.Invoices ADD VatAmount decimal(18,2) NOT NULL CONSTRAINT DF_Invoices_VatAmount DEFAULT 0;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Invoices') AND name = 'TotalAmountInclVat')
+                ALTER TABLE auction.Invoices ADD TotalAmountInclVat decimal(18,2) NOT NULL CONSTRAINT DF_Invoices_TotalAmountInclVat DEFAULT 0;
         ");
+        // (No VAT backfill: existing invoices keep VatAmount/TotalAmountInclVat = 0 until regenerated.
+        // New invoices/credit notes compute these at creation from the buyer's VAT Bus. Posting Group.)
         // Auction snapshot-build status columns (background import)
         db.Database.ExecuteSqlRaw(@"
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Auctions') AND name = 'SnapshotStatus')
