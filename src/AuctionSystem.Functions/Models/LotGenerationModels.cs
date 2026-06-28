@@ -65,6 +65,9 @@ public class CatalogBuildResult
 {
     public List<CatalogLotDto> CatalogLots { get; set; } = new();
     public List<SkippedGroupDto> SkippedGroups { get; set; } = new();
+    // Non-fatal config problems found during the build (e.g. duplicate active CatalogNumberRule).
+    // Surfaced in the generation summary so they're visible instead of crashing the run.
+    public List<string> Warnings { get; set; } = new();
 }
 
 public class CatalogLotDto
