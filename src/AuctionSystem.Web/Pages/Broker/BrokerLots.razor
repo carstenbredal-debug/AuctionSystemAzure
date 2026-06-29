@@ -73,6 +73,14 @@
             Re-Invoice <span class="badge bg-@(_pendingTakebacks.Count > 0 ? "warning" : "secondary")">@_pendingTakebacks.Count</span>
         </a>
     </li>
+    @if (_selectedAuctionId > 0 && _brokerId > 0)
+    {
+        <li class="nav-item">
+            <a class="nav-link" href="@BrokerCatalogUrl()" target="_blank" title="Download a catalogue of your won lots in this auction">
+                📄 Broker Catalogue
+            </a>
+        </li>
+    }
 </ul>
 
 @if (_loading)
@@ -781,6 +789,15 @@ else if (_activeTab == "takeback")
     {
         if (_selectedAuctionId <= 0) return new();
         return _allResults.Where(r => r.AuctionId == _selectedAuctionId).ToList();
+    }
+
+    // Download a catalogue PDF of just this broker's won lots in the selected auction (full lot skins).
+    private string BrokerCatalogUrl()
+    {
+        var num = _auctions.FirstOrDefault(a => a.Id == _selectedAuctionId)?.AuctionNumber;
+        return string.IsNullOrEmpty(num)
+            ? "javascript:void(0)"
+            : $"api/catalog/pdf?auctionNumber={Uri.EscapeDataString(num)}&brokerId={_brokerId}";
     }
 
     // Load only the selected auction's results instead of the broker's entire cross-auction history.

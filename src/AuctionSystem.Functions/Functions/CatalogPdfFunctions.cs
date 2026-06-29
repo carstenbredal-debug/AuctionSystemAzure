@@ -191,6 +191,8 @@ public class CatalogPdfFunctions
             var farmerName = query["farmerName"];
             var hasFarmerGuid = Guid.TryParse(query["farmerGuid"], out var farmerGuidVal);
             var isFarmerCatalog = hasFarmerGuid || !string.IsNullOrEmpty(farmerName);
+            int.TryParse(query["brokerId"], out var brokerCatalogId);
+            var isBrokerCatalog = !isFarmerCatalog && brokerCatalogId > 0;
             var lotSaleData = new Dictionary<int, LotSaleInfo>();
 
             if (isFarmerCatalog)
@@ -282,6 +284,51 @@ public class CatalogPdfFunctions
                         for (int i = 0; i < ordered.Count; i++)
                         {
                             ordered[i].TotalSkins = lotSaleData[ordered[i].LotNumber].FarmerSkins;
+                            ordered[i].LotsInString = ordered.Count;
+                            ordered[i].LotSequenceInString = i + 1;
+                            ordered[i].StringTotalSkins = stringTotal;
+                        }
+                    }
+                }
+            }
+            else if (isBrokerCatalog)
+            {
+                // Broker catalogue: only the lots this broker WON in this auction, at full lot skins (the
+                // broker buys the whole lot, unlike a farmer who sees only their share). Filter to those lots
+                // and recompute the per-string aggregates over them.
+                var auctionNumber = query["auctionNumber"];
+                if (!string.IsNullOrEmpty(auctionNumber))
+                {
+                    var brokerSql = @"SELECT ar.LotNumber, ar.PriceEur
+                        FROM auction.AuctionResults ar
+                        INNER JOIN auction.Lots l ON ar.LotNumber = l.LotNumber
+                        INNER JOIN auction.Auctions a ON l.AuctionId = a.Id
+                        WHERE a.AuctionNumber = @AuctionNumber AND ar.BrokerId = @BrokerId";
+                    var brokerRows = await connection.QueryAsync<dynamic>(brokerSql, new { AuctionNumber = auctionNumber, BrokerId = brokerCatalogId });
+                    var brokerLotPrice = new Dictionary<int, decimal>();
+                    foreach (var b in brokerRows)
+                        brokerLotPrice[(int)b.LotNumber] = (decimal)b.PriceEur;
+
+                    rows = rows.Where(r => brokerLotPrice.ContainsKey(r.LotNumber)).ToList();
+
+                    foreach (var r in rows)
+                    {
+                        var price = brokerLotPrice[r.LotNumber];
+                        lotSaleData[r.LotNumber] = new LotSaleInfo
+                        {
+                            HasResult = true,
+                            PricePerSkin = price,
+                            Value = r.TotalSkins * price,
+                            FarmerSkins = r.TotalSkins   // full lot — the broker bought the whole lot
+                        };
+                    }
+
+                    foreach (var strGrp in rows.GroupBy(r => r.StringNumber))
+                    {
+                        var ordered = strGrp.ToList();
+                        var stringTotal = ordered.Sum(r => r.TotalSkins);   // full lot skins
+                        for (int i = 0; i < ordered.Count; i++)
+                        {
                             ordered[i].LotsInString = ordered.Count;
                             ordered[i].LotSequenceInString = i + 1;
                             ordered[i].StringTotalSkins = stringTotal;
