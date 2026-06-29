@@ -25,6 +25,7 @@ public class CatalogPdfFunctions
     // boxes) so the catalogue doesn't mix heavy black boxes with faint grey row separators.
     private const float RowLineWidth = 0.75f;
     private const float StringBorderWidth = RowLineWidth * 2;   // the box around a multi-lot string — 2x the row lines
+    private const float DescriptionFontSize = 8f;               // slightly smaller — the description shows 2 stacked lines
     private static readonly Color RowLineColor = Colors.Grey.Medium;
 
     public CatalogPdfFunctions(
@@ -571,7 +572,7 @@ public class CatalogPdfFunctions
 
         table.Cell().Element(CellStyle).Text(BuildLotsText(row));
         table.Cell().Element(CellStyle).Text(BuildSkinsText(row));
-        table.Cell().Element(CellStyle).Text(BuildDescriptionText(row));
+        RenderDescriptionCell(table.Cell().Element(CellStyle), row);
 
         if (isFarmerCatalog && lotSaleData != null && lotSaleData.TryGetValue(row.LotNumber, out var sale))
         {
@@ -629,7 +630,7 @@ public class CatalogPdfFunctions
 
             Cell().Text(BuildLotsText(row));
             Cell().Text(BuildSkinsText(row));
-            Cell().Text(BuildDescriptionText(row));
+            RenderDescriptionCell(Cell(), row);
 
             if (isFarmerCatalog && lotSaleData != null && lotSaleData.TryGetValue(row.LotNumber, out var sale))
             {
@@ -732,6 +733,47 @@ public class CatalogPdfFunctions
         }
 
         return string.Join(" / ", parts.Where(x => !string.IsNullOrWhiteSpace(x)));
+    }
+
+    // The description's groups laid out as 3 columns of 2 stacked lines (slightly smaller font): the first
+    // two groups in column 1, the next two in column 2, the last two in column 3. Blank groups are dropped
+    // first (so a missing Damages just leaves column 3 with one line), keeping the same order as the old
+    // "/"-joined text.
+    private static void RenderDescriptionCell(IContainer container, CatalogPdfRow row)
+    {
+        // In a multi-lot string only the first lot shows the description; the other rows show the sequence
+        // number / string skin total — keep those as plain text.
+        if (row.IsMultiLotString && row.LotSequenceInString != 1)
+        {
+            container.Text(row.IsLastLotInString ? $"{row.StringTotalSkins:#,##0} skins" : row.LotSequenceInString.ToString());
+            return;
+        }
+
+        var parts = BuildDescriptionParts(row);
+        container.Row(r =>
+        {
+            for (var col = 0; col < 3; col++)
+            {
+                var top = col * 2 < parts.Count ? parts[col * 2] : "";
+                var bottom = col * 2 + 1 < parts.Count ? parts[col * 2 + 1] : "";
+                r.RelativeItem().Column(cc =>
+                {
+                    cc.Item().Text(top).FontSize(DescriptionFontSize);
+                    cc.Item().Text(bottom).FontSize(DescriptionFontSize);
+                });
+            }
+        });
+    }
+
+    private static List<string> BuildDescriptionParts(CatalogPdfRow row)
+    {
+        var parts = new List<string?> { row.HairLength, row.Size, row.Quality, row.Color, row.Clarity };
+        if (!string.IsNullOrWhiteSpace(row.Damages)
+            && !string.Equals(row.Damages, "None", StringComparison.OrdinalIgnoreCase))
+        {
+            parts.Add(row.Damages);
+        }
+        return parts.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x!).ToList();
     }
 
     // No Background here: a white cell background overpaints the bottom border of the cell above (borders
