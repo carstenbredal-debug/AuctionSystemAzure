@@ -309,21 +309,6 @@ public class SkinFunctions
 
         var saleInfoByBox = await GetSoldBoxSaleInfoAsync(auctionId.Value);
 
-        // Pre-load invoiced lot numbers (lot has an invoice line)
-        var paidStatuses = new[] {
-            Domain.Enums.InvoiceStatus.Paid,
-            Domain.Enums.InvoiceStatus.ReleasedToShip,
-            Domain.Enums.InvoiceStatus.Packing
-        };
-        var invoicedLotNumbers = await _auctionDb.Invoices
-            .Where(i => !i.IsCreditNote)
-            .SelectMany(i => i.Lines.Select(l => new { l.LotNumber, i.Status }))
-            .ToListAsync();
-        var invoicedLots = new HashSet<int>(invoicedLotNumbers.Select(x => x.LotNumber));
-        var paidLots = new HashSet<int>(invoicedLotNumbers
-            .Where(x => paidStatuses.Contains(x.Status))
-            .Select(x => x.LotNumber));
-
         // Pre-load farmer's skin count per box from snapshot
         var farmerSkinsByBox = new Dictionary<int, int>();
         await using (var preConn = new SqlConnection(connStr))
@@ -386,9 +371,9 @@ public class SkinFunctions
                 ? Math.Round(soldValue / soldSkinCount, 2)
                 : null;
 
-            var isInvoiced = invoicedLots.Contains(lotNumber);
-            var isPaid = paidLots.Contains(lotNumber);
-            string status = isPaid ? "Paid" : isInvoiced ? "Sold" : hasResult ? "Hammer" : "Auction";
+            // Farmer portal sees only Auction / Sold — a hammer price = sold to them (the invoiced/paid
+            // distinction is the broker's/finance's business, not the farmer's).
+            string status = hasResult ? "Sold" : "Auction";
 
             lots.Add(new
             {
@@ -471,7 +456,6 @@ public class SkinFunctions
         {
             var boxNum = reader.GetInt32(0);
             var hasBoxResult = saleInfoByBox.ContainsKey(boxNum);
-            var boxSoldToBuyer = hasBoxResult && saleInfoByBox[boxNum].IsSoldToBuyer;
             var price = hasBoxResult ? saleInfoByBox[boxNum].PriceEur : 0;
 
             boxes.Add(new
@@ -479,7 +463,7 @@ public class SkinFunctions
                 boxNumber = boxNum,
                 boxType = reader.IsDBNull(1) ? null : reader.GetString(1),
                 skinCount = reader.GetInt32(2),
-                status = boxSoldToBuyer ? "Sold" : hasBoxResult ? "Hammer" : "Auction",
+                status = hasBoxResult ? "Sold" : "Auction",   // farmer portal: hammer = sold
                 pricePerSkin = hasBoxResult ? price : (decimal?)null,
                 value = hasBoxResult ? reader.GetInt32(2) * price : (decimal?)null
             });

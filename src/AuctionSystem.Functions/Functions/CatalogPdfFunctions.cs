@@ -270,6 +270,23 @@ public class CatalogPdfFunctions
                             FarmerSkins = farmerSkins
                         };
                     }
+
+                    // Re-scope the catalogue to the farmer: each lot's skin count becomes the farmer's count
+                    // in that lot, and the per-string aggregates (count / sequence / string total) recompute
+                    // over ONLY the farmer's lots (the rest were filtered out above). Without this the farmer
+                    // PDF printed the whole lot's skin total instead of the farmer's share.
+                    foreach (var strGrp in rows.GroupBy(r => r.StringNumber))
+                    {
+                        var ordered = strGrp.ToList();   // rows are already sorted by CatalogSortOrder
+                        var stringTotal = ordered.Sum(r => lotSaleData[r.LotNumber].FarmerSkins);
+                        for (int i = 0; i < ordered.Count; i++)
+                        {
+                            ordered[i].TotalSkins = lotSaleData[ordered[i].LotNumber].FarmerSkins;
+                            ordered[i].LotsInString = ordered.Count;
+                            ordered[i].LotSequenceInString = i + 1;
+                            ordered[i].StringTotalSkins = stringTotal;
+                        }
+                    }
                 }
             }
 
