@@ -143,6 +143,12 @@ var host = new HostBuilder()
             MakeQueue(AuctionSystem.Functions.Services.CatalogImportQueue.QueueName),
             sp.GetRequiredService<ILogger<AuctionSystem.Functions.Services.CatalogImportQueue>>()));
 
+        // Background catalogue-freeze (Activate) queue: a big catalogue's SELECT INTO overruns the gateway
+        // timeout if done inline. Sync fallback when storage is unconfigured (local dev).
+        services.AddSingleton(sp => new AuctionSystem.Functions.Services.CatalogFreezeQueue(
+            MakeQueue(AuctionSystem.Functions.Services.CatalogFreezeQueue.QueueName),
+            sp.GetRequiredService<ILogger<AuctionSystem.Functions.Services.CatalogFreezeQueue>>()));
+
         // Background paced typist-simulator queue (runs over time at a configurable delay).
         services.AddSingleton(sp => new AuctionSystem.Functions.Services.TypistSimQueue(
             MakeQueue(AuctionSystem.Functions.Services.TypistSimQueue.QueueName),
