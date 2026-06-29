@@ -38,5 +38,12 @@ public class Auction
     // without re-enqueuing, then clears it. Reset to false when a new broker sim is started.
     public bool BrokerSimStopRequested { get; set; }
 
+    // CSV of catalogue ids imported into this auction. The per-auction snapshot is rebuilt from the UNION
+    // of ALL of them on every import, so importing catalogues incrementally accumulates instead of the
+    // latest import dropping+rebuilding the snapshot from only its own catalogues (which left the PDF /
+    // snapshot showing just the last catalogue while auction.Lots — built insert-only — kept them all).
+    // Column added via the Program.cs startup raw-SQL block (this project patches schema there).
+    public string? ImportedCatalogIds { get; set; }
+
     public ICollection<Lot> Lots { get; set; } = new List<Lot>();
 }

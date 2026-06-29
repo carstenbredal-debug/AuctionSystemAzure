@@ -314,6 +314,8 @@ using (var scope = host.Services.CreateScope())
                 ALTER TABLE auction.Auctions ADD BrokerSimStatus nvarchar(400) NULL;
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Auctions') AND name = 'BrokerSimStopRequested')
                 ALTER TABLE auction.Auctions ADD BrokerSimStopRequested bit NOT NULL DEFAULT 0;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Auctions') AND name = 'ImportedCatalogIds')
+                ALTER TABLE auction.Auctions ADD ImportedCatalogIds nvarchar(max) NULL;
         ");
         // TypistEntries table
         db.Database.ExecuteSqlRaw(@"
