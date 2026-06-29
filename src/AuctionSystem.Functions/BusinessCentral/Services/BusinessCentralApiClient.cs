@@ -523,6 +523,16 @@ public class BusinessCentralApiClient
         return result!;
     }
 
+    public async Task DeleteCustomerPaymentAsync(Guid companyId, Guid journalId, Guid paymentId)
+    {
+        await SetAuthHeaderAsync();
+        var url = $"{_options.BaseUrl}/companies({companyId})/customerPaymentJournals({journalId})/customerPayments({paymentId})";
+        var request = new HttpRequestMessage(HttpMethod.Delete, url);
+        request.Headers.Add("If-Match", "*");
+        var response = await _httpClient.SendAsync(request);
+        await EnsureSuccessAsync(response);
+    }
+
     public async Task PostCustomerPaymentJournalAsync(Guid companyId, Guid journalId)
     {
         await SetAuthHeaderAsync();

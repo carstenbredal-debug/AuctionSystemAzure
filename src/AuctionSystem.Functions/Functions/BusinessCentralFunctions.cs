@@ -63,6 +63,83 @@ public class BusinessCentralFunctions
         return await JsonResponse(req, companies);
     }
 
+    public class BuyerReceiptRequest
+    {
+        public string? JournalCode { get; set; }   // customer payment (cash receipt) journal batch code; null = first
+        public string? PostingDate { get; set; }    // yyyy-MM-dd; null = today
+    }
+
+    // Stages an UNPOSTED customer cash-receipt journal for testing: one line per buyer (customer) that has
+    // a non-zero BC balance, with the receipt amount that clears it. The balancing (bank/cash) account comes
+    // from the chosen customer payment journal BATCH in BC, so no account is passed here. Clears the batch
+    // first so re-running is idempotent. NEVER posts — you review and post it in Business Central.
+    [Function("BcGenerateBuyerReceiptJournal")]
+    public async Task<HttpResponseData> GenerateBuyerReceiptJournal(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "bc/buyer-receipt-journal")] HttpRequestData req)
+    {
+        if (!EnsureConfigured(out var error))
+            return await JsonResponse(req, error!, HttpStatusCode.BadRequest);
+
+        BuyerReceiptRequest body;
+        try { body = await req.ReadFromJsonAsync<BuyerReceiptRequest>() ?? new BuyerReceiptRequest(); }
+        catch { body = new BuyerReceiptRequest(); }
+        var postingDate = string.IsNullOrWhiteSpace(body.PostingDate) ? DateTime.UtcNow.ToString("yyyy-MM-dd") : body.PostingDate!;
+
+        var companyId = await _bcClient!.ResolveCompanyIdAsync();
+
+        // Pick the customer payment (cash receipt) journal batch (by code, else the first). It carries the bal. account.
+        var journals = await _bcClient.GetCustomerPaymentJournalsAsync(companyId);
+        if (journals.Count == 0)
+            return await JsonResponse(req, new { error = "No customer payment (cash receipt) journal exists in BC. Create one (with a balancing bank account) first." }, HttpStatusCode.BadRequest);
+        var journal = string.IsNullOrWhiteSpace(body.JournalCode)
+            ? journals[0]
+            : journals.FirstOrDefault(j => string.Equals(j.Code, body.JournalCode, StringComparison.OrdinalIgnoreCase));
+        if (journal == null)
+            return await JsonResponse(req, new { error = $"Customer payment journal '{body.JournalCode}' not found. Available: {string.Join(", ", journals.Select(j => j.Code))}" }, HttpStatusCode.BadRequest);
+
+        var balances = await _bcClient.GetCustomerBalancesAsync(companyId);
+        var toSettle = balances.Where(c => c.Balance != 0 && !string.IsNullOrEmpty(c.Number)).ToList();
+
+        // Clear the batch first so re-running doesn't stack duplicate lines.
+        var existing = await _bcClient.GetCustomerPaymentsAsync(companyId, journal.Id);
+        foreach (var line in existing)
+            await _bcClient.DeleteCustomerPaymentAsync(companyId, journal.Id, line.Id);
+
+        // One receipt line per buyer. A receivable shows as a positive customer balance; a cash receipt
+        // credits the customer, so -Balance is the line amount that clears it. VERIFY the sign on the first
+        // test post and flip if needed.
+        var created = new List<object>();
+        decimal total = 0;
+        foreach (var c in toSettle)
+        {
+            var amount = -c.Balance;
+            await _bcClient.CreateCustomerPaymentAsync(companyId, journal.Id, new BcCustomerPayment
+            {
+                CustomerNumber = c.Number,
+                PostingDate = postingDate,
+                DocumentNumber = $"RCPT-{c.Number}",
+                Amount = amount,
+                Description = $"Buyer cash receipt (test) — clears balance {c.Balance:N2}"
+            });
+            total += amount;
+            created.Add(new { customer = c.Number, name = c.DisplayName, balance = c.Balance, amount });
+        }
+
+        _logger.LogInformation("Staged buyer cash-receipt journal '{Code}': {Count} lines, total {Total:N2} (UNPOSTED)",
+            journal.Code, created.Count, total);
+
+        return await JsonResponse(req, new
+        {
+            journal = journal.Code,
+            journalName = journal.DisplayName,
+            postingDate,
+            lineCount = created.Count,
+            totalAmount = total,
+            lines = created,
+            note = "Staged UNPOSTED in BC. Review the journal and post it in Business Central to clear the buyer balances. Verify the amount sign on the first post."
+        });
+    }
+
     [Function("BcGetCustomers")]
     public async Task<HttpResponseData> GetCustomers(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "bc/customers")] HttpRequestData req)

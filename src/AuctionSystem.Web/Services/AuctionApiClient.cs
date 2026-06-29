@@ -128,6 +128,10 @@ public class AuctionApiClient
     public async Task<List<BuyerDto>> GetAllBuyersAsync()
         => await _http.GetFromJsonAsync<List<BuyerDto>>("api/buyers") ?? new();
 
+    // Stages an UNPOSTED customer cash-receipt journal in BC, one line per buyer with a non-zero balance (test).
+    public async Task<HttpResponseMessage> GenerateBuyerReceiptJournalAsync(string? journalCode = null, string? postingDate = null)
+        => await _http.PostAsJsonAsync("api/bc/buyer-receipt-journal", new { journalCode, postingDate });
+
     // Server-side typeahead search (capped, minimal projection) so pickers never pull the whole
     // buyer table into the browser.
     public async Task<List<BuyerDto>> SearchBuyersAsync(string q)

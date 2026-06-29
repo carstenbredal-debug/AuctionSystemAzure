@@ -1,6 +1,7 @@
 @page "/admin/balance-comparison"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
 @inject AuctionApiClient Api
+@using System.Net.Http.Json
 
 <h3>Balance Comparison (Web vs BC)</h3>
 <p class="text-muted">
@@ -13,6 +14,35 @@
     @if (_loading) { <span class="spinner-border spinner-border-sm me-1"></span> }
     Compare
 </button>
+
+<div class="card mb-3" style="max-width:760px">
+    <div class="card-body">
+        <h6 class="card-title">Buyer cash-receipt journal (test)</h6>
+        <p class="text-muted small mb-2">
+            Stages an <strong>unposted</strong> customer cash-receipt journal in BC — one line per buyer with
+            a non-zero balance, amount = the receipt that clears it. The balancing (bank) account comes from
+            the BC journal batch. Nothing posts: review the journal and <strong>post it in Business Central</strong>.
+        </p>
+        <div class="d-flex align-items-end gap-2 flex-wrap">
+            <div>
+                <label class="form-label small mb-0">Journal batch (blank = first)</label>
+                <input class="form-control form-control-sm" style="width:160px" @bind="_journalCode" placeholder="e.g. GENERAL" />
+            </div>
+            <div>
+                <label class="form-label small mb-0">Posting date</label>
+                <input type="date" class="form-control form-control-sm" style="width:160px" @bind="_postingDate" />
+            </div>
+            <button class="btn btn-warning btn-sm" @onclick="StageBuyerReceiptJournal" disabled="@_staging">
+                @if (_staging) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                Stage Buyer Cash-Receipt Journal
+            </button>
+        </div>
+        @if (!string.IsNullOrEmpty(_journalMessage))
+        {
+            <div class="alert @(_journalIsError ? "alert-danger" : "alert-success") mt-2 mb-0 small">@_journalMessage</div>
+        }
+    </div>
+</div>
 
 @if (_error != null)
 {
@@ -73,7 +103,47 @@ else if (_result != null)
     private bool _loading;
     private string? _error;
 
+    private string _journalCode = "";
+    private DateTime _postingDate = DateTime.Today;
+    private bool _staging;
+    private string? _journalMessage;
+    private bool _journalIsError;
+
     protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task StageBuyerReceiptJournal()
+    {
+        _staging = true;
+        _journalMessage = null;
+        try
+        {
+            var resp = await Api.GenerateBuyerReceiptJournalAsync(
+                string.IsNullOrWhiteSpace(_journalCode) ? null : _journalCode.Trim(),
+                _postingDate.ToString("yyyy-MM-dd"));
+            var content = await resp.Content.ReadFromJsonAsync<BuyerReceiptResult>();
+            if (resp.IsSuccessStatusCode && content != null)
+            {
+                _journalIsError = false;
+                _journalMessage = $"Staged {content.LineCount} line(s) totalling €{content.TotalAmount:N2} in journal '{content.Journal}' (UNPOSTED). {content.Note}";
+            }
+            else
+            {
+                _journalIsError = true;
+                _journalMessage = content?.Error ?? $"Failed ({(int)resp.StatusCode}).";
+            }
+        }
+        catch (Exception ex) { _journalIsError = true; _journalMessage = $"Error: {ex.Message}"; }
+        finally { _staging = false; }
+    }
+
+    private class BuyerReceiptResult
+    {
+        public string? Journal { get; set; }
+        public int LineCount { get; set; }
+        public decimal TotalAmount { get; set; }
+        public string? Note { get; set; }
+        public string? Error { get; set; }
+    }
 
     private async Task Load()
     {
