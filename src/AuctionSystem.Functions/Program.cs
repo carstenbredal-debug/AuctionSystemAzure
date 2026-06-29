@@ -434,7 +434,27 @@ using (var scope = host.Services.CreateScope())
                                     FROM auction.TypistEntries WHERE IsResolved = 0) x WHERE x.rn > 1);
 
                 CREATE UNIQUE INDEX UX_TypistEntries_Auction_Lot_Slot_Active
-                    ON auction.TypistEntries (AuctionId, LotNumber, TypistSlot) WHERE IsResolved = 0;
+                    ON auction.TypistEntries (AuctionId, LotNumber, TypistSlot) WHERE IsResolved = 0 AND IsDisagreement = 0;
+            END
+        ");
+
+        // The active-uniqueness index must EXCLUDE disagreement rows. With the original filter (IsResolved=0
+        // only), a disagreement re-entry inserts a fresh slot-1/2 row that collides (SQL 2601) with the
+        // still-unresolved ORIGINAL disagreement row of the same (AuctionId, LotNumber, TypistSlot) — the
+        // old rows aren't resolved until AFTER the colliding insert — so re-entry could never be submitted.
+        // Re-filter to active, NON-disagreement rows: normal-typing/redelivered-worker duplicates
+        // (IsDisagreement=0) stay protected, parked disagreement rows no longer block their own re-entry.
+        // Idempotent: skips once the index already carries the IsDisagreement predicate. No dedup needed —
+        // the old (superset) filter already guaranteed no active duplicates exist.
+        db.Database.ExecuteSqlRaw(@"
+            IF EXISTS (SELECT 1 FROM sys.indexes
+                       WHERE name = 'UX_TypistEntries_Auction_Lot_Slot_Active'
+                         AND object_id = OBJECT_ID('auction.TypistEntries')
+                         AND (filter_definition IS NULL OR filter_definition NOT LIKE '%IsDisagreement%'))
+            BEGIN
+                DROP INDEX UX_TypistEntries_Auction_Lot_Slot_Active ON auction.TypistEntries;
+                CREATE UNIQUE INDEX UX_TypistEntries_Auction_Lot_Slot_Active
+                    ON auction.TypistEntries (AuctionId, LotNumber, TypistSlot) WHERE IsResolved = 0 AND IsDisagreement = 0;
             END
         ");
         // Phase E1 (TEST/PROD perf): composite (owner + auction) indexes for the broker/buyer grids,

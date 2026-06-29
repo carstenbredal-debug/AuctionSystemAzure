@@ -711,7 +711,18 @@ public class AuctionApiClient
         var resp = await _http.PostAsJsonAsync("api/typist-entries/reentry", new { lotNumber, brokerId, priceEur, typistUserId });
         if (resp.IsSuccessStatusCode)
             return await resp.Content.ReadFromJsonAsync<TypistSubmitResult>();
-        return null;
+
+        // Surface the server's actual reason (e.g. "Broker not found", the re-entry guard) instead of
+        // swallowing it to null — the page was showing a misleading generic "already re-entered" for every failure.
+        var body = await resp.Content.ReadAsStringAsync();
+        var msg = $"Re-entry failed ({(int)resp.StatusCode}).";
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(body);
+            if (doc.RootElement.TryGetProperty("error", out var e)) msg = e.GetString() ?? msg;
+        }
+        catch { /* non-JSON body — keep the status-code message */ }
+        throw new InvalidOperationException(msg);
     }
 
     public async Task<List<TypistEntryDto>> GetTypistEntriesAsync()
