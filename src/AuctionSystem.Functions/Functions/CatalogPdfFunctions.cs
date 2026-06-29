@@ -523,7 +523,7 @@ public class CatalogPdfFunctions
         {
             table.Cell().Element(CellStyle).AlignRight().Text(sale.HasResult ? $"\u20ac{sale.PricePerSkin:N2}" : "-");
             table.Cell().Element(CellStyle).AlignRight().Text(sale.HasResult ? $"\u20ac{sale.Value:N2}" : "-");
-            table.Cell().Element(CellStyle).Text(sale.PdfStatus).FontColor(sale.IsPaid ? Color.FromHex("#230A3C") : sale.IsInvoiced ? Colors.Green.Darken2 : sale.HasResult ? Colors.Blue.Darken2 : Colors.Grey.Medium).Bold();
+            table.Cell().Element(CellStyle).Text(sale.PdfStatus).FontColor(sale.HasResult ? Colors.Green.Darken2 : Colors.Grey.Medium).Bold();
         }
         else if (isFarmerCatalog)
         {
@@ -581,7 +581,7 @@ public class CatalogPdfFunctions
             {
                 Cell().AlignRight().Text(sale.HasResult ? $"\u20ac{sale.PricePerSkin:N2}" : "-");
                 Cell().AlignRight().Text(sale.HasResult ? $"\u20ac{sale.Value:N2}" : "-");
-                Cell().Text(sale.PdfStatus).FontColor(sale.IsPaid ? Color.FromHex("#230A3C") : sale.IsInvoiced ? Colors.Green.Darken2 : sale.HasResult ? Colors.Blue.Darken2 : Colors.Grey.Medium).Bold();
+                Cell().Text(sale.PdfStatus).FontColor(sale.HasResult ? Colors.Green.Darken2 : Colors.Grey.Medium).Bold();
             }
             else if (isFarmerCatalog)
             {
@@ -727,6 +727,7 @@ public class CatalogPdfFunctions
         public int FarmerSkins { get; set; }
         public bool IsPaid { get; set; }
         public string Status => IsPaid ? "Paid" : IsInvoiced ? "Sold" : HasResult ? "Hammer" : "Auction";
-        public string PdfStatus => IsPaid ? "Paid" : IsInvoiced ? "Sold" : HasResult ? "Hmr" : "";
+        // Farmer catalogue: a hammer price = Sold (the invoiced/paid distinction is hidden from farmers).
+        public string PdfStatus => HasResult ? "Sold" : "";
     }
 }
