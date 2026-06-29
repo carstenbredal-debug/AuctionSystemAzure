@@ -9,8 +9,6 @@
 
 <PageTitle>Auction Detail - Farmer Portal</PageTitle>
 
-<nav class="mb-3"><a href="/">&larr; Back to Dashboard</a></nav>
-
 @if (_loading)
 {
     <p><em>Loading...</em></p>
@@ -65,17 +63,17 @@ else
     @* Tabs *@
     <ul class="nav nav-tabs mb-3">
         <li class="nav-item">
-            <a class="nav-link @(_activeTab == "results" ? "active" : "")" href="javascript:void(0)" @onclick='() => _activeTab = "results"'>Sales Results</a>
+            <a class="nav-link @(_activeTab == "catalog" ? "active" : "")" href="javascript:void(0)" @onclick='() => _activeTab = "catalog"'>Farmer Catalog</a>
         </li>
         <li class="nav-item">
-            <a class="nav-link @(_activeTab == "catalog" ? "active" : "")" href="javascript:void(0)" @onclick='() => _activeTab = "catalog"'>Farmer Catalog</a>
+            <a class="nav-link @(_activeTab == "results" ? "active" : "")" href="javascript:void(0)" @onclick='() => _activeTab = "results"'>Sales Results</a>
         </li>
     </ul>
 
     @if (_activeTab == "results")
     {
         <div class="bg-white border rounded p-2 mb-3 d-flex gap-4" style="font-size:0.9rem;">
-            <span><span class="badge bg-success">Sold</span> Sold (hammer price reached)</span>
+            <span><span class="badge bg-success">Sold</span> Sold</span>
             <span><span class="badge bg-secondary">Auction</span> Still to be auctioned</span>
         </div>
 
@@ -158,7 +156,7 @@ else
     else if (_activeTab == "catalog")
     {
         <div class="bg-white border rounded p-2 mb-3 d-flex gap-4" style="font-size:0.9rem;">
-            <span><span class="badge bg-success">Sold</span> Sold (hammer price reached)</span>
+            <span><span class="badge bg-success">Sold</span> Sold</span>
             <span><span class="badge bg-secondary">Auction</span> Still to be auctioned</span>
         </div>
 
@@ -237,7 +235,7 @@ else
     private int _totalSkins;
     private int _soldSkins;
     private decimal _totalValue;
-    private string _activeTab = "results";
+    private string _activeTab = "catalog";
     private bool _downloadingPdf;
 
     private List<DrillLevel> _levels = new();
