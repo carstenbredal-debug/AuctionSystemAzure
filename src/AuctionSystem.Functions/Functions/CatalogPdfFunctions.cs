@@ -538,19 +538,25 @@ public class CatalogPdfFunctions
 
     private static void AddColumnHeader(TableCellDescriptor table, bool isFarmerCatalog = false)
     {
-        table.Cell().Element(HeaderCell).Text("Lots").Bold();
-        table.Cell().Element(HeaderCell).Text("Skins").Bold();
-        table.Cell().Element(HeaderCell).Text("Description").Bold();
-        if (isFarmerCatalog)
+        var titles = isFarmerCatalog
+            ? new[] { "Lot", "Skins", "Description", "Price/Skin", "Value", "Status" }
+            : new[] { "Lot", "Skins", "Description", "Price", "Comments" };
+
+        for (var i = 0; i < titles.Length; i++)
         {
-            table.Cell().Element(HeaderCell).Text("Price/Skin").Bold();
-            table.Cell().Element(HeaderCell).Text("Value").Bold();
-            table.Cell().Element(HeaderCell).Text("Status").Bold();
-        }
-        else
-        {
-            table.Cell().Element(HeaderCell).Text("Price").Bold();
-            table.Cell().Element(HeaderCell).Text("Comments").Bold();
+            var first = i == 0;
+            var last = i == titles.Length - 1;
+            // Top + outer sides match the string box (StringBorderWidth); internal dividers stay thin.
+            table.Cell().Element(c => c
+                    .BorderTop(StringBorderWidth)
+                    .BorderBottom(0.5f)
+                    .BorderLeft(first ? StringBorderWidth : 0.5f)
+                    .BorderRight(last ? StringBorderWidth : 0.5f)
+                    .BorderColor(Colors.Grey.Medium)
+                    .Background(Colors.Grey.Lighten3)
+                    .PaddingVertical(4)
+                    .PaddingHorizontal(4))
+                .Text(titles[i]).Bold();
         }
     }
 
@@ -759,8 +765,12 @@ public class CatalogPdfFunctions
 
     private static IContainer SectionCell(IContainer container)
     {
+        // Section title: top + sides match the string box (StringBorderWidth) so the header reads as a box.
         return container
-            .Border(0.75f)
+            .BorderTop(StringBorderWidth)
+            .BorderLeft(StringBorderWidth)
+            .BorderRight(StringBorderWidth)
+            .BorderBottom(RowLineWidth)
             .BorderColor(Colors.Grey.Darken1)
             .Background(Colors.Grey.Lighten2)
             .PaddingVertical(5)
