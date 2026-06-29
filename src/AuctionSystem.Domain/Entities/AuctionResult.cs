@@ -34,4 +34,8 @@ public class AuctionResult
 
     public string? LastModifiedBy { get; set; }
     public DateTime? LastModifiedAt { get; set; }
+
+    // The external price feed's reference for this knock-down (clerk/clock system), null for typist-matched
+    // results. Stored for traceability / reconciliation. Column added via the Program.cs startup raw-SQL block.
+    public string? ExternalRef { get; set; }
 }

@@ -155,6 +155,44 @@ public class CatalogApiFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "catalog/lots")]
         HttpRequestData req)
     {
+        var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+        return await RespondCatalogLotsAsync(req, query, resolveActiveAuction: true);
+    }
+
+    // External partner catalogue read: the FULL catalogue for one auction — identical data to catalog/lots
+    // (no prices), same snapshot source — but machine-authenticated via x-api-key against
+    // EXTERNAL_PRICE_API_KEY and requiring an explicit auctionNumber. Pairs with POST auction-results/external
+    // (one credential for read + write). Add the route to Easy Auth excludedPaths.
+    [AllowAnonymous]
+    [Function("GetExternalCatalog")]
+    public async Task<HttpResponseData> GetExternalCatalog(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "catalog/external")] HttpRequestData req)
+    {
+        var expected = _configuration["EXTERNAL_PRICE_API_KEY"] ?? _configuration["Values:EXTERNAL_PRICE_API_KEY"];
+        var provided = req.Headers.TryGetValues("x-api-key", out var vals) ? vals.FirstOrDefault() : null;
+        if (string.IsNullOrEmpty(expected) || !string.Equals(provided, expected, StringComparison.Ordinal))
+        {
+            var unauth = req.CreateResponse(HttpStatusCode.Unauthorized);
+            await unauth.WriteStringAsync("Invalid or missing x-api-key.");
+            return unauth;
+        }
+
+        var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+        if (string.IsNullOrWhiteSpace(query["auctionNumber"]) || !AuctionNumberPattern.IsMatch(query["auctionNumber"]))
+        {
+            var bad = req.CreateResponse(HttpStatusCode.BadRequest);
+            await bad.WriteStringAsync("A valid auctionNumber query parameter is required.");
+            return bad;
+        }
+        return await RespondCatalogLotsAsync(req, query, resolveActiveAuction: false);
+    }
+
+    // Shared catalogue-lots reader for catalog/lots (public) and catalog/external (partner) — same projection
+    // and the same snapshot source (auction.[{Num}.Lots] via GetCatalogTable), so both always agree. Returns
+    // [] (not 500) before the snapshot exists.
+    private async Task<HttpResponseData> RespondCatalogLotsAsync(
+        HttpRequestData req, System.Collections.Specialized.NameValueCollection query, bool resolveActiveAuction)
+    {
         try
         {
             var connectionString = GetCatalogConnectionString();
@@ -169,8 +207,8 @@ public class CatalogApiFunctions
             using var connection = new SqlConnection(connectionString);
             await connection.OpenAsync();
 
-            var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
-            await ResolveActiveAuctionIntoQueryAsync(query, connection);
+            if (resolveActiveAuction)
+                await ResolveActiveAuctionIntoQueryAsync(query, connection);
 
             var sql = @"
                 SELECT
