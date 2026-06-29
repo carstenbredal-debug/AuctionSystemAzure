@@ -26,6 +26,7 @@ public class CatalogPdfFunctions
     private const float RowLineWidth = 0.75f;
     private const float StringBorderWidth = RowLineWidth * 2;   // the box around a multi-lot string — 2x the row lines
     private const float DescriptionFontSize = 8f;               // slightly smaller — the description shows 2 stacked lines
+    private const float ColumnDividerWidth = 0.5f;              // thin vertical lines between columns, through every lot
     private static readonly Color RowLineColor = Colors.Grey.Medium;
 
     public CatalogPdfFunctions(
@@ -399,8 +400,8 @@ public class CatalogPdfFunctions
                                                 columns.ConstantColumn(70);   // Lots
                                                 columns.ConstantColumn(55);   // Skins
                                                 columns.RelativeColumn();     // Description
-                                                columns.ConstantColumn(60);   // Price
-                                                columns.ConstantColumn(90);   // Comments
+                                                columns.ConstantColumn(45);   // Price (narrower, closer to Description)
+                                                columns.ConstantColumn(125);  // Comments (more room)
                                             });
                                         }
 
@@ -568,29 +569,45 @@ public class CatalogPdfFunctions
         bool isFarmerCatalog = false,
         Dictionary<int, LotSaleInfo>? lotSaleData = null)
     {
-        IContainer CellStyle(IContainer c) => nextIsStringStart ? NoBorderCell(c) : NormalCell(c);
+        var lastColIndex = isFarmerCatalog ? 5 : 4;
+        var colIndex = 0;
 
-        table.Cell().Element(CellStyle).Text(BuildLotsText(row));
-        table.Cell().Element(CellStyle).Text(BuildSkinsText(row));
-        RenderDescriptionCell(table.Cell().Element(CellStyle), row);
+        // Each cell carries the table's vertical lines so they run continuously through every lot: thick
+        // outer sides (StringBorderWidth), thin column dividers (ColumnDividerWidth). The bottom row line is
+        // suppressed right before a string starts (the string's thick top is the divider there).
+        IContainer Cell()
+        {
+            var ci = colIndex++;
+            return table.Cell().Element(c =>
+            {
+                if (!nextIsStringStart) c = c.BorderBottom(RowLineWidth);
+                if (ci == 0) c = c.BorderLeft(StringBorderWidth);
+                c = c.BorderRight(ci == lastColIndex ? StringBorderWidth : ColumnDividerWidth);
+                return c.BorderColor(RowLineColor).PaddingVertical(3).PaddingHorizontal(4);
+            });
+        }
+
+        Cell().Text(BuildLotsText(row));
+        Cell().Text(BuildSkinsText(row));
+        RenderDescriptionCell(Cell(), row);
 
         if (isFarmerCatalog && lotSaleData != null && lotSaleData.TryGetValue(row.LotNumber, out var sale))
         {
-            table.Cell().Element(CellStyle).AlignRight().Text(sale.HasResult ? $"\u20ac{sale.PricePerSkin:N2}" : "-");
-            table.Cell().Element(CellStyle).AlignRight().Text(sale.HasResult ? $"\u20ac{sale.Value:N2}" : "-");
-            table.Cell().Element(CellStyle).Text(sale.PdfStatus).FontColor(sale.HasResult ? Colors.Green.Darken2 : Colors.Grey.Medium).Bold();
+            Cell().AlignRight().Text(sale.HasResult ? $"\u20ac{sale.PricePerSkin:N2}" : "-");
+            Cell().AlignRight().Text(sale.HasResult ? $"\u20ac{sale.Value:N2}" : "-");
+            Cell().Text(sale.PdfStatus).FontColor(sale.HasResult ? Colors.Green.Darken2 : Colors.Grey.Medium).Bold();
         }
         else if (isFarmerCatalog)
         {
-            table.Cell().Element(CellStyle).Text("-");
-            table.Cell().Element(CellStyle).Text("-");
-            table.Cell().Element(CellStyle).Text("");
+            Cell().Text("-");
+            Cell().Text("-");
+            Cell().Text("");
         }
         else
         {
             // Price = estimated price, Comments = remarks (auctioneer PDF); empty on the customer catalogue.
-            table.Cell().Element(CellStyle).Text(row.Estimate ?? "");
-            table.Cell().Element(CellStyle).Text(row.Remarks ?? "");
+            Cell().Text(row.Estimate ?? "");
+            Cell().Text(row.Remarks ?? "");
         }
     }
 
@@ -623,7 +640,7 @@ public class CatalogPdfFunctions
                     if (isLast) c = c.BorderBottom(StringBorderWidth);
                     else c = c.BorderBottom(RowLineWidth);   // thin separator between lots inside the string (half the box)
                     if (ci == 0) c = c.BorderLeft(StringBorderWidth);
-                    if (ci == lastColIndex) c = c.BorderRight(StringBorderWidth);
+                    c = c.BorderRight(ci == lastColIndex ? StringBorderWidth : ColumnDividerWidth);   // thin column dividers through the string
                     return c.BorderColor(RowLineColor).PaddingVertical(3).PaddingHorizontal(4);
                 });
             }
