@@ -606,8 +606,23 @@ public class BusinessCentralApiClient
 
     public async Task<List<BcCustomerBalance>> GetCustomerBalancesAsync(Guid companyId)
     {
-        var url = $"{_options.BaseUrl}/companies({companyId})/customers?$top=5000&$select=id,number,displayName,balance,overdueAmount,currencyCode";
-        return await GetListAsync<BcCustomerBalance>(url);
+        // BC's `customers` entity doesn't expose `balance` in this environment (the $select 400s with
+        // "Could not find a property named 'balance'"). Derive each customer's open balance from the
+        // customer ledger (net of open entries' remaining amount — invoices positive, payments/credits
+        // negative), exactly like GetBuyerBalances / BcBalanceComparison.
+        var entries = await GetCustomerLedgerEntriesAsync(companyId);
+        return entries
+            .GroupBy(e => (e.CustomerNo ?? "").Trim())
+            .Where(g => !string.IsNullOrEmpty(g.Key))
+            .Select(g => new BcCustomerBalance
+            {
+                Number        = g.Key,
+                DisplayName   = g.First().CustomerName ?? string.Empty,
+                Balance       = g.Where(e => e.Open).Sum(e => e.RemainingAmount),
+                OverdueAmount = 0,
+                CurrencyCode  = string.Empty
+            })
+            .ToList();
     }
 
     // ── Sales Credit Memos ─────────────────────────────────────
