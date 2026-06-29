@@ -24,6 +24,7 @@ public class CatalogPdfFunctions
     // One consistent rule weight/colour for every data-row line (single rows and multi-lot group
     // boxes) so the catalogue doesn't mix heavy black boxes with faint grey row separators.
     private const float RowLineWidth = 0.75f;
+    private const float StringBorderWidth = RowLineWidth * 2;   // the box around a multi-lot string — 2x the row lines
     private static readonly Color RowLineColor = Colors.Grey.Medium;
 
     public CatalogPdfFunctions(
@@ -612,10 +613,10 @@ public class CatalogPdfFunctions
                 return table.Cell().Element(c =>
                 {
                     c = c.Background(Colors.White);
-                    if (isFirst) c = c.BorderTop(RowLineWidth);
-                    if (isLast) c = c.BorderBottom(RowLineWidth);
-                    if (ci == 0) c = c.BorderLeft(RowLineWidth);
-                    if (ci == lastColIndex) c = c.BorderRight(RowLineWidth);
+                    if (isFirst) c = c.BorderTop(StringBorderWidth);
+                    if (isLast) c = c.BorderBottom(StringBorderWidth);
+                    if (ci == 0) c = c.BorderLeft(StringBorderWidth);
+                    if (ci == lastColIndex) c = c.BorderRight(StringBorderWidth);
                     return c.BorderColor(RowLineColor).PaddingVertical(3).PaddingHorizontal(4);
                 });
             }
