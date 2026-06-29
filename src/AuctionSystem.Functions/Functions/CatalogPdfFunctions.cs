@@ -612,9 +612,9 @@ public class CatalogPdfFunctions
                 var ci = colIndex++;
                 return table.Cell().Element(c =>
                 {
-                    c = c.Background(Colors.White);
                     if (isFirst) c = c.BorderTop(StringBorderWidth);
                     if (isLast) c = c.BorderBottom(StringBorderWidth);
+                    else c = c.BorderBottom(RowLineWidth);   // thin separator between lots inside the string (half the box)
                     if (ci == 0) c = c.BorderLeft(StringBorderWidth);
                     if (ci == lastColIndex) c = c.BorderRight(StringBorderWidth);
                     return c.BorderColor(RowLineColor).PaddingVertical(3).PaddingHorizontal(4);
@@ -728,12 +728,14 @@ public class CatalogPdfFunctions
         return string.Join(" / ", parts.Where(x => !string.IsNullOrWhiteSpace(x)));
     }
 
+    // No Background here: a white cell background overpaints the bottom border of the cell above (borders
+    // straddle the shared edge), which made the thick line below a string's last lot look thinner. The page
+    // is white anyway, so dropping it is purely a fix.
     private static IContainer NormalCell(IContainer container)
     {
         return container
             .BorderBottom(RowLineWidth)
             .BorderColor(RowLineColor)
-            .Background(Colors.White)
             .PaddingVertical(3)
             .PaddingHorizontal(4);
     }
@@ -741,7 +743,6 @@ public class CatalogPdfFunctions
     private static IContainer NoBorderCell(IContainer container)
     {
         return container
-            .Background(Colors.White)
             .PaddingVertical(3)
             .PaddingHorizontal(4);
     }
