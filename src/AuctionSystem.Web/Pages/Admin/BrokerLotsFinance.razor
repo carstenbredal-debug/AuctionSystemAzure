@@ -1,0 +1,1009 @@
+@page "/admin/finance/broker-lots"
+@attribute [Authorize(Roles = "Admin")]
+@using System.Net.Http.Json
+@inject AuctionApiClient Api
+@inject IJSRuntime JS
+
+<PageTitle>Broker Lots — Finance</PageTitle>
+
+<h1>Broker Lots — Finance</h1>
+<p class="text-muted">Work on behalf of any broker: sell, re-invoice and respond to returns. Pick a broker to begin.</p>
+
+@if (!_loading)
+{
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <label class="form-label fw-bold">Broker</label>
+            <select class="form-select" @bind="_brokerId" @bind:after="OnBrokerFilterChanged">
+                <option value="0">— Select Broker —</option>
+                @foreach (var b in _brokers)
+                {
+                    <option value="@b.Id">@b.BrokerNumber — @b.CompanyName</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label fw-bold">Auction</label>
+            <select class="form-select" @bind="_selectedAuctionId" @bind:after="OnAuctionFilterChanged" disabled="@(_brokerId <= 0)">
+                @foreach (var a in _auctions)
+                {
+                    <option value="@a.Id">@a.AuctionNumber - @a.Title</option>
+                }
+            </select>
+        </div>
+    </div>
+}
+
+@if (_loading)
+{
+    <p><em>Loading...</em></p>
+}
+else if (_brokerId <= 0)
+{
+    <div class="alert alert-info">Select a broker above to view and work their lots.</div>
+}
+else
+{
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="summary-card">
+                <div class="card-title">Total Purchase</div>
+                <div class="card-value">€@GetFilteredResults().Sum(r => r.TotalSkins * r.PriceEur).ToString("N2")</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="summary-card">
+                <div class="card-title">Invoiced</div>
+                <div class="card-value">€@GetSoldLots().Sum(r => r.TotalSkins * r.PriceEur).ToString("N2")</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="summary-card">
+                <div class="card-title">Un-Invoiced</div>
+                <div class="card-value">€@GetUnsoldLots().Sum(r => r.TotalSkins * r.PriceEur).ToString("N2")</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="summary-card">
+                <div class="card-title">Total Auction Fees</div>
+                <div class="card-value">€@GetFilteredResults().Sum(r => CalcAuctionFee(r.TotalSkins, r.PriceEur)).ToString("N2")</div>
+            </div>
+        </div>
+    </div>
+
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+            <a class="nav-link @(_activeTab == "purchased" ? "active" : "")" href="javascript:void(0)" @onclick='() => _activeTab = "purchased"'>
+                Purchased Lots <span class="badge bg-secondary">@GetFilteredResults().Count</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(_activeTab == "sold" ? "active" : "")" href="javascript:void(0)" @onclick='() => _activeTab = "sold"'>
+                Invoiced Lots <span class="badge bg-secondary">@GetSoldLots().Count</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(_activeTab == "unsold" ? "active" : "")" href="javascript:void(0)" @onclick='() => _activeTab = "unsold"'>
+                Un-Invoiced Lots <span class="badge bg-secondary">@GetUnsoldLots().Count</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(_activeTab == "takeback" ? "active" : "")" href="javascript:void(0)" @onclick='() => _activeTab = "takeback"'>
+                Re-Invoice <span class="badge bg-@(_pendingTakebacks.Count > 0 ? "warning" : "secondary")">@_pendingTakebacks.Count</span>
+            </a>
+        </li>
+    </ul>
+
+    @if (_activeTab == "purchased")
+    {
+        <div class="section-container">
+            <div class="section-header d-flex justify-content-between align-items-center">
+                <span>All Purchased Lots</span>
+                <button class="btn btn-sm btn-outline-light" @onclick="ExportPurchasedToExcel">📥 Export to Excel</button>
+            </div>
+            <div class="section-body">
+                <table class="table table-striped table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("LotNumber")'>Lot # @SortIndicator("LotNumber")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("Type")'>Type @SortIndicator("Type")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("Gender")'>Gender @SortIndicator("Gender")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("Group")'>Group @SortIndicator("Group")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("Color")'>Color @SortIndicator("Color")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("Quality")'>Quality @SortIndicator("Quality")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("Size")'>Size @SortIndicator("Size")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("Skins")'>Skins @SortIndicator("Skins")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("Boxes")'>Boxes @SortIndicator("Boxes")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("Price")'>Price (EUR) @SortIndicator("Price")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("HammerPrice")'>Hammer Price @SortIndicator("HammerPrice")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("AuctionFee")'>Auction Fee @SortIndicator("AuctionFee")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("Commission")'>Commission @SortIndicator("Commission")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("Status")'>Status @SortIndicator("Status")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("InitiatedBy")'>Initiated By @SortIndicator("InitiatedBy")</th>
+                            <th>Documents</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (GetFilteredResults().Count == 0)
+                        {
+                            <tr><td colspan="16" class="text-center text-muted py-4">No purchased lots.</td></tr>
+                        }
+                        @foreach (var r in ApplySort(GetFilteredResults()))
+                        {
+                            var link = _invoiceLinks.GetValueOrDefault(r.Id);
+                            <tr>
+                                <td><strong>@r.LotNumber</strong></td>
+                                <td>@(r.SalesType ?? "—")</td>
+                                <td>@(r.Gender ?? "—")</td>
+                                <td>@(r.Group ?? "—")</td>
+                                <td>@(r.Color ?? "—")</td>
+                                <td>@(r.Quality ?? "—")</td>
+                                <td>@(r.Size ?? "—")</td>
+                                <td>@r.TotalSkins</td>
+                                <td>@r.BoxCount</td>
+                                <td>€@r.PriceEur.ToString("N2")</td>
+                                <td>€@((r.TotalSkins * r.PriceEur).ToString("N2"))</td>
+                                <td>€@CalcAuctionFee(r.TotalSkins, r.PriceEur).ToString("N2")</td>
+                                <td>€@((r.CommissionAmount ?? 0).ToString("N2"))</td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(r.ShippingStatus) && r.ShippingStatus == "Shipped")
+                                    {
+                                        <span class="badge bg-primary">Shipped</span>
+                                    }
+                                    else if (!string.IsNullOrEmpty(r.ShippingStatus) && r.ShippingStatus == "Delivered")
+                                    {
+                                        <span class="badge bg-dark">Delivered</span>
+                                    }
+                                    else if (!string.IsNullOrEmpty(r.ShippingStatus) && (r.ShippingStatus == "Packed" || r.ShippingStatus == "Packing"))
+                                    {
+                                        <span class="badge bg-info">Packed</span>
+                                    }
+                                    else if (!string.IsNullOrEmpty(r.ShippingStatus))
+                                    {
+                                        <span class="badge bg-secondary">@r.ShippingStatus</span>
+                                    }
+                                    else if (r.SoldToBuyerId != null && r.InvoicePosted)
+                                    {
+                                        <span class="badge bg-success">Invoiced</span>
+                                    }
+                                    else if (r.SoldToBuyerId != null)
+                                    {
+                                        <span class="badge bg-warning text-dark">Not Posted</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-warning">Un-Invoiced</span>
+                                    }
+                                </td>
+                                <td>@(r.LastModifiedBy ?? "")</td>
+                                <td>
+                                    @if (link != null)
+                                    {
+                                        @foreach (var doc in link.Documents)
+                                        {
+                                            var url = !string.IsNullOrEmpty(doc.PdfUrl) ? doc.PdfUrl : Api.GetInvoicePdfUrl(doc.Id);
+                                            <a href="@url" target="_blank" class="btn btn-sm @(doc.IsCreditNote ? "btn-outline-warning" : "btn-outline-primary") me-1" title="@doc.Number">📄 @(doc.IsCreditNote ? "CN" : "Inv")</a>
+                                        }
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+    else if (_activeTab == "sold")
+    {
+        @if (!string.IsNullOrEmpty(_takebackMessage))
+        {
+            <div class="alert @(_takebackMessageIsError ? "alert-danger" : "alert-success") alert-dismissible">
+                @_takebackMessage
+                @if (!string.IsNullOrEmpty(_lastCreditNotePdfUrl))
+                {
+                    <a href="@_lastCreditNotePdfUrl" target="_blank" class="btn btn-sm btn-outline-dark ms-2">📄 Download Credit Note PDF</a>
+                }
+                else if (_lastCreditNoteId != null)
+                {
+                    <a href="@Api.GetInvoicePdfUrl(_lastCreditNoteId.Value)" target="_blank" class="btn btn-sm btn-outline-dark ms-2">📄 Download Credit Note PDF</a>
+                }
+                <button type="button" class="btn-close" @onclick="() => { _takebackMessage = null; _lastCreditNoteId = null; }"></button>
+            </div>
+        }
+
+        @if (GetSoldLots().Count > 0)
+        {
+            <div class="section-container mb-3">
+                <div class="card-body d-flex align-items-center gap-3">
+                    <strong>Re-Invoice selected lots:</strong>
+                    <button class="btn btn-warning" @onclick="RequestTakeback" disabled="@(_requestingTakeback || _selectedSoldIds.Count == 0)">
+                        @if (_requestingTakeback)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        Re-Invoice (@_selectedSoldIds.Count)
+                    </button>
+                </div>
+            </div>
+        }
+
+        <div class="section-container">
+            <div class="section-header">Invoiced Lots</div>
+            <div class="section-body">
+                <table class="table table-striped table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th style="width: 40px;"><input type="checkbox" @onchange="ToggleAllSold" checked="@_allSoldSelected" /></th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("LotNumber")'>Lot # @SortIndicator("LotNumber")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("Type")'>Type @SortIndicator("Type")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("Gender")'>Gender @SortIndicator("Gender")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("Color")'>Color @SortIndicator("Color")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("Quality")'>Quality @SortIndicator("Quality")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("Skins")'>Skins @SortIndicator("Skins")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("Price")'>Price (EUR) @SortIndicator("Price")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("HammerPrice")'>Hammer Price @SortIndicator("HammerPrice")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("AuctionFee")'>Auction Fee @SortIndicator("AuctionFee")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("Commission")'>Commission @SortIndicator("Commission")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("SoldTo")'>Sold To @SortIndicator("SoldTo")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("SoldDate")'>Sold Date @SortIndicator("SoldDate")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("InitiatedBy")'>Initiated By @SortIndicator("InitiatedBy")</th>
+                            <th>Documents</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (GetSoldLots().Count == 0)
+                        {
+                            <tr><td colspan="15" class="text-center text-muted py-4">No invoiced lots.</td></tr>
+                        }
+                        @foreach (var r in GetSoldLots())
+                        {
+                            var link = _invoiceLinks.GetValueOrDefault(r.Id);
+                            <tr>
+                                <td><input type="checkbox" checked="@_selectedSoldIds.Contains(r.Id)" @onchange="() => ToggleSoldSelection(r.Id)" /></td>
+                                <td><a href="#" @onclick="() => ShowLotSalesHistory(r.LotNumber)" @onclick:preventDefault style="font-weight:bold; cursor:pointer;">@r.LotNumber</a></td>
+                                <td>@(r.SalesType ?? "—")</td>
+                                <td>@(r.Gender ?? "—")</td>
+                                <td>@(r.Color ?? "—")</td>
+                                <td>@(r.Quality ?? "—")</td>
+                                <td>@r.TotalSkins</td>
+                                <td>€@r.PriceEur.ToString("N2")</td>
+                                <td>€@((r.TotalSkins * r.PriceEur).ToString("N2"))</td>
+                                <td>€@CalcAuctionFee(r.TotalSkins, r.PriceEur).ToString("N2")</td>
+                                <td>€@((r.CommissionAmount ?? 0).ToString("N2"))</td>
+                                <td>@(r.SoldToBuyerNumber ?? "") — @(r.SoldToBuyerName ?? "")</td>
+                                <td>@(r.SoldAt?.ToString("g") ?? "—")</td>
+                                <td>@(r.LastModifiedBy ?? "—")</td>
+                                <td>
+                                    @if (link != null)
+                                    {
+                                        @foreach (var doc in link.Documents)
+                                        {
+                                            var url = !string.IsNullOrEmpty(doc.PdfUrl) ? doc.PdfUrl : Api.GetInvoicePdfUrl(doc.Id);
+                                            <a href="@url" target="_blank" class="btn btn-sm @(doc.IsCreditNote ? "btn-outline-warning" : "btn-outline-primary") me-1" title="@doc.Number">📄 @(doc.IsCreditNote ? "Credit Note" : "Invoice")</a>
+                                        }
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+    else if (_activeTab == "unsold")
+    {
+        @if (!string.IsNullOrEmpty(_message))
+        {
+            <div class="alert @(_messageIsError ? "alert-danger" : "alert-success") alert-dismissible">
+                @_message
+                @if (_lastInvoiceId != null)
+                {
+                    var invoicePdfLink = !string.IsNullOrEmpty(_lastInvoicePdfUrl) ? _lastInvoicePdfUrl : Api.GetInvoicePdfUrl(_lastInvoiceId.Value);
+                    <a href="@invoicePdfLink" target="_blank" class="btn btn-sm btn-outline-dark ms-2">📄 Download Invoice PDF</a>
+                }
+                <button type="button" class="btn-close" @onclick="() => { _message = null; _lastInvoiceId = null; _lastInvoicePdfUrl = null; }"></button>
+            </div>
+        }
+
+        @if (GetUnsoldLots().Count > 0)
+        {
+            <div class="section-container mb-3">
+                <div class="card-body d-flex align-items-center gap-3">
+                    <strong>Sell selected lots to:</strong>
+                    <select class="form-select w-auto" @bind="_selectedBuyerId">
+                        <option value="0">— Select Buyer —</option>
+                        @foreach (var buyer in _buyers)
+                        {
+                            <option value="@buyer.Id">@buyer.BuyerNumber — @buyer.Name</option>
+                        }
+                    </select>
+                    <button class="btn btn-primary" @onclick="OpenInitialsForSell" disabled="@(_selling || _selectedIds.Count == 0 || _selectedBuyerId <= 0)">
+                        Sell (@_selectedIds.Count)
+                    </button>
+                </div>
+            </div>
+        }
+
+        <div class="section-container">
+            <div class="section-header">Un-Invoiced Lots</div>
+            <div class="section-body">
+                <table class="table table-striped table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th style="width: 40px;"><input type="checkbox" @onchange="ToggleAll" checked="@_allSelected" /></th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("LotNumber")'>Lot # @SortIndicator("LotNumber")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("Type")'>Type @SortIndicator("Type")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("Gender")'>Gender @SortIndicator("Gender")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("Group")'>Group @SortIndicator("Group")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("Color")'>Color @SortIndicator("Color")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("Quality")'>Quality @SortIndicator("Quality")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("Size")'>Size @SortIndicator("Size")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("Skins")'>Skins @SortIndicator("Skins")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("Boxes")'>Boxes @SortIndicator("Boxes")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("Price")'>Price (EUR) @SortIndicator("Price")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("HammerPrice")'>Hammer Price @SortIndicator("HammerPrice")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("AuctionFee")'>Auction Fee @SortIndicator("AuctionFee")</th>
+                            <th style="cursor:pointer" @onclick='() => ToggleSort("InitiatedBy")'>Initiated By @SortIndicator("InitiatedBy")</th>
+                            <th>Documents</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (GetUnsoldLots().Count == 0)
+                        {
+                            <tr><td colspan="15" class="text-center text-muted py-4">All lots have been sold.</td></tr>
+                        }
+                        @foreach (var r in GetUnsoldLots())
+                        {
+                            var link = _invoiceLinks.GetValueOrDefault(r.Id);
+                            <tr>
+                                <td><input type="checkbox" checked="@_selectedIds.Contains(r.Id)" @onchange="() => ToggleSelection(r.Id)" /></td>
+                                <td><strong>@r.LotNumber</strong></td>
+                                <td>@(r.SalesType ?? "—")</td>
+                                <td>@(r.Gender ?? "—")</td>
+                                <td>@(r.Group ?? "—")</td>
+                                <td>@(r.Color ?? "—")</td>
+                                <td>@(r.Quality ?? "—")</td>
+                                <td>@(r.Size ?? "—")</td>
+                                <td>@r.TotalSkins</td>
+                                <td>@r.BoxCount</td>
+                                <td>€@r.PriceEur.ToString("N2")</td>
+                                <td>€@((r.TotalSkins * r.PriceEur).ToString("N2"))</td>
+                                <td>€@CalcAuctionFee(r.TotalSkins, r.PriceEur).ToString("N2")</td>
+                                <td>@(r.LastModifiedBy ?? "")</td>
+                                <td>
+                                    @if (link != null)
+                                    {
+                                        @foreach (var doc in link.Documents)
+                                        {
+                                            var url = !string.IsNullOrEmpty(doc.PdfUrl) ? doc.PdfUrl : Api.GetInvoicePdfUrl(doc.Id);
+                                            <a href="@url" target="_blank" class="btn btn-sm @(doc.IsCreditNote ? "btn-outline-warning" : "btn-outline-primary") me-1" title="@doc.Number">📄 @(doc.IsCreditNote ? "CN" : "Inv")</a>
+                                        }
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+    else if (_activeTab == "takeback")
+    {
+        @if (!string.IsNullOrEmpty(_brokerTakebackMessage))
+        {
+            <div class="alert @(_brokerTakebackMessageIsError ? "alert-danger" : "alert-success") alert-dismissible">
+                @_brokerTakebackMessage
+                <button type="button" class="btn-close" @onclick="() => _brokerTakebackMessage = null"></button>
+            </div>
+        }
+
+        <div class="section-container">
+            <div class="section-header">Re-Invoice Requests</div>
+            <div class="section-body">
+                <table class="table table-striped table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Lot #</th><th>Type</th><th>Gender</th><th>Color</th><th>Quality</th><th>Skins</th>
+                            <th>Price (EUR)</th><th>Hammer Price</th><th>Sold To</th><th>Initiated By</th>
+                            <th>Requested</th><th>Status</th><th>Documents</th><th style="width: 180px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (_pendingTakebacks.Count == 0)
+                        {
+                            <tr><td colspan="14" class="text-center text-muted py-4">No takeback requests.</td></tr>
+                        }
+                        @foreach (var t in _pendingTakebacks)
+                        {
+                            <tr>
+                                <td><strong>@t.LotNumber</strong></td>
+                                <td>@(t.SalesType ?? "—")</td>
+                                <td>@(t.Gender ?? "—")</td>
+                                <td>@(t.Color ?? "—")</td>
+                                <td>@(t.Quality ?? "—")</td>
+                                <td>@t.TotalSkins</td>
+                                <td>€@t.PriceEur.ToString("N2")</td>
+                                <td>€@((t.TotalSkins * t.PriceEur).ToString("N2"))</td>
+                                <td>@(t.BuyerNumber ?? "") — @(t.BuyerName ?? "")</td>
+                                <td><span class="badge bg-info">@t.InitiatedBy</span></td>
+                                <td>@t.RequestedAt.ToString("g")</td>
+                                <td>
+                                    <span class="badge bg-@(t.Status == CustomerRequestStatus.Pending ? "warning" : t.Status == CustomerRequestStatus.Approved ? "success" : "danger")">@t.Status</span>
+                                </td>
+                                <td>
+                                    @{
+                                        var tbLink = _invoiceLinks.GetValueOrDefault(t.AuctionResultId);
+                                    }
+                                    @if (tbLink != null)
+                                    {
+                                        @foreach (var doc in tbLink.Documents)
+                                        {
+                                            var url = !string.IsNullOrEmpty(doc.PdfUrl) ? doc.PdfUrl : Api.GetInvoicePdfUrl(doc.Id);
+                                            <a href="@url" target="_blank" class="btn btn-sm @(doc.IsCreditNote ? "btn-outline-warning" : "btn-outline-primary") me-1" title="@doc.Number">📄 @(doc.IsCreditNote ? "CN" : "Inv")</a>
+                                        }
+                                    }
+                                </td>
+                                <td>
+                                    @if (t.Status == CustomerRequestStatus.Pending && t.InitiatedBy == "Buyer")
+                                    {
+                                        <button class="btn btn-sm btn-success me-1" @onclick="() => RespondBrokerTakeback(t.Id, true)">Approve</button>
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => RespondBrokerTakeback(t.Id, false)">Decline</button>
+                                    }
+                                    else
+                                    {
+                                        <small class="text-muted">@(t.RespondedAt?.ToString("g") ?? "")</small>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+}
+
+@if (_showCommissionModal)
+{
+    <div class="modal d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Set Commission</h5>
+                    <button type="button" class="btn-close" @onclick="CloseCommissionModal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Selling <strong>@_selectedIds.Count</strong> lot(s) to <strong>@(_buyers.FirstOrDefault(b => b.Id == _selectedBuyerId)?.Name ?? "")</strong></p>
+                    <div class="mb-3">
+                        <label class="form-label">Commission Type</label>
+                        <select class="form-select" @bind="_commissionType">
+                            <option value="percentage">Percentage (%)</option>
+                            <option value="amount">Fixed Amount (€)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">@(_commissionType == "percentage" ? "Commission (%)" : "Commission Amount (€)")</label>
+                        <input type="number" class="form-control" step="0.01" min="0" @bind="_commissionValue" @onkeydown="HandleCommissionKeydown" />
+                    </div>
+                    @if (_commissionType == "percentage" && _commissionValue > 0)
+                    {
+                        var selectedLots = GetUnsoldLots().Where(r => _selectedIds.Contains(r.Id)).ToList();
+                        var totalHammer = selectedLots.Sum(r => (decimal)r.TotalSkins * r.PriceEur);
+                        var totalCommission = totalHammer * _commissionValue / 100m;
+                        <div class="alert alert-info">
+                            <small>Total Hammer Price: <strong>€@totalHammer.ToString("N2")</strong></small><br />
+                            <small>Commission (@_commissionValue%): <strong>€@totalCommission.ToString("N2")</strong></small>
+                        </div>
+                    }
+                    else if (_commissionType == "amount" && _commissionValue > 0)
+                    {
+                        var totalCommission = _commissionValue * _selectedIds.Count;
+                        <div class="alert alert-info">
+                            <small>Commission per lot: <strong>€@_commissionValue.ToString("N2")</strong></small><br />
+                            <small>Total Commission (@_selectedIds.Count lots): <strong>€@totalCommission.ToString("N2")</strong></small>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseCommissionModal">Cancel</button>
+                    <button class="btn btn-primary" @onclick="SellToBuyer" disabled="@_selling">
+                        @if (_selling) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        Confirm Sale
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showInvalidAmountPopup)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5); z-index: 1060;">
+        <div class="modal-dialog modal-dialog-centered modal-sm">
+            <div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title">Invalid amount</h5></div>
+                <div class="modal-body"><p class="mb-0">@_invalidAmountMessage</p></div>
+                <div class="modal-footer"><button class="btn btn-primary" @onclick="() => _showInvalidAmountPopup = false">OK</button></div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showInitialsModal)
+{
+    <div class="modal d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Enter Initials</h5>
+                    <button type="button" class="btn-close" @onclick="CloseInitialsModal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small">Enter your initials to @(_initialsAction == "sell" ? "confirm the sale" : "confirm re-invoicing")</p>
+                    <input type="text" class="form-control" maxlength="5" placeholder="e.g. CB" @bind="_initialsValue" @bind:event="oninput" @onkeydown="HandleInitialsKeydown" />
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseInitialsModal">Cancel</button>
+                    @if (_initialsAction == "sell")
+                    {
+                        <button class="btn btn-primary" @onclick="InitialsNextToCommission" disabled="@(string.IsNullOrWhiteSpace(_initialsValue))">Next →</button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-primary" @onclick="ConfirmInitials" disabled="@(string.IsNullOrWhiteSpace(_initialsValue))">Confirm</button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showSalesHistoryModal)
+{
+    <div class="modal d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Sales History — Lot @_salesHistoryLotNumber</h5>
+                    <button type="button" class="btn-close" @onclick="() => _showSalesHistoryModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    @if (_loadingSalesHistory)
+                    {
+                        <div class="text-center py-3"><span class="spinner-border"></span></div>
+                    }
+                    else if (_salesHistory.Count == 0)
+                    {
+                        <div class="text-center text-muted py-3">No sales history recorded for this lot.</div>
+                    }
+                    else
+                    {
+                        <table class="table table-sm table-striped">
+                            <thead class="table-dark">
+                                <tr><th>Date</th><th>Action</th><th>Initiated By</th><th>Buyer</th><th>Invoice / Credit Note</th><th>Amount</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var h in _salesHistory)
+                                {
+                                    <tr>
+                                        <td>@h.CreatedAt.ToString("g")</td>
+                                        <td><span class="badge @(h.ActionType == "Sold" ? "bg-success" : h.ActionType == "Re-Invoice" ? "bg-warning" : "bg-info")">@h.ActionType</span></td>
+                                        <td><strong>@(h.Initials ?? "—")</strong></td>
+                                        <td>@(h.BuyerName ?? "—")</td>
+                                        <td>@(h.InvoiceNumber ?? "—")</td>
+                                        <td>@(h.Amount != null ? $"€{h.Amount:N2}" : "—")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+                <div class="modal-footer"><button class="btn btn-secondary" @onclick="() => _showSalesHistoryModal = false">Close</button></div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<AuctionResultDto> _allResults = new();
+    private string _sortColumn = "";
+    private bool _sortAsc = true;
+
+    private List<BrokerDto> _brokers = new();
+    private List<AuctionDto> _auctions = new();
+    private int _selectedAuctionId;
+    private List<BuyerDto> _buyers = new();
+    private List<TakebackRequestDto> _pendingTakebacks = new();
+    private decimal _auctionFeePercent;
+    private decimal _handlingFeePerSkin;
+    private HashSet<int> _selectedIds = new();
+    private HashSet<int> _selectedSoldIds = new();
+    private int _selectedBuyerId;
+    private bool _loading = true;
+    private bool _selling;
+    private bool _showCommissionModal;
+    private string _commissionType = "percentage";
+    private decimal _commissionValue;
+    private bool _showInvalidAmountPopup;
+    private string _invalidAmountMessage = "";
+    private bool _requestingTakeback;
+    private string _activeTab = "purchased";
+    private string? _message;
+    private bool _messageIsError;
+    private int? _lastInvoiceId;
+    private string? _lastInvoicePdfUrl;
+    private int? _lastCreditNoteId;
+    private string? _lastCreditNotePdfUrl;
+    private Dictionary<int, InvoiceLinkDto> _invoiceLinks = new();
+    private string? _takebackMessage;
+    private bool _takebackMessageIsError;
+    private string? _brokerTakebackMessage;
+    private bool _brokerTakebackMessageIsError;
+    private bool _allSelected => GetUnsoldLots().Count > 0 && GetUnsoldLots().All(r => _selectedIds.Contains(r.Id));
+    private bool _allSoldSelected => GetSoldLots().Count > 0 && GetSoldLots().All(r => _selectedSoldIds.Contains(r.Id));
+    private int _brokerId;
+    private bool _showInitialsModal;
+    private string _initialsValue = "";
+    private string _initialsAction = "sell";
+    private bool _showSalesHistoryModal;
+    private int _salesHistoryLotNumber;
+    private bool _loadingSalesHistory;
+    private List<LotSalesHistoryDto> _salesHistory = new();
+
+    private List<AuctionResultDto> GetSoldLots() => ApplySort(GetFilteredResults().Where(r => r.SoldToBuyerId != null));
+    private List<AuctionResultDto> GetUnsoldLots() => ApplySort(GetFilteredResults().Where(r => r.SoldToBuyerId == null));
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Internal/finance view: data is scoped to a chosen broker (not the logged-in user). Buyers are
+        // ALL customers (the server lets admins sell to any customer — the broker-link rule is bypassed).
+        var brokersTask = Api.GetBrokersAsync();
+        var auctionsTask = Api.GetAuctionsAsync();
+        var buyersTask = Api.GetAllBuyersAsync();
+        var paramsTask = Api.GetParametersAsync();
+        await Task.WhenAll(brokersTask, auctionsTask, buyersTask, paramsTask);
+
+        _brokers = (await brokersTask).OrderBy(b => b.BrokerNumber).ToList();
+        _auctions = (await auctionsTask)
+            .Where(a => a.Status == AuctionStatus.Active || a.Status == AuctionStatus.Closed)
+            .ToList();
+        if (_auctions.Any())
+            _selectedAuctionId = _auctions.First().Id;
+        _buyers = await buyersTask;
+        ApplyFeeParameters(await paramsTask);
+
+        _loading = false;
+    }
+
+    private List<AuctionResultDto> GetFilteredResults()
+    {
+        if (_selectedAuctionId <= 0 || _brokerId <= 0) return new();
+        return _allResults.Where(r => r.AuctionId == _selectedAuctionId).ToList();
+    }
+
+    private async Task LoadResults()
+    {
+        _allResults = (_brokerId > 0 && _selectedAuctionId > 0)
+            ? await Api.GetAuctionResultsByBrokerAsync(_brokerId, _selectedAuctionId)
+            : new();
+    }
+
+    // Load everything scoped to the selected broker (results for the current auction + their takebacks + doc links).
+    private async Task LoadBrokerData()
+    {
+        _selectedIds.Clear();
+        _selectedSoldIds.Clear();
+        if (_brokerId <= 0)
+        {
+            _allResults = new();
+            _pendingTakebacks = new();
+            _invoiceLinks = new();
+            return;
+        }
+        var resultsTask = LoadResults();
+        var takebacksTask = Api.GetTakebackRequestsByBrokerAsync(_brokerId);
+        var linksTask = Api.GetInvoiceLinksForBrokerAsync(_brokerId);
+        await Task.WhenAll(resultsTask, takebacksTask, linksTask);
+        _pendingTakebacks = await takebacksTask;
+        _invoiceLinks = await linksTask;
+    }
+
+    private async Task OnBrokerFilterChanged()
+    {
+        _activeTab = "purchased";
+        await LoadBrokerData();
+    }
+
+    private async Task OnAuctionFilterChanged()
+    {
+        _selectedIds.Clear();
+        _selectedSoldIds.Clear();
+        await LoadResults();
+    }
+
+    private void ToggleSort(string column)
+    {
+        if (_sortColumn == column) _sortAsc = !_sortAsc;
+        else { _sortColumn = column; _sortAsc = true; }
+    }
+
+    private string SortIndicator(string column) => _sortColumn != column ? "⇅" : (_sortAsc ? "▲" : "▼");
+
+    private List<AuctionResultDto> ApplySort(IEnumerable<AuctionResultDto> source)
+    {
+        if (string.IsNullOrEmpty(_sortColumn)) return source.ToList();
+        Func<AuctionResultDto, object?> keySelector = _sortColumn switch
+        {
+            "LotNumber" => r => r.LotNumber,
+            "Type" => r => r.SalesType ?? "",
+            "Gender" => r => r.Gender ?? "",
+            "Group" => r => r.Group ?? "",
+            "Color" => r => r.Color ?? "",
+            "Quality" => r => r.Quality ?? "",
+            "Size" => r => r.Size ?? "",
+            "Skins" => r => r.TotalSkins,
+            "Boxes" => r => r.BoxCount,
+            "Price" => r => r.PriceEur,
+            "HammerPrice" => r => r.TotalSkins * r.PriceEur,
+            "AuctionFee" => r => CalcAuctionFee(r.TotalSkins, r.PriceEur),
+            "Commission" => r => r.CommissionAmount ?? 0m,
+            "Status" => r => !string.IsNullOrEmpty(r.ShippingStatus) ? r.ShippingStatus : (r.SoldToBuyerId == null ? "Un-Invoiced" : (r.InvoicePosted ? "Invoiced" : "Not Posted")),
+            "SoldTo" => r => r.SoldToBuyerNumber ?? "",
+            "SoldDate" => r => r.SoldAt ?? DateTime.MinValue,
+            "InitiatedBy" => r => r.LastModifiedBy ?? "",
+            _ => r => r.LotNumber
+        };
+        return _sortAsc ? source.OrderBy(keySelector).ToList() : source.OrderByDescending(keySelector).ToList();
+    }
+
+    private void ApplyFeeParameters(List<SystemParameterDto> parameters)
+    {
+        var auctionFee = parameters.FirstOrDefault(p => p.Key == "AuctionFee");
+        var handlingFee = parameters.FirstOrDefault(p => p.Key == "HandlingFee");
+        if (auctionFee != null) decimal.TryParse(auctionFee.Value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _auctionFeePercent);
+        if (handlingFee != null) decimal.TryParse(handlingFee.Value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _handlingFeePerSkin);
+    }
+
+    private decimal CalcAuctionFee(int skins, decimal priceEur)
+    {
+        var hammerPrice = skins * priceEur;
+        var handlingFee = skins * _handlingFeePerSkin;
+        return (hammerPrice + handlingFee) * _auctionFeePercent / 100m;
+    }
+
+    private void ToggleSelection(int id) { if (!_selectedIds.Remove(id)) _selectedIds.Add(id); }
+
+    private void ToggleAll(ChangeEventArgs e)
+    {
+        if ((bool)(e.Value ?? false)) _selectedIds = GetUnsoldLots().Select(r => r.Id).ToHashSet();
+        else _selectedIds.Clear();
+    }
+
+    private void CloseCommissionModal() => _showCommissionModal = false;
+
+    private void OpenInitialsForSell()
+    {
+        _initialsAction = "sell";
+        _initialsValue = "";
+        _showInitialsModal = true;
+    }
+
+    private void InitialsNextToCommission()
+    {
+        if (string.IsNullOrWhiteSpace(_initialsValue)) return;
+        _showInitialsModal = false;
+        _commissionType = "percentage";
+        _commissionValue = 0;
+        _showInvalidAmountPopup = false;
+        _showCommissionModal = true;
+    }
+
+    private async Task HandleCommissionKeydown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && _selectedIds.Count > 0 && _selectedBuyerId > 0)
+            await SellToBuyer();
+    }
+
+    private void CloseInitialsModal() { _showInitialsModal = false; _initialsValue = ""; }
+
+    private async Task HandleInitialsKeydown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_initialsValue))
+        {
+            if (_initialsAction == "sell") InitialsNextToCommission();
+            else await ConfirmInitials();
+        }
+    }
+
+    private async Task ConfirmInitials()
+    {
+        if (string.IsNullOrWhiteSpace(_initialsValue)) return;
+        _showInitialsModal = false;
+        if (_initialsAction == "sell") await SellToBuyer();
+        else await ExecuteTakeback();
+    }
+
+    private async Task SellToBuyer()
+    {
+        _message = null;
+        if (_selectedIds.Count == 0 || _selectedBuyerId <= 0) return;
+        if (_commissionValue < 0)
+        {
+            _invalidAmountMessage = _commissionType == "percentage" ? "Commission percentage cannot be negative." : "Commission amount cannot be negative.";
+            _showInvalidAmountPopup = true;
+            return;
+        }
+        _selling = true;
+        try
+        {
+            var resp = await Api.SellLotsToBuyerAsync(_selectedIds.ToList(), _selectedBuyerId, _commissionType, _commissionValue, _initialsValue);
+            if (resp.IsSuccessStatusCode) await HandleSellSuccess(resp);
+            else { _message = "Failed to sell lots. Please try again."; _messageIsError = true; }
+        }
+        catch (Exception ex) { _message = $"Error: {ex.Message}"; _messageIsError = true; }
+        finally { _selling = false; }
+    }
+
+    private async Task HandleSellSuccess(HttpResponseMessage resp)
+    {
+        var buyer = _buyers.FirstOrDefault(b => b.Id == _selectedBuyerId);
+        var json = await resp.Content.ReadFromJsonAsync<SellResponse>();
+        _message = $"{_selectedIds.Count} lot(s) sold to {buyer?.Name ?? "buyer"}.";
+        if (json?.InvoiceId != null)
+        {
+            _lastInvoiceId = json.InvoiceId;
+            _lastInvoicePdfUrl = json.PdfUrl;
+            _message += " Invoice created — posting to Business Central; the number and PDF will appear shortly.";
+        }
+        _messageIsError = !string.IsNullOrEmpty(json?.BcError);
+        if (_messageIsError) _message += $" BC Error: {json!.BcError}";
+
+        _selectedIds.Clear();
+        _selectedBuyerId = 0;
+        _showCommissionModal = false;
+        await LoadResults();
+        _invoiceLinks = await Api.GetInvoiceLinksForBrokerAsync(_brokerId);
+        _ = RefreshAfterBcPostAsync();
+    }
+
+    private async Task RefreshAfterBcPostAsync()
+    {
+        try
+        {
+            for (var i = 0; i < 3; i++)
+            {
+                await Task.Delay(3000);
+                await LoadResults();
+                _pendingTakebacks = await Api.GetTakebackRequestsByBrokerAsync(_brokerId);
+                _invoiceLinks = await Api.GetInvoiceLinksForBrokerAsync(_brokerId);
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch { }
+    }
+
+    private void ToggleSoldSelection(int id) { if (!_selectedSoldIds.Remove(id)) _selectedSoldIds.Add(id); }
+
+    private void ToggleAllSold(ChangeEventArgs e)
+    {
+        if ((bool)(e.Value ?? false)) _selectedSoldIds = GetSoldLots().Select(r => r.Id).ToHashSet();
+        else _selectedSoldIds.Clear();
+    }
+
+    private Task RequestTakeback()
+    {
+        if (_selectedSoldIds.Count == 0) return Task.CompletedTask;
+        _initialsAction = "reinvoice";
+        _initialsValue = "";
+        _showInitialsModal = true;
+        return Task.CompletedTask;
+    }
+
+    private async Task ExecuteTakeback()
+    {
+        _takebackMessage = null;
+        if (_selectedSoldIds.Count == 0) return;
+        _requestingTakeback = true;
+        try
+        {
+            var resp = await Api.RequestTakebackAsync(_selectedSoldIds.ToList(), _initialsValue);
+            if (resp.IsSuccessStatusCode)
+            {
+                var json = await resp.Content.ReadFromJsonAsync<TakebackResponse>();
+                _takebackMessage = $"{_selectedSoldIds.Count} lot(s) taken back. Lots moved to unsold.";
+                if (json?.CreditNoteId != null)
+                {
+                    _lastCreditNoteId = json.CreditNoteId;
+                    _lastCreditNotePdfUrl = json.CreditNotePdfUrl;
+                    _takebackMessage += " Credit note created — posting to Business Central; the PDF will appear shortly.";
+                }
+                _takebackMessageIsError = false;
+                _selectedSoldIds.Clear();
+                await LoadResults();
+                _pendingTakebacks = await Api.GetTakebackRequestsByBrokerAsync(_brokerId);
+                _invoiceLinks = await Api.GetInvoiceLinksForBrokerAsync(_brokerId);
+                _ = RefreshAfterBcPostAsync();
+            }
+            else
+            {
+                try
+                {
+                    var errorJson = await resp.Content.ReadFromJsonAsync<TakebackErrorResponse>();
+                    _takebackMessage = errorJson?.Error == "Lot Sold" ? $"Lot Sold — {errorJson.Message}" : "Failed to request takeback. Please try again.";
+                }
+                catch { _takebackMessage = "Failed to request takeback. Please try again."; }
+                _takebackMessageIsError = true;
+            }
+        }
+        catch (Exception ex) { _takebackMessage = $"Error: {ex.Message}"; _takebackMessageIsError = true; }
+        finally { _requestingTakeback = false; }
+    }
+
+    private async Task RespondBrokerTakeback(int requestId, bool approve)
+    {
+        _brokerTakebackMessage = null;
+        try
+        {
+            var resp = await Api.RespondTakebackAsync(requestId, approve);
+            if (resp.IsSuccessStatusCode)
+            {
+                _brokerTakebackMessage = approve
+                    ? "Return approved. Lot moved back to un-invoiced. Credit note posting to Business Central; it will appear shortly."
+                    : "Return request declined.";
+                _brokerTakebackMessageIsError = false;
+                await LoadResults();
+                _pendingTakebacks = await Api.GetTakebackRequestsByBrokerAsync(_brokerId);
+                _invoiceLinks = await Api.GetInvoiceLinksForBrokerAsync(_brokerId);
+                if (approve) _ = RefreshAfterBcPostAsync();
+            }
+            else { _brokerTakebackMessage = "Failed to respond. Please try again."; _brokerTakebackMessageIsError = true; }
+        }
+        catch (Exception ex) { _brokerTakebackMessage = $"Error: {ex.Message}"; _brokerTakebackMessageIsError = true; }
+    }
+
+    private async Task ShowLotSalesHistory(int lotNumber)
+    {
+        _salesHistoryLotNumber = lotNumber;
+        _loadingSalesHistory = true;
+        _showSalesHistoryModal = true;
+        _salesHistory = new();
+        StateHasChanged();
+        try { _salesHistory = await Api.GetLotSalesHistoryAsync(lotNumber); }
+        catch { }
+        _loadingSalesHistory = false;
+    }
+
+    private class SellResponse
+    {
+        public int SoldCount { get; set; }
+        public int? InvoiceId { get; set; }
+        public string? PdfUrl { get; set; }
+        public string? BcError { get; set; }
+    }
+
+    private class TakebackResponse
+    {
+        public int RequestCount { get; set; }
+        public int? CreditNoteId { get; set; }
+        public string? CreditNotePdfUrl { get; set; }
+    }
+
+    private class TakebackErrorResponse
+    {
+        public string? Error { get; set; }
+        public string? Message { get; set; }
+    }
+
+    private async Task ExportPurchasedToExcel()
+    {
+        var headers = new[] { "Lot #", "Type", "Gender", "Group", "Color", "Quality", "Size", "Skins", "Boxes", "Price (EUR)", "Hammer Price", "Auction Fee", "Commission", "Status" };
+        var rows = GetFilteredResults().Select(r => new object[]
+        {
+            r.LotNumber, r.SalesType ?? "", r.Gender ?? "", r.Group ?? "", r.Color ?? "", r.Quality ?? "", r.Size ?? "",
+            r.TotalSkins, r.BoxCount, r.PriceEur, r.TotalSkins * r.PriceEur, CalcAuctionFee(r.TotalSkins, r.PriceEur),
+            r.CommissionAmount ?? 0m,
+            !string.IsNullOrEmpty(r.ShippingStatus) ? r.ShippingStatus : (r.SoldToBuyerId == null ? "Un-Invoiced" : (r.InvoicePosted ? "Invoiced" : "Not Posted"))
+        }).ToArray();
+        await JS.InvokeVoidAsync("exportToExcel", $"BrokerLots_{DateTime.Now:yyyyMMdd}.xlsx", "Broker Lots", headers, rows);
+    }
+}

@@ -474,7 +474,9 @@ public class AuctionResultFunctions
         // Ownership: a broker may only sell their own lots (admins bypass).
         if (brokerIds.Any(bid => !req.FunctionContext.CanAccessBroker(bid)))
             return req.CreateResponse(System.Net.HttpStatusCode.Forbidden);
-        if (brokerIds.Count > 0)
+        // Admins (internal staff acting on a broker's behalf) may sell to ANY customer; brokers
+        // themselves are still restricted to their own linked customers.
+        if (brokerIds.Count > 0 && !req.FunctionContext.IsAdmin())
         {
             var linkedBrokerIds = await _db.BrokerBuyers
                 .Where(bb => bb.BuyerId == body.BuyerId && brokerIds.Contains(bb.BrokerId))
