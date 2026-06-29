@@ -21,7 +21,6 @@
 }
 else if (_isBroker)
 {
-    <h1>Dashboard</h1>
     @if (_activeAuction == null)
     {
         <p class="text-muted">No active auction at the moment.</p>
@@ -29,33 +28,6 @@ else if (_isBroker)
     else
     {
         <p class="text-muted">@_activeAuction.AuctionNumber - @_activeAuction.Title</p>
-
-        <div class="row mb-4">
-            <div class="col-md-3">
-                <div class="summary-card">
-                    <div class="card-title">Total Purchase</div>
-                    <div class="card-value">€@_brokerResults.Sum(r => r.TotalSkins * r.PriceEur).ToString("N2")</div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="summary-card">
-                    <div class="card-title">Invoiced</div>
-                    <div class="card-value">€@_brokerResults.Where(r => r.SoldToBuyerId != null).Sum(r => r.TotalSkins * r.PriceEur).ToString("N2")</div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="summary-card">
-                    <div class="card-title">Un-Invoiced</div>
-                    <div class="card-value">€@_brokerResults.Where(r => r.SoldToBuyerId == null).Sum(r => r.TotalSkins * r.PriceEur).ToString("N2")</div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="summary-card">
-                    <div class="card-title">Total Auction Fees</div>
-                    <div class="card-value">€@_brokerResults.Sum(r => CalcAuctionFee(r.TotalSkins, r.PriceEur)).ToString("N2")</div>
-                </div>
-            </div>
-        </div>
 
         <button class="btn btn-primary" @onclick='() => Nav.NavigateTo("broker/lots")'>Go to Lots</button>
     }
