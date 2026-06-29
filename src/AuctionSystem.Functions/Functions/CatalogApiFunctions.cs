@@ -155,6 +155,45 @@ public class CatalogApiFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "catalog/lots")]
         HttpRequestData req)
     {
+        var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+        return await RespondCatalogLotsAsync(req, query, resolveActiveAuction: true);
+    }
+
+    // External partner catalogue read: the FULL catalogue for one auction — identical data to catalog/lots
+    // (no prices), same snapshot source — but machine-authenticated via x-api-key against
+    // EXTERNAL_PRICE_API_KEY and requiring an explicit auctionNumber. Pairs with POST auction-results/external
+    // (one credential for read + write). Add the route to Easy Auth excludedPaths.
+    [AllowAnonymous]
+    [Function("GetExternalCatalog")]
+    public async Task<HttpResponseData> GetExternalCatalog(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "catalog/external")] HttpRequestData req)
+    {
+        var expected = _configuration["EXTERNAL_PRICE_API_KEY"] ?? _configuration["Values:EXTERNAL_PRICE_API_KEY"];
+        var provided = req.Headers.TryGetValues("x-api-key", out var vals) ? vals.FirstOrDefault() : null;
+        if (string.IsNullOrEmpty(expected) || !string.Equals(provided, expected, StringComparison.Ordinal))
+        {
+            var unauth = req.CreateResponse(HttpStatusCode.Unauthorized);
+            await unauth.WriteStringAsync("Invalid or missing x-api-key.");
+            return unauth;
+        }
+
+        var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+        if (string.IsNullOrWhiteSpace(query["auctionNumber"]) || !AuctionNumberPattern.IsMatch(query["auctionNumber"]))
+        {
+            var bad = req.CreateResponse(HttpStatusCode.BadRequest);
+            await bad.WriteStringAsync("A valid auctionNumber query parameter is required.");
+            return bad;
+        }
+        return await RespondCatalogLotsAsync(req, query, resolveActiveAuction: false, includePartnerFields: true);
+    }
+
+    // Shared catalogue-lots reader for catalog/lots (public) and catalog/external (partner) — same projection
+    // and the same snapshot source (auction.[{Num}.Lots] via GetCatalogTable), so both always agree. Returns
+    // [] (not 500) before the snapshot exists.
+    private async Task<HttpResponseData> RespondCatalogLotsAsync(
+        HttpRequestData req, System.Collections.Specialized.NameValueCollection query, bool resolveActiveAuction,
+        bool includePartnerFields = false)
+    {
         try
         {
             var connectionString = GetCatalogConnectionString();
@@ -169,8 +208,25 @@ public class CatalogApiFunctions
             using var connection = new SqlConnection(connectionString);
             await connection.OpenAsync();
 
-            var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
-            await ResolveActiveAuctionIntoQueryAsync(query, connection);
+            if (resolveActiveAuction)
+                await ResolveActiveAuctionIntoQueryAsync(query, connection);
+
+            var table = GetCatalogTable(query);
+
+            // Partner endpoint (catalog/external) ALSO returns the extra catalogue fields the snapshot carries
+            // from the per-lot editable data (Cat_{id}.Lots adds them at freeze): box numbers, description,
+            // estimate, red limit (reserve), remarks, rack position. Probe COL_LENGTH so an old-flow snapshot /
+            // live cataloglots that lacks a column returns NULL for it instead of 500ing. Deliberately NOT
+            // added to the public catalog/lots — keeps estimate/redLimit/remarks out of the public catalogue.
+            var partnerCols = "";
+            if (includePartnerFields)
+            {
+                foreach (var col in new[] { "IncludedBoxNumbers", "Description", "Estimate", "RedLimit", "Remarks", "RackPosition" })
+                {
+                    var present = await connection.ExecuteScalarAsync<int?>("SELECT COL_LENGTH(@t, @c)", new { t = table, c = col });
+                    partnerCols += present != null ? $", [{col}]" : $", CAST(NULL AS NVARCHAR(500)) AS [{col}]";
+                }
+            }
 
             var sql = @"
                 SELECT
@@ -201,9 +257,9 @@ public class CatalogApiFunctions
 
                     SUM(TotalSkins) OVER (
                         PARTITION BY StringNumber
-                    ) AS StringTotalSkins
+                    ) AS StringTotalSkins" + partnerCols + @"
 
-                FROM " + GetCatalogTable(query) + @"
+                FROM " + table + @"
                 WHERE 1=1";
 
             var parameters = new DynamicParameters();

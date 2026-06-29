@@ -143,6 +143,12 @@ var host = new HostBuilder()
             MakeQueue(AuctionSystem.Functions.Services.CatalogImportQueue.QueueName),
             sp.GetRequiredService<ILogger<AuctionSystem.Functions.Services.CatalogImportQueue>>()));
 
+        // Background catalogue-freeze (Activate) queue: a big catalogue's SELECT INTO overruns the gateway
+        // timeout if done inline. Sync fallback when storage is unconfigured (local dev).
+        services.AddSingleton(sp => new AuctionSystem.Functions.Services.CatalogFreezeQueue(
+            MakeQueue(AuctionSystem.Functions.Services.CatalogFreezeQueue.QueueName),
+            sp.GetRequiredService<ILogger<AuctionSystem.Functions.Services.CatalogFreezeQueue>>()));
+
         // Background paced typist-simulator queue (runs over time at a configurable delay).
         services.AddSingleton(sp => new AuctionSystem.Functions.Services.TypistSimQueue(
             MakeQueue(AuctionSystem.Functions.Services.TypistSimQueue.QueueName),
@@ -271,7 +277,29 @@ using (var scope = host.Services.CreateScope())
                 ALTER TABLE auction.Invoices ADD BcSyncError nvarchar(1000) NULL;
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Invoices') AND name = 'BcSyncErrorAt')
                 ALTER TABLE auction.Invoices ADD BcSyncErrorAt datetime2 NULL;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Invoices') AND name = 'VatAmount')
+                ALTER TABLE auction.Invoices ADD VatAmount decimal(18,2) NOT NULL CONSTRAINT DF_Invoices_VatAmount DEFAULT 0;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Invoices') AND name = 'TotalAmountInclVat')
+                ALTER TABLE auction.Invoices ADD TotalAmountInclVat decimal(18,2) NOT NULL CONSTRAINT DF_Invoices_TotalAmountInclVat DEFAULT 0;
         ");
+        // (No VAT backfill: existing invoices keep VatAmount/TotalAmountInclVat = 0 until regenerated.
+        // New invoices/credit notes compute these at creation from the buyer's VAT Bus. Posting Group.)
+        // Supporting index for the eligible-skin grouped count (catalog list + activate). Without it the
+        // GROUP BY over a multi-million-row SkinTable full-scans and overruns the HTTP timeout. Isolated in
+        // its own try/catch so a one-time index build hiccup can never abort the rest of the migration.
+        try
+        {
+            db.Database.ExecuteSqlRaw(@"
+                IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_SkinTable_Eligible' AND object_id = OBJECT_ID('dbo.SkinTable'))
+                    CREATE NONCLUSTERED INDEX IX_SkinTable_Eligible
+                        ON dbo.SkinTable (IsActive, BoxStatus, SalesType, Gender, [Group]);
+            ");
+        }
+        catch (Exception ixEx)
+        {
+            scope.ServiceProvider.GetRequiredService<ILogger<Program>>()
+                .LogError(ixEx, "IX_SkinTable_Eligible creation failed; continuing startup");
+        }
         // Auction snapshot-build status columns (background import)
         db.Database.ExecuteSqlRaw(@"
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Auctions') AND name = 'SnapshotStatus')
@@ -286,6 +314,10 @@ using (var scope = host.Services.CreateScope())
                 ALTER TABLE auction.Auctions ADD BrokerSimStatus nvarchar(400) NULL;
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Auctions') AND name = 'BrokerSimStopRequested')
                 ALTER TABLE auction.Auctions ADD BrokerSimStopRequested bit NOT NULL DEFAULT 0;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Auctions') AND name = 'ImportedCatalogIds')
+                ALTER TABLE auction.Auctions ADD ImportedCatalogIds nvarchar(max) NULL;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.AuctionResults') AND name = 'ExternalRef')
+                ALTER TABLE auction.AuctionResults ADD ExternalRef nvarchar(100) NULL;
         ");
         // TypistEntries table
         db.Database.ExecuteSqlRaw(@"

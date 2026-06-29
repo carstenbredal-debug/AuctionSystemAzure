@@ -414,6 +414,9 @@ public class LotGenerationFunctions
                 $"Catalog lots: {catalogLots.Count}. " +
                 $"Skipped groups: {skippedGroups.Count}.";
 
+            if (catalogBuildResult.Warnings.Count > 0)
+                summary += " WARNINGS: " + string.Join(" ", catalogBuildResult.Warnings);
+
             _logger.LogInformation(summary);
             return summary;
     }

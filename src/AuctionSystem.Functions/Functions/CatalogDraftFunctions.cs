@@ -1,6 +1,7 @@
 using AuctionSystem.Domain.Data;
 using AuctionSystem.Domain.Entities;
 using AuctionSystem.Functions.Auth;
+using AuctionSystem.Functions.Services;
 using ClosedXML.Excel;
 using Dapper;
 using Microsoft.Azure.Functions.Worker;
@@ -20,16 +21,18 @@ public class CatalogDraftFunctions
 {
     private readonly CatalogDbContext _db;
     private readonly ILogger<CatalogDraftFunctions> _logger;
+    private readonly CatalogFreezeQueue _freezeQueue;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    public CatalogDraftFunctions(CatalogDbContext db, ILogger<CatalogDraftFunctions> logger)
+    public CatalogDraftFunctions(CatalogDbContext db, ILogger<CatalogDraftFunctions> logger, CatalogFreezeQueue freezeQueue)
     {
         _db = db;
         _logger = logger;
+        _freezeQueue = freezeQueue;
     }
 
     public record CreateDraftRequest(string? SalesType, string? Gender, string? Group, int? StartRack);
@@ -161,22 +164,69 @@ public class CatalogDraftFunctions
         if (draft.Status == "InAuction")
             return await Json(req, new { error = "Catalogue is already in an auction and cannot be changed." }, HttpStatusCode.BadRequest);
 
-        if (draft.Status != "Active")
+        // Already Active, or a freeze is already in flight — nothing to do, return current state.
+        if (draft.Status != "Active" && draft.Status != "Activating")
         {
-            try
+            if (_freezeQueue.IsConfigured)
             {
-                await FreezeCatalogAsync(id);   // capture skins/boxes/lots into auction.[Cat_{id}.X]
+                // Background the freeze: a big catalogue's SELECT ... INTO over a multi-million-row SkinTable
+                // overruns the HTTP gateway timeout if done inline. The worker flips it Active when done.
+                draft.Status = "Activating";
+                await _db.SaveChangesAsync();
+                await _freezeQueue.EnqueueAsync(id);
+                _logger.LogInformation("Queued freeze for catalogue draft {Id} '{Name}'", draft.Id, draft.Name);
             }
-            catch (Exception ex)
+            else
             {
-                _logger.LogError(ex, "Activate freeze failed for catalogue {Id}", id);
-                return await Json(req, new { error = "Activate failed: " + ex.Message }, HttpStatusCode.InternalServerError);
+                // No queue configured (local dev) — freeze inline.
+                try
+                {
+                    await FreezeCatalogAsync(id);   // capture skins/boxes/lots into auction.[Cat_{id}.X]
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Activate freeze failed for catalogue {Id}", id);
+                    return await Json(req, new { error = "Activate failed: " + ex.Message }, HttpStatusCode.InternalServerError);
+                }
+                draft.Status = "Active";
+                await _db.SaveChangesAsync();
+                _logger.LogInformation("Activated + froze catalogue draft {Id} '{Name}'", draft.Id, draft.Name);
             }
-            draft.Status = "Active";
-            await _db.SaveChangesAsync();
-            _logger.LogInformation("Activated + froze catalogue draft {Id} '{Name}'", draft.Id, draft.Name);
         }
         return await Json(req, ToDto(draft, await ShowCount(id), await AvailableSkinsAsync(draft.SalesType, draft.Gender, draft.Group)));
+    }
+
+    // Background freeze worker: runs the heavy SELECT ... INTO off the request thread so a big catalogue's
+    // Activate can't overrun the HTTP gateway timeout. Flips the draft Active on success; on failure reverts
+    // it to Draft (so the admin can retry) and logs the error. Idempotent — FreezeCatalogAsync drops+rebuilds
+    // the Cat_{id}.X tables, so a redelivered message is safe.
+    [Function("CatalogFreezeWorker")]
+    public async Task CatalogFreezeWorker(
+        [QueueTrigger(CatalogFreezeQueue.QueueName, Connection = "AzureWebJobsStorage")] string message)
+    {
+        if (!int.TryParse(message, out var draftId)) { _logger.LogWarning("Bad catalog-freeze message: {Msg}", message); return; }
+
+        var draft = await _db.CatalogDrafts.FindAsync(draftId);
+        if (draft == null) { _logger.LogWarning("Catalog freeze: draft {Id} not found", draftId); return; }
+        if (draft.Status != "Activating")
+        {
+            _logger.LogInformation("Catalog freeze: draft {Id} is {Status}, not Activating; skipping", draftId, draft.Status);
+            return;
+        }
+
+        try
+        {
+            await FreezeCatalogAsync(draftId);
+            draft.Status = "Active";
+            await _db.SaveChangesAsync();
+            _logger.LogInformation("Froze catalogue draft {Id} '{Name}' (background)", draft.Id, draft.Name);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Background freeze failed for catalogue {Id}; reverting to Draft", draftId);
+            draft.Status = "Draft";
+            await _db.SaveChangesAsync();
+        }
     }
 
     [RequireRole("Admin")]

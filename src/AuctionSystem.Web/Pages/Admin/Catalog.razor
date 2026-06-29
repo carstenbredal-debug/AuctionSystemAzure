@@ -264,8 +264,28 @@
         try
         {
             var resp = await Http.PostAsync($"api/catalog/drafts/{id}/activate", null);
-            if (resp.IsSuccessStatusCode) { await LoadDrafts(); }
-            else { DraftMessage = $"Activate failed: {await resp.Content.ReadAsStringAsync()}"; DraftIsError = true; }
+            if (!resp.IsSuccessStatusCode)
+            {
+                DraftMessage = $"Activate failed: {await resp.Content.ReadAsStringAsync()}"; DraftIsError = true;
+                return;
+            }
+            await LoadDrafts();
+
+            // The freeze runs in the background (status "Activating") so a large catalogue can't time out the
+            // request. Poll until it flips to Active — or reverts to Draft on failure. Bounded so a stuck
+            // freeze doesn't poll forever. (When the queue isn't configured the API freezes inline and returns
+            // Active immediately, so this loop exits on the first check.)
+            for (var i = 0; i < 120 && Drafts.FirstOrDefault(x => x.Id == id)?.Status == "Activating"; i++)
+            {
+                await Task.Delay(3000);
+                await LoadDrafts();
+                StateHasChanged();
+            }
+
+            if (Drafts.FirstOrDefault(x => x.Id == id)?.Status == "Draft")
+            {
+                DraftMessage = "Activation did not complete — please retry."; DraftIsError = true;
+            }
         }
         catch (Exception ex) { DraftMessage = $"Activate failed: {ex.Message}"; DraftIsError = true; }
         finally { activatingId = null; }

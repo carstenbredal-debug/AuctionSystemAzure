@@ -8,6 +8,7 @@ using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace AuctionSystem.Functions.Functions;
@@ -18,6 +19,7 @@ public class TypistEntryFunctions
     private readonly CatalogDbContext _catalogDb;
     private readonly ILogger<TypistEntryFunctions> _logger;
     private readonly Services.TypistSimQueue _simQueue;
+    private readonly IConfiguration _configuration;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -25,12 +27,13 @@ public class TypistEntryFunctions
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public TypistEntryFunctions(AuctionDbContext db, CatalogDbContext catalogDb, ILogger<TypistEntryFunctions> logger, Services.TypistSimQueue simQueue)
+    public TypistEntryFunctions(AuctionDbContext db, CatalogDbContext catalogDb, ILogger<TypistEntryFunctions> logger, Services.TypistSimQueue simQueue, IConfiguration configuration)
     {
         _db = db;
         _catalogDb = catalogDb;
         _logger = logger;
         _simQueue = simQueue;
+        _configuration = configuration;
     }
 
     [AuctionSystem.Functions.Auth.RequireRole("Typist", "Admin")]
@@ -538,56 +541,19 @@ public class TypistEntryFunctions
     {
         if (entry1.BrokerId == entry2.BrokerId && entry1.PriceEur == entry2.PriceEur)
         {
-            // Match — create auction result
+            // Match — create the auction result via the shared sale path (identical to the external feed).
             entry1.IsMatched = true;
             entry2.IsMatched = true;
             entry1.MatchedWithEntryId = entry2.Id;
             entry2.MatchedWithEntryId = entry1.Id;
 
-            // Create the auction result from CatalogLot (preferred) or Lot data
-            var auctionLot = await _db.Lots.FirstOrDefaultAsync(l => l.LotNumber == entry1.LotNumber);
-            var catalogLot = await _catalogDb.CatalogLots.FirstOrDefaultAsync(cl => cl.LotNumber == entry1.LotNumber);
-
-            var result = new AuctionResult
+            var result = await RecordSaleAsync(entry1.AuctionId, entry1.LotNumber, entry1.BrokerId, entry1.PriceEur);
+            if (result != null)
             {
-                AuctionId = entry1.AuctionId,
-                LotNumber = entry1.LotNumber,
-                BrokerId = entry1.BrokerId,
-                PriceEur = entry1.PriceEur,
-                SalesType = catalogLot?.SalesType ?? auctionLot?.Description?.Split(' ').FirstOrDefault(),
-                Gender = catalogLot?.Gender ?? (auctionLot != null ? ParseField(auctionLot.Description, 1) : null),
-                Group = catalogLot?.Group ?? auctionLot?.Category,
-                Color = catalogLot?.Color ?? (auctionLot != null ? ParseField(auctionLot.Description, 2) : null),
-                Quality = catalogLot?.Quality ?? (auctionLot != null ? ParseField(auctionLot.Description, 3) : null),
-                Size = catalogLot?.Size,
-                HairLength = catalogLot?.HairLength,
-                Clarity = catalogLot?.Clarity,
-                TotalSkins = catalogLot?.TotalSkins ?? auctionLot?.Quantity ?? 0,
-                BoxCount = catalogLot?.BoxCount ?? 0,
-                Processed = false,
-                ReceivedAt = DateTime.UtcNow
-            };
-
-            _db.AuctionResults.Add(result);
-            await _db.SaveChangesAsync();
-
-            entry1.AuctionResultId = result.Id;
-            entry2.AuctionResultId = result.Id;
-
-            // Process the lot (mark as sold, assign to broker)
-            if (auctionLot != null)
-            {
-                auctionLot.Status = LotStatus.Sold;
-                auctionLot.HammerPrice = entry1.PriceEur;
-
-                result.Processed = true;
-                result.ProcessedAt = DateTime.UtcNow;
+                entry1.AuctionResultId = result.Id;
+                entry2.AuctionResultId = result.Id;
             }
-
             await _db.SaveChangesAsync();
-
-            // Create auction transactions (journal entries)
-            await CreateTransactionsForMatch(result, auctionLot);
 
             _logger.LogInformation("Typist entries matched for lot {LotNumber}: broker={BrokerId}, price={Price}",
                 entry1.LotNumber, entry1.BrokerId, entry1.PriceEur);
@@ -605,6 +571,57 @@ public class TypistEntryFunctions
             _logger.LogWarning("Typist disagreement for lot {LotNumber}: entry1(broker={B1}, price={P1}) vs entry2(broker={B2}, price={P2})",
                 entry1.LotNumber, entry1.BrokerId, entry1.PriceEur, entry2.BrokerId, entry2.PriceEur);
         }
+    }
+
+    // Shared sale creation used by BOTH the typist match (CompareEntries) and the external price feed
+    // (SubmitExternalResults): create the AuctionResult (from CatalogLot data, else Lot data), mark the lot
+    // Sold + HammerPrice, and write the journal transactions — so a sale is identical downstream (invoicing,
+    // BC push) no matter the source. Idempotent: returns null without changes if the lot is already Sold
+    // (never overwrites a price), which is also what lets external + typist coexist lot-by-lot — first
+    // authoritative record wins, the other is blocked.
+    private async Task<AuctionResult?> RecordSaleAsync(int auctionId, int lotNumber, int brokerId, decimal priceEur, string? externalRef = null)
+    {
+        var auctionLot = await _db.Lots.FirstOrDefaultAsync(l => l.LotNumber == lotNumber && l.AuctionId == auctionId);
+        if (auctionLot != null && auctionLot.Status == LotStatus.Sold)
+            return null;
+
+        var catalogLot = await _catalogDb.CatalogLots.FirstOrDefaultAsync(cl => cl.LotNumber == lotNumber);
+
+        var result = new AuctionResult
+        {
+            AuctionId = auctionId,
+            LotNumber = lotNumber,
+            BrokerId = brokerId,
+            PriceEur = priceEur,
+            SalesType = catalogLot?.SalesType ?? auctionLot?.Description?.Split(' ').FirstOrDefault(),
+            Gender = catalogLot?.Gender ?? (auctionLot != null ? ParseField(auctionLot.Description, 1) : null),
+            Group = catalogLot?.Group ?? auctionLot?.Category,
+            Color = catalogLot?.Color ?? (auctionLot != null ? ParseField(auctionLot.Description, 2) : null),
+            Quality = catalogLot?.Quality ?? (auctionLot != null ? ParseField(auctionLot.Description, 3) : null),
+            Size = catalogLot?.Size,
+            HairLength = catalogLot?.HairLength,
+            Clarity = catalogLot?.Clarity,
+            TotalSkins = catalogLot?.TotalSkins ?? auctionLot?.Quantity ?? 0,
+            BoxCount = catalogLot?.BoxCount ?? 0,
+            ExternalRef = externalRef,
+            Processed = false,
+            ReceivedAt = DateTime.UtcNow
+        };
+
+        _db.AuctionResults.Add(result);
+        await _db.SaveChangesAsync();
+
+        if (auctionLot != null)
+        {
+            auctionLot.Status = LotStatus.Sold;
+            auctionLot.HammerPrice = priceEur;
+            result.Processed = true;
+            result.ProcessedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+        }
+
+        await CreateTransactionsForMatch(result, auctionLot);
+        return result;
     }
 
     private async Task CreateTransactionsForMatch(AuctionResult result, Lot? auctionLot)
@@ -1028,6 +1045,84 @@ public class TypistEntryFunctions
         return await CreateJsonResponse(req, new { auctionId, activeTypistIds, count = activeTypistIds.Count });
     }
 
+    // External price feed: an authoritative outside system (the auction clerk/clock) POSTs realtime
+    // knock-downs — one or many — and we create the sale directly via RecordSaleAsync, skipping the
+    // two-typist verification. Machine auth via x-api-key against EXTERNAL_PRICE_API_KEY (NOT a user role);
+    // the route must be in Easy Auth excludedPaths. Idempotent: an already-Sold lot is skipped, so
+    // redelivery is safe and external + typist coexist on the same auction lot-by-lot.
+    [AllowAnonymous]
+    [Function("SubmitExternalAuctionResults")]
+    public async Task<HttpResponseData> SubmitExternalResults(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auction-results/external")] HttpRequestData req)
+    {
+        if (!CheckExternalApiKey(req))
+        {
+            var unauth = req.CreateResponse(System.Net.HttpStatusCode.Unauthorized);
+            await unauth.WriteStringAsync("Invalid or missing x-api-key.");
+            return unauth;
+        }
+
+        var body = await req.ReadFromJsonAsync<ExternalResultsRequest>();
+        if (body == null || string.IsNullOrWhiteSpace(body.AuctionNumber) || body.Results == null || body.Results.Count == 0)
+            return await CreateErrorResponse(req, "auctionNumber and at least one result are required.");
+
+        var auction = await _db.Auctions.FirstOrDefaultAsync(a => a.AuctionNumber == body.AuctionNumber);
+        if (auction == null)
+            return await CreateErrorResponse(req, $"Auction '{body.AuctionNumber}' not found.");
+
+        int recorded = 0, skipped = 0, errors = 0;
+        var outcomes = new List<object>();
+        foreach (var r in body.Results)
+        {
+            var broker = await _db.Brokers.FirstOrDefaultAsync(b => b.BrokerNumber == r.BrokerNumber);
+            if (broker == null)
+            {
+                errors++;
+                outcomes.Add(new { r.LotNumber, status = "broker-not-found", r.BrokerNumber });
+                continue;
+            }
+
+            var lot = await _db.Lots.FirstOrDefaultAsync(l => l.LotNumber == r.LotNumber && l.AuctionId == auction.Id);
+            if (lot == null)
+            {
+                errors++;
+                outcomes.Add(new { r.LotNumber, status = "lot-not-found" });
+                continue;
+            }
+            if (lot.Status == LotStatus.Sold)
+            {
+                skipped++;
+                outcomes.Add(new { r.LotNumber, status = "skipped-already-sold" });
+                continue;
+            }
+
+            var result = await RecordSaleAsync(auction.Id, r.LotNumber, broker.Id, r.PriceEur, r.ExternalRef);
+            if (result == null)
+            {
+                skipped++;
+                outcomes.Add(new { r.LotNumber, status = "skipped-already-sold" });
+                continue;
+            }
+            recorded++;
+            outcomes.Add(new { r.LotNumber, status = "recorded", auctionId = auction.Id, resultId = result.Id });
+        }
+
+        _logger.LogInformation("External results for {Auction}: recorded={Recorded}, skipped={Skipped}, errors={Errors}",
+            body.AuctionNumber, recorded, skipped, errors);
+
+        return await CreateJsonResponse(req, new { recorded, skipped, errors, results = outcomes });
+    }
+
+    // Machine-to-machine auth for the external price feed. Fails closed: 401 if EXTERNAL_PRICE_API_KEY isn't
+    // configured or the x-api-key header doesn't match (same pattern as LOT_GEN_API_KEY).
+    private bool CheckExternalApiKey(HttpRequestData req)
+    {
+        var expected = _configuration["EXTERNAL_PRICE_API_KEY"] ?? _configuration["Values:EXTERNAL_PRICE_API_KEY"];
+        if (string.IsNullOrEmpty(expected)) return false;
+        var provided = req.Headers.TryGetValues("x-api-key", out var vals) ? vals.FirstOrDefault() : null;
+        return !string.IsNullOrEmpty(provided) && string.Equals(provided, expected, StringComparison.Ordinal);
+    }
+
     private static async Task<HttpResponseData> CreateJsonResponse<T>(
         HttpRequestData req, T data, System.Net.HttpStatusCode status = System.Net.HttpStatusCode.OK)
     {
@@ -1047,3 +1142,8 @@ public class TypistEntryFunctions
 }
 
 public record SubmitTypistEntryRequest(int LotNumber, int BrokerId, decimal PriceEur, int TypistUserId, int AuctionId = 0);
+
+// External price feed payload: an auction number plus the realtime knock-downs (lot, winning broker number,
+// hammer price in EUR, and the source's own reference). Identifiers are "our numbers" (BrokerNumber / LotNumber).
+public record ExternalResultsRequest(string AuctionNumber, List<ExternalResultItem> Results);
+public record ExternalResultItem(int LotNumber, string BrokerNumber, decimal PriceEur, string? ExternalRef = null);

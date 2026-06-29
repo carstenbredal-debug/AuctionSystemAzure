@@ -122,6 +122,8 @@ else
                         <th>Auction Fee</th>
                         <th>Commission</th>
                         <th>Total</th>
+                        <th>VAT</th>
+                        <th>Total incl. VAT</th>
                         <th>Remaining</th>
                         <th>Date</th>
                         <th>Status</th>
@@ -133,7 +135,7 @@ else
                 <tbody>
                     @if (GetFilteredInvoices().Count == 0)
                     {
-                        <tr><td colspan="16" class="text-center text-muted py-4">No invoices found.</td></tr>
+                        <tr><td colspan="18" class="text-center text-muted py-4">No invoices found.</td></tr>
                     }
                     @foreach (var inv in GetFilteredInvoices())
                     {
@@ -165,6 +167,8 @@ else
                             <td>€@inv.AuctionFee.ToString("N2")</td>
                             <td>€@inv.Commission.ToString("N2")</td>
                             <td><strong>€@inv.TotalAmount.ToString("N2")</strong></td>
+                            <td>€@inv.VatAmount.ToString("N2")</td>
+                            <td><strong>€@inv.TotalAmountInclVat.ToString("N2")</strong></td>
                             <td>
                                 @if (inv.RemainingBalance.HasValue)
                                 {

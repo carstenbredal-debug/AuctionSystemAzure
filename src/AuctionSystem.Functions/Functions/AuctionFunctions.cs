@@ -324,11 +324,22 @@ public class AuctionFunctions
         try
         {
             var catalogs = await _catalogDb.CatalogDrafts.Where(d => ids.Contains(d.Id)).ToListAsync();
-            var (lots, boxes, skins) = await ImportCatalogsSnapshotAsync(auction.AuctionNumber, ids);
-            // The typist / selling flow reads auction.Lots — create them from the snapshot we just built.
+
+            // Accumulate: the snapshot must reflect EVERY catalogue imported into this auction, not just
+            // this call's. Merge the new ids with those already imported and rebuild from the full union,
+            // so importing catalogues one at a time no longer drops the earlier ones from the snapshot/PDF.
+            // Skip any id whose frozen Cat_{id}.Lots table is gone (e.g. a deleted catalogue) so a stale
+            // id can't break the rebuild with "Invalid object name".
+            var priorIds = ParseCatalogIds(auction.ImportedCatalogIds);
+            var allIds = await FilterExistingFrozenCatalogsAsync(priorIds.Union(ids).Distinct().ToList());
+
+            var (lots, boxes, skins) = await ImportCatalogsSnapshotAsync(auction.AuctionNumber, allIds);
+            // The typist / selling flow reads auction.Lots — create them from the snapshot we just built
+            // (insert-only, so already-present/sold lots are untouched while the full set accumulates).
             await CreateAuctionLotsFromSnapshotAsync(auctionId, auction.AuctionNumber);
             foreach (var c in catalogs) c.Status = "InAuction";
             await _catalogDb.SaveChangesAsync();
+            auction.ImportedCatalogIds = string.Join(",", allIds);
             auction.SnapshotStatus = $"Done: {lots} lots, {boxes} boxes, {skins} skins";
             auction.SnapshotBuiltAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
@@ -384,6 +395,33 @@ public class AuctionFunctions
         _logger.LogInformation("Imported {Count} catalogue(s) into auction {Num}: {Lots} lots, {Boxes} boxes, {Skins} skins",
             ids.Count, auctionNum, l, b, s);
         return (l, b, s);
+    }
+
+    // Parse the auction's stored CSV of imported catalogue ids (null/blank -> empty).
+    private static List<int> ParseCatalogIds(string? csv) =>
+        string.IsNullOrWhiteSpace(csv)
+            ? new List<int>()
+            : csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                 .Select(s => int.TryParse(s, out var n) ? n : 0)
+                 .Where(n => n > 0)
+                 .Distinct()
+                 .ToList();
+
+    // Keep only ids whose frozen auction.[Cat_{id}.Lots] table still exists, so a stale id (e.g. from a
+    // deleted catalogue) can't break the snapshot rebuild's UNION with "Invalid object name".
+    private async Task<List<int>> FilterExistingFrozenCatalogsAsync(List<int> ids)
+    {
+        if (ids.Count == 0) return ids;
+        using var conn = new Microsoft.Data.SqlClient.SqlConnection(_catalogDb.Database.GetConnectionString());
+        await conn.OpenAsync();
+        var kept = new List<int>();
+        foreach (var id in ids)
+        {
+            var exists = await GetScalar(conn, $"SELECT CASE WHEN OBJECT_ID('auction.[Cat_{id}.Lots]', 'U') IS NULL THEN 0 ELSE 1 END");
+            if (exists == 1) kept.Add(id);
+            else _logger.LogWarning("Skipping catalogue id {Id} on import: frozen table auction.[Cat_{Id}.Lots] missing", id, id);
+        }
+        return kept;
     }
 
     // Build the per-auction Lots/Boxes/Skins snapshot tables for the given lots. Returns the row counts.

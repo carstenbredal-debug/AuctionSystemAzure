@@ -44,6 +44,17 @@ public class LotLookupFunctions
         ?? _configuration["Values:SqlConnectionString"]
         ?? "";
 
+    // Machine auth for the scanner app: x-api-key against SCANNER_API_KEY. Fails closed — 401 if the key
+    // isn't configured or the header doesn't match (same pattern as LOT_GEN/EXTERNAL_PRICE). [AllowAnonymous]
+    // only opts out of the app-level role enforcement; this is the real gate. The scanner app must send the key.
+    private bool CheckScannerApiKey(HttpRequestData req)
+    {
+        var expected = _configuration["SCANNER_API_KEY"] ?? _configuration["Values:SCANNER_API_KEY"];
+        if (string.IsNullOrEmpty(expected)) return false;
+        var provided = req.Headers.TryGetValues("x-api-key", out var vals) ? vals.FirstOrDefault() : null;
+        return !string.IsNullOrEmpty(provided) && string.Equals(provided, expected, StringComparison.Ordinal);
+    }
+
     // Inputs are query params (not route segments) so the path stays fixed at /api/lot —
     // required for the Easy Auth excludedPaths entry on TEST/PROD to match.
     [AllowAnonymous]
@@ -51,6 +62,13 @@ public class LotLookupFunctions
     public async Task<HttpResponseData> GetLot(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "lot")] HttpRequestData req)
     {
+        if (!CheckScannerApiKey(req))
+        {
+            var unauth = req.CreateResponse(HttpStatusCode.Unauthorized);
+            await unauth.WriteStringAsync("Invalid or missing x-api-key.");
+            return unauth;
+        }
+
         var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
         var barcodeRaw = query["barcode"];
         var boxRaw = query["box"];

@@ -35,13 +35,28 @@ public class CatalogBuildService
 
         var sortMap = LotPropertyHelper.BuildSortMap(sortOrders);
 
-        var ruleMap = catalogNumberRules
+        // Build the catalog-number rule map DEFENSIVELY. A duplicate ACTIVE rule (same
+        // SalesType/Gender/Group) must never crash generation: a plain ToDictionary throws
+        // "an item with the same key has already been added", which 500'd the entire catalog build
+        // in prod. Instead, keep one deterministic rule per key (lowest StartNumber) and surface the
+        // duplicates as a warning so they get fixed (deactivate the extra row) without blocking.
+        var ruleGroups = catalogNumberRules
             .Where(x => x.IsActive)
-            .ToDictionary(
-                x => BuildRuleKey(x.SalesType, x.Gender, x.Group),
-                x => x.StartNumber,
-                StringComparer.OrdinalIgnoreCase
-            );
+            .GroupBy(x => BuildRuleKey(x.SalesType, x.Gender, x.Group), StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var ruleMap = ruleGroups.ToDictionary(
+            g => g.Key,
+            g => g.Min(x => x.StartNumber),
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var dup in ruleGroups.Where(g => g.Count() > 1))
+        {
+            var warning = $"Duplicate active CatalogNumberRule for '{dup.Key}' ({dup.Count()} rows) — " +
+                          $"using StartNumber {dup.Min(x => x.StartNumber)}; deactivate the extra row(s).";
+            _logger.LogWarning("{Warning}", warning);
+            result.Warnings.Add(warning);
+        }
 
         var strings = lotList
             .GroupBy(lot => BuildStringKey(lot, stringColumns))
