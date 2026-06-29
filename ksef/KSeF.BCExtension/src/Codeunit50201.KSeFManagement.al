@@ -414,6 +414,48 @@ codeunit 50201 "KPHG KSeF Management"
         end;
     end;
 
+    // Verifies the full KSeF auth path (function -> KSeF) by doing the real InitSession handshake for the
+    // Company NIP. Unlike TestConnection (which only checks the function /health endpoint is reachable),
+    // this surfaces a bad/missing KSeF token.
+    procedure TestKSeFAuth()
+    var
+        Setup: Record "KPHG KSeF Setup";
+        Client: HttpClient;
+        ResponseMessage: HttpResponseMessage;
+        ResponseText: Text;
+        JsonResponse: JsonObject;
+        TextValue: Text;
+        Success: Boolean;
+    begin
+        Setup.GetSetup();
+        if Setup."Azure Function URL" = '' then
+            Error('Azure Function URL is not configured.');
+        if Setup."Company NIP" = '' then
+            Error('Company NIP is not configured.');
+
+        Client.DefaultRequestHeaders().Add('x-functions-key', Setup."Azure Function Key");
+
+        Success := Client.Get(Setup."Azure Function URL" + '/test-ksef-auth?nip=' + Setup."Company NIP", ResponseMessage);
+        if not Success then
+            Error('KSeF auth test failed: unable to reach Azure Function.');
+
+        ResponseMessage.Content().ReadAs(ResponseText);
+        if not JsonResponse.ReadFrom(ResponseText) then
+            Error('KSeF auth test: unexpected response: %1', ResponseText);
+
+        if not TryGetJsonText(JsonResponse, 'success', TextValue) then
+            TextValue := '';
+
+        if TextValue = 'true' then
+            Message('KSeF authentication successful for NIP %1.', Setup."Company NIP")
+        else begin
+            if TryGetJsonText(JsonResponse, 'error', TextValue) then
+                Error('KSeF authentication failed: %1', FormatErrorMessage(TextValue))
+            else
+                Error('KSeF authentication failed (no detail returned).');
+        end;
+    end;
+
     procedure MarkAccepted(var SalesInvHeader: Record "Sales Invoice Header"; KSeFNumber: Code[100])
     begin
         SalesInvHeader."KPHG KSeF Number" := KSeFNumber;

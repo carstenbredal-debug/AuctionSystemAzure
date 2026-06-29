@@ -254,6 +254,42 @@ public class InvoiceFunctions
     }
 
     /// <summary>
+    /// Tests KSeF authentication for a NIP: performs the real auth handshake (InitSession) and
+    /// terminates it, WITHOUT sending an invoice. Surfaces a bad/missing KSeF token — which the
+    /// static /health check can't catch. GET /api/test-ksef-auth?nip={nip}
+    /// </summary>
+    [Function("TestKSeFAuth")]
+    public async Task<HttpResponseData> TestKSeFAuth(
+        [HttpTrigger(AuthorizationLevel.Function, "get", Route = "test-ksef-auth")] HttpRequestData req)
+    {
+        var nip = req.Query["nip"];
+        _logger.LogInformation("TestKSeFAuth called for NIP {NIP}", nip);
+
+        if (string.IsNullOrEmpty(nip))
+            return await CreateResponse(req, HttpStatusCode.BadRequest,
+                new StatusResult { Success = false, Error = "Missing 'nip' query parameter" });
+
+        try
+        {
+            // Real KSeF auth round-trip: encrypts the configured KSeF token, authenticates for the NIP,
+            // then terminates. Throws if the token is missing/invalid or the NIP isn't authorised.
+            var session = await _ksef.InitSessionAsync(nip);
+            await _ksef.TerminateSessionAsync(session.SessionToken);
+            return await CreateResponse(req, HttpStatusCode.OK, new StatusResult
+            {
+                Success = true,
+                ProcessingDescription = $"KSeF authentication OK for NIP {nip} against {_ksef.BaseUrl}."
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "TestKSeFAuth failed for NIP {NIP}", nip);
+            return await CreateResponse(req, HttpStatusCode.OK,
+                new StatusResult { Success = false, Error = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Generate invoice XML preview without sending to KSeF.
     /// POST /api/invoice/preview
     /// Body: InvoiceData JSON

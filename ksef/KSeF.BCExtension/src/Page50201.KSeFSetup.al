@@ -78,6 +78,20 @@ page 50201 "KPHG KSeF Setup"
                     KSeFMgmt.TestConnection();
                 end;
             }
+            action("Test KSeF Auth")
+            {
+                ApplicationArea = All;
+                Caption = 'Test KSeF Authentication';
+                Image = TestReport;
+                ToolTip = 'Performs the real KSeF authentication (InitSession) for the Company NIP to verify the KSeF token. Unlike Test Connection (which only checks the Azure Function is reachable), this surfaces a bad or missing KSeF token.';
+
+                trigger OnAction()
+                var
+                    KSeFMgmt: Codeunit "KPHG KSeF Management";
+                begin
+                    KSeFMgmt.TestKSeFAuth();
+                end;
+            }
             action("Activate KSeF Dispatch")
             {
                 ApplicationArea = All;
