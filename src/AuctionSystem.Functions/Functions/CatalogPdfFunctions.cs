@@ -24,6 +24,9 @@ public class CatalogPdfFunctions
     // One consistent rule weight/colour for every data-row line (single rows and multi-lot group
     // boxes) so the catalogue doesn't mix heavy black boxes with faint grey row separators.
     private const float RowLineWidth = 0.75f;
+    private const float StringBorderWidth = RowLineWidth * 2;   // the box around a multi-lot string — 2x the row lines
+    private const float DescriptionFontSize = 8f;               // slightly smaller — the description shows 2 stacked lines
+    private const float ColumnDividerWidth = 0.5f;              // thin vertical lines between columns, through every lot
     private static readonly Color RowLineColor = Colors.Grey.Medium;
 
     public CatalogPdfFunctions(
@@ -191,6 +194,8 @@ public class CatalogPdfFunctions
             var farmerName = query["farmerName"];
             var hasFarmerGuid = Guid.TryParse(query["farmerGuid"], out var farmerGuidVal);
             var isFarmerCatalog = hasFarmerGuid || !string.IsNullOrEmpty(farmerName);
+            int.TryParse(query["brokerId"], out var brokerCatalogId);
+            var isBrokerCatalog = !isFarmerCatalog && brokerCatalogId > 0;
             var lotSaleData = new Dictionary<int, LotSaleInfo>();
 
             if (isFarmerCatalog)
@@ -289,6 +294,51 @@ public class CatalogPdfFunctions
                     }
                 }
             }
+            else if (isBrokerCatalog)
+            {
+                // Broker catalogue: only the lots this broker WON in this auction, at full lot skins (the
+                // broker buys the whole lot, unlike a farmer who sees only their share). Filter to those lots
+                // and recompute the per-string aggregates over them.
+                var auctionNumber = query["auctionNumber"];
+                if (!string.IsNullOrEmpty(auctionNumber))
+                {
+                    var brokerSql = @"SELECT ar.LotNumber, ar.PriceEur
+                        FROM auction.AuctionResults ar
+                        INNER JOIN auction.Lots l ON ar.LotNumber = l.LotNumber
+                        INNER JOIN auction.Auctions a ON l.AuctionId = a.Id
+                        WHERE a.AuctionNumber = @AuctionNumber AND ar.BrokerId = @BrokerId";
+                    var brokerRows = await connection.QueryAsync<dynamic>(brokerSql, new { AuctionNumber = auctionNumber, BrokerId = brokerCatalogId });
+                    var brokerLotPrice = new Dictionary<int, decimal>();
+                    foreach (var b in brokerRows)
+                        brokerLotPrice[(int)b.LotNumber] = (decimal)b.PriceEur;
+
+                    rows = rows.Where(r => brokerLotPrice.ContainsKey(r.LotNumber)).ToList();
+
+                    foreach (var r in rows)
+                    {
+                        var price = brokerLotPrice[r.LotNumber];
+                        lotSaleData[r.LotNumber] = new LotSaleInfo
+                        {
+                            HasResult = true,
+                            PricePerSkin = price,
+                            Value = r.TotalSkins * price,
+                            FarmerSkins = r.TotalSkins   // full lot — the broker bought the whole lot
+                        };
+                    }
+
+                    foreach (var strGrp in rows.GroupBy(r => r.StringNumber))
+                    {
+                        var ordered = strGrp.ToList();
+                        var stringTotal = ordered.Sum(r => r.TotalSkins);   // full lot skins
+                        for (int i = 0; i < ordered.Count; i++)
+                        {
+                            ordered[i].LotsInString = ordered.Count;
+                            ordered[i].LotSequenceInString = i + 1;
+                            ordered[i].StringTotalSkins = stringTotal;
+                        }
+                    }
+                }
+            }
 
             if (!rows.Any())
             {
@@ -350,8 +400,8 @@ public class CatalogPdfFunctions
                                                 columns.ConstantColumn(70);   // Lots
                                                 columns.ConstantColumn(55);   // Skins
                                                 columns.RelativeColumn();     // Description
-                                                columns.ConstantColumn(60);   // Price
-                                                columns.ConstantColumn(90);   // Comments
+                                                columns.ConstantColumn(45);   // Price (narrower, closer to Description)
+                                                columns.ConstantColumn(125);  // Comments (more room)
                                             });
                                         }
 
@@ -490,19 +540,25 @@ public class CatalogPdfFunctions
 
     private static void AddColumnHeader(TableCellDescriptor table, bool isFarmerCatalog = false)
     {
-        table.Cell().Element(HeaderCell).Text("Lots").Bold();
-        table.Cell().Element(HeaderCell).Text("Skins").Bold();
-        table.Cell().Element(HeaderCell).Text("Description").Bold();
-        if (isFarmerCatalog)
+        var titles = isFarmerCatalog
+            ? new[] { "Lot", "Skins", "Description", "Price/Skin", "Value", "Status" }
+            : new[] { "Lot", "Skins", "Description", "Price", "Comments" };
+
+        for (var i = 0; i < titles.Length; i++)
         {
-            table.Cell().Element(HeaderCell).Text("Price/Skin").Bold();
-            table.Cell().Element(HeaderCell).Text("Value").Bold();
-            table.Cell().Element(HeaderCell).Text("Status").Bold();
-        }
-        else
-        {
-            table.Cell().Element(HeaderCell).Text("Price").Bold();
-            table.Cell().Element(HeaderCell).Text("Comments").Bold();
+            var first = i == 0;
+            var last = i == titles.Length - 1;
+            // Top + outer sides match the string box (StringBorderWidth); internal dividers stay thin.
+            table.Cell().Element(c => c
+                    .BorderTop(StringBorderWidth)
+                    .BorderBottom(0.5f)
+                    .BorderLeft(first ? StringBorderWidth : 0.5f)
+                    .BorderRight(last ? StringBorderWidth : 0.5f)
+                    .BorderColor(Colors.Grey.Medium)
+                    .Background(Colors.Grey.Lighten3)
+                    .PaddingVertical(4)
+                    .PaddingHorizontal(4))
+                .Text(titles[i]).Bold();
         }
     }
 
@@ -513,29 +569,45 @@ public class CatalogPdfFunctions
         bool isFarmerCatalog = false,
         Dictionary<int, LotSaleInfo>? lotSaleData = null)
     {
-        IContainer CellStyle(IContainer c) => nextIsStringStart ? NoBorderCell(c) : NormalCell(c);
+        var lastColIndex = isFarmerCatalog ? 5 : 4;
+        var colIndex = 0;
 
-        table.Cell().Element(CellStyle).Text(BuildLotsText(row));
-        table.Cell().Element(CellStyle).Text(BuildSkinsText(row));
-        table.Cell().Element(CellStyle).Text(BuildDescriptionText(row));
+        // Each cell carries the table's vertical lines so they run continuously through every lot: thick
+        // outer sides (StringBorderWidth), thin column dividers (ColumnDividerWidth). The bottom row line is
+        // suppressed right before a string starts (the string's thick top is the divider there).
+        IContainer Cell()
+        {
+            var ci = colIndex++;
+            return table.Cell().Element(c =>
+            {
+                if (!nextIsStringStart) c = c.BorderBottom(RowLineWidth);
+                if (ci == 0) c = c.BorderLeft(StringBorderWidth);
+                c = c.BorderRight(ci == lastColIndex ? StringBorderWidth : ColumnDividerWidth);
+                return c.BorderColor(RowLineColor).PaddingVertical(3).PaddingHorizontal(4);
+            });
+        }
+
+        Cell().Text(BuildLotsText(row));
+        Cell().Text(BuildSkinsText(row));
+        RenderDescriptionCell(Cell(), row);
 
         if (isFarmerCatalog && lotSaleData != null && lotSaleData.TryGetValue(row.LotNumber, out var sale))
         {
-            table.Cell().Element(CellStyle).AlignRight().Text(sale.HasResult ? $"\u20ac{sale.PricePerSkin:N2}" : "-");
-            table.Cell().Element(CellStyle).AlignRight().Text(sale.HasResult ? $"\u20ac{sale.Value:N2}" : "-");
-            table.Cell().Element(CellStyle).Text(sale.PdfStatus).FontColor(sale.HasResult ? Colors.Green.Darken2 : Colors.Grey.Medium).Bold();
+            Cell().AlignRight().Text(sale.HasResult ? $"\u20ac{sale.PricePerSkin:N2}" : "-");
+            Cell().AlignRight().Text(sale.HasResult ? $"\u20ac{sale.Value:N2}" : "-");
+            Cell().Text(sale.PdfStatus).FontColor(sale.HasResult ? Colors.Green.Darken2 : Colors.Grey.Medium).Bold();
         }
         else if (isFarmerCatalog)
         {
-            table.Cell().Element(CellStyle).Text("-");
-            table.Cell().Element(CellStyle).Text("-");
-            table.Cell().Element(CellStyle).Text("");
+            Cell().Text("-");
+            Cell().Text("-");
+            Cell().Text("");
         }
         else
         {
             // Price = estimated price, Comments = remarks (auctioneer PDF); empty on the customer catalogue.
-            table.Cell().Element(CellStyle).Text(row.Estimate ?? "");
-            table.Cell().Element(CellStyle).Text(row.Remarks ?? "");
+            Cell().Text(row.Estimate ?? "");
+            Cell().Text(row.Remarks ?? "");
         }
     }
 
@@ -564,18 +636,18 @@ public class CatalogPdfFunctions
                 var ci = colIndex++;
                 return table.Cell().Element(c =>
                 {
-                    c = c.Background(Colors.White);
-                    if (isFirst) c = c.BorderTop(RowLineWidth);
-                    if (isLast) c = c.BorderBottom(RowLineWidth);
-                    if (ci == 0) c = c.BorderLeft(RowLineWidth);
-                    if (ci == lastColIndex) c = c.BorderRight(RowLineWidth);
+                    if (isFirst) c = c.BorderTop(StringBorderWidth);
+                    if (isLast) c = c.BorderBottom(StringBorderWidth);
+                    else c = c.BorderBottom(RowLineWidth);   // thin separator between lots inside the string (half the box)
+                    if (ci == 0) c = c.BorderLeft(StringBorderWidth);
+                    c = c.BorderRight(ci == lastColIndex ? StringBorderWidth : ColumnDividerWidth);   // thin column dividers through the string
                     return c.BorderColor(RowLineColor).PaddingVertical(3).PaddingHorizontal(4);
                 });
             }
 
             Cell().Text(BuildLotsText(row));
             Cell().Text(BuildSkinsText(row));
-            Cell().Text(BuildDescriptionText(row));
+            RenderDescriptionCell(Cell(), row);
 
             if (isFarmerCatalog && lotSaleData != null && lotSaleData.TryGetValue(row.LotNumber, out var sale))
             {
@@ -680,12 +752,55 @@ public class CatalogPdfFunctions
         return string.Join(" / ", parts.Where(x => !string.IsNullOrWhiteSpace(x)));
     }
 
+    // The description's groups laid out as 3 columns of 2 stacked lines (slightly smaller font): the first
+    // two groups in column 1, the next two in column 2, the last two in column 3. Blank groups are dropped
+    // first (so a missing Damages just leaves column 3 with one line), keeping the same order as the old
+    // "/"-joined text.
+    private static void RenderDescriptionCell(IContainer container, CatalogPdfRow row)
+    {
+        // In a multi-lot string only the first lot shows the description; the other rows show the sequence
+        // number / string skin total — keep those as plain text.
+        if (row.IsMultiLotString && row.LotSequenceInString != 1)
+        {
+            container.Text(row.IsLastLotInString ? $"{row.StringTotalSkins:#,##0} skins" : row.LotSequenceInString.ToString());
+            return;
+        }
+
+        var parts = BuildDescriptionParts(row);
+        container.Row(r =>
+        {
+            for (var col = 0; col < 3; col++)
+            {
+                var top = col * 2 < parts.Count ? parts[col * 2] : "";
+                var bottom = col * 2 + 1 < parts.Count ? parts[col * 2 + 1] : "";
+                r.RelativeItem().Column(cc =>
+                {
+                    cc.Item().Text(top).FontSize(DescriptionFontSize);
+                    cc.Item().Text(bottom).FontSize(DescriptionFontSize);
+                });
+            }
+        });
+    }
+
+    private static List<string> BuildDescriptionParts(CatalogPdfRow row)
+    {
+        var parts = new List<string?> { row.HairLength, row.Size, row.Quality, row.Color, row.Clarity };
+        if (!string.IsNullOrWhiteSpace(row.Damages)
+            && !string.Equals(row.Damages, "None", StringComparison.OrdinalIgnoreCase))
+        {
+            parts.Add(row.Damages);
+        }
+        return parts.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x!).ToList();
+    }
+
+    // No Background here: a white cell background overpaints the bottom border of the cell above (borders
+    // straddle the shared edge), which made the thick line below a string's last lot look thinner. The page
+    // is white anyway, so dropping it is purely a fix.
     private static IContainer NormalCell(IContainer container)
     {
         return container
             .BorderBottom(RowLineWidth)
             .BorderColor(RowLineColor)
-            .Background(Colors.White)
             .PaddingVertical(3)
             .PaddingHorizontal(4);
     }
@@ -693,7 +808,6 @@ public class CatalogPdfFunctions
     private static IContainer NoBorderCell(IContainer container)
     {
         return container
-            .Background(Colors.White)
             .PaddingVertical(3)
             .PaddingHorizontal(4);
     }
@@ -710,8 +824,12 @@ public class CatalogPdfFunctions
 
     private static IContainer SectionCell(IContainer container)
     {
+        // Section title: top + sides match the string box (StringBorderWidth) so the header reads as a box.
         return container
-            .Border(0.75f)
+            .BorderTop(StringBorderWidth)
+            .BorderLeft(StringBorderWidth)
+            .BorderRight(StringBorderWidth)
+            .BorderBottom(RowLineWidth)
             .BorderColor(Colors.Grey.Darken1)
             .Background(Colors.Grey.Lighten2)
             .PaddingVertical(5)
