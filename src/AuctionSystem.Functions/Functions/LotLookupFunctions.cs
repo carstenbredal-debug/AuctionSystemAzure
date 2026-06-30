@@ -120,18 +120,31 @@ public class LotLookupFunctions
                 return await Json(req, new { found = false, message = "Provide a 'barcode' or 'box' parameter." });
             }
 
-            // box -> lot across ALL ACTIVE catalogues (CatalogDraftLots of Active CatalogDrafts). A box
-            // normally belongs to one catalogue; if it overlaps, the lowest lot number wins.
-            var lot = await connection.QueryFirstOrDefaultAsync<LotRow>(
-                @"SELECT TOP 1 dl.LotNumber, dl.SalesType, dl.Gender, dl.[Group], dl.HairLength, dl.Size,
-                         dl.Quality, dl.Color, dl.Clarity, dl.Damages, dl.RackPosition, dl.Description,
-                         dl.Estimate, dl.RedLimit, dl.Remarks, d.Name AS CatalogName
-                  FROM auction.CatalogDraftLots dl
-                  JOIN auction.CatalogDrafts d ON d.Id = dl.DraftId
-                  WHERE d.Status = 'Active'
-                    AND ',' + REPLACE(dl.IncludedBoxNumbers, ' ', '') + ',' LIKE '%,' + @box + ',%'
-                  ORDER BY dl.LotNumber",
-                new { box = boxNumber.ToString() });
+            // box -> lot in the ACTIVE catalogue(s). There's only ever one active catalogue; each reads its
+            // own table auction.[Cat_{id}.Lots]. A box normally belongs to one catalogue; if it overlaps the
+            // lowest lot number wins.
+            var actives = (await connection.QueryAsync(
+                "SELECT Id, Name FROM auction.CatalogDrafts WHERE Status = 'Active'")).ToList();
+            var unionParts = new List<string>();
+            foreach (var a in actives)
+            {
+                int catId = (int)a.Id;
+                if (await connection.ExecuteScalarAsync<int?>($"SELECT OBJECT_ID('auction.[Cat_{catId}.Lots]', 'U')") == null)
+                    continue;
+                var nameEsc = ((string)a.Name).Replace("'", "''");
+                unionParts.Add($@"
+                    SELECT LotNumber, SalesType, Gender, [Group], HairLength, Size, Quality, Color, Clarity,
+                           Damages, RackPosition, Description, Estimate, RedLimit, Remarks, N'{nameEsc}' AS CatalogName
+                    FROM auction.[Cat_{catId}.Lots]
+                    WHERE ',' + REPLACE(IncludedBoxNumbers, ' ', '') + ',' LIKE '%,' + @box + ',%'");
+            }
+
+            LotRow? lot = null;
+            if (unionParts.Count > 0)
+            {
+                var lotSql = "SELECT TOP 1 * FROM (" + string.Join(" UNION ALL ", unionParts) + ") x ORDER BY LotNumber";
+                lot = await connection.QueryFirstOrDefaultAsync<LotRow>(lotSql, new { box = boxNumber.ToString() });
+            }
 
             if (lot is null)
                 return await Json(req, new { found = false, boxNumber, boxType, message = "Do not exist" });

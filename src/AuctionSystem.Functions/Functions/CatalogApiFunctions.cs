@@ -59,6 +59,13 @@ public class CatalogApiFunctions
         if (!string.IsNullOrEmpty(num)) query["auctionNumber"] = num;
     }
 
+    // activeAuction=true was requested but no active auction exists (resolution set no auctionNumber). The
+    // public catalogue must then show NOTHING — not fall back to the live auction.cataloglots (the last
+    // generated catalogue). Call AFTER ResolveActiveAuctionIntoQueryAsync.
+    private static bool NoActiveAuction(System.Collections.Specialized.NameValueCollection query) =>
+        string.Equals(query["activeAuction"], "true", StringComparison.OrdinalIgnoreCase)
+        && string.IsNullOrEmpty(query["auctionNumber"]);
+
     // Public, read-only catalog data (the active auction). [AllowAnonymous] opts out of AUTH_ENFORCE;
     // safe because the only interpolated value (auctionNumber) is whitelisted in GetCatalogTable and
     // all filters are parameterized.
@@ -85,6 +92,13 @@ public class CatalogApiFunctions
 
             var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
             await ResolveActiveAuctionIntoQueryAsync(query, connection);
+            if (NoActiveAuction(query))
+            {
+                var none = req.CreateResponse(HttpStatusCode.OK);
+                none.Headers.Add("Content-Type", "application/json");
+                await none.WriteStringAsync(JsonSerializer.Serialize(new Dictionary<string, List<string>>()));
+                return none;
+            }
             var table = GetCatalogTable(query);
 
             var filters = new Dictionary<string, List<string>>();
@@ -149,6 +163,38 @@ public class CatalogApiFunctions
         }
     }
 
+    // The active auction's number + title for the public catalogue header (or {active:false} if none).
+    [AllowAnonymous]
+    [Function("GetActiveAuctionInfo")]
+    public async Task<HttpResponseData> GetActiveAuctionInfo(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "catalog/active-auction")] HttpRequestData req)
+    {
+        var resp = req.CreateResponse(HttpStatusCode.OK);
+        resp.Headers.Add("Content-Type", "application/json");
+        try
+        {
+            using var connection = new SqlConnection(GetCatalogConnectionString());
+            await connection.OpenAsync();
+            var row = await connection.QueryFirstOrDefaultAsync(
+                "SELECT TOP 1 AuctionNumber, Title FROM auction.Auctions WHERE Status = 1 ORDER BY Id DESC");
+            if (row == null)
+                await resp.WriteStringAsync(JsonSerializer.Serialize(new { active = false }));
+            else
+                await resp.WriteStringAsync(JsonSerializer.Serialize(new
+                {
+                    active = true,
+                    auctionNumber = (string)row.AuctionNumber,
+                    title = (string?)row.Title ?? ""
+                }));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading active auction");
+            await resp.WriteStringAsync(JsonSerializer.Serialize(new { active = false }));
+        }
+        return resp;
+    }
+
     [AllowAnonymous]
     [Function("GetCatalogLotsApi")]
     public async Task<HttpResponseData> GetCatalogLots(
@@ -210,6 +256,14 @@ public class CatalogApiFunctions
 
             if (resolveActiveAuction)
                 await ResolveActiveAuctionIntoQueryAsync(query, connection);
+
+            if (NoActiveAuction(query))
+            {
+                var none = req.CreateResponse(HttpStatusCode.OK);
+                none.Headers.Add("Content-Type", "application/json");
+                await none.WriteStringAsync("[]");
+                return none;
+            }
 
             var table = GetCatalogTable(query);
 

@@ -34,29 +34,7 @@ else if (_isBroker)
 }
 else
 {
-    <div class="row mt-4">
-        <div class="col-md-12">
-            <div class="section-container">
-                <div class="section-header">Auctions</div>
-                <div class="section-body p-3">
-                    <table class="table table-sm">
-                        <thead><tr><th>Number</th><th>Title</th><th>Date</th><th>Status</th></tr></thead>
-                        <tbody>
-                            @foreach (var a in stats.RecentAuctions)
-                            {
-                                <tr>
-                                    <td><a href="/farmer/auction/@a.Id">@a.AuctionNumber</a></td>
-                                    <td>@a.Title</td>
-                                    <td>@a.ScheduledDate.ToString("yyyy-MM-dd")</td>
-                                    <td><span class="badge bg-@GetStatusColor(a.Status)">@a.Status</span></td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
+    @* Admin/default home shows just the welcome card above; the Auctions list was removed. *@
 }
 
 @code {

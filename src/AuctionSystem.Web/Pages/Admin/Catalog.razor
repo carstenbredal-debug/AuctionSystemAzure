@@ -156,9 +156,12 @@
                             <td>@lot.LotNumber</td>
                             <td>@lot.StringNumber</td>
                             <td>@lot.RackPosition</td>
-                            @if (editingLotId == lot.Id)
+                            @if (editingLotNumber == lot.LotNumber)
                             {
-                                <td><input class="form-control form-control-sm" @bind="editDescription" placeholder="@BuildDescription(lot)" /></td>
+                                <td>
+                                    <input class="form-control form-control-sm" @bind="editDescription" placeholder="@BuildDescription(lot)" />
+                                    <input class="form-control form-control-sm mt-1" @bind="editDamages" placeholder="Damages" title="Damages (part of the description)" />
+                                </td>
                                 <td class="text-end">@lot.TotalSkins.ToString("N0")</td>
                                 <td><input class="form-control form-control-sm" @bind="editEstimate" /></td>
                                 <td><input class="form-control form-control-sm" @bind="editRedLimit" /></td>
@@ -294,12 +297,12 @@
     private int viewingDraftId;
     private string viewingDraftName = "";
     private string viewingDraftStatus = "Draft";
-    private int? editingLotId;
-    private string editDescription = "", editEstimate = "", editRedLimit = "", editRemarks = "";
+    private int? editingLotNumber;
+    private string editDescription = "", editEstimate = "", editRedLimit = "", editRemarks = "", editDamages = "";
 
     private async Task ViewDraft(CatalogDraftRow d)
     {
-        IsLoading = true; CatalogLots = new(); editingLotId = null; DraftMessage = ""; DraftIsError = false;
+        IsLoading = true; CatalogLots = new(); editingLotNumber = null; DraftMessage = ""; DraftIsError = false;
         viewingDraftId = d.Id; viewingDraftName = d.Name; viewingDraftStatus = d.Status;
         try { CatalogLots = await Http.GetFromJsonAsync<List<CatalogLotRow>>($"api/catalog/drafts/{d.Id}/lots") ?? new(); }
         catch { CatalogLots = new(); }
@@ -308,12 +311,12 @@
 
     private void StartEditLot(CatalogLotRow lot)
     {
-        editingLotId = lot.Id;
+        editingLotNumber = lot.LotNumber;
         editDescription = lot.Description; editEstimate = lot.Estimate;
-        editRedLimit = lot.RedLimit; editRemarks = lot.Remarks;
+        editRedLimit = lot.RedLimit; editRemarks = lot.Remarks; editDamages = lot.Damages;
     }
 
-    private void CancelEditLot() => editingLotId = null;
+    private void CancelEditLot() => editingLotNumber = null;
 
     private async Task ExportDraft()
     {
@@ -323,7 +326,7 @@
 
     private async Task OnImportFile(InputFileChangeEventArgs e)
     {
-        DraftMessage = ""; DraftIsError = false; editingLotId = null;
+        DraftMessage = ""; DraftIsError = false; editingLotNumber = null;
         try
         {
             using var content = new StreamContent(e.File.OpenReadStream(20_000_000));
@@ -345,13 +348,13 @@
         DraftMessage = ""; DraftIsError = false;
         try
         {
-            var resp = await Http.PutAsJsonAsync($"api/catalog/drafts/{viewingDraftId}/lots/{lot.Id}",
-                new { description = editDescription, estimate = editEstimate, redLimit = editRedLimit, remarks = editRemarks });
+            var resp = await Http.PutAsJsonAsync($"api/catalog/drafts/{viewingDraftId}/lots/{lot.LotNumber}",
+                new { description = editDescription, estimate = editEstimate, redLimit = editRedLimit, remarks = editRemarks, damages = editDamages });
             if (resp.IsSuccessStatusCode)
             {
                 lot.Description = editDescription; lot.Estimate = editEstimate;
-                lot.RedLimit = editRedLimit; lot.Remarks = editRemarks;
-                editingLotId = null;
+                lot.RedLimit = editRedLimit; lot.Remarks = editRemarks; lot.Damages = editDamages;
+                editingLotNumber = null;
             }
             else { DraftMessage = $"Save failed: {await resp.Content.ReadAsStringAsync()}"; DraftIsError = true; }
         }
