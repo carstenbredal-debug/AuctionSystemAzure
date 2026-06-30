@@ -82,16 +82,43 @@ public class CatalogDraftFunctions
                 {where}";
             await _db.Database.ExecuteSqlRawAsync(sql, args.ToArray());
 
-            // Assign rack-position from the Start Rack #: 20 positions per rack, in catalogue order.
-            // ONLY showlot lots (IsShow='Yes') get a rack place — they're the ones physically racked.
+            // Assign rack-position from the Start Rack #: 20 positions per rack, in catalogue order. ONLY
+            // showlot lots (IsShow='Yes') get a rack place — they're the ones physically racked. Each
+            // (SalesType, Gender) group STARTS A NEW RACK: when the type or gender changes the racking jumps
+            // to the next rack at position 1 (it no longer continues the previous group's rack). Within a
+            // group it still fills 20 per rack and spills onto the next. A group's starting rack = StartRack
+            // + the racks consumed by all earlier groups (in catalogue order).
             var startRack = body?.StartRack is int sr && sr > 0 ? sr : 1;
             await _db.Database.ExecuteSqlRawAsync(@"
-                WITH ordered AS (
-                    SELECT Id, (ROW_NUMBER() OVER (ORDER BY CatalogSortOrder, LotNumber) - 1) AS rn
-                    FROM auction.CatalogDraftLots WHERE DraftId = {0} AND IsShow = 'Yes')
+                WITH showlots AS (
+                    SELECT Id, SalesType, Gender, CatalogSortOrder,
+                           (ROW_NUMBER() OVER (PARTITION BY SalesType, Gender ORDER BY CatalogSortOrder, LotNumber) - 1) AS rnInGroup
+                    FROM auction.CatalogDraftLots
+                    WHERE DraftId = {0} AND IsShow = 'Yes'
+                ),
+                grp AS (
+                    SELECT SalesType, Gender,
+                           ((COUNT(*) - 1) / 20 + 1) AS racksInGroup,
+                           MIN(CatalogSortOrder) AS groupOrder
+                    FROM showlots
+                    GROUP BY SalesType, Gender
+                ),
+                grpOffset AS (
+                    SELECT SalesType, Gender,
+                           COALESCE(SUM(racksInGroup) OVER (
+                               ORDER BY groupOrder, SalesType, Gender
+                               ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0) AS rackOffset
+                    FROM grp
+                )
                 UPDATE d
-                SET RackPosition = CAST(({1} + o.rn / 20) AS NVARCHAR(10)) + '-' + CAST((o.rn % 20 + 1) AS NVARCHAR(10))
-                FROM auction.CatalogDraftLots d JOIN ordered o ON o.Id = d.Id;",
+                SET RackPosition =
+                    CAST(({1} + go.rackOffset + s.rnInGroup / 20) AS NVARCHAR(10)) + '-' +
+                    CAST((s.rnInGroup % 20 + 1) AS NVARCHAR(10))
+                FROM auction.CatalogDraftLots d
+                JOIN showlots s ON s.Id = d.Id
+                JOIN grpOffset go
+                    ON ISNULL(go.SalesType, '~') = ISNULL(s.SalesType, '~')
+                   AND ISNULL(go.Gender, '~') = ISNULL(s.Gender, '~');",
                 draft.Id, startRack);
 
             draft.LotCount = await _db.CatalogDraftLots.CountAsync(l => l.DraftId == draft.Id);
