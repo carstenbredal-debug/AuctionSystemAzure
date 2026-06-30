@@ -126,9 +126,34 @@ public class CatalogPdfFunctions
 
             await ResolveActiveAuctionIntoQueryAsync(query, connection);
             int.TryParse(query["draftId"], out var draftId);
-            var sourceTable = draftId > 0 ? "auction.CatalogDraftLots" : GetCatalogTable(query);
+
+            // activeAuction=true but no active auction exists -> nothing to show; don't fall back to the live
+            // cataloglots (the last generated catalogue). Only applies to the public active-auction request.
+            if (draftId == 0
+                && string.Equals(query["activeAuction"], "true", StringComparison.OrdinalIgnoreCase)
+                && string.IsNullOrEmpty(query["auctionNumber"]))
+            {
+                var noneResp = req.CreateResponse(HttpStatusCode.NotFound);
+                await noneResp.WriteStringAsync("No active auction.");
+                return noneResp;
+            }
+
+            // A catalogue (draftId) reads its own table auction.[Cat_{id}.Lots]; legacy drafts predating that
+            // fall back to auction.CatalogDraftLots (which has a DraftId column). Otherwise it's an auction /
+            // partner request -> the {Num}.Lots snapshot (or live cataloglots).
+            string sourceTable;
+            bool draftIsCat = false;
+            if (draftId > 0)
+            {
+                draftIsCat = await connection.ExecuteScalarAsync<int?>($"SELECT OBJECT_ID('auction.[Cat_{draftId}.Lots]', 'U')") != null;
+                sourceTable = draftIsCat ? $"auction.[Cat_{draftId}.Lots]" : "auction.CatalogDraftLots";
+            }
+            else
+            {
+                sourceTable = GetCatalogTable(query);
+            }
             // Auctioneer variant (only the admin pdf-auc endpoint sets allowAuc): add estimated price +
-            // remarks. CatalogDraftLots always has them; an auction snapshot only if it was catalog-imported,
+            // remarks. A catalogue always has them; an auction snapshot only if it was catalog-imported,
             // so probe for the Estimate column first to stay safe on old-flow snapshots.
             bool includeAuc = false;
             if (allowAuc)
@@ -177,9 +202,12 @@ public class CatalogPdfFunctions
             var parameters = new DynamicParameters();
             if (draftId > 0)
             {
-                // Frozen catalogue draft — source the frozen lots, no other filters.
-                sql += " AND DraftId = @DraftId";
-                parameters.Add("DraftId", draftId);
+                // A specific catalogue — its own table needs no filter; only the legacy CatalogDraftLots does.
+                if (!draftIsCat)
+                {
+                    sql += " AND DraftId = @DraftId";
+                    parameters.Add("DraftId", draftId);
+                }
             }
             else
             {
@@ -549,7 +577,7 @@ public class CatalogPdfFunctions
             var first = i == 0;
             var last = i == titles.Length - 1;
             // Top + outer sides match the string box (StringBorderWidth); internal dividers stay thin.
-            table.Cell().Element(c => c
+            var headerCell = table.Cell().Element(c => c
                     .BorderTop(StringBorderWidth)
                     .BorderBottom(0.5f)
                     .BorderLeft(first ? StringBorderWidth : 0.5f)
@@ -557,8 +585,9 @@ public class CatalogPdfFunctions
                     .BorderColor(Colors.Grey.Medium)
                     .Background(Colors.Grey.Lighten3)
                     .PaddingVertical(4)
-                    .PaddingHorizontal(4))
-                .Text(titles[i]).Bold();
+                    .PaddingHorizontal(4));
+            // Lot + Skins centered to match their data cells.
+            (i <= 1 ? headerCell.AlignCenter() : headerCell).Text(titles[i]).Bold();
         }
     }
 
@@ -587,8 +616,8 @@ public class CatalogPdfFunctions
             });
         }
 
-        Cell().Text(BuildLotsText(row));
-        Cell().Text(BuildSkinsText(row));
+        Cell().AlignCenter().Text(BuildLotsText(row));
+        Cell().AlignCenter().Text(BuildSkinsText(row));
         RenderDescriptionCell(Cell(), row);
 
         if (isFarmerCatalog && lotSaleData != null && lotSaleData.TryGetValue(row.LotNumber, out var sale))
@@ -645,8 +674,8 @@ public class CatalogPdfFunctions
                 });
             }
 
-            Cell().Text(BuildLotsText(row));
-            Cell().Text(BuildSkinsText(row));
+            Cell().AlignCenter().Text(BuildLotsText(row));
+            Cell().AlignCenter().Text(BuildSkinsText(row));
             RenderDescriptionCell(Cell(), row);
 
             if (isFarmerCatalog && lotSaleData != null && lotSaleData.TryGetValue(row.LotNumber, out var sale))
@@ -762,7 +791,9 @@ public class CatalogPdfFunctions
         // number / string skin total — keep those as plain text.
         if (row.IsMultiLotString && row.LotSequenceInString != 1)
         {
-            container.Text(row.IsLastLotInString ? $"{row.StringTotalSkins:#,##0} skins" : row.LotSequenceInString.ToString());
+            container.AlignRight()
+                .Text(row.IsLastLotInString ? $"{row.StringTotalSkins:#,##0} skins" : row.LotSequenceInString.ToString())
+                .FontSize(DescriptionFontSize);
             return;
         }
 

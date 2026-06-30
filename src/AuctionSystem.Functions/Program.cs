@@ -284,6 +284,21 @@ using (var scope = host.Services.CreateScope())
         ");
         // (No VAT backfill: existing invoices keep VatAmount/TotalAmountInclVat = 0 until regenerated.
         // New invoices/credit notes compute these at creation from the buyer's VAT Bus. Posting Group.)
+        // CatalogDrafts: ShowLotCount frozen on the row (the catalogue's lots live in per-catalogue
+        // auction.[Cat_{id}.Lots] tables which can't be GROUP BY'd across all drafts for the list page).
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.CatalogDrafts') AND name = 'ShowLotCount')
+                ALTER TABLE auction.CatalogDrafts ADD ShowLotCount int NOT NULL CONSTRAINT DF_CatalogDrafts_ShowLotCount DEFAULT 0;
+        ");
+        // Backfill ShowLotCount for catalogues created before the column existed (their lots are still in the
+        // legacy CatalogDraftLots). New catalogues set it at creation, so only still-zero rows are touched.
+        db.Database.ExecuteSqlRaw(@"
+            UPDATE d SET d.ShowLotCount = x.cnt
+            FROM auction.CatalogDrafts d
+            JOIN (SELECT DraftId, COUNT(*) AS cnt FROM auction.CatalogDraftLots WHERE IsShow = 'Yes' GROUP BY DraftId) x
+              ON x.DraftId = d.Id
+            WHERE d.ShowLotCount = 0;
+        ");
         // Supporting index for the eligible-skin grouped count (catalog list + activate). Without it the
         // GROUP BY over a multi-million-row SkinTable full-scans and overruns the HTTP timeout. Isolated in
         // its own try/catch so a one-time index build hiccup can never abort the rest of the migration.
