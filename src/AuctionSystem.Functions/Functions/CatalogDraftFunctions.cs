@@ -36,7 +36,7 @@ public class CatalogDraftFunctions
     }
 
     public record CreateDraftRequest(string? SalesType, string? Gender, string? Group, int? StartRack);
-    public record UpdateDraftLotRequest(string? Description, string? Estimate, string? RedLimit, string? Remarks);
+    public record UpdateDraftLotRequest(string? Description, string? Estimate, string? RedLimit, string? Remarks, string? Damages);
 
     [RequireRole("Admin")]
     [Function("CreateCatalogDraft")]
@@ -61,26 +61,26 @@ public class CatalogDraftFunctions
             _db.CatalogDrafts.Add(draft);
             await _db.SaveChangesAsync();
 
-            // Freeze the matching cataloglots rows. Build the WHERE from only the provided filters so we
-            // never bind an untyped DBNull parameter — those are fragile in ExecuteSqlRaw comparisons and
-            // were the cause of the 500. A blank filter simply omits its clause (= "all").
+            // Freeze the matching cataloglots rows into the catalogue's OWN table auction.[Cat_{id}.Lots] —
+            // the single source the catalogue reads for its whole life (view / PDF / labels / scanner / import
+            // all read it; edits write straight to it). Build the WHERE from only the provided filters so we
+            // never bind an untyped DBNull. A blank filter simply omits its clause (= "all").
             var conditions = new List<string>();
-            var args = new List<object> { draft.Id };
-            int p = 1;
+            var args = new List<object>();
+            int p = 0;
             if (salesType != null) { conditions.Add($"SalesType = {{{p}}}"); args.Add(salesType); p++; }
             if (gender != null) { conditions.Add($"Gender = {{{p}}}"); args.Add(gender); p++; }
             if (group != null) { conditions.Add($"[Group] = {{{p}}}"); args.Add(group); p++; }
             var where = conditions.Count > 0 ? "WHERE " + string.Join(" AND ", conditions) : "";
 
-            var sql = $@"
-                INSERT INTO auction.CatalogDraftLots
-                    (DraftId, StringNumber, LotNumber, CatalogSortOrder, IsShow, SalesType, Gender, [Group],
-                     HairLength, Size, Quality, Color, Clarity, Damages, IncludedBoxNumbers, BoxCount, TotalSkins)
-                SELECT {{0}}, StringNumber, LotNumber, CatalogSortOrder, IsShow, SalesType, Gender, [Group],
-                       HairLength, Size, Quality, Color, Clarity, Damages, IncludedBoxNumbers, BoxCount, TotalSkins
-                FROM auction.cataloglots
-                {where}";
-            await _db.Database.ExecuteSqlRawAsync(sql, args.ToArray());
+            // Separate batches: a SELECT ... INTO target can't be dropped+recreated, nor a just-added column
+            // referenced, within one batch. (The table name is built from the int draft.Id — never user input.)
+            var tbl = $"auction.[Cat_{draft.Id}.Lots]";
+            await _db.Database.ExecuteSqlRawAsync($"IF OBJECT_ID('{tbl}', 'U') IS NOT NULL DROP TABLE {tbl};");
+            await _db.Database.ExecuteSqlRawAsync($"SELECT * INTO {tbl} FROM auction.cataloglots {where};", args.ToArray());
+            await _db.Database.ExecuteSqlRawAsync(
+                $"ALTER TABLE {tbl} ADD Description NVARCHAR(500) NULL, Estimate NVARCHAR(100) NULL, " +
+                "RedLimit NVARCHAR(100) NULL, Remarks NVARCHAR(500) NULL, RackPosition NVARCHAR(20) NULL;");
 
             // Assign rack-position from the Start Rack #: 20 positions per rack, in catalogue order. ONLY
             // showlot lots (IsShow='Yes') get a rack place — they're the ones physically racked. Each
@@ -89,12 +89,12 @@ public class CatalogDraftFunctions
             // group it still fills 20 per rack and spills onto the next. A group's starting rack = StartRack
             // + the racks consumed by all earlier groups (in catalogue order).
             var startRack = body?.StartRack is int sr && sr > 0 ? sr : 1;
-            await _db.Database.ExecuteSqlRawAsync(@"
+            await _db.Database.ExecuteSqlRawAsync($@"
                 WITH showlots AS (
-                    SELECT Id, SalesType, Gender, CatalogSortOrder,
+                    SELECT LotNumber, SalesType, Gender, CatalogSortOrder,
                            (ROW_NUMBER() OVER (PARTITION BY SalesType, Gender ORDER BY CatalogSortOrder, LotNumber) - 1) AS rnInGroup
-                    FROM auction.CatalogDraftLots
-                    WHERE DraftId = {0} AND IsShow = 'Yes'
+                    FROM {tbl}
+                    WHERE IsShow = 'Yes'
                 ),
                 grp AS (
                     SELECT SalesType, Gender,
@@ -112,24 +112,26 @@ public class CatalogDraftFunctions
                 )
                 UPDATE d
                 SET RackPosition =
-                    CAST(({1} + go.rackOffset + s.rnInGroup / 20) AS NVARCHAR(10)) + '-' +
+                    CAST(({{0}} + go.rackOffset + s.rnInGroup / 20) AS NVARCHAR(10)) + '-' +
                     CAST((s.rnInGroup % 20 + 1) AS NVARCHAR(10))
-                FROM auction.CatalogDraftLots d
-                JOIN showlots s ON s.Id = d.Id
+                FROM {tbl} d
+                JOIN showlots s ON s.LotNumber = d.LotNumber
                 JOIN grpOffset go
                     ON ISNULL(go.SalesType, '~') = ISNULL(s.SalesType, '~')
                    AND ISNULL(go.Gender, '~') = ISNULL(s.Gender, '~');",
-                draft.Id, startRack);
+                startRack);
 
-            draft.LotCount = await _db.CatalogDraftLots.CountAsync(l => l.DraftId == draft.Id);
-            draft.SkinCount = await _db.CatalogDraftLots.Where(l => l.DraftId == draft.Id).SumAsync(l => (int?)l.TotalSkins) ?? 0;
-            var showLotCount = await _db.CatalogDraftLots.CountAsync(l => l.DraftId == draft.Id && l.IsShow == "Yes");
+            // Counts frozen on the row — the drafts list reads these (per-catalogue tables can't be GROUP BY'd together).
+            var counts = await CatalogCountsAsync(draft.Id);
+            draft.LotCount = counts.Lots;
+            draft.SkinCount = counts.Skins;
+            draft.ShowLotCount = counts.ShowLots;
             await _db.SaveChangesAsync();
 
             _logger.LogInformation("Created catalogue draft {Id} '{Name}' ({Lots} lots, {Show} show, {Skins} skins)",
-                draft.Id, draft.Name, draft.LotCount, showLotCount, draft.SkinCount);
+                draft.Id, draft.Name, draft.LotCount, draft.ShowLotCount, draft.SkinCount);
 
-            return await Json(req, ToDto(draft, showLotCount, await AvailableSkinsAsync(salesType, gender, group)), HttpStatusCode.Created);
+            return await Json(req, ToDto(draft, draft.ShowLotCount, await AvailableSkinsAsync(salesType, gender, group)), HttpStatusCode.Created);
         }
         catch (Exception ex)
         {
@@ -149,14 +151,6 @@ public class CatalogDraftFunctions
             .OrderByDescending(d => d.CreatedAt)
             .ToListAsync();
 
-        // Showlot count per draft (IsShow = 'Yes'), computed on the fly so existing drafts are correct too.
-        var showCounts = (await _db.CatalogDraftLots
-                .Where(l => l.IsShow == "Yes")
-                .GroupBy(l => l.DraftId)
-                .Select(g => new { DraftId = g.Key, Count = g.Count() })
-                .ToListAsync())
-            .ToDictionary(x => x.DraftId, x => x.Count);
-
         // Live "could have been" pool: skins currently eligible (active, Showlot/Storage) for each type
         // slice. One grouped scan, then summed per draft respecting blank (= all) filters. Comparing this to
         // the frozen SkinCount shows when more skins of a catalogue's type have arrived since it was activated.
@@ -175,7 +169,7 @@ public class CatalogDraftFunctions
                      && (d.Group     == null || string.Equals(g.GroupName?.Trim(), d.Group,     StringComparison.OrdinalIgnoreCase)))
             .Sum(g => g.Cnt);
 
-        return await Json(req, drafts.Select(d => ToDto(d, showCounts.TryGetValue(d.Id, out var c) ? c : 0, Available(d))));
+        return await Json(req, drafts.Select(d => ToDto(d, d.ShowLotCount, Available(d))));
     }
 
     // Activate a catalogue (Draft -> Active): it becomes usable for an auction. (Freezing the catalogue's
@@ -220,7 +214,7 @@ public class CatalogDraftFunctions
                 _logger.LogInformation("Activated + froze catalogue draft {Id} '{Name}'", draft.Id, draft.Name);
             }
         }
-        return await Json(req, ToDto(draft, await ShowCount(id), await AvailableSkinsAsync(draft.SalesType, draft.Gender, draft.Group)));
+        return await Json(req, ToDto(draft, draft.ShowLotCount, await AvailableSkinsAsync(draft.SalesType, draft.Gender, draft.Group)));
     }
 
     // Background freeze worker: runs the heavy SELECT ... INTO off the request thread so a big catalogue's
@@ -292,23 +286,26 @@ public class CatalogDraftFunctions
         // Each statement runs in its OWN batch so every table reference is to an already-committed table
         // (a SELECT ... INTO target referenced later in the SAME batch fails compile-time name resolution).
 
-        // 1. Lots — full cataloglots shape for this catalogue's lot numbers, plus the editable per-lot
-        //    fields (Description/Estimate/RedLimit/Remarks) carried over from CatalogDraftLots so they flow
-        //    into the auction's [{Num}.Lots] when the catalogue is imported. (ALTER + UPDATE in separate
-        //    batches: a just-added column can't be referenced in the same batch.)
-        await ExecSql(conn, $"IF OBJECT_ID('auction.[{lots}]', 'U') IS NOT NULL DROP TABLE auction.[{lots}];");
-        await ExecSql(conn, $@"
-            SELECT * INTO auction.[{lots}] FROM auction.cataloglots
-            WHERE LotNumber IN (SELECT LotNumber FROM auction.CatalogDraftLots WHERE DraftId = {draftId});");
-        await ExecSql(conn, $@"
-            ALTER TABLE auction.[{lots}] ADD Description NVARCHAR(500) NULL, Estimate NVARCHAR(100) NULL,
-                                             RedLimit NVARCHAR(100) NULL, Remarks NVARCHAR(500) NULL,
-                                             RackPosition NVARCHAR(20) NULL;");
-        await ExecSql(conn, $@"
-            UPDATE t SET t.Description = d.Description, t.Estimate = d.Estimate,
-                         t.RedLimit = d.RedLimit, t.Remarks = d.Remarks, t.RackPosition = d.RackPosition
-            FROM auction.[{lots}] t
-            JOIN auction.CatalogDraftLots d ON d.DraftId = {draftId} AND d.LotNumber = t.LotNumber;");
+        // 1. Lots — for catalogues created the new way, auction.[Cat_{id}.Lots] is built at draft creation and
+        //    edited in place, so the freeze must NOT touch it (rebuilding would wipe in-place edits). Only a
+        //    legacy draft (created before per-catalogue tables, lots still in CatalogDraftLots) needs it built
+        //    here, from cataloglots + the editable fields carried over.
+        var lotsExists = await conn.ExecuteScalarAsync<int?>($"SELECT OBJECT_ID('auction.[{lots}]', 'U')") != null;
+        if (!lotsExists)
+        {
+            await ExecSql(conn, $@"
+                SELECT * INTO auction.[{lots}] FROM auction.cataloglots
+                WHERE LotNumber IN (SELECT LotNumber FROM auction.CatalogDraftLots WHERE DraftId = {draftId});");
+            await ExecSql(conn, $@"
+                ALTER TABLE auction.[{lots}] ADD Description NVARCHAR(500) NULL, Estimate NVARCHAR(100) NULL,
+                                                 RedLimit NVARCHAR(100) NULL, Remarks NVARCHAR(500) NULL,
+                                                 RackPosition NVARCHAR(20) NULL;");
+            await ExecSql(conn, $@"
+                UPDATE t SET t.Description = d.Description, t.Estimate = d.Estimate,
+                             t.RedLimit = d.RedLimit, t.Remarks = d.Remarks, t.RackPosition = d.RackPosition
+                FROM auction.[{lots}] t
+                JOIN auction.CatalogDraftLots d ON d.DraftId = {draftId} AND d.LotNumber = t.LotNumber;");
+        }
 
         // 2. Skins — live SkinTable for those lots' boxes, frozen now (TRY_CAST: one bad IncludedBoxNumbers
         //    value must not abort the whole statement).
@@ -360,8 +357,13 @@ public class CatalogDraftFunctions
     public async Task<HttpResponseData> GetLots(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "catalog/drafts/{id:int}/lots")] HttpRequestData req, int id)
     {
-        const string sql = @"
-            SELECT Id, LotNumber, StringNumber, CatalogSortOrder, SalesType, Gender, [Group], Color, Quality,
+        await using var conn = new SqlConnection(_db.Database.GetConnectionString());
+        await conn.OpenAsync();
+        var (table, isCat) = await ResolveLotsTableAsync(conn, id);
+
+        // Keyed on Lot # (the per-catalogue table has no draft row-id); the view edits by Lot #.
+        var sql = $@"
+            SELECT LotNumber, StringNumber, CatalogSortOrder, SalesType, Gender, [Group], Color, Quality,
                    Clarity, Size, HairLength, Damages, TotalSkins, BoxCount,
                    ISNULL(Description, '') AS Description, ISNULL(Estimate, '') AS Estimate,
                    ISNULL(RedLimit, '') AS RedLimit, ISNULL(Remarks, '') AS Remarks,
@@ -370,57 +372,73 @@ public class CatalogDraftFunctions
                    COUNT(*) OVER (PARTITION BY StringNumber) AS LotsInString,
                    ROW_NUMBER() OVER (PARTITION BY StringNumber ORDER BY CatalogSortOrder) AS LotSequenceInString,
                    SUM(TotalSkins) OVER (PARTITION BY StringNumber) AS StringTotalSkins
-            FROM auction.CatalogDraftLots
-            WHERE DraftId = @id
+            FROM {table}
+            {(isCat ? "" : "WHERE DraftId = @id")}
             ORDER BY CatalogSortOrder";
 
-        await using var conn = new SqlConnection(_db.Database.GetConnectionString());
-        await conn.OpenAsync();
         var lots = (await conn.QueryAsync(sql, new { id })).ToList();
         return await Json(req, lots);
     }
 
-    // Edit a single lot's Description / Estimate / Red Limit / Remarks. Allowed while Draft or Active
-    // (an Active edit also syncs the frozen copy so it flows to auctions); only In-Auction is locked.
+    // Edit a single lot's Description / Estimate / Red Limit / Remarks / Damages, keyed on Lot #. Written
+    // straight into the catalogue's own table (auction.[Cat_{id}.Lots]) so view / PDF / import all see it.
+    // Allowed while Draft or Active; only In-Auction is locked.
     [RequireRole("Admin")]
     [Function("UpdateCatalogDraftLot")]
     public async Task<HttpResponseData> UpdateLot(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "catalog/drafts/{id:int}/lots/{lotRowId:int}")] HttpRequestData req, int id, int lotRowId)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "catalog/drafts/{id:int}/lots/{lotNumber:int}")] HttpRequestData req, int id, int lotNumber)
     {
         var draft = await _db.CatalogDrafts.FindAsync(id);
         if (draft == null) return req.CreateResponse(HttpStatusCode.NotFound);
         if (draft.Status == "InAuction")
             return await Json(req, new { error = "Catalogue is in an auction and cannot be edited." }, HttpStatusCode.BadRequest);
 
-        var lot = await _db.CatalogDraftLots.FirstOrDefaultAsync(l => l.Id == lotRowId && l.DraftId == id);
-        if (lot == null) return req.CreateResponse(HttpStatusCode.NotFound);
-
         var body = await req.ReadFromJsonAsync<UpdateDraftLotRequest>();
         static string? Clean(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
-        lot.Description = Clean(body?.Description);
-        lot.Estimate = Clean(body?.Estimate);
-        lot.RedLimit = Clean(body?.RedLimit);
-        lot.Remarks = Clean(body?.Remarks);
-        await _db.SaveChangesAsync();
 
-        // Active = frozen; mirror the edit into [Cat_{id}.Lots] so it reaches the auction on import.
-        if (draft.Status == "Active") await SyncFrozenFieldsAsync(id);
-
+        await using var conn = new SqlConnection(_db.Database.GetConnectionString());
+        await conn.OpenAsync();
+        var (table, isCat) = await ResolveLotsTableAsync(conn, id);
+        var rows = await conn.ExecuteAsync(
+            $@"UPDATE {table}
+               SET Description = @Description, Estimate = @Estimate, RedLimit = @RedLimit,
+                   Remarks = @Remarks, Damages = @Damages
+               WHERE LotNumber = @lotNumber {(isCat ? "" : "AND DraftId = @id")}",
+            new
+            {
+                Description = Clean(body?.Description),
+                Estimate = Clean(body?.Estimate),
+                RedLimit = Clean(body?.RedLimit),
+                Remarks = Clean(body?.Remarks),
+                Damages = Clean(body?.Damages),
+                lotNumber,
+                id
+            });
+        if (rows == 0) return req.CreateResponse(HttpStatusCode.NotFound);
         return await Json(req, new { ok = true });
     }
 
-    // Re-copy the 4 editable fields from CatalogDraftLots into the frozen [Cat_{id}.Lots] (no-op if not frozen).
-    private async Task SyncFrozenFieldsAsync(int draftId)
+    // The catalogue's lots table: the per-catalogue auction.[Cat_{id}.Lots] once built (at creation, going
+    // forward), else the legacy auction.CatalogDraftLots for drafts predating the switch. Returns the table
+    // name and whether it's the per-catalogue table (which has no DraftId column — callers add that filter
+    // only for the legacy table).
+    private static async Task<(string Table, bool IsCat)> ResolveLotsTableAsync(SqlConnection conn, int draftId)
+    {
+        var exists = await conn.ExecuteScalarAsync<int?>($"SELECT OBJECT_ID('auction.[Cat_{draftId}.Lots]', 'U')") != null;
+        return exists ? ($"auction.[Cat_{draftId}.Lots]", true) : ("auction.CatalogDraftLots", false);
+    }
+
+    // Lots / Skins / ShowLots counts read straight from the catalogue's own table.
+    private async Task<(int Lots, int Skins, int ShowLots)> CatalogCountsAsync(int draftId)
     {
         await using var conn = new SqlConnection(_db.Database.GetConnectionString());
         await conn.OpenAsync();
-        await using var cmd = new SqlCommand($@"
-            IF OBJECT_ID('auction.[Cat_{draftId}.Lots]', 'U') IS NOT NULL
-            UPDATE t SET t.Description = d.Description, t.Estimate = d.Estimate,
-                         t.RedLimit = d.RedLimit, t.Remarks = d.Remarks
-            FROM auction.[Cat_{draftId}.Lots] t
-            JOIN auction.CatalogDraftLots d ON d.DraftId = {draftId} AND d.LotNumber = t.LotNumber;", conn);
-        await cmd.ExecuteNonQueryAsync();
+        var (table, isCat) = await ResolveLotsTableAsync(conn, draftId);
+        var row = await conn.QueryFirstAsync($@"
+            SELECT COUNT(*) AS Lots, ISNULL(SUM(TotalSkins), 0) AS Skins,
+                   ISNULL(SUM(CASE WHEN IsShow = 'Yes' THEN 1 ELSE 0 END), 0) AS ShowLots
+            FROM {table} {(isCat ? "" : "WHERE DraftId = @draftId")}", new { draftId });
+        return ((int)row.Lots, (int)row.Skins, (int)row.ShowLots);
     }
 
     // Export a draft's lots to .xlsx for bulk-editing the 4 fields (matched back on Lot # at import).
@@ -432,8 +450,14 @@ public class CatalogDraftFunctions
         var draft = await _db.CatalogDrafts.FindAsync(id);
         if (draft == null) return req.CreateResponse(HttpStatusCode.NotFound);
 
-        var lots = await _db.CatalogDraftLots.Where(l => l.DraftId == id)
-            .OrderBy(l => l.CatalogSortOrder).ThenBy(l => l.LotNumber).ToListAsync();
+        await using var conn = new SqlConnection(_db.Database.GetConnectionString());
+        await conn.OpenAsync();
+        var (table, isCat) = await ResolveLotsTableAsync(conn, id);
+        var lots = (await conn.QueryAsync<ExportRow>($@"
+            SELECT LotNumber, ISNULL(RackPosition, '') AS RackPosition, SalesType, Gender, [Group] AS GroupName,
+                   Description, Estimate, RedLimit, Remarks, HairLength, Size, Quality, Color, Clarity, Damages
+            FROM {table} {(isCat ? "" : "WHERE DraftId = @id")}
+            ORDER BY CatalogSortOrder, LotNumber", new { id })).ToList();
 
         using var wb = new XLWorkbook();
         var ws = wb.AddWorksheet("Lots");
@@ -448,7 +472,7 @@ public class CatalogDraftFunctions
             ws.Cell(r, 2).Value = l.RackPosition ?? "";
             ws.Cell(r, 3).Value = l.SalesType ?? "";
             ws.Cell(r, 4).Value = l.Gender ?? "";
-            ws.Cell(r, 5).Value = l.Group ?? "";
+            ws.Cell(r, 5).Value = l.GroupName ?? "";
             // Show the effective description (custom override, else the auto-built catalogue line) so the
             // column isn't blank; whatever's here on import becomes the lot's Description.
             ws.Cell(r, 6).Value = string.IsNullOrWhiteSpace(l.Description) ? AutoDescription(l) : l.Description;
@@ -506,26 +530,35 @@ public class CatalogDraftFunctions
         if (lotCol == null) return await Json(req, new { error = "Missing a 'Lot #' column." }, HttpStatusCode.BadRequest);
         int? descCol = Col("Description"), estCol = Col("Estimate"), redCol = Col("Red Limit"), remCol = Col("Remarks");
 
-        var byLot = (await _db.CatalogDraftLots.Where(l => l.DraftId == id).ToListAsync())
-            .GroupBy(l => l.LotNumber).ToDictionary(g => g.Key, g => g.First());
-
         static string? Clean(string s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
-        var updated = 0;
+        var descEdits = new List<(int Lot, string? Val)>();
+        var estEdits = new List<(int Lot, string? Val)>();
+        var redEdits = new List<(int Lot, string? Val)>();
+        var remEdits = new List<(int Lot, string? Val)>();
+        var seen = new HashSet<int>();
         var lastRow = ws.LastRowUsed()?.RowNumber() ?? 1;
         for (var row = 2; row <= lastRow; row++)
         {
             if (!int.TryParse(ws.Cell(row, lotCol.Value).GetString().Trim(), out var lotNum)) continue;
-            if (!byLot.TryGetValue(lotNum, out var lot)) continue;
-            if (descCol != null) lot.Description = Clean(ws.Cell(row, descCol.Value).GetString());
-            if (estCol != null) lot.Estimate = Clean(ws.Cell(row, estCol.Value).GetString());
-            if (redCol != null) lot.RedLimit = Clean(ws.Cell(row, redCol.Value).GetString());
-            if (remCol != null) lot.Remarks = Clean(ws.Cell(row, remCol.Value).GetString());
-            updated++;
+            seen.Add(lotNum);
+            if (descCol != null) descEdits.Add((lotNum, Clean(ws.Cell(row, descCol.Value).GetString())));
+            if (estCol != null) estEdits.Add((lotNum, Clean(ws.Cell(row, estCol.Value).GetString())));
+            if (redCol != null) redEdits.Add((lotNum, Clean(ws.Cell(row, redCol.Value).GetString())));
+            if (remCol != null) remEdits.Add((lotNum, Clean(ws.Cell(row, remCol.Value).GetString())));
         }
-        await _db.SaveChangesAsync();
-        if (draft.Status == "Active") await SyncFrozenFieldsAsync(id);
-        _logger.LogInformation("Imported xlsx into catalogue {Id}: {Updated} lots updated", id, updated);
-        return await Json(req, new { updated });
+
+        // Apply per-column so a column absent from the file leaves its DB value untouched. Chunked to stay
+        // under SQL Server's 2100-parameter cap on a big catalogue.
+        await using var conn = new SqlConnection(_db.Database.GetConnectionString());
+        await conn.OpenAsync();
+        var (table, isCat) = await ResolveLotsTableAsync(conn, id);
+        await UpdateColumnAsync(conn, table, isCat, id, "Description", descEdits);
+        await UpdateColumnAsync(conn, table, isCat, id, "Estimate", estEdits);
+        await UpdateColumnAsync(conn, table, isCat, id, "RedLimit", redEdits);
+        await UpdateColumnAsync(conn, table, isCat, id, "Remarks", remEdits);
+
+        _logger.LogInformation("Imported xlsx into catalogue {Id}: {Updated} lots updated", id, seen.Count);
+        return await Json(req, new { updated = seen.Count });
     }
 
 
@@ -533,9 +566,6 @@ public class CatalogDraftFunctions
     {
         d.Id, d.Name, d.SalesType, d.Gender, d.Group, d.LotCount, showLotCount, d.SkinCount, availableSkins, d.Status, d.CreatedAt
     };
-
-    private Task<int> ShowCount(int draftId) =>
-        _db.CatalogDraftLots.CountAsync(l => l.DraftId == draftId && l.IsShow == "Yes");
 
     // Live count of skins currently eligible for a catalogue's type filter — the same eligibility the
     // auction.Boxes view uses (active, BoxStatus Showlot/Storage). A blank filter (null) means "all".
@@ -561,12 +591,57 @@ public class CatalogDraftFunctions
 
     // The auto-built catalogue line — matches the grid's BuildDescription exactly: grading attributes only
     // (Type/Gender/Group are separate columns), joined by " / ".
-    private static string AutoDescription(CatalogDraftLot l)
+    private static string AutoDescription(ExportRow l)
     {
         var parts = new[] { l.HairLength, l.Size, l.Quality, l.Color, l.Clarity,
             (l.Damages != null && !l.Damages.Equals("None", StringComparison.OrdinalIgnoreCase)) ? l.Damages : null }
             .Where(p => !string.IsNullOrWhiteSpace(p));
         return string.Join(" / ", parts);
+    }
+
+    // Chunked single-column update of the catalogue's lots table, keyed on Lot #. The column name is a fixed
+    // internal literal (never user input). Chunked to stay under SQL Server's 2100-parameter cap.
+    private static async Task UpdateColumnAsync(SqlConnection conn, string table, bool isCat, int draftId,
+        string column, List<(int Lot, string? Val)> edits)
+    {
+        foreach (var chunk in edits.Chunk(500))
+        {
+            var values = new List<string>();
+            var dp = new DynamicParameters();
+            if (!isCat) dp.Add("draftId", draftId);
+            int i = 0;
+            foreach (var e in chunk)
+            {
+                values.Add($"(@l{i}, @v{i})");
+                dp.Add($"l{i}", e.Lot);
+                dp.Add($"v{i}", e.Val, System.Data.DbType.String);
+                i++;
+            }
+            await conn.ExecuteAsync(
+                $@"UPDATE t SET t.[{column}] = v.Val
+                   FROM {table} t
+                   JOIN (VALUES {string.Join(",", values)}) v(LotNumber, Val)
+                     ON t.LotNumber = v.LotNumber {(isCat ? "" : "AND t.DraftId = @draftId")}", dp);
+        }
+    }
+
+    private class ExportRow
+    {
+        public int LotNumber { get; set; }
+        public string RackPosition { get; set; } = "";
+        public string? SalesType { get; set; }
+        public string? Gender { get; set; }
+        public string? GroupName { get; set; }
+        public string? Description { get; set; }
+        public string? Estimate { get; set; }
+        public string? RedLimit { get; set; }
+        public string? Remarks { get; set; }
+        public string? HairLength { get; set; }
+        public string? Size { get; set; }
+        public string? Quality { get; set; }
+        public string? Color { get; set; }
+        public string? Clarity { get; set; }
+        public string? Damages { get; set; }
     }
 
     private static async Task<HttpResponseData> Json(HttpRequestData req, object body, HttpStatusCode status = HttpStatusCode.OK)

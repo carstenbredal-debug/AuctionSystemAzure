@@ -138,9 +138,22 @@ public class CatalogPdfFunctions
                 return noneResp;
             }
 
-            var sourceTable = draftId > 0 ? "auction.CatalogDraftLots" : GetCatalogTable(query);
+            // A catalogue (draftId) reads its own table auction.[Cat_{id}.Lots]; legacy drafts predating that
+            // fall back to auction.CatalogDraftLots (which has a DraftId column). Otherwise it's an auction /
+            // partner request -> the {Num}.Lots snapshot (or live cataloglots).
+            string sourceTable;
+            bool draftIsCat = false;
+            if (draftId > 0)
+            {
+                draftIsCat = await connection.ExecuteScalarAsync<int?>($"SELECT OBJECT_ID('auction.[Cat_{draftId}.Lots]', 'U')") != null;
+                sourceTable = draftIsCat ? $"auction.[Cat_{draftId}.Lots]" : "auction.CatalogDraftLots";
+            }
+            else
+            {
+                sourceTable = GetCatalogTable(query);
+            }
             // Auctioneer variant (only the admin pdf-auc endpoint sets allowAuc): add estimated price +
-            // remarks. CatalogDraftLots always has them; an auction snapshot only if it was catalog-imported,
+            // remarks. A catalogue always has them; an auction snapshot only if it was catalog-imported,
             // so probe for the Estimate column first to stay safe on old-flow snapshots.
             bool includeAuc = false;
             if (allowAuc)
@@ -189,9 +202,12 @@ public class CatalogPdfFunctions
             var parameters = new DynamicParameters();
             if (draftId > 0)
             {
-                // Frozen catalogue draft — source the frozen lots, no other filters.
-                sql += " AND DraftId = @DraftId";
-                parameters.Add("DraftId", draftId);
+                // A specific catalogue — its own table needs no filter; only the legacy CatalogDraftLots does.
+                if (!draftIsCat)
+                {
+                    sql += " AND DraftId = @DraftId";
+                    parameters.Add("DraftId", draftId);
+                }
             }
             else
             {

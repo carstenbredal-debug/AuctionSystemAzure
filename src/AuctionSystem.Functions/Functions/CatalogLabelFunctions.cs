@@ -67,11 +67,15 @@ public class CatalogLabelFunctions
             using var connection = new SqlConnection(connectionString);
             await connection.OpenAsync();
 
-            // Showlot lots in this draft (in catalogue order).
+            // Showlot lots in this catalogue (in catalogue order). The catalogue reads its own table
+            // auction.[Cat_{id}.Lots]; legacy drafts predating it fall back to auction.CatalogDraftLots.
+            var catTable = $"auction.[Cat_{draftId}.Lots]";
+            var isCat = await connection.ExecuteScalarAsync<int?>($"SELECT OBJECT_ID('{catTable}', 'U')") != null;
+            var table = isCat ? catTable : "auction.CatalogDraftLots";
             var lots = (await connection.QueryAsync<LotRow>(
-                @"SELECT LotNumber, ISNULL(IncludedBoxNumbers,'') AS IncludedBoxNumbers, ISNULL(RackPosition,'') AS RackPosition
-                  FROM auction.CatalogDraftLots
-                  WHERE DraftId = @draftId AND IsShow = 'Yes'
+                $@"SELECT LotNumber, ISNULL(IncludedBoxNumbers,'') AS IncludedBoxNumbers, ISNULL(RackPosition,'') AS RackPosition
+                  FROM {table}
+                  WHERE IsShow = 'Yes' {(isCat ? "" : "AND DraftId = @draftId")}
                   ORDER BY CatalogSortOrder, LotNumber",
                 new { draftId })).ToList();
 
@@ -167,9 +171,12 @@ public class CatalogLabelFunctions
             using var connection = new SqlConnection(connectionString);
             await connection.OpenAsync();
 
+            var catTable = $"auction.[Cat_{draftId}.Lots]";
+            var isCat = await connection.ExecuteScalarAsync<int?>($"SELECT OBJECT_ID('{catTable}', 'U')") != null;
+            var table = isCat ? catTable : "auction.CatalogDraftLots";
             var lotNumbers = (await connection.QueryAsync<int>(
-                @"SELECT LotNumber FROM auction.CatalogDraftLots
-                  WHERE DraftId = @draftId AND IsShow = 'Yes'
+                $@"SELECT LotNumber FROM {table}
+                  WHERE IsShow = 'Yes' {(isCat ? "" : "AND DraftId = @draftId")}
                   ORDER BY CatalogSortOrder, LotNumber",
                 new { draftId })).ToList();
 

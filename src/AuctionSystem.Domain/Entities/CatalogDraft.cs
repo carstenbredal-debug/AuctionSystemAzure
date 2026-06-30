@@ -11,6 +11,7 @@ public class CatalogDraft
     public string? Group { get; set; }
     public int LotCount { get; set; }
     public int SkinCount { get; set; }
+    public int ShowLotCount { get; set; }   // frozen at creation (drafts-list reads this; per-catalogue lot tables can't be GROUP BY'd across all)
     // Lifecycle: Draft (editable) -> Active (frozen skins/boxes/lots, usable for an auction) -> InAuction (consumed, locked).
     public string Status { get; set; } = "Draft";
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
