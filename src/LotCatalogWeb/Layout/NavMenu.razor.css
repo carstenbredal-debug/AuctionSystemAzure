@@ -27,6 +27,26 @@
     flex: 1;
 }
 
+.nav-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+}
+
+.active-auction {
+    color: #2d1b4e;
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.active-auction.none {
+    color: #888;
+    font-weight: 500;
+    font-style: italic;
+}
+
 ::deep .nav-item {
     color: #333;
     text-decoration: none;

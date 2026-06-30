@@ -1,5 +1,7 @@
 @using Microsoft.AspNetCore.Components.Routing
+@using System.Net.Http.Json
 @inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@inject HttpClient Http
 
 <header class="top-nav">
     <div class="nav-brand">
@@ -7,12 +9,39 @@
         <span class="brand-name">FUR</span>
     </div>
 
-    <a href="@ClientPortalUrl" class="btn-login">Client Portals</a>
+    <div class="nav-right">
+        <a href="@ClientPortalUrl" class="btn-login">Client Portals</a>
+        @if (_loaded)
+        {
+            <span class="active-auction @(_active?.Active == true ? "" : "none")">
+                @(_active?.Active == true
+                    ? $"{_active.AuctionNumber} — {_active.Title}"
+                    : "No active auction at the moment")
+            </span>
+        }
+    </div>
 </header>
 
 @code {
+    private ActiveAuctionInfo? _active;
+    private bool _loaded;
+
     // The portal (main web app) URL is environment-specific; set ClientPortalUrl in appsettings.json
     // (rewritten per environment at deploy, like ApiBaseUrl). Falls back to "#" if unset.
     private string ClientPortalUrl =>
         string.IsNullOrWhiteSpace(Configuration["ClientPortalUrl"]) ? "#" : Configuration["ClientPortalUrl"]!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _active = await Http.GetFromJsonAsync<ActiveAuctionInfo>("api/catalog/active-auction"); }
+        catch { _active = null; }
+        finally { _loaded = true; }
+    }
+
+    private class ActiveAuctionInfo
+    {
+        public bool Active { get; set; }
+        public string AuctionNumber { get; set; } = "";
+        public string Title { get; set; } = "";
+    }
 }
