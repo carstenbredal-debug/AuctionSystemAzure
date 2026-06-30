@@ -577,7 +577,7 @@ public class CatalogPdfFunctions
             var first = i == 0;
             var last = i == titles.Length - 1;
             // Top + outer sides match the string box (StringBorderWidth); internal dividers stay thin.
-            table.Cell().Element(c => c
+            var headerCell = table.Cell().Element(c => c
                     .BorderTop(StringBorderWidth)
                     .BorderBottom(0.5f)
                     .BorderLeft(first ? StringBorderWidth : 0.5f)
@@ -585,8 +585,9 @@ public class CatalogPdfFunctions
                     .BorderColor(Colors.Grey.Medium)
                     .Background(Colors.Grey.Lighten3)
                     .PaddingVertical(4)
-                    .PaddingHorizontal(4))
-                .Text(titles[i]).Bold();
+                    .PaddingHorizontal(4));
+            // Lot + Skins centered to match their data cells.
+            (i <= 1 ? headerCell.AlignCenter() : headerCell).Text(titles[i]).Bold();
         }
     }
 
@@ -615,8 +616,8 @@ public class CatalogPdfFunctions
             });
         }
 
-        Cell().Text(BuildLotsText(row));
-        Cell().Text(BuildSkinsText(row));
+        Cell().AlignCenter().Text(BuildLotsText(row));
+        Cell().AlignCenter().Text(BuildSkinsText(row));
         RenderDescriptionCell(Cell(), row);
 
         if (isFarmerCatalog && lotSaleData != null && lotSaleData.TryGetValue(row.LotNumber, out var sale))
@@ -673,8 +674,8 @@ public class CatalogPdfFunctions
                 });
             }
 
-            Cell().Text(BuildLotsText(row));
-            Cell().Text(BuildSkinsText(row));
+            Cell().AlignCenter().Text(BuildLotsText(row));
+            Cell().AlignCenter().Text(BuildSkinsText(row));
             RenderDescriptionCell(Cell(), row);
 
             if (isFarmerCatalog && lotSaleData != null && lotSaleData.TryGetValue(row.LotNumber, out var sale))
@@ -790,7 +791,9 @@ public class CatalogPdfFunctions
         // number / string skin total — keep those as plain text.
         if (row.IsMultiLotString && row.LotSequenceInString != 1)
         {
-            container.Text(row.IsLastLotInString ? $"{row.StringTotalSkins:#,##0} skins" : row.LotSequenceInString.ToString());
+            container.AlignRight()
+                .Text(row.IsLastLotInString ? $"{row.StringTotalSkins:#,##0} skins" : row.LotSequenceInString.ToString())
+                .FontSize(DescriptionFontSize);
             return;
         }
 
