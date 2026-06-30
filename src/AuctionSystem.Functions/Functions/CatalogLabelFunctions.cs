@@ -86,10 +86,13 @@ public class CatalogLabelFunctions
             var showBoxes = new HashSet<int>();
             if (allBoxes.Count > 0)
             {
+                // Pass the box numbers as ONE CSV parameter and split server-side — a plain "IN @boxes"
+                // expands to one parameter each and a big catalogue (>2100 boxes) hits SQL's parameter cap.
                 var boxNums = await connection.QueryAsync<int>(
                     @"SELECT DISTINCT BoxNumber FROM dbo.SkinTable
-                      WHERE BoxType = 'Showlot' AND IsActive = 1 AND BoxNumber IN @boxes",
-                    new { boxes = allBoxes });
+                      WHERE BoxType = 'Showlot' AND IsActive = 1
+                        AND BoxNumber IN (SELECT TRY_CAST(value AS INT) FROM STRING_SPLIT(@boxesCsv, ','))",
+                    new { boxesCsv = string.Join(",", allBoxes) });
                 foreach (var n in boxNums) showBoxes.Add(n);
             }
 
