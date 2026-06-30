@@ -126,6 +126,18 @@ public class CatalogPdfFunctions
 
             await ResolveActiveAuctionIntoQueryAsync(query, connection);
             int.TryParse(query["draftId"], out var draftId);
+
+            // activeAuction=true but no active auction exists -> nothing to show; don't fall back to the live
+            // cataloglots (the last generated catalogue). Only applies to the public active-auction request.
+            if (draftId == 0
+                && string.Equals(query["activeAuction"], "true", StringComparison.OrdinalIgnoreCase)
+                && string.IsNullOrEmpty(query["auctionNumber"]))
+            {
+                var noneResp = req.CreateResponse(HttpStatusCode.NotFound);
+                await noneResp.WriteStringAsync("No active auction.");
+                return noneResp;
+            }
+
             var sourceTable = draftId > 0 ? "auction.CatalogDraftLots" : GetCatalogTable(query);
             // Auctioneer variant (only the admin pdf-auc endpoint sets allowAuc): add estimated price +
             // remarks. CatalogDraftLots always has them; an auction snapshot only if it was catalog-imported,

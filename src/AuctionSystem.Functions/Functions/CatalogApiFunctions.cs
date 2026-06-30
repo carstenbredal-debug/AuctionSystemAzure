@@ -59,6 +59,13 @@ public class CatalogApiFunctions
         if (!string.IsNullOrEmpty(num)) query["auctionNumber"] = num;
     }
 
+    // activeAuction=true was requested but no active auction exists (resolution set no auctionNumber). The
+    // public catalogue must then show NOTHING — not fall back to the live auction.cataloglots (the last
+    // generated catalogue). Call AFTER ResolveActiveAuctionIntoQueryAsync.
+    private static bool NoActiveAuction(System.Collections.Specialized.NameValueCollection query) =>
+        string.Equals(query["activeAuction"], "true", StringComparison.OrdinalIgnoreCase)
+        && string.IsNullOrEmpty(query["auctionNumber"]);
+
     // Public, read-only catalog data (the active auction). [AllowAnonymous] opts out of AUTH_ENFORCE;
     // safe because the only interpolated value (auctionNumber) is whitelisted in GetCatalogTable and
     // all filters are parameterized.
@@ -85,6 +92,13 @@ public class CatalogApiFunctions
 
             var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
             await ResolveActiveAuctionIntoQueryAsync(query, connection);
+            if (NoActiveAuction(query))
+            {
+                var none = req.CreateResponse(HttpStatusCode.OK);
+                none.Headers.Add("Content-Type", "application/json");
+                await none.WriteStringAsync(JsonSerializer.Serialize(new Dictionary<string, List<string>>()));
+                return none;
+            }
             var table = GetCatalogTable(query);
 
             var filters = new Dictionary<string, List<string>>();
@@ -210,6 +224,14 @@ public class CatalogApiFunctions
 
             if (resolveActiveAuction)
                 await ResolveActiveAuctionIntoQueryAsync(query, connection);
+
+            if (NoActiveAuction(query))
+            {
+                var none = req.CreateResponse(HttpStatusCode.OK);
+                none.Headers.Add("Content-Type", "application/json");
+                await none.WriteStringAsync("[]");
+                return none;
+            }
 
             var table = GetCatalogTable(query);
 
