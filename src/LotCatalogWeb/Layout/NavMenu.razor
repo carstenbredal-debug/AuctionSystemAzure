@@ -1,4 +1,5 @@
 @using Microsoft.AspNetCore.Components.Routing
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 
 <header class="top-nav">
     <div class="nav-brand">
@@ -6,14 +7,12 @@
         <span class="brand-name">FUR</span>
     </div>
 
-    <nav class="nav-links">
-        <a href="#" class="nav-item">Auctions <span class="dropdown-arrow">▾</span></a>
-        <a href="#" class="nav-item">Our Collection <span class="dropdown-arrow">▾</span></a>
-        <a href="#" class="nav-item">Fashion & Innovation <span class="dropdown-arrow">▾</span></a>
-        <a href="#" class="nav-item">Partners & Ambassadors <span class="dropdown-arrow">▾</span></a>
-        <a href="#" class="nav-item">Sustainability <span class="dropdown-arrow">▾</span></a>
-        <a href="#" class="nav-item">About Us <span class="dropdown-arrow">▾</span></a>
-    </nav>
-
-    <a href="#" class="btn-login">Client Portals</a>
+    <a href="@ClientPortalUrl" class="btn-login">Client Portals</a>
 </header>
+
+@code {
+    // The portal (main web app) URL is environment-specific; set ClientPortalUrl in appsettings.json
+    // (rewritten per environment at deploy, like ApiBaseUrl). Falls back to "#" if unset.
+    private string ClientPortalUrl =>
+        string.IsNullOrWhiteSpace(Configuration["ClientPortalUrl"]) ? "#" : Configuration["ClientPortalUrl"]!;
+}
