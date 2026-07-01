@@ -241,6 +241,17 @@
                     }
                 </AuthorizeView>
 
+                <AuthorizeView Roles="Farmer">
+                    <div class="nav-item px-3 mt-2">
+                        <span class="nav-link section-label"><small><strong>FARMER</strong></small></span>
+                    </div>
+                    <div class="nav-item ps-5 pe-3">
+                        <NavLink class="nav-link" href="farmer">
+                            Farmer Portal
+                        </NavLink>
+                    </div>
+                </AuthorizeView>
+
                 <AuthorizeView Roles="Broker">
                     <div class="nav-item px-3">
                         <NavLink class="nav-link" href="broker/customers">
