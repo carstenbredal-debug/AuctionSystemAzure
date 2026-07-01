@@ -129,13 +129,18 @@
             </h6>
             <div class="mb-2">
                 <button class="btn btn-sm btn-outline-success" @onclick="ExportDraft">Export to Excel</button>
+                <button class="btn btn-sm btn-outline-success ms-1" @onclick="ExportGrading" title="Grading fields as separate editable columns">Export Grading</button>
                 @if (viewingDraftStatus != "InAuction")
                 {
                     <label class="btn btn-sm btn-outline-primary ms-1 mb-0">
                         Import Excel
                         <InputFile OnChange="OnImportFile" accept=".xlsx" style="display:none" />
                     </label>
-                    <span class="text-muted small ms-2">Edit the 4 fields in Excel, then re-import (matched on Lot #).</span>
+                    <label class="btn btn-sm btn-outline-primary ms-1 mb-0">
+                        Import Grading
+                        <InputFile OnChange="OnImportGradingFile" accept=".xlsx" style="display:none" />
+                    </label>
+                    <span class="text-muted small ms-2">Description export edits the 4 text fields; Grading export edits Hair Length / Size / Quality / Color / Clarity / Damages (+ Estimate / Red / Remarks). Matched on Lot #.</span>
                 }
             </div>
             @if (!string.IsNullOrEmpty(DraftMessage))
@@ -322,6 +327,31 @@
     {
         try { await JS.InvokeVoidAsync("open", $"api/catalog/drafts/{viewingDraftId}/export", "_blank"); }
         catch (Exception ex) { DraftMessage = $"Export failed: {ex.Message}"; DraftIsError = true; }
+    }
+
+    private async Task ExportGrading()
+    {
+        try { await JS.InvokeVoidAsync("open", $"api/catalog/drafts/{viewingDraftId}/export-grading", "_blank"); }
+        catch (Exception ex) { DraftMessage = $"Export failed: {ex.Message}"; DraftIsError = true; }
+    }
+
+    private async Task OnImportGradingFile(InputFileChangeEventArgs e)
+    {
+        DraftMessage = ""; DraftIsError = false; editingLotNumber = null;
+        try
+        {
+            using var content = new StreamContent(e.File.OpenReadStream(20_000_000));
+            var resp = await Http.PostAsync($"api/catalog/drafts/{viewingDraftId}/import-grading", content);
+            var bodyTxt = await resp.Content.ReadAsStringAsync();
+            if (resp.IsSuccessStatusCode)
+            {
+                DraftMessage = $"Imported grading — {bodyTxt}";
+                CatalogLots = await Http.GetFromJsonAsync<List<CatalogLotRow>>($"api/catalog/drafts/{viewingDraftId}/lots") ?? new();
+                await LoadDrafts();
+            }
+            else { DraftMessage = $"Import failed: {bodyTxt}"; DraftIsError = true; }
+        }
+        catch (Exception ex) { DraftMessage = $"Import failed: {ex.Message}"; DraftIsError = true; }
     }
 
     private async Task OnImportFile(InputFileChangeEventArgs e)
