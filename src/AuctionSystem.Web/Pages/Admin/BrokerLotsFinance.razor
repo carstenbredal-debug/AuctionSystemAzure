@@ -199,14 +199,6 @@ else
         {
             <div class="alert @(_takebackMessageIsError ? "alert-danger" : "alert-success") alert-dismissible">
                 @_takebackMessage
-                @if (!string.IsNullOrEmpty(_lastCreditNotePdfUrl))
-                {
-                    <a href="@_lastCreditNotePdfUrl" target="_blank" class="btn btn-sm btn-outline-dark ms-2">📄 Download Credit Note PDF</a>
-                }
-                else if (_lastCreditNoteId != null)
-                {
-                    <a href="@Api.GetInvoicePdfUrl(_lastCreditNoteId.Value)" target="_blank" class="btn btn-sm btn-outline-dark ms-2">📄 Download Credit Note PDF</a>
-                }
                 <button type="button" class="btn-close" @onclick="() => { _takebackMessage = null; _lastCreditNoteId = null; }"></button>
             </div>
         }
@@ -910,7 +902,7 @@ else
             if (resp.IsSuccessStatusCode)
             {
                 var json = await resp.Content.ReadFromJsonAsync<TakebackResponse>();
-                _takebackMessage = $"{_selectedSoldIds.Count} lot(s) taken back. Lots moved to unsold.";
+                _takebackMessage = $"{_selectedSoldIds.Count} lot(s) taken back. Lots moved to Un-invoiced.";
                 if (json?.CreditNoteId != null)
                 {
                     _lastCreditNoteId = json.CreditNoteId;
