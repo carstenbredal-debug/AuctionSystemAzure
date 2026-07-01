@@ -1174,6 +1174,7 @@ public class FarmerSalesRow
 {
     public Guid? FarmerGuid { get; set; }
     public string Farmer { get; set; } = "";
+    public int SkinsInAuction { get; set; }
     public int SkinsSold { get; set; }
     public decimal TotalValue { get; set; }
 }

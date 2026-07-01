@@ -632,9 +632,10 @@ public class SkinFunctions
         return response;
     }
 
-    // Per-farmer sold skins + total value for ONE auction (the Finance > Farmers page). Skins live in the
-    // auction snapshot table grouped by box; a box counts only if it sold (it's in the sold-box sale map),
-    // and value = skins-in-box * the box's sale price per skin.
+    // Per-farmer skins-in-auction, sold skins + total value for ONE auction (the Finance > Farmers page).
+    // Skins live in the auction snapshot table grouped by box. EVERY farmer with skins in the auction is
+    // returned (even with 0 sales); sold skins/value count only boxes in the sold-box sale map, and
+    // value = skins-in-box * the box's sale price per skin.
     [Function("GetFarmerSalesByAuction")]
     public async Task<HttpResponseData> GetFarmerSalesByAuction(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "skins/farmer-sales")] HttpRequestData req)
@@ -653,7 +654,7 @@ public class SkinFunctions
         if (auction != null)
         {
             var saleInfoByBox = await GetSoldBoxSaleInfoAsync(auctionId);
-            var perFarmer = new Dictionary<string, (Guid? Guid, string Name, int Skins, decimal Value)>();
+            var perFarmer = new Dictionary<string, (Guid? Guid, string Name, int InAuction, int Sold, decimal Value)>();
             try
             {
                 await using var conn = new SqlConnection(_auctionDb.Database.GetConnectionString()!);
@@ -669,19 +670,21 @@ public class SkinFunctions
                     var name = string.IsNullOrWhiteSpace(nameRaw) ? "Unknow" : nameRaw;
                     var box = reader.GetInt32(2);
                     var cnt = reader.GetInt32(3);
-                    if (saleInfoByBox.TryGetValue(box, out var info)) // only sold boxes count
-                    {
-                        var key = guid?.ToString() ?? ("name:" + name);
-                        var cur = perFarmer.TryGetValue(key, out var v) ? v : (guid, name, 0, 0m);
-                        perFarmer[key] = (cur.Item1, cur.Item2, cur.Item3 + cnt, cur.Item4 + cnt * info.PriceEur);
-                    }
+                    var key = guid?.ToString() ?? ("name:" + name);
+                    var cur = perFarmer.TryGetValue(key, out var v) ? v : (guid, name, 0, 0, 0m);
+                    // Every box counts toward skins-in-auction; sold skins/value only when the box sold.
+                    var sold = saleInfoByBox.TryGetValue(box, out var info);
+                    perFarmer[key] = (cur.Item1, cur.Item2, cur.Item3 + cnt,
+                        cur.Item4 + (sold ? cnt : 0),
+                        cur.Item5 + (sold ? cnt * info.PriceEur : 0m));
                 }
             }
             catch { /* snapshot table may not exist / lacks farmerGUID for this auction */ }
 
             rows = perFarmer
-                .OrderByDescending(kv => kv.Value.Item4)
-                .Select(kv => (object)new { farmerGuid = kv.Value.Item1, farmer = kv.Value.Item2, skinsSold = kv.Value.Item3, totalValue = kv.Value.Item4 })
+                .OrderByDescending(kv => kv.Value.Item5)
+                .ThenByDescending(kv => kv.Value.Item3)
+                .Select(kv => (object)new { farmerGuid = kv.Value.Item1, farmer = kv.Value.Item2, skinsInAuction = kv.Value.Item3, skinsSold = kv.Value.Item4, totalValue = kv.Value.Item5 })
                 .ToList();
         }
 
