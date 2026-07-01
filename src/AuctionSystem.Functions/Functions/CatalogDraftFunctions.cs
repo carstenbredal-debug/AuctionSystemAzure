@@ -561,6 +561,133 @@ public class CatalogDraftFunctions
         return await Json(req, new { updated = seen.Count });
     }
 
+    // Grading export: the description broken into its component fields (Hair Length / Size / Quality / Color /
+    // Clarity / Damages) as separate editable columns, plus Estimate / Red Limit / Remarks. Lets you bulk-edit
+    // grading in Excel and re-import; the composed descriptions (view/PDF) then recompose from the new grading.
+    [RequireRole("Admin")]
+    [Function("ExportCatalogDraftGrading")]
+    public async Task<HttpResponseData> ExportGrading(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "catalog/drafts/{id:int}/export-grading")] HttpRequestData req, int id)
+    {
+        var draft = await _db.CatalogDrafts.FindAsync(id);
+        if (draft == null) return req.CreateResponse(HttpStatusCode.NotFound);
+
+        await using var conn = new SqlConnection(_db.Database.GetConnectionString());
+        await conn.OpenAsync();
+        var (table, isCat) = await ResolveLotsTableAsync(conn, id);
+        var lots = (await conn.QueryAsync<ExportRow>($@"
+            SELECT LotNumber, ISNULL(RackPosition, '') AS RackPosition, SalesType, Gender, [Group] AS GroupName,
+                   Description, Estimate, RedLimit, Remarks, HairLength, Size, Quality, Color, Clarity, Damages
+            FROM {table} {(isCat ? "" : "WHERE DraftId = @id")}
+            ORDER BY CatalogSortOrder, LotNumber", new { id })).ToList();
+
+        using var wb = new XLWorkbook();
+        var ws = wb.AddWorksheet("Grading");
+        var headers = new[] { "Lot #", "Rack", "Type", "Gender", "Group",
+            "Hair Length", "Size", "Quality", "Color", "Clarity", "Damages", "Estimate", "Red Limit", "Remarks" };
+        for (int c = 0; c < headers.Length; c++) ws.Cell(1, c + 1).Value = headers[c];
+        ws.Row(1).Style.Font.Bold = true;
+
+        var r = 2;
+        foreach (var l in lots)
+        {
+            ws.Cell(r, 1).Value = l.LotNumber;
+            ws.Cell(r, 2).Value = l.RackPosition ?? "";
+            ws.Cell(r, 3).Value = l.SalesType ?? "";
+            ws.Cell(r, 4).Value = l.Gender ?? "";
+            ws.Cell(r, 5).Value = l.GroupName ?? "";
+            ws.Cell(r, 6).Value = l.HairLength ?? "";
+            ws.Cell(r, 7).Value = l.Size ?? "";
+            ws.Cell(r, 8).Value = l.Quality ?? "";
+            ws.Cell(r, 9).Value = l.Color ?? "";
+            ws.Cell(r, 10).Value = l.Clarity ?? "";
+            ws.Cell(r, 11).Value = l.Damages ?? "";
+            ws.Cell(r, 12).Value = l.Estimate ?? "";
+            ws.Cell(r, 13).Value = l.RedLimit ?? "";
+            ws.Cell(r, 14).Value = l.Remarks ?? "";
+            r++;
+        }
+        ws.Columns().AdjustToContents();
+
+        // Read-only Lot#/Rack/Type/Gender/Group (cols 1-5); unlock the 9 editable columns (6-14), then protect.
+        if (lots.Count > 0)
+            ws.Range(2, 6, r - 1, 14).Style.Protection.Locked = false;
+        ws.Protect();
+
+        using var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        var resp = req.CreateResponse(HttpStatusCode.OK);
+        resp.Headers.Add("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        resp.Headers.Add("Content-Disposition", $"attachment; filename=\"catalog-{id}-grading.xlsx\"");
+        await resp.WriteBytesAsync(ms.ToArray());
+        return resp;
+    }
+
+    // Bulk-update the grading fields (+ Estimate/Red Limit/Remarks) from the grading .xlsx, matched by Lot #.
+    // Draft/Active only (In-Auction is locked). Any column absent from the file is left untouched.
+    [RequireRole("Admin")]
+    [Function("ImportCatalogDraftGrading")]
+    public async Task<HttpResponseData> ImportGrading(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "catalog/drafts/{id:int}/import-grading")] HttpRequestData req, int id)
+    {
+        var draft = await _db.CatalogDrafts.FindAsync(id);
+        if (draft == null) return req.CreateResponse(HttpStatusCode.NotFound);
+        if (draft.Status == "InAuction")
+            return await Json(req, new { error = "Catalogue is in an auction and cannot be edited." }, HttpStatusCode.BadRequest);
+
+        using var ms = new MemoryStream();
+        await req.Body.CopyToAsync(ms);
+        ms.Position = 0;
+        XLWorkbook wb;
+        try { wb = new XLWorkbook(ms); }
+        catch { return await Json(req, new { error = "Not a valid .xlsx file." }, HttpStatusCode.BadRequest); }
+        var ws = wb.Worksheets.FirstOrDefault();
+        if (ws == null) return await Json(req, new { error = "No sheet found in the file." }, HttpStatusCode.BadRequest);
+
+        var cols = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var cell in ws.Row(1).CellsUsed()) cols[cell.GetString().Trim()] = cell.Address.ColumnNumber;
+        int? Col(params string[] names) { foreach (var n in names) if (cols.TryGetValue(n, out var c)) return c; return null; }
+
+        var lotCol = Col("Lot #", "Lot", "LotNumber");
+        if (lotCol == null) return await Json(req, new { error = "Missing a 'Lot #' column." }, HttpStatusCode.BadRequest);
+
+        // DB column -> its column number in the sheet (null = absent, skipped).
+        var map = new (string Db, int? Col)[]
+        {
+            ("HairLength", Col("Hair Length", "HairLength")),
+            ("Size",       Col("Size")),
+            ("Quality",    Col("Quality")),
+            ("Color",      Col("Color")),
+            ("Clarity",    Col("Clarity")),
+            ("Damages",    Col("Damages")),
+            ("Estimate",   Col("Estimate")),
+            ("RedLimit",   Col("Red Limit", "RedLimit")),
+            ("Remarks",    Col("Remarks")),
+        };
+
+        static string? Clean(string s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+        var edits = map.Where(m => m.Col != null).ToDictionary(m => m.Db, _ => new List<(int Lot, string? Val)>());
+        var seen = new HashSet<int>();
+        var lastRow = ws.LastRowUsed()?.RowNumber() ?? 1;
+        for (var row = 2; row <= lastRow; row++)
+        {
+            if (!int.TryParse(ws.Cell(row, lotCol.Value).GetString().Trim(), out var lotNum)) continue;
+            seen.Add(lotNum);
+            foreach (var m in map)
+                if (m.Col != null)
+                    edits[m.Db].Add((lotNum, Clean(ws.Cell(row, m.Col.Value).GetString())));
+        }
+
+        await using var conn = new SqlConnection(_db.Database.GetConnectionString());
+        await conn.OpenAsync();
+        var (table, isCat) = await ResolveLotsTableAsync(conn, id);
+        foreach (var kv in edits)
+            await UpdateColumnAsync(conn, table, isCat, id, kv.Key, kv.Value);
+
+        _logger.LogInformation("Imported grading xlsx into catalogue {Id}: {Updated} lots updated", id, seen.Count);
+        return await Json(req, new { updated = seen.Count });
+    }
+
 
     private static object ToDto(CatalogDraft d, int showLotCount, int availableSkins) => new
     {

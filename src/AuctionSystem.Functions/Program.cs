@@ -299,6 +299,26 @@ using (var scope = host.Services.CreateScope())
               ON x.DraftId = d.Id
             WHERE d.ShowLotCount = 0;
         ");
+        // External-price staging: a POSTed external result lands here first and waits out a 5-minute debounce
+        // window (each correction bumps UpdatedAt) before a timer applies it to the real sale. One pending row
+        // per (auction, lot) via the filtered unique index.
+        db.Database.ExecuteSqlRaw(@"
+            IF OBJECT_ID('auction.ExternalPriceStaging', 'U') IS NULL
+            CREATE TABLE auction.ExternalPriceStaging (
+                Id          int IDENTITY(1,1) PRIMARY KEY,
+                AuctionId   int NOT NULL,
+                LotNumber   int NOT NULL,
+                BrokerId    int NOT NULL,
+                PriceEur    decimal(18,2) NOT NULL,
+                ExternalRef nvarchar(100) NULL,
+                ReceivedAt  datetime2 NOT NULL,
+                UpdatedAt   datetime2 NOT NULL,
+                Applied     bit NOT NULL CONSTRAINT DF_ExternalPriceStaging_Applied DEFAULT 0,
+                AppliedAt   datetime2 NULL
+            );
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_ExternalPriceStaging_Pending' AND object_id = OBJECT_ID('auction.ExternalPriceStaging'))
+                CREATE UNIQUE INDEX UX_ExternalPriceStaging_Pending ON auction.ExternalPriceStaging(AuctionId, LotNumber) WHERE Applied = 0;
+        ");
         // Supporting index for the eligible-skin grouped count (catalog list + activate). Without it the
         // GROUP BY over a multi-million-row SkinTable full-scans and overruns the HTTP timeout. Isolated in
         // its own try/catch so a one-time index build hiccup can never abort the rest of the migration.
