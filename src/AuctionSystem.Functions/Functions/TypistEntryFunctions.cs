@@ -4,6 +4,7 @@ using AuctionSystem.Domain.Data;
 using AuctionSystem.Domain.Entities;
 using AuctionSystem.Domain.Enums;
 using AuctionSystem.Functions.Auth;
+using Dapper;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Data.SqlClient;
@@ -1070,7 +1071,10 @@ public class TypistEntryFunctions
         if (auction == null)
             return await CreateErrorResponse(req, $"Auction '{body.AuctionNumber}' not found.");
 
-        int recorded = 0, skipped = 0, errors = 0;
+        await using var conn = new SqlConnection(_db.Database.GetConnectionString());
+        await conn.OpenAsync();
+
+        int staged = 0, skipped = 0, errors = 0;
         var outcomes = new List<object>();
         foreach (var r in body.Results)
         {
@@ -1096,21 +1100,77 @@ public class TypistEntryFunctions
                 continue;
             }
 
-            var result = await RecordSaleAsync(auction.Id, r.LotNumber, broker.Id, r.PriceEur, r.ExternalRef);
-            if (result == null)
-            {
-                skipped++;
-                outcomes.Add(new { r.LotNumber, status = "skipped-already-sold" });
-                continue;
-            }
-            recorded++;
-            outcomes.Add(new { r.LotNumber, status = "recorded", auctionId = auction.Id, resultId = result.Id });
+            // Stage the result instead of recording it now: the external system may correct the price/broker
+            // for up to 5 minutes. A re-send for the same lot UPDATEs the pending row and bumps UpdatedAt,
+            // restarting the debounce; the ApplyExternalPriceStaging timer records it once 5 min pass quietly.
+            var updated = await conn.ExecuteAsync(@"
+                UPDATE auction.ExternalPriceStaging
+                SET BrokerId = @brokerId, PriceEur = @price, ExternalRef = @externalRef, UpdatedAt = SYSUTCDATETIME()
+                WHERE AuctionId = @auctionId AND LotNumber = @lotNumber AND Applied = 0",
+                new { brokerId = broker.Id, price = r.PriceEur, externalRef = r.ExternalRef, auctionId = auction.Id, lotNumber = r.LotNumber });
+            if (updated == 0)
+                await conn.ExecuteAsync(@"
+                    INSERT INTO auction.ExternalPriceStaging (AuctionId, LotNumber, BrokerId, PriceEur, ExternalRef, ReceivedAt, UpdatedAt, Applied)
+                    VALUES (@auctionId, @lotNumber, @brokerId, @price, @externalRef, SYSUTCDATETIME(), SYSUTCDATETIME(), 0)",
+                    new { auctionId = auction.Id, lotNumber = r.LotNumber, brokerId = broker.Id, price = r.PriceEur, externalRef = r.ExternalRef });
+
+            staged++;
+            outcomes.Add(new { r.LotNumber, status = updated > 0 ? "updated" : "staged" });
         }
 
-        _logger.LogInformation("External results for {Auction}: recorded={Recorded}, skipped={Skipped}, errors={Errors}",
-            body.AuctionNumber, recorded, skipped, errors);
+        _logger.LogInformation("External results for {Auction}: staged={Staged}, skipped={Skipped}, errors={Errors}",
+            body.AuctionNumber, staged, skipped, errors);
 
-        return await CreateJsonResponse(req, new { recorded, skipped, errors, results = outcomes });
+        return await CreateJsonResponse(req, new { staged, skipped, errors, results = outcomes });
+    }
+
+    // Applies staged external prices once their 5-minute debounce window has elapsed with no further correction
+    // (UpdatedAt older than 5 min). Runs every minute. Each row is claimed atomically (Applied=1 only if still
+    // due), so a correction landing between the SELECT and the apply is not lost — it stays pending and the
+    // stale value is skipped. On failure the claim is reverted so the next tick retries.
+    [Function("ApplyExternalPriceStaging")]
+    public async Task ApplyExternalPriceStaging([TimerTrigger("0 */1 * * * *")] TimerInfo timer)
+    {
+        await using var conn = new SqlConnection(_db.Database.GetConnectionString());
+        await conn.OpenAsync();
+
+        var due = (await conn.QueryAsync<StagedResult>(@"
+            SELECT Id, AuctionId, LotNumber, BrokerId, PriceEur, ExternalRef
+            FROM auction.ExternalPriceStaging
+            WHERE Applied = 0 AND UpdatedAt <= DATEADD(MINUTE, -5, SYSUTCDATETIME())
+            ORDER BY UpdatedAt")).ToList();
+
+        foreach (var s in due)
+        {
+            // Claim only if still due — a correction since the SELECT would have bumped UpdatedAt.
+            var claimed = await conn.ExecuteAsync(@"
+                UPDATE auction.ExternalPriceStaging SET Applied = 1, AppliedAt = SYSUTCDATETIME()
+                WHERE Id = @id AND Applied = 0 AND UpdatedAt <= DATEADD(MINUTE, -5, SYSUTCDATETIME())",
+                new { id = s.Id });
+            if (claimed == 0) continue;
+
+            try
+            {
+                var result = await RecordSaleAsync(s.AuctionId, s.LotNumber, s.BrokerId, s.PriceEur, s.ExternalRef);
+                _logger.LogInformation("Applied staged external price lot {Lot} (auction {Auction}): {Status}",
+                    s.LotNumber, s.AuctionId, result == null ? "already-sold" : "recorded");
+            }
+            catch (Exception ex)
+            {
+                await conn.ExecuteAsync("UPDATE auction.ExternalPriceStaging SET Applied = 0, AppliedAt = NULL WHERE Id = @id", new { id = s.Id });
+                _logger.LogError(ex, "Failed to apply staged external price id {Id} (lot {Lot}); will retry next tick", s.Id, s.LotNumber);
+            }
+        }
+    }
+
+    private class StagedResult
+    {
+        public int Id { get; set; }
+        public int AuctionId { get; set; }
+        public int LotNumber { get; set; }
+        public int BrokerId { get; set; }
+        public decimal PriceEur { get; set; }
+        public string? ExternalRef { get; set; }
     }
 
     // Machine-to-machine auth for the external price feed. Fails closed: 401 if EXTERNAL_PRICE_API_KEY isn't
