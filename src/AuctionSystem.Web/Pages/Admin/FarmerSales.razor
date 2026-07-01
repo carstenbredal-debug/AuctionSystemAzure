@@ -26,19 +26,20 @@
 }
 else if (_rows != null)
 {
-    <table class="table table-sm table-hover" style="max-width:720px">
+    <table class="table table-sm table-hover" style="max-width:820px">
         <thead class="table-dark">
-            <tr><th>Farmer</th><th class="text-end">Skins sold</th><th class="text-end">Total value (€)</th></tr>
+            <tr><th>Farmer</th><th class="text-end">Skins in auction</th><th class="text-end">Skins sold</th><th class="text-end">Total value (€)</th></tr>
         </thead>
         <tbody>
             @if (_rows.Count == 0)
             {
-                <tr><td colspan="3" class="text-center text-muted py-3">No sold skins for this auction.</td></tr>
+                <tr><td colspan="4" class="text-center text-muted py-3">No skins for this auction.</td></tr>
             }
             @foreach (var r in _rows)
             {
                 <tr>
                     <td><a href="@(r.FarmerGuid.HasValue ? $"/farmer/auction/{_auctionId}?farmerGuid={r.FarmerGuid}" : $"/farmer/auction/{_auctionId}?farmer={Uri.EscapeDataString(r.Farmer)}")">@r.Farmer</a></td>
+                    <td class="text-end">@r.SkinsInAuction.ToString("N0")</td>
                     <td class="text-end">@r.SkinsSold.ToString("N0")</td>
                     <td class="text-end">@r.TotalValue.ToString("N2")</td>
                 </tr>
@@ -49,6 +50,7 @@ else if (_rows != null)
             <tfoot>
                 <tr class="fw-bold">
                     <td>Total — @_rows.Count farmer(s)</td>
+                    <td class="text-end">@_rows.Sum(x => x.SkinsInAuction).ToString("N0")</td>
                     <td class="text-end">@_rows.Sum(x => x.SkinsSold).ToString("N0")</td>
                     <td class="text-end">@_rows.Sum(x => x.TotalValue).ToString("N2")</td>
                 </tr>
