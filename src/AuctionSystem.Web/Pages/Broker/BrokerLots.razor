@@ -192,14 +192,6 @@ else if (_activeTab == "sold")
     {
         <div class="alert @(_takebackMessageIsError ? "alert-danger" : "alert-success") alert-dismissible">
             @_takebackMessage
-            @if (!string.IsNullOrEmpty(_lastCreditNotePdfUrl))
-            {
-                <a href="@_lastCreditNotePdfUrl" target="_blank" class="btn btn-sm btn-outline-dark ms-2">📄 Download Credit Note PDF</a>
-            }
-            else if (_lastCreditNoteId != null)
-            {
-                <a href="@Api.GetInvoicePdfUrl(_lastCreditNoteId.Value)" target="_blank" class="btn btn-sm btn-outline-dark ms-2">📄 Download Credit Note PDF</a>
-            }
             <button type="button" class="btn-close" @onclick="() => { _takebackMessage = null; _lastCreditNoteId = null; }"></button>
         </div>
     }
@@ -295,11 +287,6 @@ else if (_activeTab == "unsold")
     {
         <div class="alert @(_messageIsError ? "alert-danger" : "alert-success") alert-dismissible">
             @_message
-            @if (_lastInvoiceId != null)
-            {
-                var invoicePdfLink = !string.IsNullOrEmpty(_lastInvoicePdfUrl) ? _lastInvoicePdfUrl : Api.GetInvoicePdfUrl(_lastInvoiceId.Value);
-                <a href="@invoicePdfLink" target="_blank" class="btn btn-sm btn-outline-dark ms-2">📄 Download Invoice PDF</a>
-            }
             <button type="button" class="btn-close" @onclick="() => { _message = null; _lastInvoiceId = null; _lastInvoicePdfUrl = null; }"></button>
         </div>
     }
@@ -1029,7 +1016,7 @@ else if (_activeTab == "takeback")
             if (resp.IsSuccessStatusCode)
             {
                 var json = await resp.Content.ReadFromJsonAsync<TakebackResponse>();
-                _takebackMessage = $"{_selectedSoldIds.Count} lot(s) taken back. Lots moved to unsold.";
+                _takebackMessage = $"{_selectedSoldIds.Count} lot(s) taken back. Lots moved to Un-invoiced.";
                 if (json?.CreditNoteId != null)
                 {
                     _lastCreditNoteId = json.CreditNoteId;

@@ -432,6 +432,10 @@ public class AuctionApiClient
     public async Task<HttpResponseMessage> RequestTakebackAsync(List<int> auctionResultIds, string? initials = null)
         => await _http.PostAsJsonAsync("api/takeback-requests", new { auctionResultIds, initials });
 
+    // Move un-invoiced lots to another broker (internal staff only)
+    public async Task<HttpResponseMessage> MoveLotsToBrokerAsync(List<int> auctionResultIds, int targetBrokerId, string? initials = null)
+        => await _http.PostAsJsonAsync("api/auction-results/move-to-broker", new { auctionResultIds, targetBrokerId, initials });
+
     public async Task<List<LotSalesHistoryDto>> GetLotSalesHistoryAsync(int lotNumber)
         => await _http.GetFromJsonAsync<List<LotSalesHistoryDto>>($"api/auction-results/lot-history/{lotNumber}") ?? new();
 

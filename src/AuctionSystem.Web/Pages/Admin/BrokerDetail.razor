@@ -646,7 +646,7 @@ else
             var resp = await Api.RequestTakebackAsync(_selectedSoldIds.ToList());
             if (resp.IsSuccessStatusCode)
             {
-                _takebackMessage = $"{_selectedSoldIds.Count} lot(s) taken back. Lots moved to unsold.";
+                _takebackMessage = $"{_selectedSoldIds.Count} lot(s) taken back. Lots moved to Un-invoiced.";
                 _takebackMessageIsError = false;
                 _selectedSoldIds.Clear();
                 await LoadData();
