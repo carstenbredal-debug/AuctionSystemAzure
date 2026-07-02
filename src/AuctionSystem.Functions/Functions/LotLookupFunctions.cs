@@ -18,9 +18,9 @@ namespace AuctionSystem.Functions.Functions;
 // this resolves ANY box to the lot it belongs to across ALL ACTIVE catalogues, by either:
 //   GET /api/lot?barcode=12345   (scanned barcode -> the skin's box -> lot)
 //   GET /api/lot?box=678         (raw box number -> lot)
-// It answers from the Active catalogues (CatalogDraftLots of CatalogDrafts with Status='Active') — the
-// pre-auction source of truth for racking. Returns the lot + rackPosition + grading attributes + the
-// editable fields, plus boxNumber/boxType/isShowlot.
+// It answers from the ACTIVE AUCTION's frozen snapshot auction.[{Num}.Lots] (catalogue drafts are not
+// used for scanning). Returns the lot + rackPosition + grading attributes + the editable fields, plus
+// boxNumber/boxType/isShowlot.
 public class LotLookupFunctions
 {
     private readonly IConfiguration _configuration;
@@ -120,30 +120,21 @@ public class LotLookupFunctions
                 return await Json(req, new { found = false, message = "Provide a 'barcode' or 'box' parameter." });
             }
 
-            // box -> lot in the ACTIVE catalogue(s). There's only ever one active catalogue; each reads its
-            // own table auction.[Cat_{id}.Lots]. A box normally belongs to one catalogue; if it overlaps the
-            // lowest lot number wins.
-            var actives = (await connection.QueryAsync(
-                "SELECT Id, Name FROM auction.CatalogDrafts WHERE Status = 'Active'")).ToList();
-            var unionParts = new List<string>();
-            foreach (var a in actives)
-            {
-                int catId = (int)a.Id;
-                if (await connection.ExecuteScalarAsync<int?>($"SELECT OBJECT_ID('auction.[Cat_{catId}.Lots]', 'U')") == null)
-                    continue;
-                var nameEsc = ((string)a.Name).Replace("'", "''");
-                unionParts.Add($@"
-                    SELECT LotNumber, SalesType, Gender, [Group], HairLength, Size, Quality, Color, Clarity,
-                           Damages, RackPosition, Description, Estimate, RedLimit, Remarks, N'{nameEsc}' AS CatalogName
-                    FROM auction.[Cat_{catId}.Lots]
-                    WHERE ',' + REPLACE(IncludedBoxNumbers, ' ', '') + ',' LIKE '%,' + @box + ',%'");
-            }
-
+            // box -> lot from the ACTIVE AUCTION's frozen snapshot auction.[{Num}.Lots] — the single source
+            // of truth once catalogues are imported (catalogue drafts are not used for scanning anymore).
             LotRow? lot = null;
-            if (unionParts.Count > 0)
+            var activeAuction = await connection.QueryFirstOrDefaultAsync<string>(
+                "SELECT TOP 1 AuctionNumber FROM auction.Auctions WHERE Status = 1 ORDER BY Id DESC");
+            if (!string.IsNullOrEmpty(activeAuction)
+                && await connection.ExecuteScalarAsync<int?>($"SELECT OBJECT_ID('auction.[{activeAuction}.Lots]', 'U')") != null)
             {
-                var lotSql = "SELECT TOP 1 * FROM (" + string.Join(" UNION ALL ", unionParts) + ") x ORDER BY LotNumber";
-                lot = await connection.QueryFirstOrDefaultAsync<LotRow>(lotSql, new { box = boxNumber.ToString() });
+                lot = await connection.QueryFirstOrDefaultAsync<LotRow>($@"
+                    SELECT TOP 1 LotNumber, SalesType, Gender, [Group], HairLength, Size, Quality, Color, Clarity,
+                           Damages, RackPosition, Description, Estimate, RedLimit, Remarks,
+                           N'Auction {activeAuction.Replace("'", "''")}' AS CatalogName
+                    FROM auction.[{activeAuction}.Lots]
+                    WHERE ',' + REPLACE(IncludedBoxNumbers, ' ', '') + ',' LIKE '%,' + @box + ',%'
+                    ORDER BY LotNumber", new { box = boxNumber.ToString() });
             }
 
             if (lot is null)
