@@ -351,11 +351,20 @@
         public List<string>? Damages { get; set; }
     }
 
-    private Dictionary<string, List<CatalogLotRow>> GetSections()
+    // Sections are CONTIGUOUS runs of the same Type/Gender/Group in catalogue sort order (matches the
+    // PDF): a manually re-sorted lot shows first under its own header, and the rest of its group
+    // appears later with the header repeated.
+    private List<KeyValuePair<string, List<CatalogLotRow>>> GetSections()
     {
-        return CatalogLots
-            .GroupBy(l => $"{l.SalesType} - {l.Gender} - {l.Group}")
-            .ToDictionary(g => g.Key, g => g.ToList());
+        var sections = new List<KeyValuePair<string, List<CatalogLotRow>>>();
+        foreach (var l in CatalogLots)   // already in CatalogSortOrder from the API
+        {
+            var key = $"{l.SalesType} - {l.Gender} - {l.Group}";
+            if (sections.Count == 0 || sections[^1].Key != key)
+                sections.Add(new(key, new List<CatalogLotRow>()));
+            sections[^1].Value.Add(l);
+        }
+        return sections;
     }
 
     private string BuildDescription(CatalogLotRow lot)
