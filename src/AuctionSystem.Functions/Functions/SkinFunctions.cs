@@ -333,7 +333,7 @@ public class SkinFunctions
             SELECT l.LotNumber, l.IncludedBoxNumbers,
                    l.SalesType, l.Gender, l.[Group], l.Quality, l.HairLength, l.Size, l.Color, l.Clarity, l.Damages
             FROM {lotsTable} l
-            ORDER BY l.LotNumber", conn);
+            ORDER BY l.CatalogSortOrder, l.LotNumber", conn);
         cmd.CommandTimeout = 60;
 
         await using var reader = await cmd.ExecuteReaderAsync();

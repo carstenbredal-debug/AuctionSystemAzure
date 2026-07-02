@@ -315,9 +315,8 @@ public class AuctionResultFunctions
         var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
         int? auctionId = int.TryParse(query["auctionId"], out var aid) ? aid : null;
 
-        var results = await _db.AuctionResults
+        var fetched = await _db.AuctionResults
             .Where(r => r.BrokerId == brokerId && (auctionId == null || r.AuctionId == auctionId.Value))
-            .OrderByDescending(r => r.ReceivedAt)
             .Select(r => new
             {
                 r.Id, r.AuctionId, r.LotNumber, r.BrokerId,
@@ -333,6 +332,17 @@ public class AuctionResultFunctions
                 r.LastModifiedBy, r.LastModifiedAt
             })
             .ToListAsync();
+
+        // Present in SALES order (snapshot CatalogSortOrder per auction, newest auction first); lots
+        // missing from a snapshot fall back to numeric lot order at the end of their auction.
+        var sortMaps = new Dictionary<int, Dictionary<int, int>>();
+        foreach (var aidKey in fetched.Select(r => r.AuctionId).Distinct())
+            sortMaps[aidKey] = await SnapshotSortMapAsync(aidKey);
+        var results = fetched
+            .OrderByDescending(r => r.AuctionId)
+            .ThenBy(r => sortMaps[r.AuctionId].TryGetValue(r.LotNumber, out var so) ? so : int.MaxValue)
+            .ThenBy(r => r.LotNumber)
+            .ToList();
 
         // Get shipping status for lots
         var lotNumbers = results.Select(r => r.LotNumber).Distinct().ToList();
@@ -374,15 +384,23 @@ public class AuctionResultFunctions
     public async Task<HttpResponseData> GetNextUnsoldLot(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "auction-results/next-unsold-lot")] HttpRequestData req)
     {
-        var nextLot = await _db.Lots
+        // Next lot follows the SALES order (snapshot CatalogSortOrder), not numeric lot order.
+        var candidates = await _db.Lots
             .Where(l => l.Status == LotStatus.Pending || l.Status == LotStatus.Active)
-            .OrderBy(l => l.LotNumber)
             .Select(l => new { l.LotNumber, l.AuctionId, l.Description, l.Category, l.Quantity, l.Unit })
-            .FirstOrDefaultAsync();
+            .ToListAsync();
 
         object? payload = null;
-        if (nextLot != null)
+        if (candidates.Count > 0)
         {
+            var maps = new Dictionary<int, Dictionary<int, int>>();
+            foreach (var aid in candidates.Select(c => c.AuctionId).Distinct())
+                maps[aid] = await SnapshotSortMapAsync(aid);
+            var nextLot = candidates
+                .OrderBy(c => maps[c.AuctionId].TryGetValue(c.LotNumber, out var so) ? so : int.MaxValue)
+                .ThenBy(c => c.LotNumber)
+                .First();
+
             // Display text/skins from the authoritative snapshot auction.[{Num}.Lots]; fall back to the Lot row.
             var snap = await SnapshotLotDisplayAsync(nextLot.AuctionId, nextLot.LotNumber);
             payload = new
@@ -399,6 +417,26 @@ public class AuctionResultFunctions
         response.Headers.Add("Content-Type", "application/json");
         await response.WriteStringAsync(JsonSerializer.Serialize(payload, JsonOptions));
         return response;
+    }
+
+    // The auction's SALES order: LotNumber -> CatalogSortOrder from the frozen snapshot. Empty when the
+    // snapshot isn't built — callers fall back to numeric lot order.
+    private async Task<Dictionary<int, int>> SnapshotSortMapAsync(int auctionId)
+    {
+        var map = new Dictionary<int, int>();
+        if (auctionId <= 0) return map;
+        var auctionNum = await _db.Auctions.Where(a => a.Id == auctionId).Select(a => a.AuctionNumber).FirstOrDefaultAsync();
+        if (string.IsNullOrEmpty(auctionNum)) return map;
+        try
+        {
+            await using var conn = new SqlConnection(_catalogDb.Database.GetConnectionString());
+            await conn.OpenAsync();
+            await using var cmd = new SqlCommand($"SELECT LotNumber, CatalogSortOrder FROM auction.[{auctionNum}.Lots]", conn);
+            await using var r = await cmd.ExecuteReaderAsync();
+            while (await r.ReadAsync()) map[r.GetInt32(0)] = r.GetInt32(1);
+        }
+        catch { /* snapshot not built yet */ }
+        return map;
     }
 
     // Same as the typist's: a lot's DISPLAY text/skins come from the frozen snapshot auction.[{Num}.Lots],

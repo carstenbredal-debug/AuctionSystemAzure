@@ -807,6 +807,26 @@ public class TypistEntryFunctions
         });
     }
 
+    // The auction's SALES order: LotNumber -> CatalogSortOrder from the frozen snapshot. Empty when
+    // there's no auction scope or the snapshot isn't built — callers fall back to numeric lot order.
+    private async Task<Dictionary<int, int>> SnapshotSortMapAsync(int auctionId)
+    {
+        var map = new Dictionary<int, int>();
+        if (auctionId <= 0) return map;
+        var auctionNum = await _db.Auctions.Where(a => a.Id == auctionId).Select(a => a.AuctionNumber).FirstOrDefaultAsync();
+        if (string.IsNullOrEmpty(auctionNum)) return map;
+        try
+        {
+            await using var conn = new SqlConnection(_catalogDb.Database.GetConnectionString());
+            await conn.OpenAsync();
+            await using var cmd = new SqlCommand($"SELECT LotNumber, CatalogSortOrder FROM auction.[{auctionNum}.Lots]", conn);
+            await using var r = await cmd.ExecuteReaderAsync();
+            while (await r.ReadAsync()) map[r.GetInt32(0)] = r.GetInt32(1);
+        }
+        catch { /* snapshot not built yet */ }
+        return map;
+    }
+
     // Option A: a lot's DISPLAY text/skins come from the frozen snapshot auction.[{Num}.Lots] (the
     // authoritative catalogue), not the materialised Lot.Description. Returns null -> caller falls back to
     // the Lot row (no auction scope, or the snapshot isn't built yet).
@@ -871,13 +891,18 @@ public class TypistEntryFunctions
         var lotsQuery = _db.Lots.Where(l => l.Status != LotStatus.Sold && !skipLots.Contains(l.LotNumber));
         if (auctionId > 0) lotsQuery = lotsQuery.Where(l => l.AuctionId == auctionId);
 
-        var nextLot = await lotsQuery
-            .OrderBy(l => l.LotNumber)
+        // Next lot follows the SALES order (snapshot CatalogSortOrder), not numeric lot order.
+        var candidates = await lotsQuery
             .Select(l => new { l.LotNumber, l.Description, l.Category, l.Quantity, l.Unit })
-            .FirstOrDefaultAsync();
-
-        if (nextLot == null)
+            .ToListAsync();
+        if (candidates.Count == 0)
             return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        var sortMap = await SnapshotSortMapAsync(auctionId);
+        var nextLot = candidates
+            .OrderBy(c => sortMap.TryGetValue(c.LotNumber, out var so) ? so : int.MaxValue)
+            .ThenBy(c => c.LotNumber)
+            .First();
 
         var snap = await SnapshotLotDisplayAsync(auctionId, nextLot.LotNumber);
         return await CreateJsonResponse(req, new

@@ -91,11 +91,35 @@ public class AuctionFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "auctions/{auctionId:int}/lots")] HttpRequestData req, int auctionId)
     {
         var lots = await _service.GetLotsByAuctionAsync(auctionId);
-        var result = lots.Select(l => new
+
+        // Present lots in SALES order (the snapshot's CatalogSortOrder — the order they're auctioned),
+        // not numeric lot order. auction.Lots has no sort column, so read the map from the snapshot;
+        // lots missing from it (or no snapshot yet) fall back to the end, ordered by lot number.
+        var sortByLot = new Dictionary<int, int>();
+        var auction = await _db.Auctions.FindAsync(auctionId);
+        if (auction != null)
         {
-            l.Id, l.LotNumber, l.Description, l.Category, l.Quantity, l.Unit,
-            l.StartingPrice, l.HammerPrice, status = (int)l.Status, l.AuctionId
-        });
+            try
+            {
+                await using var conn = new Microsoft.Data.SqlClient.SqlConnection(_db.Database.GetConnectionString());
+                await conn.OpenAsync();
+                await using var cmd = new Microsoft.Data.SqlClient.SqlCommand(
+                    $"SELECT LotNumber, CatalogSortOrder FROM auction.[{auction.AuctionNumber}.Lots]", conn);
+                await using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                    sortByLot[reader.GetInt32(0)] = reader.GetInt32(1);
+            }
+            catch { /* snapshot table may not exist yet — numeric order below */ }
+        }
+
+        var result = lots
+            .OrderBy(l => sortByLot.TryGetValue(l.LotNumber, out var so) ? so : int.MaxValue)
+            .ThenBy(l => l.LotNumber)
+            .Select(l => new
+            {
+                l.Id, l.LotNumber, l.Description, l.Category, l.Quantity, l.Unit,
+                l.StartingPrice, l.HammerPrice, status = (int)l.Status, l.AuctionId
+            });
         return await CreateJsonResponse(req, result);
     }
 
