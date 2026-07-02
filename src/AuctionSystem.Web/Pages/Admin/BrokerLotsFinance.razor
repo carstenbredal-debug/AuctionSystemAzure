@@ -44,6 +44,8 @@ else if (_brokerId <= 0)
 }
 else
 {
+    <nav class="mb-3"><a href="javascript:void(0)" @onclick="ResetBrokerSelection">&larr; Back to broker selection</a></nav>
+
     <div class="row mb-4">
         <div class="col-md-3">
             <div class="summary-card">
@@ -699,6 +701,15 @@ else
     {
         _activeTab = "purchased";
         await LoadBrokerData();
+    }
+
+    // "Back to broker selection": clear the chosen broker so the page returns to the pick-a-broker state.
+    private async Task ResetBrokerSelection()
+    {
+        _brokerId = 0;
+        _message = null;
+        _takebackMessage = null;
+        await OnBrokerFilterChanged();
     }
 
     private async Task OnAuctionFilterChanged()
