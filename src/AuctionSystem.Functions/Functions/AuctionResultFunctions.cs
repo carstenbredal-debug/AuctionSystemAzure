@@ -623,6 +623,20 @@ public class AuctionResultFunctions
         List<AuctionResult> results, int buyerId, Buyer buyer, string? commissionType, decimal? commissionValue, string? initials)
     {
         var now = DateTime.UtcNow;
+
+        // Fee parameters — needed when the commission is a % of the TOTAL price (hammer + auction fee).
+        // Same formula as invoicing: auction fee = (hammer + skins * handling fee) * auction fee % / 100.
+        decimal auctionFeePercent = 0, handlingFeePerSkin = 0;
+        if (commissionType == "percentageTotal")
+        {
+            var afp = await _db.SystemParameters.FirstOrDefaultAsync(p => p.Key == "AuctionFee");
+            var hfp = await _db.SystemParameters.FirstOrDefaultAsync(p => p.Key == "HandlingFee");
+            if (afp != null) decimal.TryParse(afp.Value, System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out auctionFeePercent);
+            if (hfp != null) decimal.TryParse(hfp.Value, System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out handlingFeePerSkin);
+        }
+
         // Atomic: the sale claim(s) and the invoice commit together, or NEITHER does. If invoice creation
         // fails (e.g. a deadlock), CreateInvoiceAndQueuePushAsync rethrows, this transaction rolls back, and
         // the lots stay UNSOLD (re-sellable on a later pass) instead of being left sold-but-uninvoiced.
@@ -633,6 +647,12 @@ public class AuctionResultFunctions
             decimal? commissionAmount = null;
             if (commissionType == "percentage" && commissionValue.HasValue)
                 commissionAmount = (result.TotalSkins * result.PriceEur) * commissionValue.Value / 100m;
+            else if (commissionType == "percentageTotal" && commissionValue.HasValue)
+            {
+                var hammer = result.TotalSkins * result.PriceEur;
+                var auctionFee = (hammer + result.TotalSkins * handlingFeePerSkin) * auctionFeePercent / 100m;
+                commissionAmount = (hammer + auctionFee) * commissionValue.Value / 100m;
+            }
             else if (commissionType == "amount" && commissionValue.HasValue)
                 commissionAmount = commissionValue.Value;
 

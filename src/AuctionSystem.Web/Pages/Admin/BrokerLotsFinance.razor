@@ -470,21 +470,29 @@ else
                     <div class="mb-3">
                         <label class="form-label">Commission Type</label>
                         <select class="form-select" @bind="_commissionType">
-                            <option value="percentage">Percentage (%)</option>
                             <option value="amount">Fixed Amount (€)</option>
+                            <option value="percentage">Commission % of Hammer Price</option>
+                            <option value="percentageTotal">Commission % of Total Price (Hammer + Auction Fee)</option>
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">@(_commissionType == "percentage" ? "Commission (%)" : "Commission Amount (€)")</label>
+                        <label class="form-label">@(_commissionType == "amount" ? "Commission Amount (€)" : "Commission (%)")</label>
                         <input type="number" class="form-control" step="0.01" min="0" @bind="_commissionValue" @onkeydown="HandleCommissionKeydown" />
                     </div>
-                    @if (_commissionType == "percentage" && _commissionValue > 0)
+                    @if (_commissionType != "amount" && _commissionValue > 0)
                     {
                         var selectedLots = GetUnsoldLots().Where(r => _selectedIds.Contains(r.Id)).ToList();
                         var totalHammer = selectedLots.Sum(r => (decimal)r.TotalSkins * r.PriceEur);
-                        var totalCommission = totalHammer * _commissionValue / 100m;
+                        var totalFee = selectedLots.Sum(r => CalcAuctionFee(r.TotalSkins, r.PriceEur));
+                        var baseAmount = _commissionType == "percentageTotal" ? totalHammer + totalFee : totalHammer;
+                        var totalCommission = baseAmount * _commissionValue / 100m;
                         <div class="alert alert-info">
                             <small>Total Hammer Price: <strong>€@totalHammer.ToString("N2")</strong></small><br />
+                            @if (_commissionType == "percentageTotal")
+                            {
+                                <small>Auction Fee: <strong>€@totalFee.ToString("N2")</strong></small><br />
+                                <small>Total Price: <strong>€@((totalHammer + totalFee).ToString("N2"))</strong></small><br />
+                            }
                             <small>Commission (@_commissionValue%): <strong>€@totalCommission.ToString("N2")</strong></small>
                         </div>
                     }
