@@ -519,6 +519,63 @@ public class AuctionResultFunctions
         return response;
     }
 
+    // Move un-invoiced lots to another broker (internal staff only). Repoints the AuctionResult AND its
+    // sale-time transactions (LotSale / AuctionFee / Commission carry the broker) so the source broker's
+    // account no longer carries the hammer price + fees and the target's does. Only un-invoiced results
+    // may move — an invoiced lot's paperwork belongs to the broker it was invoiced under (take it back
+    // first). Initials are recorded on the result (the Initiated By column).
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [Function("MoveLotsToBroker")]
+    public async Task<HttpResponseData> MoveLotsToBroker(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auction-results/move-to-broker")] HttpRequestData req)
+    {
+        var body = await req.ReadFromJsonAsync<MoveToBrokerRequest>();
+        if (body == null || body.AuctionResultIds == null || body.AuctionResultIds.Count == 0 || body.TargetBrokerId <= 0)
+            return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+
+        var target = await _db.Brokers.FindAsync(body.TargetBrokerId);
+        if (target == null)
+        {
+            var bad = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+            bad.Headers.Add("Content-Type", "application/json");
+            await bad.WriteStringAsync(JsonSerializer.Serialize(new { error = "Target broker not found" }, JsonOptions));
+            return bad;
+        }
+
+        var results = await _db.AuctionResults
+            .Where(r => body.AuctionResultIds.Contains(r.Id) && r.SoldToBuyerId == null && r.BrokerId != body.TargetBrokerId)
+            .ToListAsync();
+        var skipped = body.AuctionResultIds.Count - results.Count;   // invoiced meanwhile / already target's / unknown
+
+        if (results.Count > 0)
+        {
+            var now = DateTime.UtcNow;
+            var ids = results.Select(r => r.Id).ToList();
+            foreach (var r in results)
+            {
+                r.BrokerId = body.TargetBrokerId;
+                r.LastModifiedBy = string.IsNullOrWhiteSpace(body.Initials) ? r.LastModifiedBy : body.Initials.Trim();
+                r.LastModifiedAt = now;
+            }
+            // One transaction: the result AND its sale-time transactions move together or not at all.
+            await using var tx = await _db.Database.BeginTransactionAsync();
+            await _db.AuctionTransactions
+                .Where(t => t.AuctionResultId != null && ids.Contains(t.AuctionResultId.Value))
+                .ExecuteUpdateAsync(s => s.SetProperty(t => t.BrokerId, body.TargetBrokerId));
+            await _db.SaveChangesAsync();
+            await tx.CommitAsync();
+
+            _logger.LogInformation("Moved {Count} un-invoiced lot(s) ({Lots}) to broker {Broker} ({BrokerNo}) by '{Initials}'",
+                results.Count, string.Join(",", results.Select(r => r.LotNumber)), target.CompanyName, target.BrokerNumber, body.Initials);
+        }
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(
+            new { movedCount = results.Count, skipped, targetBroker = $"{target.BrokerNumber} — {target.CompanyName}" }, JsonOptions));
+        return response;
+    }
+
     // Shared sell core used by BOTH the broker SellLotsToBuyer endpoint and the sell simulator, so they
     // exercise identical behaviour. Atomically claims each still-unsold result for the buyer (with
     // commission), marks its lot Sold, records sales history, then creates the invoice. The atomic
@@ -1908,6 +1965,13 @@ public class SellToBuyerRequest
     public int BuyerId { get; set; }
     public string? CommissionType { get; set; }
     public decimal? CommissionValue { get; set; }
+    public string? Initials { get; set; }
+}
+
+public class MoveToBrokerRequest
+{
+    public List<int> AuctionResultIds { get; set; } = new();
+    public int TargetBrokerId { get; set; }
     public string? Initials { get; set; }
 }
 

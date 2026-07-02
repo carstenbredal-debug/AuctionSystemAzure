@@ -44,6 +44,8 @@ else if (_brokerId <= 0)
 }
 else
 {
+    <nav class="mb-3"><a href="javascript:void(0)" @onclick="ResetBrokerSelection">&larr; Back to broker selection</a></nav>
+
     <div class="row mb-4">
         <div class="col-md-3">
             <div class="summary-card">
@@ -199,14 +201,6 @@ else
         {
             <div class="alert @(_takebackMessageIsError ? "alert-danger" : "alert-success") alert-dismissible">
                 @_takebackMessage
-                @if (!string.IsNullOrEmpty(_lastCreditNotePdfUrl))
-                {
-                    <a href="@_lastCreditNotePdfUrl" target="_blank" class="btn btn-sm btn-outline-dark ms-2">📄 Download Credit Note PDF</a>
-                }
-                else if (_lastCreditNoteId != null)
-                {
-                    <a href="@Api.GetInvoicePdfUrl(_lastCreditNoteId.Value)" target="_blank" class="btn btn-sm btn-outline-dark ms-2">📄 Download Credit Note PDF</a>
-                }
                 <button type="button" class="btn-close" @onclick="() => { _takebackMessage = null; _lastCreditNoteId = null; }"></button>
             </div>
         }
@@ -296,11 +290,6 @@ else
         {
             <div class="alert @(_messageIsError ? "alert-danger" : "alert-success") alert-dismissible">
                 @_message
-                @if (_lastInvoiceId != null)
-                {
-                    var invoicePdfLink = !string.IsNullOrEmpty(_lastInvoicePdfUrl) ? _lastInvoicePdfUrl : Api.GetInvoicePdfUrl(_lastInvoiceId.Value);
-                    <a href="@invoicePdfLink" target="_blank" class="btn btn-sm btn-outline-dark ms-2">📄 Download Invoice PDF</a>
-                }
                 <button type="button" class="btn-close" @onclick="() => { _message = null; _lastInvoiceId = null; _lastInvoicePdfUrl = null; }"></button>
             </div>
         }
@@ -319,6 +308,10 @@ else
                     </select>
                     <button class="btn btn-primary" @onclick="OpenInitialsForSell" disabled="@(_selling || _selectedIds.Count == 0 || _selectedBuyerId <= 0)">
                         Sell (@_selectedIds.Count)
+                    </button>
+                    <button class="btn btn-outline-secondary ms-auto" @onclick="OpenMoveModal" disabled="@(_moving || _selectedIds.Count == 0)"
+                            title="Move the selected un-invoiced lots to another broker">
+                        Move Lots to Broker (@_selectedIds.Count)
                     </button>
                 </div>
             </div>
@@ -529,6 +522,43 @@ else
     </div>
 }
 
+@if (_showMoveModal)
+{
+    <div class="modal d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Move @_selectedIds.Count lot(s) to another broker</h5>
+                    <button type="button" class="btn-close" @onclick="CloseMoveModal"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label fw-bold">Receiving broker</label>
+                    <select class="form-select mb-3" @bind="_moveTargetBrokerId">
+                        <option value="0">— Select Broker —</option>
+                        @foreach (var b in _brokers.Where(b => b.Id != _brokerId))
+                        {
+                            <option value="@b.Id">@b.BrokerNumber — @b.CompanyName</option>
+                        }
+                    </select>
+                    @if (_moveTargetBrokerId > 0)
+                    {
+                        <label class="form-label fw-bold">Who did this?</label>
+                        <input type="text" class="form-control" maxlength="5" placeholder="e.g. CB"
+                               @bind="_moveInitials" @bind:event="oninput" />
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseMoveModal" disabled="@_moving">Cancel</button>
+                    <button class="btn btn-primary" @onclick="ConfirmMove"
+                            disabled="@(_moving || _moveTargetBrokerId <= 0 || string.IsNullOrWhiteSpace(_moveInitials))">
+                        @(_moving ? "Moving…" : "Acknowledge & Move")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @if (_showInitialsModal)
 {
     <div class="modal d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
@@ -645,6 +675,10 @@ else
     private bool _showInitialsModal;
     private string _initialsValue = "";
     private string _initialsAction = "sell";
+    private bool _showMoveModal;
+    private bool _moving;
+    private int _moveTargetBrokerId;
+    private string _moveInitials = "";
     private bool _showSalesHistoryModal;
     private int _salesHistoryLotNumber;
     private bool _loadingSalesHistory;
@@ -712,6 +746,65 @@ else
     {
         _activeTab = "purchased";
         await LoadBrokerData();
+    }
+
+    // "Back to broker selection": clear the chosen broker so the page returns to the pick-a-broker state.
+    private async Task ResetBrokerSelection()
+    {
+        _brokerId = 0;
+        _message = null;
+        _takebackMessage = null;
+        await OnBrokerFilterChanged();
+    }
+
+    private void OpenMoveModal()
+    {
+        _moveTargetBrokerId = 0;
+        _moveInitials = "";
+        _showMoveModal = true;
+    }
+
+    private void CloseMoveModal() { _showMoveModal = false; }
+
+    private async Task ConfirmMove()
+    {
+        if (_moveTargetBrokerId <= 0 || string.IsNullOrWhiteSpace(_moveInitials) || _selectedIds.Count == 0) return;
+        _moving = true;
+        _message = null;
+        try
+        {
+            var resp = await Api.MoveLotsToBrokerAsync(_selectedIds.ToList(), _moveTargetBrokerId, _moveInitials.Trim());
+            var json = await resp.Content.ReadFromJsonAsync<MoveToBrokerResponse>();
+            if (resp.IsSuccessStatusCode && json != null)
+            {
+                _message = $"{json.MovedCount} lot(s) moved to {json.TargetBroker}."
+                         + (json.Skipped > 0 ? $" {json.Skipped} lot(s) skipped (invoiced meanwhile or already that broker's)." : "");
+                _messageIsError = false;
+                _showMoveModal = false;
+                _selectedIds.Clear();
+                await LoadBrokerData();   // the moved lots leave this broker's list
+            }
+            else
+            {
+                _message = $"Move failed: {await resp.Content.ReadAsStringAsync()}";
+                _messageIsError = true;
+                _showMoveModal = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"Move failed: {ex.Message}";
+            _messageIsError = true;
+            _showMoveModal = false;
+        }
+        finally { _moving = false; }
+    }
+
+    private class MoveToBrokerResponse
+    {
+        public int MovedCount { get; set; }
+        public int Skipped { get; set; }
+        public string? TargetBroker { get; set; }
     }
 
     private async Task OnAuctionFilterChanged()
@@ -910,7 +1003,7 @@ else
             if (resp.IsSuccessStatusCode)
             {
                 var json = await resp.Content.ReadFromJsonAsync<TakebackResponse>();
-                _takebackMessage = $"{_selectedSoldIds.Count} lot(s) taken back. Lots moved to unsold.";
+                _takebackMessage = $"{_selectedSoldIds.Count} lot(s) taken back. Lots moved to Un-invoiced.";
                 if (json?.CreditNoteId != null)
                 {
                     _lastCreditNoteId = json.CreditNoteId;
