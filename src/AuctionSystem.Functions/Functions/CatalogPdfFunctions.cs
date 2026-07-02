@@ -375,9 +375,19 @@ public class CatalogPdfFunctions
                 return notFound;
             }
 
-            var sections = rows
-                .GroupBy(BuildSectionTitle)
-                .ToList();
+            // Sections are CONTIGUOUS runs of the same Type/Gender/Group in catalogue sort order — not a
+            // global GroupBy. A lot manually re-sorted to the front therefore renders first under its own
+            // section header, and the REST of its group appears later where its sort order places it (the
+            // header repeats there). For a normally generated catalogue (groups contiguous) the output is
+            // identical to the old grouping.
+            var sections = new List<(string Key, List<CatalogPdfRow> Rows)>();
+            foreach (var row in rows)   // rows are already in CatalogSortOrder
+            {
+                var key = BuildSectionTitle(row);
+                if (sections.Count == 0 || sections[^1].Key != key)
+                    sections.Add((key, new List<CatalogPdfRow>()));
+                sections[^1].Rows.Add(row);
+            }
 
             var logoPath = Path.Combine(AppContext.BaseDirectory, "Assets", "kopenhagenfur-logo.png");
 
@@ -447,9 +457,7 @@ public class CatalogPdfFunctions
                                             AddColumnHeader(header, isFarmerCatalog);
                                         });
 
-                                        var sectionRows = section
-                                            .OrderBy(x => x.CatalogSortOrder)
-                                            .ToList();
+                                        var sectionRows = section.Rows;   // already in CatalogSortOrder
 
                                         int i = 0;
                                         while (i < sectionRows.Count)
