@@ -184,8 +184,8 @@
 }
 
 /* Fixed column widths — Description takes the rest */
-.results-table th:nth-child(1) { width: 80px; }   /* Lot # */
-.results-table th:nth-child(2) { width: 70px; }   /* String # */
+.results-table th:nth-child(1) { width: 100px; }  /* Lot # */
+.results-table th:nth-child(2) { width: 90px; }   /* String # */
 .results-table th:nth-child(4) { width: 60px; }   /* Skins */
 .results-table th:nth-child(5) { width: 70px; }   /* Price */
 .results-table th:nth-child(6) { width: 140px; }  /* Comments */
