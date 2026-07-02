@@ -169,19 +169,27 @@
                                     }
                                     if (lot.IsShow) cssClass += " showlot-row";
 
-                                    var desc = BuildDescription(lot);
-                                    if (isMulti && !isFirst)
-                                    {
-                                        if (isLast)
-                                            desc = $"{sgList.Sum(l => l.TotalSkins):N0} skins";
-                                        else
-                                            desc = (i + 1).ToString();
-                                    }
-
                                     <tr class="@cssClass">
                                         <td>@lot.LotNumber</td>
                                         <td>@lot.StringNumber</td>
-                                        <td>@desc</td>
+                                        @if (isMulti && !isFirst)
+                                        {
+                                            <td class="string-note">@(isLast ? $"{sgList.Sum(l => l.TotalSkins):N0} skins" : (i + 1).ToString())</td>
+                                        }
+                                        else
+                                        {
+                                            var parts = BuildDescriptionParts(lot);
+                                            <td>
+                                                <div class="desc-grid">
+                                                    @for (int c = 0; c < 3; c++)
+                                                    {
+                                                        var top = c * 2 < parts.Count ? parts[c * 2] : "";
+                                                        var bottom = c * 2 + 1 < parts.Count ? parts[c * 2 + 1] : "";
+                                                        <div class="desc-col"><span>@top</span><span>@bottom</span></div>
+                                                    }
+                                                </div>
+                                            </td>
+                                        }
                                         <td>@lot.TotalSkins.ToString("N0")</td>
                                         <td></td>
                                         <td></td>
@@ -351,11 +359,32 @@
         public List<string>? Damages { get; set; }
     }
 
-    private Dictionary<string, List<CatalogLotRow>> GetSections()
+    // Sections are CONTIGUOUS runs of the same Type/Gender/Group in catalogue sort order (matches the
+    // PDF): a manually re-sorted lot shows first under its own header, and the rest of its group
+    // appears later with the header repeated.
+    private List<KeyValuePair<string, List<CatalogLotRow>>> GetSections()
     {
-        return CatalogLots
-            .GroupBy(l => $"{l.SalesType} - {l.Gender} - {l.Group}")
-            .ToDictionary(g => g.Key, g => g.ToList());
+        var sections = new List<KeyValuePair<string, List<CatalogLotRow>>>();
+        foreach (var l in CatalogLots)   // already in CatalogSortOrder from the API
+        {
+            var key = $"{l.SalesType} - {l.Gender} - {l.Group}";
+            if (sections.Count == 0 || sections[^1].Key != key)
+                sections.Add(new(key, new List<CatalogLotRow>()));
+            sections[^1].Value.Add(l);
+        }
+        return sections;
+    }
+
+    // The description's parts laid out as the PDF does: 3 columns of 2 stacked lines — first two parts
+    // in column 1, next two in column 2, last two in column 3. Blank parts (and Damages "None") drop out.
+    private List<string> BuildDescriptionParts(CatalogLotRow lot)
+    {
+        var raw = new List<string?>
+        {
+            lot.HairLength, lot.Size, lot.Quality, lot.Color, lot.Clarity,
+            (!string.IsNullOrWhiteSpace(lot.Damages) && !lot.Damages.Equals("None", StringComparison.OrdinalIgnoreCase)) ? lot.Damages : null
+        };
+        return raw.Where(p => !string.IsNullOrWhiteSpace(p)).Select(p => p!).ToList();
     }
 
     private string BuildDescription(CatalogLotRow lot)
