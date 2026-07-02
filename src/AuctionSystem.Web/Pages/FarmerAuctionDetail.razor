@@ -192,7 +192,7 @@ else
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var lot in _lots.OrderBy(l => l.LotNumber))
+                    @foreach (var lot in _lots)
                     {
                         <tr>
                             <td>@lot.LotNumber</td>
@@ -397,7 +397,7 @@ else
         }
         else
         {
-            _filteredLots = filtered.OrderBy(l => l.LotNumber).ToList();
+            _filteredLots = filtered.ToList();   // keep the API's sales order (CatalogSortOrder)
         }
     }
 
