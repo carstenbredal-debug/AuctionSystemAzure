@@ -622,6 +622,7 @@ public class AuctionFunctions
                 "ShipmentLines", "Shipments",
                 "LotSalesHistories", "AuctionTransactions", "TypistEntries",
                 "InvoiceLines", "Invoices",
+                "ExternalPriceStaging",   // staged external prices (5-min buffer) — per-auction, must reset too
                 "TakebackRequests", "LotAllocations", "AuctionResults", "Settlements", "Bids", "Lots", "Auctions",
                 // Catalogue lifecycle (child before parent). The frozen [Cat_{id}.Lots/.Skins/.Boxes] tables
                 // are dropped below by the %.Lots/%.Boxes/%.Skins sweep; here we clear the draft records so a
