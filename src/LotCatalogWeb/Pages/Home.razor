@@ -170,8 +170,10 @@
                                     if (lot.IsShow) cssClass += " showlot-row";
 
                                     var desc = BuildDescription(lot);
+                                    var descClass = "";
                                     if (isMulti && !isFirst)
                                     {
+                                        descClass = "string-note";
                                         if (isLast)
                                             desc = $"{sgList.Sum(l => l.TotalSkins):N0} skins";
                                         else
@@ -181,7 +183,7 @@
                                     <tr class="@cssClass">
                                         <td>@lot.LotNumber</td>
                                         <td>@lot.StringNumber</td>
-                                        <td>@desc</td>
+                                        <td class="@descClass">@desc</td>
                                         <td>@lot.TotalSkins.ToString("N0")</td>
                                         <td></td>
                                         <td></td>

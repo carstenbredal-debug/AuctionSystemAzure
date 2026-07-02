@@ -179,6 +179,7 @@
     width: 100%;
     border-collapse: collapse;
     font-size: 0.82rem;
+    border: 2px solid #333;   /* thick outer frame, like the PDF's table sides */
 }
 
 .results-table th {
@@ -188,12 +189,27 @@
     text-align: left;
     font-weight: 600;
     border: 1px solid #7a6e90;
+    border-top: 2px solid #333;
+    border-bottom: 2px solid #333;
 }
 
 .results-table td {
     padding: 0.5rem 0.75rem;
     border: 1px solid #ddd;
     color: #333;
+}
+
+/* Lot #, String # and Skins centred — same as the PDF's Lot/Skins columns */
+.results-table th:nth-child(1), .results-table td:nth-child(1),
+.results-table th:nth-child(2), .results-table td:nth-child(2),
+.results-table th:nth-child(4), .results-table td:nth-child(4) {
+    text-align: center;
+}
+
+/* In-string sequence number / "N skins" total — right-aligned, slightly smaller (PDF rule) */
+.results-table td.string-note {
+    text-align: right;
+    font-size: 0.78rem;
 }
 
 .results-table tbody tr:hover {
@@ -204,40 +220,25 @@
     background-color: #fef9e7;
 }
 
-/* Multi-lot string grouping — background on full row, borders on columns 1-4 */
+/* Multi-lot string grouping — background on the full row, thick box around the WHOLE string
+   (all columns, both sides), thin separators between the lots inside — same as the PDF. */
 ::deep .string-row {
     background-color: #fef9e7;
 }
 
-::deep .string-first td:nth-child(-n+4) {
+::deep .string-first td {
     border-top: 2px solid #333;
 }
 
-::deep .string-first td:first-child {
-    border-left: 2px solid #333;
-}
-
-::deep .string-first td:nth-child(4) {
-    border-right: 2px solid #333;
-}
-
-::deep .string-last td:nth-child(-n+4) {
+::deep .string-last td {
     border-bottom: 2px solid #333;
 }
 
-::deep .string-last td:first-child {
+::deep .string-row td:first-child {
     border-left: 2px solid #333;
 }
 
-::deep .string-last td:nth-child(4) {
-    border-right: 2px solid #333;
-}
-
-::deep .string-row:not(.string-first):not(.string-last) td:first-child {
-    border-left: 2px solid #333;
-}
-
-::deep .string-row:not(.string-first):not(.string-last) td:nth-child(4) {
+::deep .string-row td:last-child {
     border-right: 2px solid #333;
 }
 
