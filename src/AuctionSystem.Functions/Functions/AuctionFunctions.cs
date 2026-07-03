@@ -602,6 +602,7 @@ public class AuctionFunctions
     }
 
     [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [AuctionSystem.Functions.Auth.RequireSectionPassword("Diagnostics")]
     [Function("ResetAllData")]
     public async Task<HttpResponseData> ResetAllData(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "system/reset-all")] HttpRequestData req)

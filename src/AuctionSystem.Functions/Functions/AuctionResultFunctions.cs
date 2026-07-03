@@ -799,6 +799,7 @@ public class AuctionResultFunctions
     // (the real rule); an optional buyer-id set restricts the pool. Commission % is random in a range.
     // Lots whose broker has no eligible linked buyer are skipped and reported.
     [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [AuctionSystem.Functions.Auth.RequireSectionPassword("Diagnostics")]
     [Function("SimulateSellLots")]
     public async Task<HttpResponseData> SimulateSell(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auction-results/simulate-sell")] HttpRequestData req)
@@ -1019,6 +1020,7 @@ public class AuctionResultFunctions
     // Start the PACED broker simulator: runs passes server-side (surviving page-close) until every
     // sellable lot is sold or Stop is pressed. Mirrors the typist's Start endpoint exactly.
     [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [AuctionSystem.Functions.Auth.RequireSectionPassword("Diagnostics")]
     [Function("StartBrokerSim")]
     public async Task<HttpResponseData> StartBrokerSim(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auction-results/simulate-brokers/start")] HttpRequestData req)
@@ -1059,6 +1061,7 @@ public class AuctionResultFunctions
     // mid-pass overwriting the status; the worker checks it between passes, halts without re-enqueuing,
     // and clears it. Already-sold lots stay sold.
     [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [AuctionSystem.Functions.Auth.RequireSectionPassword("Diagnostics")]
     [Function("StopBrokerSim")]
     public async Task<HttpResponseData> StopBrokerSim(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auction-results/simulate-brokers/stop")] HttpRequestData req)

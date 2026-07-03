@@ -248,6 +248,7 @@ public class TypistEntryFunctions
     // and a configurable share land in the disagreement queue. Bypasses the auth-derived TypistUserId
     // of SubmitTypistEntry because it must act as two users at once.
     [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [AuctionSystem.Functions.Auth.RequireSectionPassword("Diagnostics")]
     [Function("SimulateTypistEntries")]
     public async Task<HttpResponseData> Simulate(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "typist-entries/simulate")] HttpRequestData req)
@@ -311,6 +312,7 @@ public class TypistEntryFunctions
     // worker is mid-batch overwriting status); the worker checks it each lot, halts without re-enqueuing,
     // and clears it. Already-typed lots stay; a later Start resumes from the remaining un-typed lots.
     [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [AuctionSystem.Functions.Auth.RequireSectionPassword("Diagnostics")]
     [Function("StopTypistSim")]
     public async Task<HttpResponseData> StopTypistSim(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "typist-entries/simulate/stop")] HttpRequestData req)
@@ -483,6 +485,7 @@ public class TypistEntryFunctions
     // both typists (the real reentry path: mark the disagreement rows resolved, then CompareEntries →
     // matched + AuctionResult). Resolves to the slot-1 entry's broker/price.
     [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [AuctionSystem.Functions.Auth.RequireSectionPassword("Diagnostics")]
     [Function("ResolveTypistDisagreements")]
     public async Task<HttpResponseData> ResolveDisagreements(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "typist-entries/resolve-disagreements")] HttpRequestData req)

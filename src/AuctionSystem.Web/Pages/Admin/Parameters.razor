@@ -2,6 +2,7 @@
 @attribute [Authorize(Roles = "Admin")]
 @inject AuctionApiClient Api
 
+<SectionGate Section="Parameters" Title="Broker Parameters">
 <PageTitle>Parameters - Admin</PageTitle>
 
 <h1>Parameters</h1>
@@ -115,6 +116,8 @@ else
         </div>
     }
 }
+
+</SectionGate>
 
 @code {
     private List<SystemParameterDto> _items = new();

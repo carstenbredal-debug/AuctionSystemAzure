@@ -3,6 +3,7 @@
 @inject HttpClient Http
 @attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
 
+<SectionGate Section="Diagnostics" Title="Data Integrity">
 <h3>Data Integrity</h3>
 <p class="text-muted">Check that sold skin counts and hammer prices match across lots, boxes, and skins.</p>
 
@@ -130,6 +131,8 @@
         }
     </div>
 </div>
+
+</SectionGate>
 
 @code {
     private bool _showResetConfirm;
