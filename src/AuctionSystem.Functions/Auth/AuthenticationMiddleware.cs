@@ -30,9 +30,10 @@ public sealed class AuthenticationMiddleware : IFunctionsWorkerMiddleware
     internal const string AppUserKey = "AuthAppUser";
     internal const string PrincipalKey = "AuthClientPrincipal";
 
-    private static readonly ConcurrentDictionary<string, (bool Anonymous, string[] Roles)> Cache = new();
+    private static readonly ConcurrentDictionary<string, (bool Anonymous, string[] Roles, string? Section)> Cache = new();
 
     private readonly bool _enforce;
+    private readonly IConfiguration _config;
     private readonly ILogger<AuthenticationMiddleware> _logger;
 
     public AuthenticationMiddleware(IConfiguration config, ILogger<AuthenticationMiddleware> logger)
@@ -41,8 +42,17 @@ public sealed class AuthenticationMiddleware : IFunctionsWorkerMiddleware
         // during the SWA-linked-backend rollout. Default (unset) enforces.
         var flag = config["AUTH_ENFORCE"] ?? config["Values:AUTH_ENFORCE"];
         _enforce = !string.Equals(flag, "false", StringComparison.OrdinalIgnoreCase);
+        _config = config;
         _logger = logger;
     }
+
+    /// <summary>The expected password for a section — SECTION_PASSWORD_{SECTION} app setting (null = unset).</summary>
+    internal static string? SectionPasswordFor(IConfiguration config, string section) =>
+        config[$"SECTION_PASSWORD_{section.ToUpperInvariant()}"]
+        ?? config[$"Values:SECTION_PASSWORD_{section.ToUpperInvariant()}"];
+
+    /// <summary>The header carrying a section's password, e.g. x-section-password-shipping.</summary>
+    internal static string SectionHeaderFor(string section) => $"x-section-password-{section.ToLowerInvariant()}";
 
     public async Task Invoke(FunctionContext context, FunctionExecutionDelegate next)
     {
@@ -54,7 +64,7 @@ public sealed class AuthenticationMiddleware : IFunctionsWorkerMiddleware
             return;
         }
 
-        var (anonymous, roles) = ResolveRequirements(context);
+        var (anonymous, roles, section) = ResolveRequirements(context);
         if (anonymous)
         {
             await next(context);
@@ -89,6 +99,19 @@ public sealed class AuthenticationMiddleware : IFunctionsWorkerMiddleware
             denyStatus = StatusCodes.Status403Forbidden;
             denyMessage = "Insufficient permissions.";
         }
+        else if (section != null)
+        {
+            // Fails closed: if the section's SECTION_PASSWORD_{SECTION} isn't configured, that section stays
+            // locked for everyone rather than silently open (same pattern as the machine-endpoint api keys).
+            var expected = SectionPasswordFor(_config, section);
+            var provided = http.Request.Headers.TryGetValue(SectionHeaderFor(section), out var vals) ? vals.FirstOrDefault() : null;
+            if (string.IsNullOrEmpty(expected) || string.IsNullOrEmpty(provided) ||
+                !string.Equals(provided, expected, StringComparison.Ordinal))
+            {
+                denyStatus = StatusCodes.Status403Forbidden;
+                denyMessage = "Section password required.";
+            }
+        }
 
         if (denyStatus is int status)
         {
@@ -104,18 +127,20 @@ public sealed class AuthenticationMiddleware : IFunctionsWorkerMiddleware
         await next(context);
     }
 
-    private static (bool Anonymous, string[] Roles) ResolveRequirements(FunctionContext context) =>
+    private static (bool Anonymous, string[] Roles, string? Section) ResolveRequirements(FunctionContext context) =>
         Cache.GetOrAdd(context.FunctionDefinition.Name, _ =>
         {
             var method = ResolveMethod(context.FunctionDefinition.EntryPoint);
             if (method is null)
-                return (false, Array.Empty<string>());
+                return (false, Array.Empty<string>(), null);
             var anon = method.GetCustomAttribute<AllowAnonymousAttribute>() is not null;
             // Method-level role wins; otherwise fall back to a class-level [RequireRole] so an
             // entire controller (e.g. BusinessCentralFunctions) can be locked with one attribute.
             var roleAttr = method.GetCustomAttribute<RequireRoleAttribute>()
                            ?? method.DeclaringType?.GetCustomAttribute<RequireRoleAttribute>();
-            return (anon, roleAttr?.Roles ?? Array.Empty<string>());
+            var sectionAttr = method.GetCustomAttribute<RequireSectionPasswordAttribute>()
+                               ?? method.DeclaringType?.GetCustomAttribute<RequireSectionPasswordAttribute>();
+            return (anon, roleAttr?.Roles ?? Array.Empty<string>(), sectionAttr?.Section);
         });
 
     private static MethodInfo? ResolveMethod(string entryPoint)

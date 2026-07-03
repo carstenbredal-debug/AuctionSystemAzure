@@ -214,6 +214,15 @@ else
                                 {
                                     <button class="btn btn-sm btn-outline-info me-1" @onclick="() => OpenDownpaymentPopup(invId)" disabled="@_updatingId.HasValue">Partial Payment</button>
                                     <button class="btn btn-sm btn-outline-success" @onclick="() => SubmitFullyPaid(invId)" disabled="@_updatingId.HasValue">Full Payment</button>
+                                    @if (inv.ShippingStatus == "Released" || inv.ShippingStatus == "Shipped")
+                                    {
+                                        <span class="badge bg-info ms-1" title="Sent to shipping without payment — invoice is still unpaid">Packing</span>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-sm btn-outline-warning ms-1" @onclick="() => OpenUnpaidShipPopup(invId)" disabled="@_updatingId.HasValue"
+                                                title="Send to shipping WITHOUT payment (password required)">To Shipping</button>
+                                    }
                                 }
                                 else if (isFullyPaid && inv.Status == "Paid")
                                 {
@@ -326,6 +335,39 @@ else
                 <div class="modal-footer">
                     <button class="btn btn-secondary" @onclick="CloseDownpaymentPopup">Cancel</button>
                     <button class="btn btn-primary" @onclick="ConfirmDownpayment" disabled="@(_dpAmount <= 0)">Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showUnpaidShipPopup)
+{
+    <div class="modal d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">To Shipping — WITHOUT payment</h5>
+                    <button type="button" class="btn-close" @onclick="CloseUnpaidShipPopup"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        This sends the order to shipping although the invoice is <strong>not paid</strong>.
+                        The invoice stays unpaid and the payment actions remain available.
+                    </div>
+                    <label class="form-label">Password</label>
+                    <input type="password" class="form-control" @bind="_unpaidShipPassword" @bind:event="oninput" />
+                    @if (!string.IsNullOrEmpty(_unpaidShipError))
+                    {
+                        <div class="text-danger small mt-2">@_unpaidShipError</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseUnpaidShipPopup" disabled="@_unpaidShipBusy">Cancel</button>
+                    <button class="btn btn-warning" @onclick="ConfirmUnpaidShip"
+                            disabled="@(_unpaidShipBusy || string.IsNullOrWhiteSpace(_unpaidShipPassword))">
+                        @(_unpaidShipBusy ? "Sending…" : "Send to Shipping")
+                    </button>
                 </div>
             </div>
         </div>
@@ -677,6 +719,51 @@ else
             _bcError = $"Failed to update invoice status (HTTP {(int)resp.StatusCode}).";
         }
         _updatingId = null;
+    }
+
+    // "To Shipping" WITHOUT payment — password-gated.
+    private bool _showUnpaidShipPopup;
+    private bool _unpaidShipBusy;
+    private int _unpaidShipInvoiceId;
+    private string _unpaidShipPassword = "";
+    private string? _unpaidShipError;
+
+    private void OpenUnpaidShipPopup(int invoiceId)
+    {
+        _unpaidShipInvoiceId = invoiceId;
+        _unpaidShipPassword = "";
+        _unpaidShipError = null;
+        _showUnpaidShipPopup = true;
+    }
+
+    private void CloseUnpaidShipPopup() { _showUnpaidShipPopup = false; _unpaidShipPassword = ""; }
+
+    private async Task ConfirmUnpaidShip()
+    {
+        _unpaidShipBusy = true;
+        _unpaidShipError = null;
+        try
+        {
+            var resp = await Api.ReleaseInvoiceUnpaidAsync(_unpaidShipInvoiceId, _unpaidShipPassword.Trim());
+            if (resp.IsSuccessStatusCode)
+            {
+                var inv = _invoices.FirstOrDefault(i => i.Id == _unpaidShipInvoiceId);
+                if (inv != null) inv.ShippingStatus = "Released";
+                _bcSuccess = "Invoice sent to shipping WITHOUT payment — it remains unpaid.";
+                _showUnpaidShipPopup = false;
+                _unpaidShipPassword = "";
+            }
+            else if (resp.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            {
+                _unpaidShipError = "Wrong password.";
+            }
+            else
+            {
+                _unpaidShipError = $"Failed (HTTP {(int)resp.StatusCode}).";
+            }
+        }
+        catch (Exception ex) { _unpaidShipError = ex.Message; }
+        finally { _unpaidShipBusy = false; }
     }
 
     private async Task SendToShipping(int invoiceId)

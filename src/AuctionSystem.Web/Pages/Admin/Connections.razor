@@ -2,6 +2,7 @@
 @attribute [Authorize(Roles = "Admin")]
 @inject AuctionApiClient Api
 
+<SectionGate Section="Diagnostics" Title="Connections">
 <PageTitle>Connections - Admin</PageTitle>
 
 <h1>Connections</h1>
@@ -147,6 +148,8 @@ else
         </div>
     }
 }
+
+</SectionGate>
 
 @code {
     private bool _loading = true;

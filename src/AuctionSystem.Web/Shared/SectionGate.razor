@@ -1,0 +1,62 @@
+@inject AuctionApiClient Api
+
+@if (SectionUnlockState.IsUnlocked(Section))
+{
+    @ChildContent
+}
+else
+{
+    <div class="card shadow-sm mt-4" style="max-width: 440px;">
+        <div class="card-header"><strong>🔒 @(Title ?? Section)</strong></div>
+        <div class="card-body">
+            <p class="text-muted">This section is password protected. Enter the @Section.ToLowerInvariant() password to continue.</p>
+            <input type="password" class="form-control mb-2" placeholder="Password"
+                   @bind="_password" @bind:event="oninput" @onkeydown="OnKeydown" disabled="@_busy" />
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <div class="text-danger small mb-2">@_error</div>
+            }
+            <button class="btn btn-primary" @onclick="Unlock" disabled="@(_busy || string.IsNullOrWhiteSpace(_password))">
+                @(_busy ? "Checking…" : "Unlock")
+            </button>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string Section { get; set; } = "";
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private string _password = "";
+    private string? _error;
+    private bool _busy;
+
+    private async Task OnKeydown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_password)) await Unlock();
+    }
+
+    private async Task Unlock()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var pw = _password.Trim();
+            if (await Api.VerifySectionPasswordAsync(Section, pw))
+            {
+                // Attach the header to all subsequent API calls so the gated endpoints behind this
+                // section work for the rest of the session, then reveal the content.
+                Api.AttachSectionPassword(Section, pw);
+                SectionUnlockState.MarkUnlocked(Section);
+            }
+            else
+            {
+                _error = "Wrong password.";
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; _password = ""; }
+    }
+}

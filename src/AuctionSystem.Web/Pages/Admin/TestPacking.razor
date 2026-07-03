@@ -2,6 +2,7 @@
 @attribute [Authorize(Roles = "Admin")]
 @inject AuctionApiClient Api
 
+<SectionGate Section="Diagnostics" Title="Test Packing">
 <h4 class="mb-4">Test Packing — External System Simulator</h4>
 <p class="text-muted mb-3">This page simulates the external packing system that reads packing order XML files from blob storage, displays the boxes to pick, and confirms the pick.</p>
 
@@ -358,6 +359,8 @@ else
         </div>
     </div>
 }
+
+</SectionGate>
 
 @code {
     private List<PackingOrderXmlDto> _pendingOrders = new();

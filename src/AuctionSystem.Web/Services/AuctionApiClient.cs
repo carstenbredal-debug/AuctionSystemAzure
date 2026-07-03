@@ -202,6 +202,32 @@ public class AuctionApiClient
     public async Task<HttpResponseMessage> UpdateInvoiceStatusAsync(int invoiceId, string status, bool releaseForShipping = false)
         => await _http.PutAsJsonAsync($"api/settlements/invoices/{invoiceId}/status", new { status, releaseForShipping });
 
+    // "To Shipping" without payment — requires the Shipping section password.
+    public async Task<HttpResponseMessage> ReleaseInvoiceUnpaidAsync(int invoiceId, string sectionPassword)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Put, $"api/settlements/invoices/{invoiceId}/release-unpaid");
+        request.Headers.Add("x-section-password-shipping", sectionPassword);
+        return await _http.SendAsync(request);
+    }
+
+    // Verify a section password (used by the section gates before unlocking a page).
+    public async Task<bool> VerifySectionPasswordAsync(string section, string password)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, $"api/section-password/verify?section={Uri.EscapeDataString(section)}");
+        request.Headers.Add($"x-section-password-{section.ToLowerInvariant()}", password);
+        var resp = await _http.SendAsync(request);
+        return resp.IsSuccessStatusCode;
+    }
+
+    // After a successful unlock: attach the section's password header to ALL subsequent API calls from
+    // this app session (the shared HttpClient), so the gated endpoints behind that section just work.
+    public void AttachSectionPassword(string section, string password)
+    {
+        var header = $"x-section-password-{section.ToLowerInvariant()}";
+        _http.DefaultRequestHeaders.Remove(header);
+        _http.DefaultRequestHeaders.Add(header, password);
+    }
+
     public async Task<BcBalanceCheckDto?> CheckBcPaymentBalanceAsync(int invoiceId)
     {
         try
