@@ -3,6 +3,7 @@
 @inject AuctionApiClient Api
 @using System.Net.Http.Json
 
+<SectionGate Section="Diagnostics" Title="Balance Comparison">
 <h3>Balance Comparison (Web vs BC)</h3>
 <p class="text-muted">
     Per buyer, the local invoiced/credited (from <strong>posted</strong> invoices) against Business
@@ -97,6 +98,8 @@ else if (_result != null)
         </tfoot>
     </table>
 }
+
+</SectionGate>
 
 @code {
     private BalanceComparisonResult? _result;

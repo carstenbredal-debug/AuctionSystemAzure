@@ -141,7 +141,7 @@ public class SettlementFunctions
     // stays UNPAID: only ShippingStatus flips to "Released" (the pipeline keys on that); the payment status
     // (Issued/Downpayment) is untouched, so the payment actions remain and payment still applies later.
     [AuctionSystem.Functions.Auth.RequireRole("Admin")]
-    [AuctionSystem.Functions.Auth.RequireSectionPassword]
+    [AuctionSystem.Functions.Auth.RequireSectionPassword("Shipping")]
     [Function("ReleaseInvoiceUnpaid")]
     public async Task<HttpResponseData> ReleaseInvoiceUnpaid(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "settlements/invoices/{invoiceId:int}/release-unpaid")] HttpRequestData req, int invoiceId)

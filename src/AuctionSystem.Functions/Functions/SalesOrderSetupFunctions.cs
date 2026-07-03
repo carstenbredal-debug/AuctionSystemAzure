@@ -41,6 +41,8 @@ public class SalesOrderSetupFunctions
         return await CreateJsonResponse(req, items);
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [AuctionSystem.Functions.Auth.RequireSectionPassword("Parameters")]
     [Function("CreateLotGroupOrder")]
     public async Task<HttpResponseData> CreateLotGroupOrder(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "sales-order-setup/lot-group-orders")] HttpRequestData req)
@@ -67,6 +69,8 @@ public class SalesOrderSetupFunctions
         }
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [AuctionSystem.Functions.Auth.RequireSectionPassword("Parameters")]
     [Function("UpdateLotGroupOrder")]
     public async Task<HttpResponseData> UpdateLotGroupOrder(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "sales-order-setup/lot-group-orders/update")] HttpRequestData req)
@@ -126,6 +130,8 @@ public class SalesOrderSetupFunctions
         return await CreateJsonResponse(req, item);
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [AuctionSystem.Functions.Auth.RequireSectionPassword("Parameters")]
     [Function("ReorderLotGroupOrders")]
     public async Task<HttpResponseData> ReorderLotGroupOrders(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "sales-order-setup/lot-group-orders/reorder")] HttpRequestData req)
@@ -151,6 +157,8 @@ public class SalesOrderSetupFunctions
         }
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [AuctionSystem.Functions.Auth.RequireSectionPassword("Parameters")]
     [Function("DeleteLotGroupOrder")]
     public async Task<HttpResponseData> DeleteLotGroupOrder(
         [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "sales-order-setup/lot-group-orders/remove")] HttpRequestData req)
@@ -187,6 +195,8 @@ public class SalesOrderSetupFunctions
         return await CreateJsonResponse(req, items);
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [AuctionSystem.Functions.Auth.RequireSectionPassword("Parameters")]
     [Function("CreateLotSizeRule")]
     public async Task<HttpResponseData> CreateLotSizeRule(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "sales-order-setup/lot-size-rules")] HttpRequestData req)
@@ -209,6 +219,8 @@ public class SalesOrderSetupFunctions
         }
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [AuctionSystem.Functions.Auth.RequireSectionPassword("Parameters")]
     [Function("UpdateLotSizeRule")]
     public async Task<HttpResponseData> UpdateLotSizeRule(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "sales-order-setup/lot-size-rules/update")] HttpRequestData req)
@@ -242,6 +254,8 @@ public class SalesOrderSetupFunctions
         }
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [AuctionSystem.Functions.Auth.RequireSectionPassword("Parameters")]
     [Function("DeleteLotSizeRule")]
     public async Task<HttpResponseData> DeleteLotSizeRule(
         [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "sales-order-setup/lot-size-rules/remove")] HttpRequestData req)
@@ -277,6 +291,8 @@ public class SalesOrderSetupFunctions
         return await CreateJsonResponse(req, items);
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [AuctionSystem.Functions.Auth.RequireSectionPassword("Parameters")]
     [Function("CreateLotSortOrder")]
     public async Task<HttpResponseData> CreateLotSortOrder(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "sales-order-setup/lot-sort-orders")] HttpRequestData req)
@@ -303,6 +319,8 @@ public class SalesOrderSetupFunctions
         }
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [AuctionSystem.Functions.Auth.RequireSectionPassword("Parameters")]
     [Function("UpdateLotSortOrder")]
     public async Task<HttpResponseData> UpdateLotSortOrder(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "sales-order-setup/lot-sort-orders/update")] HttpRequestData req)
@@ -369,6 +387,8 @@ public class SalesOrderSetupFunctions
         return await CreateJsonResponse(req, item);
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [AuctionSystem.Functions.Auth.RequireSectionPassword("Parameters")]
     [Function("ReorderLotSortOrders")]
     public async Task<HttpResponseData> ReorderLotSortOrders(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "sales-order-setup/lot-sort-orders/reorder")] HttpRequestData req)
@@ -394,6 +414,8 @@ public class SalesOrderSetupFunctions
         }
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [AuctionSystem.Functions.Auth.RequireSectionPassword("Parameters")]
     [Function("DeleteLotSortOrder")]
     public async Task<HttpResponseData> DeleteLotSortOrder(
         [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "sales-order-setup/lot-sort-orders/remove")] HttpRequestData req)
@@ -430,6 +452,8 @@ public class SalesOrderSetupFunctions
         return await CreateJsonResponse(req, items);
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [AuctionSystem.Functions.Auth.RequireSectionPassword("Parameters")]
     [Function("CreateCatalogNumberRule")]
     public async Task<HttpResponseData> CreateCatalogNumberRule(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "sales-order-setup/catalog-number-rules")] HttpRequestData req)
@@ -452,6 +476,8 @@ public class SalesOrderSetupFunctions
         }
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [AuctionSystem.Functions.Auth.RequireSectionPassword("Parameters")]
     [Function("UpdateCatalogNumberRule")]
     public async Task<HttpResponseData> UpdateCatalogNumberRule(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "sales-order-setup/catalog-number-rules/update")] HttpRequestData req)
@@ -481,6 +507,8 @@ public class SalesOrderSetupFunctions
         }
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [AuctionSystem.Functions.Auth.RequireSectionPassword("Parameters")]
     [Function("DeleteCatalogNumberRule")]
     public async Task<HttpResponseData> DeleteCatalogNumberRule(
         [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "sales-order-setup/catalog-number-rules/remove")] HttpRequestData req)

@@ -3,6 +3,7 @@
 @inject AuctionApiClient Api
 @using System.Text.Json
 
+<SectionGate Section="Diagnostics" Title="Typist Simulator">
 <h3>Typist Simulator</h3>
 <p class="text-muted">
     Types an auction's unsold lots as two typists and drives the real matching — matched lots become
@@ -201,6 +202,8 @@ else
         <div class="alert @(_brokerSimError ? "alert-danger" : "alert-info") mt-3" style="max-width:760px">@_brokerSimStatus</div>
     }
 }
+
+</SectionGate>
 
 @code {
     private List<AuctionDto>? _auctions;

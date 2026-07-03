@@ -60,6 +60,8 @@ public class ShippingParameterFunctions
         return response;
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [AuctionSystem.Functions.Auth.RequireSectionPassword("Parameters")]
     [Function("SaveBoxTypeDimension")]
     public async Task<HttpResponseData> Save(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "shipping-parameters/box-types")] HttpRequestData req)
@@ -98,6 +100,8 @@ public class ShippingParameterFunctions
         return response;
     }
 
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [AuctionSystem.Functions.Auth.RequireSectionPassword("Parameters")]
     [Function("SaveAllBoxTypeDimensions")]
     public async Task<HttpResponseData> SaveAll(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "shipping-parameters/box-types/bulk")] HttpRequestData req)
