@@ -136,6 +136,28 @@ public class SettlementFunctions
         return await CreateJsonResponse(req, new { invoice.Id, Status = invoice.Status.ToString(), invoice.ShippingStatus, bcPaymentError, bcPaymentSuccess });
     }
 
+    // "To Shipping" WITHOUT payment — password-gated (x-section-password vs SECTION_PASSWORD, enforced by
+    // the auth middleware). Releases the invoice's lots to the shipping/packing pipeline while the invoice
+    // stays UNPAID: only ShippingStatus flips to "Released" (the pipeline keys on that); the payment status
+    // (Issued/Downpayment) is untouched, so the payment actions remain and payment still applies later.
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [AuctionSystem.Functions.Auth.RequireSectionPassword]
+    [Function("ReleaseInvoiceUnpaid")]
+    public async Task<HttpResponseData> ReleaseInvoiceUnpaid(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "settlements/invoices/{invoiceId:int}/release-unpaid")] HttpRequestData req, int invoiceId)
+    {
+        var invoice = await _db.Invoices.FirstOrDefaultAsync(i => i.Id == invoiceId);
+        if (invoice == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+        if (invoice.IsCreditNote) return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+
+        invoice.ShippingStatus = "Released";
+        await _db.SaveChangesAsync();
+        _logger.LogWarning("Invoice {Id} ({Number}) released to shipping UNPAID (payment status stays {Status})",
+            invoice.Id, invoice.InvoiceNumber, invoice.Status);
+
+        return await CreateJsonResponse(req, new { invoice.Id, Status = invoice.Status.ToString(), invoice.ShippingStatus });
+    }
+
     [AuctionSystem.Functions.Auth.RequireRole("Admin")]
     [Function("CheckBcPaymentBalance")]
     public async Task<HttpResponseData> CheckBcPaymentBalance(

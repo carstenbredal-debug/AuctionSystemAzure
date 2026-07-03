@@ -202,6 +202,14 @@ public class AuctionApiClient
     public async Task<HttpResponseMessage> UpdateInvoiceStatusAsync(int invoiceId, string status, bool releaseForShipping = false)
         => await _http.PutAsJsonAsync($"api/settlements/invoices/{invoiceId}/status", new { status, releaseForShipping });
 
+    // "To Shipping" without payment — requires the section password (sent as x-section-password).
+    public async Task<HttpResponseMessage> ReleaseInvoiceUnpaidAsync(int invoiceId, string sectionPassword)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Put, $"api/settlements/invoices/{invoiceId}/release-unpaid");
+        request.Headers.Add("x-section-password", sectionPassword);
+        return await _http.SendAsync(request);
+    }
+
     public async Task<BcBalanceCheckDto?> CheckBcPaymentBalanceAsync(int invoiceId)
     {
         try

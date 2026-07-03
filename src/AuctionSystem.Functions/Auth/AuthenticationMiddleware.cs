@@ -30,9 +30,10 @@ public sealed class AuthenticationMiddleware : IFunctionsWorkerMiddleware
     internal const string AppUserKey = "AuthAppUser";
     internal const string PrincipalKey = "AuthClientPrincipal";
 
-    private static readonly ConcurrentDictionary<string, (bool Anonymous, string[] Roles)> Cache = new();
+    private static readonly ConcurrentDictionary<string, (bool Anonymous, string[] Roles, bool SectionPassword)> Cache = new();
 
     private readonly bool _enforce;
+    private readonly string? _sectionPassword;
     private readonly ILogger<AuthenticationMiddleware> _logger;
 
     public AuthenticationMiddleware(IConfiguration config, ILogger<AuthenticationMiddleware> logger)
@@ -41,6 +42,7 @@ public sealed class AuthenticationMiddleware : IFunctionsWorkerMiddleware
         // during the SWA-linked-backend rollout. Default (unset) enforces.
         var flag = config["AUTH_ENFORCE"] ?? config["Values:AUTH_ENFORCE"];
         _enforce = !string.Equals(flag, "false", StringComparison.OrdinalIgnoreCase);
+        _sectionPassword = config["SECTION_PASSWORD"] ?? config["Values:SECTION_PASSWORD"];
         _logger = logger;
     }
 
@@ -54,7 +56,7 @@ public sealed class AuthenticationMiddleware : IFunctionsWorkerMiddleware
             return;
         }
 
-        var (anonymous, roles) = ResolveRequirements(context);
+        var (anonymous, roles, needsSectionPassword) = ResolveRequirements(context);
         if (anonymous)
         {
             await next(context);
@@ -89,6 +91,18 @@ public sealed class AuthenticationMiddleware : IFunctionsWorkerMiddleware
             denyStatus = StatusCodes.Status403Forbidden;
             denyMessage = "Insufficient permissions.";
         }
+        else if (needsSectionPassword)
+        {
+            // Fails closed: if SECTION_PASSWORD isn't configured, the section stays locked for everyone
+            // rather than silently open (same fail-closed pattern as the machine-endpoint x-api-key checks).
+            var provided = http.Request.Headers.TryGetValue("x-section-password", out var vals) ? vals.FirstOrDefault() : null;
+            if (string.IsNullOrEmpty(_sectionPassword) || string.IsNullOrEmpty(provided) ||
+                !string.Equals(provided, _sectionPassword, StringComparison.Ordinal))
+            {
+                denyStatus = StatusCodes.Status403Forbidden;
+                denyMessage = "Section password required.";
+            }
+        }
 
         if (denyStatus is int status)
         {
@@ -104,18 +118,20 @@ public sealed class AuthenticationMiddleware : IFunctionsWorkerMiddleware
         await next(context);
     }
 
-    private static (bool Anonymous, string[] Roles) ResolveRequirements(FunctionContext context) =>
+    private static (bool Anonymous, string[] Roles, bool SectionPassword) ResolveRequirements(FunctionContext context) =>
         Cache.GetOrAdd(context.FunctionDefinition.Name, _ =>
         {
             var method = ResolveMethod(context.FunctionDefinition.EntryPoint);
             if (method is null)
-                return (false, Array.Empty<string>());
+                return (false, Array.Empty<string>(), false);
             var anon = method.GetCustomAttribute<AllowAnonymousAttribute>() is not null;
             // Method-level role wins; otherwise fall back to a class-level [RequireRole] so an
             // entire controller (e.g. BusinessCentralFunctions) can be locked with one attribute.
             var roleAttr = method.GetCustomAttribute<RequireRoleAttribute>()
                            ?? method.DeclaringType?.GetCustomAttribute<RequireRoleAttribute>();
-            return (anon, roleAttr?.Roles ?? Array.Empty<string>());
+            var sectionPassword = method.GetCustomAttribute<RequireSectionPasswordAttribute>() is not null
+                                   || method.DeclaringType?.GetCustomAttribute<RequireSectionPasswordAttribute>() is not null;
+            return (anon, roleAttr?.Roles ?? Array.Empty<string>(), sectionPassword);
         });
 
     private static MethodInfo? ResolveMethod(string entryPoint)
