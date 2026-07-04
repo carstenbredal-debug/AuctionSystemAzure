@@ -117,7 +117,7 @@ else
     {
         var hammerPrice = skins * priceEur;
         var handlingFee = skins * _handlingFeePerSkin;
-        return (hammerPrice + handlingFee) * _auctionFeePercent / 100m;
+        return handlingFee + (hammerPrice + handlingFee) * _auctionFeePercent / 100m;
     }
 
     private string GetStatusColor(AuctionStatus status) => status switch

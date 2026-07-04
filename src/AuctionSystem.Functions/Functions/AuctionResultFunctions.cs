@@ -650,7 +650,8 @@ public class AuctionResultFunctions
             else if (commissionType == "percentageTotal" && commissionValue.HasValue)
             {
                 var hammer = result.TotalSkins * result.PriceEur;
-                var auctionFee = (hammer + result.TotalSkins * handlingFeePerSkin) * auctionFeePercent / 100m;
+                var handlingAmt = result.TotalSkins * handlingFeePerSkin;
+                var auctionFee = handlingAmt + (hammer + handlingAmt) * auctionFeePercent / 100m;
                 commissionAmount = (hammer + auctionFee) * commissionValue.Value / 100m;
             }
             else if (commissionType == "amount" && commissionValue.HasValue)
@@ -749,7 +750,7 @@ public class AuctionResultFunctions
             {
                 var hammerPrice = r.TotalSkins * r.PriceEur;
                 var handlingFee = r.TotalSkins * handlingFeePerSkin;
-                var lotAuctionFee = (hammerPrice + handlingFee) * auctionFeePercent / 100m;
+                var lotAuctionFee = handlingFee + (hammerPrice + handlingFee) * auctionFeePercent / 100m;
                 var description = string.Join(", ", new[] { r.SalesType, r.Gender, r.Group, r.Color, r.Quality, r.Size }.Where(s => !string.IsNullOrEmpty(s)));
 
                 invoice.Lines.Add(new InvoiceLine
@@ -1846,7 +1847,7 @@ public class AuctionResultFunctions
             foreach (var line in grp)
             {
                 var handlingFee = line.Skins * handlingFeePerSkin;
-                var lotAuctionFee = (line.HammerPrice + handlingFee) * auctionFeePercent / 100m;
+                var lotAuctionFee = handlingFee + (line.HammerPrice + handlingFee) * auctionFeePercent / 100m;
 
                 creditNote.Lines.Add(new InvoiceLine
                 {
