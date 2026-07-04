@@ -869,7 +869,7 @@ else
     {
         var hammerPrice = skins * priceEur;
         var handlingFee = skins * _handlingFeePerSkin;
-        return (hammerPrice + handlingFee) * _auctionFeePercent / 100m;
+        return handlingFee + (hammerPrice + handlingFee) * _auctionFeePercent / 100m;
     }
 
     private void ToggleSelection(int id) { if (!_selectedIds.Remove(id)) _selectedIds.Add(id); }
