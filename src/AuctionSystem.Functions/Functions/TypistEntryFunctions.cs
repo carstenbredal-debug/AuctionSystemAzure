@@ -668,7 +668,7 @@ public class TypistEntryFunctions
 
         // 2. Auction Fee transaction
         var handlingTotal = quantity * handlingFeePerSkin;
-        var auctionFeeAmount = (hammerPrice + handlingTotal) * auctionFeePercent / 100m;
+        var auctionFeeAmount = handlingTotal + (hammerPrice + handlingTotal) * auctionFeePercent / 100m;
         if (auctionFeeAmount > 0)
         {
             _db.AuctionTransactions.Add(new AuctionTransaction
