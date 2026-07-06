@@ -1201,6 +1201,156 @@ public class TypistEntryFunctions
         public string? ExternalRef { get; set; }
     }
 
+    // ── Backoffice lot console (Finance > Backoffice) ─────────────────────────────────────────
+    // Search a lot; sell it to a broker if unsold; correct the hammer price while un-invoiced;
+    // read-only once invoiced. Admin-only. Lives here to reuse RecordSaleAsync (the one true sale path).
+
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [Function("BackofficeGetLot")]
+    public async Task<HttpResponseData> BackofficeGetLot(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "backoffice/lot/{lotNumber:int}")] HttpRequestData req, int lotNumber)
+    {
+        var lot = await _db.Lots.Where(l => l.LotNumber == lotNumber)
+            .OrderByDescending(l => l.Id).FirstOrDefaultAsync();
+        if (lot == null)
+            return await CreateJsonResponse(req, new { found = false, message = $"Lot {lotNumber} not found in any auction." });
+
+        var snap = await SnapshotLotDisplayAsync(lot.AuctionId, lotNumber);
+
+        var result = await _db.AuctionResults
+            .Include(r => r.Broker)
+            .Where(r => r.AuctionId == lot.AuctionId && r.LotNumber == lotNumber)
+            .OrderByDescending(r => r.Id)
+            .FirstOrDefaultAsync();
+
+        object? invoice = null;
+        if (result?.SoldToBuyerId != null)
+        {
+            var inv = await _db.Invoices
+                .Where(i => !i.IsCreditNote && i.Lines.Any(l => l.AuctionResultId == result.Id))
+                .OrderByDescending(i => i.Id).FirstOrDefaultAsync();
+            var buyer = await _db.Buyers.FindAsync(result.SoldToBuyerId.Value);
+            if (inv != null)
+                invoice = new
+                {
+                    inv.InvoiceNumber, inv.BcInvoiceNumber,
+                    Status = inv.Status.ToString(), inv.TotalAmount,
+                    buyerNumber = buyer?.BuyerNumber, buyerName = buyer?.Name
+                };
+        }
+
+        var status = result == null ? "Unsold" : (result.SoldToBuyerId == null ? "Sold" : "Invoiced");
+        return await CreateJsonResponse(req, new
+        {
+            found = true, lotNumber, status,
+            description = snap?.Description ?? lot.Description,
+            skins = snap?.Quantity ?? lot.Quantity,
+            brokerId = result?.BrokerId,
+            brokerNumber = result?.Broker?.BrokerNumber,
+            brokerName = result?.Broker?.CompanyName,
+            priceEur = result?.PriceEur,
+            soldAt = result?.ReceivedAt,
+            lastModifiedBy = result?.LastModifiedBy,
+            invoice
+        });
+    }
+
+    // Sell an UNSOLD lot to a broker at a typed price — same shared sale path as typist/external
+    // (result + lot status + journal transactions), so it's identical downstream.
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [Function("BackofficeSellLot")]
+    public async Task<HttpResponseData> BackofficeSellLot(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "backoffice/lot/{lotNumber:int}/sell")] HttpRequestData req, int lotNumber)
+    {
+        var body = await req.ReadFromJsonAsync<BackofficeSellRequest>();
+        if (body == null || body.BrokerId <= 0 || body.PriceEur <= 0)
+            return await CreateJsonResponse(req, new { error = "brokerId and a positive priceEur are required." }, System.Net.HttpStatusCode.BadRequest);
+
+        var lot = await _db.Lots.Where(l => l.LotNumber == lotNumber)
+            .OrderByDescending(l => l.Id).FirstOrDefaultAsync();
+        if (lot == null)
+            return await CreateJsonResponse(req, new { error = $"Lot {lotNumber} not found." }, System.Net.HttpStatusCode.NotFound);
+
+        var broker = await _db.Brokers.FindAsync(body.BrokerId);
+        if (broker == null)
+            return await CreateJsonResponse(req, new { error = "Broker not found." }, System.Net.HttpStatusCode.BadRequest);
+
+        var result = await RecordSaleAsync(lot.AuctionId, lotNumber, body.BrokerId, body.PriceEur);
+        if (result == null)
+            return await CreateJsonResponse(req, new { error = "Lot is already sold." }, System.Net.HttpStatusCode.Conflict);
+
+        result.LastModifiedBy = string.IsNullOrWhiteSpace(body.Initials) ? "Backoffice" : body.Initials.Trim();
+        result.LastModifiedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        _logger.LogInformation("Backoffice: lot {Lot} sold to broker {Broker} at {Price} by '{Initials}'",
+            lotNumber, broker.BrokerNumber, body.PriceEur, result.LastModifiedBy);
+        return await CreateJsonResponse(req, new { ok = true, resultId = result.Id });
+    }
+
+    // Correct the hammer price of a sold-but-UN-INVOICED lot: updates the result, the lot, and the
+    // sale-time journal transactions (lot sale + auction fee) together. Invoiced lots are locked —
+    // take back first.
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [Function("BackofficeChangePrice")]
+    public async Task<HttpResponseData> BackofficeChangePrice(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "backoffice/lot/{lotNumber:int}/price")] HttpRequestData req, int lotNumber)
+    {
+        var body = await req.ReadFromJsonAsync<BackofficePriceRequest>();
+        if (body == null || body.PriceEur <= 0)
+            return await CreateJsonResponse(req, new { error = "A positive priceEur is required." }, System.Net.HttpStatusCode.BadRequest);
+
+        var lot = await _db.Lots.Where(l => l.LotNumber == lotNumber)
+            .OrderByDescending(l => l.Id).FirstOrDefaultAsync();
+        if (lot == null)
+            return await CreateJsonResponse(req, new { error = $"Lot {lotNumber} not found." }, System.Net.HttpStatusCode.NotFound);
+
+        var result = await _db.AuctionResults
+            .Where(r => r.AuctionId == lot.AuctionId && r.LotNumber == lotNumber)
+            .OrderByDescending(r => r.Id).FirstOrDefaultAsync();
+        if (result == null)
+            return await CreateJsonResponse(req, new { error = "Lot is not sold — nothing to reprice." }, System.Net.HttpStatusCode.Conflict);
+        if (result.SoldToBuyerId != null)
+            return await CreateJsonResponse(req, new { error = "Lot is invoiced — take it back before changing the price." }, System.Net.HttpStatusCode.Conflict);
+
+        // Fee parameters, same as sale time
+        decimal afPct = 0, hfPerSkin = 0;
+        var afp = await _db.SystemParameters.FirstOrDefaultAsync(p => p.Key == "AuctionFee");
+        var hfp = await _db.SystemParameters.FirstOrDefaultAsync(p => p.Key == "HandlingFee");
+        if (afp != null) decimal.TryParse(afp.Value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out afPct);
+        if (hfp != null) decimal.TryParse(hfp.Value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out hfPerSkin);
+
+        var skins = result.TotalSkins;
+        var hammer = skins * body.PriceEur;
+        var handling = skins * hfPerSkin;
+        var fee = Math.Round(handling + (hammer + handling) * afPct / 100m, 2);
+
+        result.PriceEur = body.PriceEur;
+        result.LastModifiedBy = string.IsNullOrWhiteSpace(body.Initials) ? "Backoffice" : body.Initials.Trim();
+        result.LastModifiedAt = DateTime.UtcNow;
+        lot.HammerPrice = body.PriceEur;
+
+        var txs = await _db.AuctionTransactions.Where(t => t.AuctionResultId == result.Id).ToListAsync();
+        foreach (var t in txs)
+        {
+            if (t.TransactionType == Domain.Enums.TransactionType.LotSale)
+            {
+                t.UnitPrice = body.PriceEur;
+                t.Amount = hammer;
+            }
+            else if (t.TransactionType == Domain.Enums.TransactionType.AuctionFee)
+            {
+                t.UnitPrice = skins > 0 ? Math.Round(fee / skins, 4) : 0;
+                t.Amount = fee;
+            }
+        }
+        await _db.SaveChangesAsync();
+
+        _logger.LogInformation("Backoffice: lot {Lot} repriced to {Price} (fee {Fee}) by '{Initials}'",
+            lotNumber, body.PriceEur, fee, result.LastModifiedBy);
+        return await CreateJsonResponse(req, new { ok = true, priceEur = body.PriceEur, hammer, auctionFee = fee });
+    }
+
     // Machine-to-machine auth for the external price feed. Fails closed: 401 if EXTERNAL_PRICE_API_KEY isn't
     // configured or the x-api-key header doesn't match (same pattern as LOT_GEN_API_KEY).
     private bool CheckExternalApiKey(HttpRequestData req)
@@ -1230,6 +1380,9 @@ public class TypistEntryFunctions
 }
 
 public record SubmitTypistEntryRequest(int LotNumber, int BrokerId, decimal PriceEur, int TypistUserId, int AuctionId = 0);
+
+public record BackofficeSellRequest(int BrokerId, decimal PriceEur, string? Initials);
+public record BackofficePriceRequest(decimal PriceEur, string? Initials);
 
 // External price feed payload: an auction number plus the realtime knock-downs (lot, winning broker number,
 // hammer price in EUR, and the source's own reference). Identifiers are "our numbers" (BrokerNumber / LotNumber).
