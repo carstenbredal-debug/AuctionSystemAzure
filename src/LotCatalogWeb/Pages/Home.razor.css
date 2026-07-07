@@ -58,12 +58,26 @@
 /* Action buttons row */
 .action-row {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 1.5rem;
     padding: 2rem 3rem;
     max-width: 1200px;
     margin: 0 auto;
     background-color: #ffffff;
+}
+
+/* Static-PDF link styled like the pdf button */
+.btn-link-pdf {
+    text-decoration: none;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-link-pdf:hover {
+    background-color: #3d2a5e;
+    color: white;
 }
 
 .btn-reset {
