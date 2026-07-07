@@ -1,0 +1,219 @@
+@page "/admin/backoffice"
+@attribute [Authorize(Roles = "Admin")]
+@using System.Text.Json
+@inject HttpClient Http
+@inject AuctionApiClient Api
+
+<PageTitle>Backoffice - Finance</PageTitle>
+
+<h1>Backoffice</h1>
+<p class="text-muted">Look up a lot: sell it to a broker if unsold, correct the price while un-invoiced, view invoice details once invoiced.</p>
+
+<div class="d-flex gap-2 mb-4" style="max-width:420px">
+    <input type="number" class="form-control" placeholder="Lot #" @bind="_lotNumber" @bind:event="oninput" @onkeydown="OnSearchKeydown" />
+    <button class="btn btn-primary" @onclick="Search" disabled="@(_busy || _lotNumber <= 0)">Search</button>
+</div>
+
+@if (!string.IsNullOrEmpty(_message))
+{
+    <div class="alert @(_messageIsError ? "alert-danger" : "alert-success") alert-dismissible" style="max-width:720px">
+        @_message
+        <button type="button" class="btn-close" @onclick="() => _message = null"></button>
+    </div>
+}
+
+@if (_lot != null)
+{
+    <div class="card shadow-sm" style="max-width:720px">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <strong>Lot @_lot.LotNumber</strong>
+            <span class="badge bg-@(_lot.Status == "Unsold" ? "secondary" : _lot.Status == "Sold" ? "success" : "info")">@_lot.Status</span>
+        </div>
+        <div class="card-body">
+            <table class="table table-sm mb-3" style="max-width:600px">
+                <tr><td class="text-muted" style="width:180px">Description</td><td>@_lot.Description</td></tr>
+                <tr><td class="text-muted">Skins</td><td>@_lot.Skins.ToString("N0")</td></tr>
+                @if (_lot.Status != "Unsold")
+                {
+                    <tr><td class="text-muted">Broker</td><td>@_lot.BrokerNumber — @_lot.BrokerName</td></tr>
+                    <tr><td class="text-muted">Price / skin</td><td>€@(_lot.PriceEur?.ToString("N2"))</td></tr>
+                    <tr><td class="text-muted">Hammer price</td><td>€@(((_lot.PriceEur ?? 0) * _lot.Skins).ToString("N2"))</td></tr>
+                    <tr><td class="text-muted">Sold at</td><td>@_lot.SoldAt?.ToString("yyyy-MM-dd HH:mm")</td></tr>
+                    <tr><td class="text-muted">Initiated by</td><td>@_lot.LastModifiedBy</td></tr>
+                }
+                @if (_lot.Invoice != null)
+                {
+                    <tr><td class="text-muted">Invoice</td><td>@_lot.Invoice.InvoiceNumber @(string.IsNullOrEmpty(_lot.Invoice.BcInvoiceNumber) ? "(not posted)" : $"/ BC {_lot.Invoice.BcInvoiceNumber}")</td></tr>
+                    <tr><td class="text-muted">Invoice status</td><td>@_lot.Invoice.Status</td></tr>
+                    <tr><td class="text-muted">Buyer</td><td>@_lot.Invoice.BuyerNumber — @_lot.Invoice.BuyerName</td></tr>
+                    <tr><td class="text-muted">Invoice total</td><td>€@_lot.Invoice.TotalAmount.ToString("N2")</td></tr>
+                }
+            </table>
+
+            @if (_lot.Status == "Unsold")
+            {
+                <div class="border rounded p-3 bg-light">
+                    <strong>Sell to broker</strong>
+                    <div class="d-flex gap-2 mt-2 flex-wrap">
+                        <select class="form-select" style="max-width:280px" @bind="_sellBrokerId">
+                            <option value="0">— Select Broker —</option>
+                            @foreach (var b in _brokers)
+                            {
+                                <option value="@b.Id">@b.BrokerNumber — @b.CompanyName</option>
+                            }
+                        </select>
+                        <input type="number" class="form-control" style="max-width:140px" step="0.01" min="0" placeholder="Price / skin" @bind="_sellPrice" />
+                        <input type="text" class="form-control" style="max-width:100px" maxlength="5" placeholder="Initials" @bind="_initials" />
+                        <button class="btn btn-success" @onclick="Sell" disabled="@(_busy || _sellBrokerId <= 0 || _sellPrice <= 0 || string.IsNullOrWhiteSpace(_initials))">
+                            @(_busy ? "Selling…" : "Sell")
+                        </button>
+                    </div>
+                </div>
+            }
+            else if (_lot.Status == "Sold")
+            {
+                <div class="border rounded p-3 bg-light">
+                    <strong>Change price</strong>
+                    <div class="d-flex gap-2 mt-2 flex-wrap">
+                        <input type="number" class="form-control" style="max-width:140px" step="0.01" min="0" placeholder="New price / skin" @bind="_newPrice" />
+                        <input type="text" class="form-control" style="max-width:100px" maxlength="5" placeholder="Initials" @bind="_initials" />
+                        <button class="btn btn-warning" @onclick="ChangePrice" disabled="@(_busy || _newPrice <= 0 || string.IsNullOrWhiteSpace(_initials))">
+                            @(_busy ? "Updating…" : "Update Price")
+                        </button>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-info mb-0">Invoiced — read-only. To change anything, take the lot back (Re-Invoice flow) first.</div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private int _lotNumber;
+    private bool _busy;
+    private string? _message;
+    private bool _messageIsError;
+    private LotInfo? _lot;
+    private List<BrokerDto> _brokers = new();
+
+    private int _sellBrokerId;
+    private decimal _sellPrice;
+    private decimal _newPrice;
+    private string _initials = "";
+
+    private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNameCaseInsensitive = true };
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _brokers = await Api.GetBrokersAsync(); } catch { }
+    }
+
+    private async Task OnSearchKeydown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && _lotNumber > 0) await Search();
+    }
+
+    private async Task Search()
+    {
+        _busy = true; _message = null; _lot = null;
+        _sellBrokerId = 0; _sellPrice = 0; _newPrice = 0;
+        try
+        {
+            var json = await Http.GetStringAsync($"api/backoffice/lot/{_lotNumber}");
+            var info = JsonSerializer.Deserialize<LotInfo>(json, JsonOpts);
+            if (info == null || !info.Found)
+            {
+                _message = info?.Message ?? $"Lot {_lotNumber} not found.";
+                _messageIsError = true;
+            }
+            else
+            {
+                _lot = info;
+                _newPrice = info.PriceEur ?? 0;
+            }
+        }
+        catch (Exception ex) { _message = $"Lookup failed: {ex.Message}"; _messageIsError = true; }
+        finally { _busy = false; }
+    }
+
+    private async Task Sell()
+    {
+        _busy = true; _message = null;
+        try
+        {
+            var resp = await Http.PostAsJsonAsync($"api/backoffice/lot/{_lot!.LotNumber}/sell",
+                new { brokerId = _sellBrokerId, priceEur = _sellPrice, initials = _initials.Trim() });
+            var body = await resp.Content.ReadAsStringAsync();
+            if (resp.IsSuccessStatusCode)
+            {
+                _message = $"Lot {_lot.LotNumber} sold at €{_sellPrice:N2}/skin.";
+                _messageIsError = false;
+                await Search();
+            }
+            else { _message = $"Sell failed: {ExtractError(body)}"; _messageIsError = true; }
+        }
+        catch (Exception ex) { _message = $"Sell failed: {ex.Message}"; _messageIsError = true; }
+        finally { _busy = false; }
+    }
+
+    private async Task ChangePrice()
+    {
+        _busy = true; _message = null;
+        try
+        {
+            var resp = await Http.PutAsJsonAsync($"api/backoffice/lot/{_lot!.LotNumber}/price",
+                new { priceEur = _newPrice, initials = _initials.Trim() });
+            var body = await resp.Content.ReadAsStringAsync();
+            if (resp.IsSuccessStatusCode)
+            {
+                _message = $"Lot {_lot.LotNumber} repriced to €{_newPrice:N2}/skin.";
+                _messageIsError = false;
+                await Search();
+            }
+            else { _message = $"Update failed: {ExtractError(body)}"; _messageIsError = true; }
+        }
+        catch (Exception ex) { _message = $"Update failed: {ex.Message}"; _messageIsError = true; }
+        finally { _busy = false; }
+    }
+
+    private static string ExtractError(string body)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.TryGetProperty("error", out var e)) return e.GetString() ?? body;
+        }
+        catch { }
+        return body;
+    }
+
+    private class LotInfo
+    {
+        public bool Found { get; set; }
+        public string? Message { get; set; }
+        public int LotNumber { get; set; }
+        public string Status { get; set; } = "";
+        public string? Description { get; set; }
+        public int Skins { get; set; }
+        public int? BrokerId { get; set; }
+        public string? BrokerNumber { get; set; }
+        public string? BrokerName { get; set; }
+        public decimal? PriceEur { get; set; }
+        public DateTime? SoldAt { get; set; }
+        public string? LastModifiedBy { get; set; }
+        public InvoiceInfo? Invoice { get; set; }
+    }
+
+    private class InvoiceInfo
+    {
+        public string? InvoiceNumber { get; set; }
+        public string? BcInvoiceNumber { get; set; }
+        public string? Status { get; set; }
+        public decimal TotalAmount { get; set; }
+        public string? BuyerNumber { get; set; }
+        public string? BuyerName { get; set; }
+    }
+}

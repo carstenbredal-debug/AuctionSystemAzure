@@ -75,13 +75,10 @@ public class InvoiceXmlBuilder
         return new XElement(Ns + "Podmiot1",
             new XElement(Ns + "DaneIdentyfikacyjne",
                 new XElement(Ns + "NIP", CleanNip(seller.NIP)),
-                new XElement(Ns + "Nazwa", seller.Name)
+                new XElement(Ns + "Nazwa", Tokenize(seller.Name))
             ),
-            new XElement(Ns + "Adres",
-                new XElement(Ns + "KodKraju", IsoCountry(countryCode)),
-                new XElement(Ns + "AdresL1", FormatAddress(seller.Street, seller.BuildingNumber, seller.ApartmentNumber)),
-                new XElement(Ns + "AdresL2", $"{seller.PostalCode} {seller.City}")
-            )
+            BuildAdres(countryCode, seller.Street, seller.BuildingNumber, seller.ApartmentNumber,
+                seller.PostalCode, seller.City, $"Seller '{seller.Name}'")
         );
     }
 
@@ -97,6 +94,31 @@ public class InvoiceXmlBuilder
     // Map it for KodKraju only; KodUE (the VAT-prefix field) correctly keeps "EL".
     private static string IsoCountry(string countryCode)
         => string.Equals(countryCode, "EL", StringComparison.OrdinalIgnoreCase) ? "GR" : countryCode;
+
+    // FA(3) text fields are xs:token: tabs/newlines, leading/trailing spaces and runs of multiple
+    // spaces are all invalid. Collapse any whitespace to single spaces and trim.
+    private static string Tokenize(string? s) =>
+        System.Text.RegularExpressions.Regex.Replace(s ?? "", @"\s+", " ").Trim();
+
+    // An Adres element that always validates: lines are tokenised; a blank AdresL2 is OMITTED (optional
+    // per the XSD); if the street line is blank, postal+city becomes AdresL1 (which is mandatory); and
+    // no address data at all fails with a CLEAR message instead of a schema-validation riddle.
+    private XElement BuildAdres(string countryCode, string? street, string? building, string? apartment,
+        string? postal, string? city, string owner)
+    {
+        var l1 = Tokenize(FormatAddress(street, building, apartment));
+        var l2 = Tokenize($"{postal} {city}");
+        if (l1.Length == 0) { l1 = l2; l2 = ""; }
+        if (l1.Length == 0)
+            throw new InvalidOperationException($"{owner} has no address data — AdresL1 is mandatory in FA(3). Fill in the address and re-send.");
+
+        var adres = new XElement(Ns + "Adres",
+            new XElement(Ns + "KodKraju", IsoCountry(countryCode)),
+            new XElement(Ns + "AdresL1", l1));
+        if (l2.Length > 0)
+            adres.Add(new XElement(Ns + "AdresL2", l2));
+        return adres;
+    }
 
     private enum ZeroRateKind { Domestic, IntraEu, Export }
 
@@ -176,15 +198,12 @@ public class InvoiceXmlBuilder
             identyfikacyjne.Add(new XElement(Ns + "BrakID", 1));
         }
 
-        identyfikacyjne.Add(new XElement(Ns + "Nazwa", buyer.Name));
+        identyfikacyjne.Add(new XElement(Ns + "Nazwa", Tokenize(buyer.Name)));
 
         return new XElement(Ns + "Podmiot2",
             identyfikacyjne,
-            new XElement(Ns + "Adres",
-                new XElement(Ns + "KodKraju", IsoCountry(countryCode)),
-                new XElement(Ns + "AdresL1", FormatAddress(buyer.Street, buyer.BuildingNumber, buyer.ApartmentNumber)),
-                new XElement(Ns + "AdresL2", $"{buyer.PostalCode} {buyer.City}")
-            ),
+            BuildAdres(countryCode, buyer.Street, buyer.BuildingNumber, buyer.ApartmentNumber,
+                buyer.PostalCode, buyer.City, $"Buyer '{buyer.Name}'"),
             // FA(3): JST and GV are mandatory in Podmiot2 and must follow Adres.
             // "2" = not applicable (buyer is neither a local-government unit (JST)
             // nor a VAT-group member (GV)). If you ever invoice JST or VAT-group
