@@ -1054,22 +1054,6 @@ public class PackingOrderLineDto
     public int? PackedBoxId { get; set; }
 }
 
-public class PackingOrderXmlDto
-{
-    public string FileName { get; set; } = "";
-    public string Folder { get; set; } = "";
-    public string PackingOrderNumber { get; set; } = "";
-    public string ShipmentNumber { get; set; } = "";
-    public string Status { get; set; } = "";
-    public string Type { get; set; } = "";
-    public string CreatedAt { get; set; } = "";
-    public string BuyerName { get; set; } = "";
-    public string BuyerNumber { get; set; } = "";
-    public string ShipperName { get; set; } = "";
-    public int ShowLotCount { get; set; }
-    public List<PackingOrderLineDto> Lines { get; set; } = new();
-}
-
 public class ShowLotWeightDto
 {
     public int BoxNumber { get; set; }
