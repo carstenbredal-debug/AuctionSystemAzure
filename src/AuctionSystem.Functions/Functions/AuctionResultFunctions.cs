@@ -651,7 +651,7 @@ public class AuctionResultFunctions
             {
                 var hammer = result.TotalSkins * result.PriceEur;
                 var handlingAmt = result.TotalSkins * handlingFeePerSkin;
-                var auctionFee = handlingAmt + (hammer + handlingAmt) * auctionFeePercent / 100m;
+                var auctionFee = hammer * auctionFeePercent / 100m + handlingAmt;
                 commissionAmount = (hammer + auctionFee) * commissionValue.Value / 100m;
             }
             else if (commissionType == "amount" && commissionValue.HasValue)
@@ -750,7 +750,8 @@ public class AuctionResultFunctions
             {
                 var hammerPrice = r.TotalSkins * r.PriceEur;
                 var handlingFee = r.TotalSkins * handlingFeePerSkin;
-                var lotAuctionFee = handlingFee + (hammerPrice + handlingFee) * auctionFeePercent / 100m;
+                // Fee rule: percentage of the HAMMER PRICE only, plus the handling charge.
+                var lotAuctionFee = hammerPrice * auctionFeePercent / 100m + handlingFee;
                 var description = string.Join(", ", new[] { r.SalesType, r.Gender, r.Group, r.Color, r.Quality, r.Size }.Where(s => !string.IsNullOrEmpty(s)));
 
                 invoice.Lines.Add(new InvoiceLine
@@ -760,6 +761,7 @@ public class AuctionResultFunctions
                     Skins = r.TotalSkins,
                     PricePerSkin = r.PriceEur,
                     HammerPrice = hammerPrice,
+                    AuctionFee = lotAuctionFee,   // stored: credit notes credit THIS, never a recompute
                     AuctionResultId = r.Id
                 });
 
@@ -1846,8 +1848,12 @@ public class AuctionResultFunctions
 
             foreach (var line in grp)
             {
+                // Credit EXACTLY what was charged: the fee stored on the original invoice line. Lines
+                // created before the column existed fall back to the formula in force back then
+                // (handling inside the percentage base), which is what those invoices were charged.
                 var handlingFee = line.Skins * handlingFeePerSkin;
-                var lotAuctionFee = handlingFee + (line.HammerPrice + handlingFee) * auctionFeePercent / 100m;
+                var lotAuctionFee = line.AuctionFee
+                    ?? handlingFee + (line.HammerPrice + handlingFee) * auctionFeePercent / 100m;
 
                 creditNote.Lines.Add(new InvoiceLine
                 {
@@ -1856,6 +1862,7 @@ public class AuctionResultFunctions
                     Skins = -line.Skins,
                     PricePerSkin = line.PricePerSkin,
                     HammerPrice = -line.HammerPrice,
+                    AuctionFee = -lotAuctionFee,
                     AuctionResultId = line.AuctionResultId
                 });
 

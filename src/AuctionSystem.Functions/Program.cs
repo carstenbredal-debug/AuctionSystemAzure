@@ -299,6 +299,11 @@ using (var scope = host.Services.CreateScope())
               ON x.DraftId = d.Id
             WHERE d.ShowLotCount = 0;
         ");
+        // Per-line charged auction fee — credit notes credit this stored amount instead of recomputing.
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.InvoiceLines') AND name = 'AuctionFee')
+                ALTER TABLE auction.InvoiceLines ADD AuctionFee decimal(18,2) NULL;
+        ");
         // External-price staging: a POSTed external result lands here first and waits out a 5-minute debounce
         // window (each correction bumps UpdatedAt) before a timer applies it to the real sale. One pending row
         // per (auction, lot) via the filtered unique index.
