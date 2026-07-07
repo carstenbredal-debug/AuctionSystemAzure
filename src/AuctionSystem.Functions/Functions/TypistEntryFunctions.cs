@@ -668,7 +668,7 @@ public class TypistEntryFunctions
 
         // 2. Auction Fee transaction
         var handlingTotal = quantity * handlingFeePerSkin;
-        var auctionFeeAmount = handlingTotal + (hammerPrice + handlingTotal) * auctionFeePercent / 100m;
+        var auctionFeeAmount = hammerPrice * auctionFeePercent / 100m + handlingTotal;
         if (auctionFeeAmount > 0)
         {
             _db.AuctionTransactions.Add(new AuctionTransaction
@@ -1323,7 +1323,7 @@ public class TypistEntryFunctions
         var skins = result.TotalSkins;
         var hammer = skins * body.PriceEur;
         var handling = skins * hfPerSkin;
-        var fee = Math.Round(handling + (hammer + handling) * afPct / 100m, 2);
+        var fee = Math.Round(hammer * afPct / 100m + handling, 2);
 
         result.PriceEur = body.PriceEur;
         result.LastModifiedBy = string.IsNullOrWhiteSpace(body.Initials) ? "Backoffice" : body.Initials.Trim();
