@@ -589,7 +589,21 @@ public class TypistEntryFunctions
         if (auctionLot != null && auctionLot.Status == LotStatus.Sold)
             return null;
 
-        var catalogLot = await _catalogDb.CatalogLots.FirstOrDefaultAsync(cl => cl.LotNumber == lotNumber);
+        // Lot attributes MUST come from the auction's frozen snapshot ([{Num}.Lots]) — that's what
+        // the catalogue (and its mid-auction grading edits) shows. The live cataloglots never
+        // receives edits and gets rewritten by Generate Lots, so copying from it put stale
+        // descriptions on invoices (found live in auction 261). Fallback only if no snapshot.
+        var catalogLot = await GetSnapshotLotAsync(auctionId, lotNumber)
+            ?? await _catalogDb.CatalogLots
+                .Where(cl => cl.LotNumber == lotNumber)
+                .Select(cl => new SnapshotLotRow
+                {
+                    SalesType = cl.SalesType, Gender = cl.Gender, Group = cl.Group,
+                    Color = cl.Color, Quality = cl.Quality, Size = cl.Size,
+                    HairLength = cl.HairLength, Clarity = cl.Clarity,
+                    TotalSkins = cl.TotalSkins, BoxCount = cl.BoxCount
+                })
+                .FirstOrDefaultAsync();
 
         var result = new AuctionResult
         {
@@ -626,6 +640,44 @@ public class TypistEntryFunctions
 
         await CreateTransactionsForMatch(result, auctionLot);
         return result;
+    }
+
+    private sealed class SnapshotLotRow
+    {
+        public string? SalesType { get; set; }
+        public string? Gender { get; set; }
+        public string? Group { get; set; }
+        public string? Color { get; set; }
+        public string? Quality { get; set; }
+        public string? Size { get; set; }
+        public string? HairLength { get; set; }
+        public string? Clarity { get; set; }
+        public int TotalSkins { get; set; }
+        public int BoxCount { get; set; }
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex SnapshotAuctionNumberPattern =
+        new("^[A-Za-z0-9]{1,20}$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    // The auction's frozen [{Num}.Lots] snapshot row for this lot; null if the snapshot doesn't
+    // exist (pre-snapshot auctions) so the caller can fall back to live cataloglots.
+    private async Task<SnapshotLotRow?> GetSnapshotLotAsync(int auctionId, int lotNumber)
+    {
+        var auctionNumber = await _db.Auctions.Where(a => a.Id == auctionId).Select(a => a.AuctionNumber).FirstOrDefaultAsync();
+        if (string.IsNullOrEmpty(auctionNumber) || !SnapshotAuctionNumberPattern.IsMatch(auctionNumber))
+            return null;
+        try
+        {
+            return await _catalogDb.Database
+                .SqlQueryRaw<SnapshotLotRow>(
+                    $"SELECT SalesType, Gender, [Group], Color, Quality, Size, HairLength, Clarity, TotalSkins, BoxCount " +
+                    $"FROM auction.[{auctionNumber}.Lots] WHERE LotNumber = {{0}}", lotNumber)
+                .FirstOrDefaultAsync();
+        }
+        catch
+        {
+            return null;   // snapshot table missing — legacy flow
+        }
     }
 
     private async Task CreateTransactionsForMatch(AuctionResult result, Lot? auctionLot)
