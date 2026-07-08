@@ -29,7 +29,7 @@ else
                     <div class="card-header py-1 d-flex justify-content-between align-items-center
                                 @(loc.Shipment == null ? "bg-success text-white" : "bg-dark text-white")">
                         <strong>@loc.Name</strong>
-                        <small>@(loc.Shipment == null ? "EMPTY" : loc.Shipment.Status)</small>
+                        <small>@(loc.Shipment == null ? "EMPTY" : GetPackingStatus(loc.Shipment))</small>
                     </div>
                     <div class="card-body p-2">
                         @if (loc.Shipment == null)
@@ -64,6 +64,8 @@ else
     // A location is occupied by the shipment holding it that has not yet left the house.
     private static readonly string[] DoneStatuses = { "Shipped", "Delivered", "Cancelled" };
 
+    private Dictionary<int, List<string>> _orderStatusesByShipment = new();
+
     protected override async Task OnInitializedAsync() => await Load();
 
     private async Task Load()
@@ -75,10 +77,33 @@ else
             .GroupBy(s => s.OutLocation!)
             .ToDictionary(g => g.Key, g => g.OrderBy(s => s.CreatedAt).First());
 
+        // Packing-order statuses tell whether work at the location has actually begun.
+        try
+        {
+            var orders = await Api.GetPackingOrdersAsync();
+            _orderStatusesByShipment = orders
+                .Where(o => o.ShipmentId > 0)
+                .GroupBy(o => o.ShipmentId)
+                .ToDictionary(g => g.Key, g => g.Select(o => o.Status).ToList());
+        }
+        catch { _orderStatusesByShipment = new(); }
+
         _locations = Enumerable.Range(1, LocationCount)
             .Select(i => $"OUT-{i}")
             .Select(name => new LocationSlot { Name = name, Shipment = active.GetValueOrDefault(name) })
             .ToList();
         _loading = false;
+    }
+
+    // Header label: nothing packed yet -> NOT STARTED; everything packed -> PACKED; else the
+    // shipment's own status (Packing / ShowLot Packing).
+    private string GetPackingStatus(ShipmentListDto s)
+    {
+        var statuses = _orderStatusesByShipment.GetValueOrDefault(s.Id);
+        if (statuses == null || statuses.Count == 0 || statuses.All(st => st == "Ready to Pack"))
+            return "NOT STARTED";
+        if (statuses.All(st => st == "Packed"))
+            return "PACKED";
+        return s.Status;
     }
 }
