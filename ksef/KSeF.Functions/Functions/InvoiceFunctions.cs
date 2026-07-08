@@ -175,17 +175,22 @@ public class InvoiceFunctions
             var qrUrl = $"{_ksef.BaseUrl.Replace("/v2", "")}/web/verify/{refForQr}/{xmlHash}";
 
             // Accepted (has number) or Sent/pending (no number yet — BC reconciles via status, never
-            // re-sends). Duplicate => already in KSeF; BC marks Accepted.
+            // re-sends). Duplicate => the invoice IS in KSeF: with its number we can truthfully
+            // report success (BC stores the number and marks Accepted); without it, return a clear
+            // error — BC's fallback for a missing error field is a useless "Unknown error".
             return await CreateResponse(req, HttpStatusCode.OK, new SubmitResult
             {
-                Success = !duplicate,
+                Success = !duplicate || !string.IsNullOrEmpty(ksefNumber),
                 Duplicate = duplicate,
                 Retryable = false,
                 ElementReferenceNumber = sendResult.ElementReferenceNumber,
                 KSeFReferenceNumber = ksefNumber,
                 SessionToken = session.SessionToken,
                 SessionReferenceNumber = session.SessionReferenceNumber,
-                QRVerificationUrl = qrUrl
+                QRVerificationUrl = qrUrl,
+                Error = duplicate && string.IsNullOrEmpty(ksefNumber)
+                    ? "Already submitted to KSeF (duplicate); KSeF number not returned in this session — verify in the KSeF portal."
+                    : null
             });
         }
         catch (Exception ex)
