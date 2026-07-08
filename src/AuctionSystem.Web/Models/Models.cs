@@ -475,6 +475,7 @@ public class ShippingBoxDto
     public int BoxNumber { get; set; }
     public string BoxType { get; set; } = "";
     public int Skins { get; set; }
+    public bool IsShow { get; set; }
     public decimal PricePerSkin { get; set; }
     public decimal HammerPrice { get; set; }
     public decimal? VolumeM3 { get; set; }
@@ -993,6 +994,7 @@ public class ShipmentListDto
     public string ShippingAddressSummary { get; set; } = "";
     public string TrackingNumber { get; set; } = "";
     public string Status { get; set; } = "";
+    public string? OutLocation { get; set; }
     public string Notes { get; set; } = "";
     public string? PackingListPdfUrl { get; set; }
     public string? ShippingInvoicePdfUrl { get; set; }
@@ -1000,6 +1002,7 @@ public class ShipmentListDto
     public DateTime? ShippedAt { get; set; }
     public DateTime? DeliveredAt { get; set; }
     public int LotCount { get; set; }
+    public int BoxCount { get; set; }
     public List<ShipmentLotDto> Lots { get; set; } = new();
 }
 
@@ -1052,22 +1055,6 @@ public class PackingOrderLineDto
     public string BoxType { get; set; } = "";
     public string Location { get; set; } = "";
     public int? PackedBoxId { get; set; }
-}
-
-public class PackingOrderXmlDto
-{
-    public string FileName { get; set; } = "";
-    public string Folder { get; set; } = "";
-    public string PackingOrderNumber { get; set; } = "";
-    public string ShipmentNumber { get; set; } = "";
-    public string Status { get; set; } = "";
-    public string Type { get; set; } = "";
-    public string CreatedAt { get; set; } = "";
-    public string BuyerName { get; set; } = "";
-    public string BuyerNumber { get; set; } = "";
-    public string ShipperName { get; set; } = "";
-    public int ShowLotCount { get; set; }
-    public List<PackingOrderLineDto> Lines { get; set; } = new();
 }
 
 public class ShowLotWeightDto

@@ -9,6 +9,7 @@ using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using QuestPDF.Fluent;
 
 namespace AuctionSystem.Functions.Functions;
 
@@ -72,12 +73,15 @@ public class ShipmentFunctions
                 s.TrackingNumber,
                 s.Status,
                 s.Notes,
+                s.OutLocation,
                 s.PackingListPdfUrl,
                 s.ShippingInvoicePdfUrl,
                 s.CreatedAt,
                 s.ShippedAt,
                 s.DeliveredAt,
                 LotCount = s.Lines.Count,
+                BoxCount = _db.PackingOrders.Where(p => p.ShipmentId == s.Id)
+                    .SelectMany(p => p.Lines).Select(l => l.BoxNumber).Distinct().Count(),
                 Lots = s.Lines.Select(l => new
                 {
                     l.LotNumber,
@@ -221,6 +225,18 @@ public class ShipmentFunctions
             Notes = body.Notes ?? "",
             Status = "Packing"
         };
+
+        // Allot the first free outgoing staging location (OUT-1..OUT-20) — where every box of this
+        // shipment is put. A location is occupied while its shipment is still in-house and frees up
+        // once the shipment is Shipped/Delivered/Cancelled. All 20 taken -> no location (null).
+        var doneStatuses = new[] { "Shipped", "Delivered", "Cancelled" };
+        var takenLocations = await _db.Shipments
+            .Where(s => s.OutLocation != null && !doneStatuses.Contains(s.Status))
+            .Select(s => s.OutLocation!)
+            .ToListAsync();
+        shipment.OutLocation = Enumerable.Range(1, 20)
+            .Select(i => $"OUT-{i}")
+            .FirstOrDefault(loc => !takenLocations.Contains(loc));
 
         foreach (var lotNumber in body.LotNumbers)
         {
@@ -468,7 +484,7 @@ public class ShipmentFunctions
 
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
-        await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true, id = shipment.Id, shipmentNumber = shipment.ShipmentNumber }, JsonOptions));
+        await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true, id = shipment.Id, shipmentNumber = shipment.ShipmentNumber, outLocation = shipment.OutLocation }, JsonOptions));
         return response;
         }
         catch (Exception ex)
@@ -987,6 +1003,199 @@ public class ShipmentFunctions
         return response;
     }
 
+    // Box contents PDF: every skin in each of the shipment's boxes with its farmer's country of
+    // origin (customs). GET so the browser can open it directly in a new tab.
+    [Function("GenerateBoxSkinsPdf")]
+    public async Task<HttpResponseData> GenerateBoxSkinsPdf(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "shipments/{id:int}/box-skins-pdf")] HttpRequestData req,
+        int id)
+    {
+        QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
+
+        var shipment = await _db.Shipments
+            .Include(s => s.Shipper)
+            .Include(s => s.Buyer)
+            .Include(s => s.Lines)
+            .FirstOrDefaultAsync(s => s.Id == id);
+        if (shipment == null)
+            return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        var lotNumbers = shipment.Lines.Select(l => l.LotNumber).Distinct().ToList();
+
+        // Box-level shipping: only the boxes in this shipment's packing orders; empty => legacy
+        // shipment, all lot boxes.
+        var shipmentBoxes = (await _db.PackingOrders.Where(p => p.ShipmentId == id)
+            .SelectMany(p => p.Lines).Select(l => l.BoxNumber).Distinct().ToListAsync()).ToHashSet();
+
+        var auctionNum = await _db.Lots
+            .Where(l => lotNumbers.Contains(l.LotNumber))
+            .Select(l => l.Auction.AuctionNumber)
+            .FirstOrDefaultAsync();
+        var snapLots = auctionNum != null ? $"auction.[{auctionNum}.Lots]" : null;
+        var snapSkins = auctionNum != null ? $"auction.[{auctionNum}.Skins]" : null;
+        var useSnapshot = false;
+        if (snapLots != null)
+        {
+            try { await _catalogDb.Database.SqlQueryRaw<int>($"SELECT TOP 1 1 AS Value FROM {snapLots}").FirstOrDefaultAsync(); useSnapshot = true; }
+            catch { }
+        }
+
+        // Box -> lot map from the lots' IncludedBoxNumbers
+        List<CatalogLotResult> catLots;
+        if (useSnapshot)
+        {
+            catLots = await _catalogDb.Database
+                .SqlQueryRaw<CatalogLotResult>($"SELECT LotNumber, IncludedBoxNumbers FROM {snapLots} WHERE LotNumber IN (" +
+                    string.Join(",", lotNumbers) + ")")
+                .ToListAsync();
+        }
+        else
+        {
+            catLots = await _catalogDb.CatalogLots
+                .Where(cl => lotNumbers.Contains(cl.LotNumber))
+                .Select(cl => new CatalogLotResult { LotNumber = cl.LotNumber, IncludedBoxNumbers = cl.IncludedBoxNumbers ?? "" })
+                .ToListAsync();
+        }
+
+        var boxToLot = new Dictionary<int, int>();
+        foreach (var cl in catLots)
+        {
+            if (string.IsNullOrEmpty(cl.IncludedBoxNumbers)) continue;
+            foreach (var boxStr in cl.IncludedBoxNumbers.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                if (int.TryParse(boxStr.Trim(), out var n) && n > 0 && (shipmentBoxes.Count == 0 || shipmentBoxes.Contains(n)))
+                    boxToLot[n] = cl.LotNumber;
+        }
+
+        // ?box={n}: one box's contents only (the per-box "Skins PDF" button on the boxes list).
+        var boxQuery = System.Web.HttpUtility.ParseQueryString(req.Url.Query)["box"];
+        if (int.TryParse(boxQuery, out var singleBox) && singleBox > 0)
+            boxToLot = boxToLot.Where(kv => kv.Key == singleBox).ToDictionary(kv => kv.Key, kv => kv.Value);
+
+        if (boxToLot.Count == 0)
+        {
+            var none = req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+            await none.WriteStringAsync("No boxes found for this shipment.");
+            return none;
+        }
+
+        // Skins per box (snapshot preferred — the auction's frozen truth)
+        var skinsTable = useSnapshot ? snapSkins! : "dbo.SkinTable";
+        var skins = await _catalogDb.Database
+            .SqlQueryRaw<BoxSkinRow>($"SELECT Barcode, BoxNumber, ISNULL(Farmer, '') AS Farmer, farmerGUID AS FarmerGuid FROM {skinsTable} WHERE BoxNumber IN (" +
+                string.Join(",", boxToLot.Keys) + ") AND IsActive = 1 ORDER BY BoxNumber, Barcode")
+            .ToListAsync();
+
+        // Farmer -> country of origin (stable GUID first, legacy name fallback)
+        var farmers = await _db.Farmers
+            .Select(f => new { f.FarmerGUID, f.Name, f.Country })
+            .ToListAsync();
+        var countryByGuid = farmers.Where(f => f.FarmerGUID != null)
+            .GroupBy(f => f.FarmerGUID!.Value).ToDictionary(g => g.Key, g => g.First().Country);
+        var countryByName = farmers.GroupBy(f => f.Name).ToDictionary(g => g.Key, g => g.First().Country, StringComparer.OrdinalIgnoreCase);
+
+        string CountryOf(BoxSkinRow s)
+        {
+            if (s.FarmerGuid.HasValue && countryByGuid.TryGetValue(s.FarmerGuid.Value, out var c) && !string.IsNullOrWhiteSpace(c)) return c;
+            if (!string.IsNullOrWhiteSpace(s.Farmer) && countryByName.TryGetValue(s.Farmer.Trim(), out var c2) && !string.IsNullOrWhiteSpace(c2)) return c2;
+            return "";
+        }
+
+        var skinsByBox = skins.GroupBy(s => s.BoxNumber).OrderBy(g => g.Key).ToList();
+        var logoPath = Path.Combine(AppContext.BaseDirectory, "Assets", "kopenhagenfur-logo.png");
+
+        var pdfBytes = QuestPDF.Fluent.Document.Create(container =>
+        {
+            container.Page(page =>
+            {
+                page.Size(QuestPDF.Helpers.PageSizes.A4);
+                page.Margin(30);
+                page.DefaultTextStyle(x => x.FontSize(8));
+
+                page.Header().PaddingBottom(10).Row(row =>
+                {
+                    row.RelativeItem().Column(col =>
+                    {
+                        col.Item().Text($"Box Contents — Shipment {shipment.ShipmentNumber}").Bold().FontSize(12);
+                        col.Item().Text($"Buyer: {shipment.Buyer?.BuyerNumber} - {shipment.Buyer?.Name}    Shipper: {shipment.Shipper?.Name}").FontSize(8);
+                        col.Item().Text($"Date: {DateTime.UtcNow:yyyy-MM-dd}    Boxes: {skinsByBox.Count}    Skins: {skins.Count:N0}").FontSize(8);
+                    });
+                    if (File.Exists(logoPath))
+                        row.ConstantItem(110).Height(40).AlignRight().AlignTop().Image(logoPath, QuestPDF.Infrastructure.ImageScaling.FitArea);
+                });
+
+                page.Content().Column(col =>
+                {
+                    // Overall country-of-origin summary first (the customs answer at a glance)
+                    var byCountry = skins.GroupBy(s => string.IsNullOrEmpty(CountryOf(s)) ? "Unknown" : CountryOf(s))
+                        .OrderByDescending(g => g.Count()).ToList();
+                    col.Item().PaddingBottom(4).Text("Country of origin summary: " +
+                        string.Join(", ", byCountry.Select(g => $"{g.Key} {g.Count():N0}"))).Bold().FontSize(9);
+
+                    foreach (var boxGrp in skinsByBox)
+                    {
+                        var boxCountries = boxGrp.GroupBy(s => string.IsNullOrEmpty(CountryOf(s)) ? "Unknown" : CountryOf(s))
+                            .OrderByDescending(g => g.Count()).ToList();
+
+                        col.Item().PaddingTop(8).Table(table =>
+                        {
+                            table.ColumnsDefinition(c =>
+                            {
+                                c.ConstantColumn(110);   // Barcode
+                                c.RelativeColumn();      // Farmer
+                                c.ConstantColumn(120);   // Country of origin
+                            });
+
+                            table.Header(header =>
+                            {
+                                header.Cell().ColumnSpan(3)
+                                    .Background(QuestPDF.Helpers.Colors.Grey.Lighten2)
+                                    .Border(0.75f).BorderColor(QuestPDF.Helpers.Colors.Grey.Darken1)
+                                    .Padding(4)
+                                    .Text($"Box {boxGrp.Key} — Lot {boxToLot.GetValueOrDefault(boxGrp.Key)} — {boxGrp.Count():N0} skins — Origin: " +
+                                        string.Join(", ", boxCountries.Select(g => $"{g.Key} ({g.Count():N0})")))
+                                    .Bold().FontSize(9);
+
+                                foreach (var title in new[] { "Barcode", "Farmer", "Country of Origin" })
+                                    header.Cell().Background(QuestPDF.Helpers.Colors.Grey.Lighten3)
+                                        .BorderBottom(0.5f).BorderColor(QuestPDF.Helpers.Colors.Grey.Medium)
+                                        .Padding(3).Text(title).Bold();
+                            });
+
+                            foreach (var s in boxGrp)
+                            {
+                                table.Cell().BorderBottom(0.25f).BorderColor(QuestPDF.Helpers.Colors.Grey.Lighten1).Padding(3).Text(s.Barcode.ToString());
+                                table.Cell().BorderBottom(0.25f).BorderColor(QuestPDF.Helpers.Colors.Grey.Lighten1).Padding(3).Text(s.Farmer);
+                                table.Cell().BorderBottom(0.25f).BorderColor(QuestPDF.Helpers.Colors.Grey.Lighten1).Padding(3).Text(string.IsNullOrEmpty(CountryOf(s)) ? "—" : CountryOf(s));
+                            }
+                        });
+                    }
+                });
+
+                page.Footer().AlignCenter().Text(t =>
+                {
+                    t.Span("Page ");
+                    t.CurrentPageNumber();
+                    t.Span(" of ");
+                    t.TotalPages();
+                });
+            });
+        }).GeneratePdf();
+
+        var pdfResp = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        pdfResp.Headers.Add("Content-Type", "application/pdf");
+        pdfResp.Headers.Add("Content-Disposition", $"inline; filename=\"Box contents - {shipment.ShipmentNumber}.pdf\"");
+        await pdfResp.Body.WriteAsync(pdfBytes);
+        return pdfResp;
+    }
+
+    private class BoxSkinRow
+    {
+        public long Barcode { get; set; }
+        public int BoxNumber { get; set; }
+        public string Farmer { get; set; } = "";
+        public Guid? FarmerGuid { get; set; }
+    }
+
     [Function("GeneratePackingListPdf")]
     public async Task<HttpResponseData> GeneratePackingListPdf(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "shipments/{id:int}/packing-list-pdf")] HttpRequestData req,
@@ -1400,6 +1609,8 @@ public class ShipmentFunctions
             po.Type,
             po.CreatedAt,
             BoxCount = po.Lines.Count,
+            // A ShowLot order's lines ARE the showlots; storage ("Packing") orders have none.
+            ShowLotCount = po.Type == "ShowLot" ? po.Lines.Count : 0,
             Lines = po.Lines.Select(l => new
             {
                 l.Id,

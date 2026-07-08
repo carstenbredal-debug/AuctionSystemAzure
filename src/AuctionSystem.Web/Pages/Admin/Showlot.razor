@@ -55,7 +55,15 @@ else
                             <td>@po.ShowLotCount</td>
                             <td>@po.CreatedAt.ToString("yyyy-MM-dd")</td>
                             <td>
-                                <button class="btn btn-sm btn-outline-danger" @onclick="() => DeletePackingOrder(po)">Delete</button>
+                                @if (po.Status != "Packed")
+                                {
+                                    <button class="btn btn-sm btn-primary me-1" @onclick="() => StartPacking(po)">Start Packing</button>
+                                    <button class="btn btn-sm btn-success" @onclick="() => ConfirmPacked(po)"
+                                            disabled="@po.Lines.Any(l => l.PackedBoxId == null)"
+                                            title="@(po.Lines.Any(l => l.PackedBoxId == null) ? "All showlots must be packed before confirming." : "Mark this packing order as Packed")">
+                                        Confirm
+                                    </button>
+                                }
                             </td>
                         </tr>
                         @if (_expandedId == po.Id)
@@ -369,17 +377,16 @@ else
         }
     }
 
-    private async Task DeletePackingOrder(PackingOrderDto po)
+    private async Task ConfirmPacked(PackingOrderDto po)
     {
-        var success = await Api.DeletePackingOrderAsync(po.Id);
-        if (success)
-        {
-            _orders.Remove(po);
-        }
+        await UpdateStatus(po, "Packed");
     }
 
     private async Task StartPacking(PackingOrderDto po)
     {
+        // Starting to pack moves a fresh order into In Production.
+        if (po.Status == "Ready to Pack")
+            await UpdateStatus(po, "In Production");
         _packingOrder = po;
         _selectedBoxType = "";
         _selectedLineIds = new();

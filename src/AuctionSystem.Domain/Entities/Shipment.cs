@@ -13,6 +13,9 @@ public class Shipment
     public string TrackingNumber { get; set; } = string.Empty;
     public string Status { get; set; } = "Pending";
     public string Notes { get; set; } = string.Empty;
+    // Outgoing staging location (OUT-1..OUT-20) where the shipment's boxes are collected.
+    // Occupied while the shipment is active; freed (derived) once Shipped/Delivered/Cancelled.
+    public string? OutLocation { get; set; }
     public string? PackingListPdfUrl { get; set; }
     public string? ShippingInvoicePdfUrl { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -57,6 +60,8 @@ public class PackingOrderLine
     public decimal WeightKg { get; set; }
     public int? PackedBoxId { get; set; }
     public PackedBox? PackedBox { get; set; }
+    // Set when the scanner confirms the box was moved from storage to the shipment's OUT location.
+    public DateTime? MovedToOutAt { get; set; }
 }
 
 public class PackedBox
