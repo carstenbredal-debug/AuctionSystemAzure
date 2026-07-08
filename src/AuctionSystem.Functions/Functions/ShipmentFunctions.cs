@@ -1596,6 +1596,8 @@ public class ShipmentFunctions
             po.Type,
             po.CreatedAt,
             BoxCount = po.Lines.Count,
+            // A ShowLot order's lines ARE the showlots; storage ("Packing") orders have none.
+            ShowLotCount = po.Type == "ShowLot" ? po.Lines.Count : 0,
             Lines = po.Lines.Select(l => new
             {
                 l.Id,
