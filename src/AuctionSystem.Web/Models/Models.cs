@@ -1001,6 +1001,7 @@ public class ShipmentListDto
     public DateTime? ShippedAt { get; set; }
     public DateTime? DeliveredAt { get; set; }
     public int LotCount { get; set; }
+    public int BoxCount { get; set; }
     public List<ShipmentLotDto> Lots { get; set; } = new();
 }
 

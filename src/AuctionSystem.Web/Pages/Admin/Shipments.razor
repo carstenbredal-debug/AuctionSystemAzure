@@ -49,6 +49,7 @@ else
                         <th>Tracking #</th>
                         <th>Status</th>
                         <th>Lots</th>
+                        <th>Boxes</th>
                         <th>Created</th>
                         <th>Shipped</th>
                         <th>Delivered</th>
@@ -69,6 +70,12 @@ else
                             <td>
                                 <button class="btn btn-sm btn-link p-0" @onclick="() => ToggleLots(s.Id)">
                                     @s.LotCount lot(s)
+                                </button>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-link p-0" @onclick="() => OpenBoxSkinsPdf(s)"
+                                        title="Box contents PDF — skins per box with country of origin">
+                                    @s.BoxCount box(es)
                                 </button>
                             </td>
                             <td>@s.CreatedAt.ToString("yyyy-MM-dd")</td>
@@ -639,6 +646,12 @@ else
             _error = ex.Message;
         }
         _saving = false;
+    }
+
+    private async Task OpenBoxSkinsPdf(ShipmentListDto shipment)
+    {
+        // GET endpoint streams the PDF inline — the browser tab does the rest.
+        await JS.InvokeVoidAsync("open", $"api/shipments/{shipment.Id}/box-skins-pdf", "_blank");
     }
 
     private async Task OpenPackingListPdf(ShipmentListDto shipment)
