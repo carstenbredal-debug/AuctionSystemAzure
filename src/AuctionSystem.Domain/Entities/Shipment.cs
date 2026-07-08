@@ -60,6 +60,8 @@ public class PackingOrderLine
     public decimal WeightKg { get; set; }
     public int? PackedBoxId { get; set; }
     public PackedBox? PackedBox { get; set; }
+    // Set when the scanner confirms the box was moved from storage to the shipment's OUT location.
+    public DateTime? MovedToOutAt { get; set; }
 }
 
 public class PackedBox
