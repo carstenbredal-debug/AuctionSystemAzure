@@ -5,7 +5,7 @@
 
 <PageTitle>Shipping - Admin</PageTitle>
 
-<h3 class="mb-4">Shipping — Confirm Shipments</h3>
+<h3 class="mb-4">Shipping — Create Shipment</h3>
 
 @if (!string.IsNullOrEmpty(_error))
 {
@@ -20,40 +20,70 @@
 {
     <p><em>Loading...</em></p>
 }
-else if (_shipments.Count == 0)
+else if (_boxes.Count == 0)
 {
-    <div class="alert alert-info">No shipments waiting to be shipped.</div>
+    <div class="alert alert-info">No invoices released for shipping yet.</div>
 }
 else
 {
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <label class="form-label fw-bold">Shipper</label>
+            <select class="form-select" @bind="_selectedShipperId">
+                <option value="0">— Select Shipper —</option>
+                @foreach (var sh in _shippers)
+                {
+                    <option value="@sh.Id">@sh.Code - @sh.Name</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-5">
+            <label class="form-label fw-bold">Shipping Address</label>
+            <select class="form-select" @bind="_selectedAddressId">
+                <option value="0">— Select Address —</option>
+                @foreach (var a in _addresses)
+                {
+                    <option value="@a.Id">@a.Name — @a.AddressLine1, @a.City @a.Country @(a.IsDefault ? "(Default)" : "")</option>
+                }
+            </select>
+        </div>
+    </div>
+
+    @if (_selectedShipperId == 0 || _selectedAddressId == 0)
+    {
+        <div class="alert alert-secondary">Select a shipper and a shipping address, then choose the invoice to ship.</div>
+    }
+
     <div class="section-container">
+        <div class="section-header"><h6 class="mb-0">Invoices Ready for Shipping</h6></div>
         <div class="section-body">
             <table class="table table-striped table-hover mb-0">
                 <thead class="table-dark">
                     <tr>
-                        <th>Shipment #</th>
+                        <th>Invoice</th>
                         <th>Buyer</th>
-                        <th>Shipper</th>
-                        <th>Address</th>
-                        <th>Status</th>
-                        <th>Created</th>
-                        <th class="text-end">Lots</th>
+                        <th class="text-end">Boxes</th>
+                        <th class="text-end">Skins</th>
+                        <th class="text-end">Gross (kg)</th>
+                        <th class="text-end">Net (kg)</th>
                         <th></th>
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var s in _shipments)
+                    @foreach (var inv in GetInvoiceGroups())
                     {
                         <tr>
-                            <td class="fw-bold">@s.ShipmentNumber</td>
-                            <td>@s.BuyerNumber - @s.BuyerName</td>
-                            <td>@s.ShipperCode - @s.ShipperName</td>
-                            <td class="small">@s.ShippingAddressSummary</td>
-                            <td><span class="badge @GetStatusBadge(s.Status)">@s.Status</span></td>
-                            <td>@s.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
-                            <td class="text-end">@s.LotCount</td>
+                            <td class="fw-bold">@inv.InvoiceNumber</td>
+                            <td>@inv.BuyerName</td>
+                            <td class="text-end">@inv.Boxes.Count</td>
+                            <td class="text-end">@inv.Boxes.Sum(b => b.Skins).ToString("N0")</td>
+                            <td class="text-end">@inv.Boxes.Sum(b => b.GrossWeight ?? 0).ToString("N2")</td>
+                            <td class="text-end">@inv.Boxes.Sum(b => b.NetWeight ?? 0).ToString("N2")</td>
                             <td class="text-end">
-                                <button class="btn btn-sm btn-success" @onclick="() => OpenShipDialog(s)">Ship…</button>
+                                <button class="btn btn-sm btn-primary" @onclick="() => OpenConfirmDialog(inv)"
+                                        disabled="@(_selectedShipperId == 0 || _selectedAddressId == 0)">
+                                    Create Shipment…
+                                </button>
                             </td>
                         </tr>
                     }
@@ -63,82 +93,65 @@ else
     </div>
 }
 
-@* Confirm-shipment popup: shows the boxes that leave with this shipment *@
-@if (_shipDialogShipment != null)
+@* Confirm popup: the boxes that ship on the chosen invoice *@
+@if (_confirmInvoice != null)
 {
     <div class="modal fade show d-block" style="background: rgba(0,0,0,0.5)">
         <div class="modal-dialog modal-xl modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Ship @_shipDialogShipment.ShipmentNumber — @_shipDialogShipment.BuyerName</h5>
-                    <button type="button" class="btn-close" @onclick="CloseShipDialog"></button>
+                    <h5 class="modal-title">Create Shipment — Invoice @_confirmInvoice.InvoiceNumber (@_confirmInvoice.BuyerName)</h5>
+                    <button type="button" class="btn-close" @onclick="CloseConfirmDialog"></button>
                 </div>
                 <div class="modal-body">
-                    @if (_packingListLoading)
-                    {
-                        <p><em>Loading boxes...</em></p>
-                    }
-                    else if (_packingList == null || _packingList.PackingLines.Count == 0)
-                    {
-                        <div class="alert alert-warning">No boxes found for this shipment.</div>
-                    }
-                    else
-                    {
-                        <p class="mb-2">
-                            You are shipping <strong>@_packingList.Totals.Boxes box(es)</strong>
-                            with <strong>@_packingList.Totals.Skins.ToString("N0") skins</strong>
-                            to <strong>@_packingList.BuyerName</strong>
-                            via <strong>@_packingList.ShipperName</strong>.
-                        </p>
-                        <table class="table table-sm table-striped">
-                            <thead class="table-dark">
+                    <p class="mb-2">
+                        These <strong>@_confirmInvoice.Boxes.Count box(es)</strong>
+                        (<strong>@_confirmInvoice.Boxes.Sum(b => b.Skins).ToString("N0") skins</strong>)
+                        ship on this invoice
+                        via <strong>@(_shippers.FirstOrDefault(s => s.Id == _selectedShipperId)?.Name)</strong>
+                        to <strong>@(_addresses.FirstOrDefault(a => a.Id == _selectedAddressId)?.Name)</strong>.
+                    </p>
+                    <table class="table table-sm table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Box #</th>
+                                <th>Lot #</th>
+                                <th>Type</th>
+                                <th class="text-end">Skins</th>
+                                <th class="text-end">Gross (kg)</th>
+                                <th class="text-end">Net (kg)</th>
+                                <th>Location</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var box in _confirmInvoice.Boxes.OrderBy(b => b.LotNumber).ThenBy(b => b.BoxNumber))
+                            {
                                 <tr>
-                                    <th>Box #</th>
-                                    <th>Lot #</th>
-                                    <th>Type</th>
-                                    <th class="text-end">Skins</th>
-                                    <th class="text-end">Gross (kg)</th>
-                                    <th class="text-end">Net (kg)</th>
-                                    <th>Location</th>
+                                    <td>@box.BoxNumber</td>
+                                    <td>@box.LotNumber</td>
+                                    <td>@box.BoxType</td>
+                                    <td class="text-end">@box.Skins</td>
+                                    <td class="text-end">@(box.GrossWeight?.ToString("N2") ?? "—")</td>
+                                    <td class="text-end">@(box.NetWeight?.ToString("N2") ?? "—")</td>
+                                    <td>@(box.BoxLocation ?? "—")</td>
                                 </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var line in _packingList.PackingLines)
-                                {
-                                    <tr>
-                                        <td>@line.BoxNumber</td>
-                                        <td>@line.LotNumber</td>
-                                        <td>@line.BoxType</td>
-                                        <td class="text-end">@line.Skins</td>
-                                        <td class="text-end">@line.GrossWeightKg.ToString("N2")</td>
-                                        <td class="text-end">@line.NetWeightKg.ToString("N2")</td>
-                                        <td>@line.Location</td>
-                                    </tr>
-                                }
-                            </tbody>
-                            <tfoot class="fw-bold">
-                                <tr>
-                                    <td colspan="3">Total</td>
-                                    <td class="text-end">@_packingList.Totals.Skins.ToString("N0")</td>
-                                    <td class="text-end">@_packingList.Totals.GrossWeightKg.ToString("N2")</td>
-                                    <td class="text-end">@_packingList.Totals.NetWeightKg.ToString("N2")</td>
-                                    <td></td>
-                                </tr>
-                            </tfoot>
-                        </table>
-                        <div class="row mt-3">
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold">Tracking Number (optional)</label>
-                                <input class="form-control" @bind="_trackingNumber" placeholder="Tracking number" />
-                            </div>
-                        </div>
-                    }
+                            }
+                        </tbody>
+                        <tfoot class="fw-bold">
+                            <tr>
+                                <td colspan="3">Total</td>
+                                <td class="text-end">@_confirmInvoice.Boxes.Sum(b => b.Skins).ToString("N0")</td>
+                                <td class="text-end">@_confirmInvoice.Boxes.Sum(b => b.GrossWeight ?? 0).ToString("N2")</td>
+                                <td class="text-end">@_confirmInvoice.Boxes.Sum(b => b.NetWeight ?? 0).ToString("N2")</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
                 </div>
                 <div class="modal-footer">
-                    <button class="btn btn-secondary" @onclick="CloseShipDialog" disabled="@_confirming">Cancel</button>
-                    <button class="btn btn-success" @onclick="ConfirmShip"
-                            disabled="@(_confirming || _packingListLoading || _packingList == null || _packingList.PackingLines.Count == 0)">
-                        @(_confirming ? "Confirming..." : "Confirm Shipment")
+                    <button class="btn btn-secondary" @onclick="CloseConfirmDialog" disabled="@_creating">Cancel</button>
+                    <button class="btn btn-success" @onclick="ConfirmCreateShipment" disabled="@_creating">
+                        @(_creating ? "Creating..." : "Confirm — Create Shipment")
                     </button>
                 </div>
             </div>
@@ -147,90 +160,103 @@ else
 }
 
 @code {
-    private List<ShipmentListDto> _shipments = new();
+    private List<ShippingBoxDto> _boxes = new();
+    private List<ShippingAddressListDto> _addresses = new();
+    private List<ShipperListDto> _shippers = new();
     private bool _loading = true;
+    private bool _creating;
+    private int _selectedShipperId;
+    private int _selectedAddressId;
     private string? _error;
     private string? _success;
 
-    private ShipmentListDto? _shipDialogShipment;
-    private ShipmentPackingListDto? _packingList;
-    private bool _packingListLoading;
-    private bool _confirming;
-    private string _trackingNumber = "";
+    private InvoiceGroup? _confirmInvoice;
 
-    // Only shipments still in-house are confirmable here.
-    private static readonly string[] OpenStatuses = { "Pending", "Packing", "ShowLot Packing" };
+    private class InvoiceGroup
+    {
+        public string InvoiceNumber { get; init; } = "";
+        public string BuyerName { get; init; } = "";
+        public List<ShippingBoxDto> Boxes { get; init; } = new();
+    }
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadShipments();
+        await LoadBoxes();
+        _addresses = await Api.GetShippingAddressesAsync();
+        _shippers = await Api.GetShippersAsync();
+        var defaultAddr = _addresses.FirstOrDefault(a => a.IsDefault);
+        _selectedAddressId = defaultAddr?.Id ?? 0;
         _loading = false;
     }
 
-    private async Task LoadShipments()
+    private async Task LoadBoxes()
     {
-        var all = await Api.GetShipmentsAsync(null);
-        _shipments = all.Where(s => OpenStatuses.Contains(s.Status))
-            .OrderBy(s => s.CreatedAt)
+        _boxes = await Api.GetShippingBoxesAsync();
+    }
+
+    private List<InvoiceGroup> GetInvoiceGroups()
+    {
+        return _boxes
+            .GroupBy(b => b.InvoiceNumber ?? "—")
+            .Select(g => new InvoiceGroup
+            {
+                InvoiceNumber = g.Key,
+                BuyerName = g.Select(b => b.BuyerName ?? "—").FirstOrDefault() ?? "—",
+                Boxes = g.ToList()
+            })
+            .OrderBy(g => g.InvoiceNumber)
             .ToList();
     }
 
-    private async Task OpenShipDialog(ShipmentListDto s)
+    private void OpenConfirmDialog(InvoiceGroup inv)
     {
-        _shipDialogShipment = s;
-        _trackingNumber = s.TrackingNumber ?? "";
-        _packingList = null;
-        _packingListLoading = true;
         _error = null;
         _success = null;
+        _confirmInvoice = inv;
+    }
+
+    private void CloseConfirmDialog()
+    {
+        _confirmInvoice = null;
+    }
+
+    private async Task ConfirmCreateShipment()
+    {
+        if (_confirmInvoice == null) return;
+        _creating = true;
+        _error = null;
         StateHasChanged();
+
+        var boxes = _confirmInvoice.Boxes;
+        var payload = new
+        {
+            shipperId = _selectedShipperId,
+            buyerId = boxes.Select(b => b.BuyerId).FirstOrDefault(),
+            shippingAddressId = _selectedAddressId > 0 ? (int?)_selectedAddressId : null,
+            trackingNumber = "",
+            notes = "",
+            lotNumbers = boxes.Select(b => b.LotNumber).Distinct().ToList(),
+            boxNumbers = boxes.Select(b => b.BoxNumber).Distinct().ToList()
+        };
 
         try
         {
-            _packingList = await Api.GetShipmentPackingListAsync(s.Id);
+            var (ok, err, num) = await Api.CreateShipmentAsync(payload);
+            if (!ok)
+            {
+                _error = err;
+                _creating = false;
+                return;
+            }
+            _success = $"Shipment {num} created for invoice {_confirmInvoice.InvoiceNumber}: " +
+                       $"{boxes.Count} box(es), {boxes.Sum(b => b.Skins):N0} skins.";
+            _confirmInvoice = null;
+            await LoadBoxes();
         }
         catch (Exception ex)
         {
             _error = ex.Message;
-            _shipDialogShipment = null;
         }
-        _packingListLoading = false;
+        _creating = false;
     }
-
-    private void CloseShipDialog()
-    {
-        _shipDialogShipment = null;
-        _packingList = null;
-    }
-
-    private async Task ConfirmShip()
-    {
-        if (_shipDialogShipment == null) return;
-        _confirming = true;
-        _error = null;
-        StateHasChanged();
-
-        var (ok, err) = await Api.UpdateShipmentStatusAsync(_shipDialogShipment.Id,
-            new { status = "Shipped", trackingNumber = _trackingNumber });
-        if (!ok)
-        {
-            _error = err;
-            _confirming = false;
-            return;
-        }
-
-        _success = $"Shipment {_shipDialogShipment.ShipmentNumber} confirmed shipped" +
-                   $" ({_packingList?.Totals.Boxes ?? 0} box(es), {_packingList?.Totals.Skins ?? 0:N0} skins).";
-        CloseShipDialog();
-        await LoadShipments();
-        _confirming = false;
-    }
-
-    private static string GetStatusBadge(string status) => status switch
-    {
-        "Pending" => "bg-warning text-dark",
-        "Packing" => "bg-info text-dark",
-        "ShowLot Packing" => "bg-info text-dark",
-        _ => "bg-secondary"
-    };
 }
