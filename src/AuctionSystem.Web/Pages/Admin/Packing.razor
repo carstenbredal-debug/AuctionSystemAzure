@@ -10,6 +10,7 @@
         <select class="form-select" @onchange="OnStatusFilterChanged">
             <option value="">All Statuses</option>
             <option value="Ready to Pack">Ready to Pack</option>
+            <option value="In Production">In Production</option>
             <option value="Packed">Packed</option>
         </select>
     </div>
@@ -54,7 +55,18 @@ else
                             <td>@po.BoxCount</td>
                             <td>@po.CreatedAt.ToString("yyyy-MM-dd")</td>
                             <td>
-                                <button class="btn btn-sm btn-outline-danger" @onclick="() => DeletePackingOrder(po)">Delete</button>
+                                @if (po.Status != "Packed")
+                                {
+                                    @if (po.Status == "Ready to Pack")
+                                    {
+                                        <button class="btn btn-sm btn-primary me-1" @onclick='() => UpdateStatus(po, "In Production")'>Start Packing</button>
+                                    }
+                                    <button class="btn btn-sm btn-success" @onclick='() => UpdateStatus(po, "Packed")'
+                                            disabled="@(po.Status == "Ready to Pack")"
+                                            title="@(po.Status == "Ready to Pack" ? "Start packing first." : "Confirm all boxes are packed")">
+                                        Confirm
+                                    </button>
+                                }
                             </td>
                         </tr>
                         @if (_expandedId == po.Id)
@@ -134,16 +146,20 @@ else
         _expandedId = _expandedId == id ? null : id;
     }
 
-    private async Task DeletePackingOrder(PackingOrderDto po)
+    private async Task UpdateStatus(PackingOrderDto po, string newStatus)
     {
-        var success = await Api.DeletePackingOrderAsync(po.Id);
+        var success = await Api.UpdatePackingOrderStatusAsync(po.Id, newStatus);
         if (success)
-            _orders.Remove(po);
+        {
+            po.Status = newStatus;
+            StateHasChanged();
+        }
     }
 
     private string GetStatusBadgeClass(string status) => status switch
     {
         "Ready to Pack" => "bg-warning text-dark",
+        "In Production" => "bg-info text-dark",
         "Packed" => "bg-success",
         _ => "bg-secondary"
     };

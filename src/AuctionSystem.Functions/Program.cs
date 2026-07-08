@@ -820,6 +820,17 @@ using (var scope = host.Services.CreateScope())
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Shipments') AND name = 'ShippingInvoicePdfUrl')
                 ALTER TABLE auction.Shipments ADD ShippingInvoicePdfUrl NVARCHAR(MAX) NULL;
         ");
+        // Add OutLocation column to Shipments if missing (outgoing staging location OUT-1..OUT-20)
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Shipments') AND name = 'OutLocation')
+                ALTER TABLE auction.Shipments ADD OutLocation NVARCHAR(20) NULL;
+        ");
+        // Add MovedToOutAt column to PackingOrderLines if missing (scanner confirms the box was
+        // moved from storage to the shipment's OUT location)
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.PackingOrderLines') AND name = 'MovedToOutAt')
+                ALTER TABLE auction.PackingOrderLines ADD MovedToOutAt DATETIME2 NULL;
+        ");
         // Drop auction.Boxes table if it exists (replaced by view)
         db.Database.ExecuteSqlRaw(@"
             IF EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'Boxes')

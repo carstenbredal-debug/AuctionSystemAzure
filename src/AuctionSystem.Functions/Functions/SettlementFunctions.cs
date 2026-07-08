@@ -509,11 +509,13 @@ public class SettlementFunctions
 
         var boxStagingLookup = await FetchBoxStagingAsync(catalogLots, useSnapshot ? snapshotBoxesTable : null);
 
+        var rackLookup = await FetchRackPositionsAsync(uncreditedLotNumbers, useSnapshot ? snapshotLotsTable : null);
+
         // Boxes already on a shipment's packing order must not appear as available — this is what
         // keeps a partially-shipped invoice's remaining boxes (and only those) selectable.
         var shippedBoxes = (await _db.Set<PackingOrderLine>().Select(l => l.BoxNumber).ToListAsync()).ToHashSet();
 
-        var shippingBoxes = BuildShippingBoxList(catalogLots, lotInvoiceMap, boxInfo, dimLookup, boxStagingLookup, shippedBoxes);
+        var shippingBoxes = BuildShippingBoxList(catalogLots, lotInvoiceMap, boxInfo, dimLookup, boxStagingLookup, shippedBoxes, rackLookup);
         return await CreateJsonResponse(req, shippingBoxes);
     }
 
@@ -562,13 +564,40 @@ public class SettlementFunctions
         {
             var boxTable = snapshotBoxesTable ?? "auction.boxes";
             var boxData = await _catalogDb.Database
-                .SqlQueryRaw<BoxViewInfo>($"SELECT BoxNumber, Skins, BoxType FROM {boxTable} WHERE BoxNumber IN (" +
+                .SqlQueryRaw<BoxViewInfo>($"SELECT BoxNumber, Skins, BoxType, BoxStatus FROM {boxTable} WHERE BoxNumber IN (" +
                     string.Join(",", allBoxNumbers) + ")")
                 .ToListAsync();
             foreach (var b in boxData)
                 result[b.BoxNumber] = b;
         }
         return result;
+    }
+
+    // Showlot boxes live on the show racks, not in the warehouse — their "location" is the lot's
+    // rack number from the catalogue. Missing column / no rack falls back to the staging location.
+    private async Task<Dictionary<int, string>> FetchRackPositionsAsync(List<int> lotNumbers, string? snapshotLotsTable)
+    {
+        var result = new Dictionary<int, string>();
+        if (lotNumbers.Count == 0) return result;
+        try
+        {
+            var lotsTable = snapshotLotsTable ?? "auction.cataloglots";
+            var racks = await _catalogDb.Database
+                .SqlQueryRaw<LotRackInfo>($"SELECT LotNumber, ISNULL(RackPosition, '') AS RackPosition FROM {lotsTable} WHERE LotNumber IN (" +
+                    string.Join(",", lotNumbers) + ")")
+                .ToListAsync();
+            foreach (var r in racks)
+                if (!string.IsNullOrWhiteSpace(r.RackPosition))
+                    result[r.LotNumber] = r.RackPosition.Trim();
+        }
+        catch { /* RackPosition column may not exist in this environment */ }
+        return result;
+    }
+
+    private class LotRackInfo
+    {
+        public int LotNumber { get; set; }
+        public string RackPosition { get; set; } = "";
     }
 
     private async Task<Dictionary<int, BoxStagingInfo>> FetchBoxStagingAsync(List<CatalogLotInfo> catalogLots, string? snapshotBoxesTable = null)
@@ -622,7 +651,7 @@ public class SettlementFunctions
     }
 
     private static List<object> BuildShippingBoxList(
-        List<CatalogLotInfo> catalogLots, Dictionary<int, (Invoice Inv, InvoiceLine Line)> lotInvoiceMap, Dictionary<int, BoxViewInfo> boxInfo, Dictionary<string, BoxTypeDimension> dimLookup, Dictionary<int, BoxStagingInfo> boxStagingLookup, HashSet<int> shippedBoxes)
+        List<CatalogLotInfo> catalogLots, Dictionary<int, (Invoice Inv, InvoiceLine Line)> lotInvoiceMap, Dictionary<int, BoxViewInfo> boxInfo, Dictionary<string, BoxTypeDimension> dimLookup, Dictionary<int, BoxStagingInfo> boxStagingLookup, HashSet<int> shippedBoxes, Dictionary<int, string> rackLookup)
     {
         var shippingBoxes = new List<object>();
         foreach (var cl in catalogLots)
@@ -638,6 +667,9 @@ public class SettlementFunctions
                 var bi = boxInfo.GetValueOrDefault(boxNumber);
                 var boxType = bi?.BoxType ?? "";
                 var dim = !string.IsNullOrEmpty(boxType) && dimLookup.TryGetValue(boxType, out var d) ? d : null;
+                // Showlot boxes sit on the show racks: location = the lot's catalogue rack number.
+                var isShow = string.Equals(bi?.BoxStatus, "Showlot", StringComparison.OrdinalIgnoreCase);
+                var rack = isShow && rackLookup.TryGetValue(cl.LotNumber, out var r) ? r : null;
                 shippingBoxes.Add(new
                 {
                     InvoiceId = info.Inv.Id, info.Inv.InvoiceNumber,
@@ -645,11 +677,12 @@ public class SettlementFunctions
                     BuyerId = info.Inv.BuyerId, BuyerName = info.Inv.Buyer?.Name, BuyerNumber = info.Inv.Buyer?.BuyerNumber,
                     LotNumber = cl.LotNumber, BoxNumber = boxNumber,
                     BoxType = boxType, Skins = bi?.Skins ?? 0,
+                    IsShow = isShow,
                     info.Line.PricePerSkin, HammerPrice = info.Line.HammerPrice,
                     VolumeM3 = dim != null ? dim.LengthM * dim.WidthM * dim.HeightM : (decimal?)null,
                     GrossWeight = boxStagingLookup.TryGetValue(boxNumber, out var stg) ? stg.BoxWeight : null,
                     NetWeight = stg?.BoxWeight != null && dim?.WeightKg != null ? stg.BoxWeight - dim.WeightKg : stg?.BoxWeight,
-                    BoxLocation = stg?.BoxLocation
+                    BoxLocation = rack != null ? $"Rack {rack}" : stg?.BoxLocation
                 });
             }
         }
@@ -661,6 +694,7 @@ public class SettlementFunctions
         public int BoxNumber { get; set; }
         public int Skins { get; set; }
         public string BoxType { get; set; } = "";
+        public string? BoxStatus { get; set; }
     }
 
     [Function("CreateSettlement")]

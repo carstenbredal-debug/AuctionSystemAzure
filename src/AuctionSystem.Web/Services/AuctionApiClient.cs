@@ -1107,19 +1107,6 @@ public class AuctionApiClient
         resp.EnsureSuccessStatusCode();
     }
 
-    public async Task<List<PackingOrderXmlDto>> GetPackingOrderXmlsAsync()
-    {
-        var resp = await _http.GetAsync("api/shipments/packing-orders/xmls");
-        resp.EnsureSuccessStatusCode();
-        return await resp.Content.ReadFromJsonAsync<List<PackingOrderXmlDto>>() ?? new();
-    }
-
-    public async Task<bool> ConfirmPickingAsync(string packingOrderNumber, List<int> pickedBoxNumbers)
-    {
-        var resp = await _http.PostAsJsonAsync("api/shipments/packing-orders/confirm-picking", new { packingOrderNumber, pickedBoxNumbers });
-        return resp.IsSuccessStatusCode;
-    }
-
     public async Task<PackShowLotsResponseDto?> PackShowLotsAsync(
         string packingOrderNumber, string boxType, string boxNumber, decimal grossWeight,
         List<int> showLotBoxNumbers, List<ShowLotWeightDto> showLotWeights)
@@ -1135,12 +1122,6 @@ public class AuctionApiClient
         });
         if (!resp.IsSuccessStatusCode) return null;
         return await resp.Content.ReadFromJsonAsync<PackShowLotsResponseDto>();
-    }
-
-    public async Task<bool> CompleteShowLotPackingAsync(string packingOrderNumber)
-    {
-        var resp = await _http.PostAsJsonAsync("api/shipments/packing-orders/complete-showlot", new { packingOrderNumber });
-        return resp.IsSuccessStatusCode;
     }
 
     public async Task<bool> ApprovePackedBoxAsync(int packedBoxId)
@@ -1165,13 +1146,14 @@ public class AuctionApiClient
         return await resp.Content.ReadFromJsonAsync<List<ReleasedLotDto>>() ?? new();
     }
 
-    public async Task<(bool Success, string? Error, string? ShipmentNumber)> CreateShipmentAsync(object shipment)
+    public async Task<(bool Success, string? Error, string? ShipmentNumber, string? OutLocation)> CreateShipmentAsync(object shipment)
     {
         var resp = await _http.PostAsJsonAsync("api/shipments", shipment);
-        if (!resp.IsSuccessStatusCode) return (false, await GetErrorMessage(resp), null);
+        if (!resp.IsSuccessStatusCode) return (false, await GetErrorMessage(resp), null, null);
         var doc = System.Text.Json.JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
         var num = doc.RootElement.TryGetProperty("shipmentNumber", out var sn) ? sn.GetString() : null;
-        return (true, null, num);
+        var loc = doc.RootElement.TryGetProperty("outLocation", out var ol) && ol.ValueKind == System.Text.Json.JsonValueKind.String ? ol.GetString() : null;
+        return (true, null, num, loc);
     }
 
     public async Task<(bool Success, string? Error)> UpdateShipmentStatusAsync(int id, object status)
