@@ -1146,13 +1146,14 @@ public class AuctionApiClient
         return await resp.Content.ReadFromJsonAsync<List<ReleasedLotDto>>() ?? new();
     }
 
-    public async Task<(bool Success, string? Error, string? ShipmentNumber)> CreateShipmentAsync(object shipment)
+    public async Task<(bool Success, string? Error, string? ShipmentNumber, string? OutLocation)> CreateShipmentAsync(object shipment)
     {
         var resp = await _http.PostAsJsonAsync("api/shipments", shipment);
-        if (!resp.IsSuccessStatusCode) return (false, await GetErrorMessage(resp), null);
+        if (!resp.IsSuccessStatusCode) return (false, await GetErrorMessage(resp), null, null);
         var doc = System.Text.Json.JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
         var num = doc.RootElement.TryGetProperty("shipmentNumber", out var sn) ? sn.GetString() : null;
-        return (true, null, num);
+        var loc = doc.RootElement.TryGetProperty("outLocation", out var ol) && ol.ValueKind == System.Text.Json.JsonValueKind.String ? ol.GetString() : null;
+        return (true, null, num, loc);
     }
 
     public async Task<(bool Success, string? Error)> UpdateShipmentStatusAsync(int id, object status)

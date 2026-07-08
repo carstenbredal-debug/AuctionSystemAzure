@@ -48,6 +48,7 @@ else
                         <th>Buyer</th>
                         <th>Tracking #</th>
                         <th>Status</th>
+                        <th>Location</th>
                         <th>Lots</th>
                         <th>Boxes</th>
                         <th>Created</th>
@@ -66,6 +67,16 @@ else
                             <td>@s.TrackingNumber</td>
                             <td>
                                 <span class="badge @GetStatusBadgeClass(s.Status)">@s.Status</span>
+                            </td>
+                            <td>
+                                @if (!string.IsNullOrEmpty(s.OutLocation))
+                                {
+                                    <span class="badge bg-dark">@s.OutLocation</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">—</span>
+                                }
                             </td>
                             <td>
                                 <button class="btn btn-sm btn-link p-0" @onclick="() => ToggleLots(s.Id)">
@@ -135,7 +146,7 @@ else
                         @if (_expandedBoxesShipmentId == s.Id)
                         {
                             <tr>
-                                <td colspan="11" class="bg-light">
+                                <td colspan="12" class="bg-light">
                                     <div class="ps-4">
                                         <strong>Boxes in this shipment:</strong>
                                         @if (_loadingShipmentBoxes)
@@ -190,7 +201,7 @@ else
                         @if (_expandedShipmentId == s.Id)
                         {
                             <tr>
-                                <td colspan="11" class="bg-light">
+                                <td colspan="12" class="bg-light">
                                     <div class="ps-4">
                                         <strong>Lots in this shipment:</strong>
                                         @if (!string.IsNullOrEmpty(s.ShippingAddressSummary))
@@ -238,7 +249,7 @@ else
                     }
                     @if (!_shipments.Any())
                     {
-                        <tr><td colspan="11" class="text-center text-muted">No shipments found.</td></tr>
+                        <tr><td colspan="12" class="text-center text-muted">No shipments found.</td></tr>
                     }
                 </tbody>
             </table>
@@ -687,10 +698,13 @@ else
 
         try
         {
-            var (ok, err, num) = await Api.CreateShipmentAsync(payload);
+            var (ok, err, num, outLocation) = await Api.CreateShipmentAsync(payload);
             if (!ok) { _error = err; _saving = false; return; }
             _success = $"Shipment {num} created for invoice(s) {string.Join(", ", _confirmInvoices.Select(i => i.InvoiceNumber))}: " +
-                       $"{_confirmBoxes.Count} box(es), {_confirmBoxes.Sum(b => b.Skins):N0} skins.";
+                       $"{_confirmBoxes.Count} box(es), {_confirmBoxes.Sum(b => b.Skins):N0} skins." +
+                       (outLocation != null
+                           ? $" Outgoing location: {outLocation} — put all boxes there."
+                           : " NO outgoing location free — all 20 are occupied!");
             _showCreateModal = false;
             _selectedInvoiceNumbers.Clear();
             _confirmInvoices.Clear();

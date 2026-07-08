@@ -994,6 +994,7 @@ public class ShipmentListDto
     public string ShippingAddressSummary { get; set; } = "";
     public string TrackingNumber { get; set; } = "";
     public string Status { get; set; } = "";
+    public string? OutLocation { get; set; }
     public string Notes { get; set; } = "";
     public string? PackingListPdfUrl { get; set; }
     public string? ShippingInvoicePdfUrl { get; set; }

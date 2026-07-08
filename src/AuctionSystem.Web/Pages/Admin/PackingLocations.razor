@@ -1,0 +1,84 @@
+@page "/admin/packing-locations"
+@using AuctionSystem.Web.Models
+@using AuctionSystem.Web.Services
+@attribute [Authorize(Roles = "Admin")]
+@inject AuctionApiClient Api
+
+<PageTitle>Outgoing Locations - Admin</PageTitle>
+
+<h4 class="mb-2">Outgoing Locations</h4>
+<p class="text-muted">Each active shipment is allotted one OUT location — all its boxes are collected there. The location frees up when the shipment is shipped.</p>
+
+@if (_loading)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <div class="mb-3">
+        <span class="me-3"><span class="badge bg-success">@_locations.Count(l => l.Shipment == null)</span> free</span>
+        <span><span class="badge bg-dark">@_locations.Count(l => l.Shipment != null)</span> occupied</span>
+        <button class="btn btn-sm btn-outline-secondary ms-3" @onclick="Load">Refresh</button>
+    </div>
+
+    <div class="row g-3">
+        @foreach (var loc in _locations)
+        {
+            <div class="col-md-3 col-sm-4 col-6">
+                <div class="card h-100 @(loc.Shipment == null ? "border-success" : "border-dark")">
+                    <div class="card-header py-1 d-flex justify-content-between align-items-center
+                                @(loc.Shipment == null ? "bg-success text-white" : "bg-dark text-white")">
+                        <strong>@loc.Name</strong>
+                        <small>@(loc.Shipment == null ? "EMPTY" : loc.Shipment.Status)</small>
+                    </div>
+                    <div class="card-body p-2">
+                        @if (loc.Shipment == null)
+                        {
+                            <span class="text-muted small">Free</span>
+                        }
+                        else
+                        {
+                            <div><strong>@loc.Shipment.ShipmentNumber</strong></div>
+                            <div class="small">@loc.Shipment.BuyerNumber - @loc.Shipment.BuyerName</div>
+                            <div class="small text-muted">@loc.Shipment.BoxCount box(es), @loc.Shipment.LotCount lot(s)</div>
+                            <div class="small text-muted">Created @loc.Shipment.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private const int LocationCount = 20;
+    private bool _loading = true;
+    private List<LocationSlot> _locations = new();
+
+    private class LocationSlot
+    {
+        public string Name { get; init; } = "";
+        public ShipmentListDto? Shipment { get; set; }
+    }
+
+    // A location is occupied by the shipment holding it that has not yet left the house.
+    private static readonly string[] DoneStatuses = { "Shipped", "Delivered", "Cancelled" };
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        var shipments = await Api.GetShipmentsAsync(null);
+        var active = shipments
+            .Where(s => !string.IsNullOrEmpty(s.OutLocation) && !DoneStatuses.Contains(s.Status))
+            .GroupBy(s => s.OutLocation!)
+            .ToDictionary(g => g.Key, g => g.OrderBy(s => s.CreatedAt).First());
+
+        _locations = Enumerable.Range(1, LocationCount)
+            .Select(i => $"OUT-{i}")
+            .Select(name => new LocationSlot { Name = name, Shipment = active.GetValueOrDefault(name) })
+            .ToList();
+        _loading = false;
+    }
+}

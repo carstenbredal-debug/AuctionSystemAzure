@@ -73,6 +73,7 @@ public class ShipmentFunctions
                 s.TrackingNumber,
                 s.Status,
                 s.Notes,
+                s.OutLocation,
                 s.PackingListPdfUrl,
                 s.ShippingInvoicePdfUrl,
                 s.CreatedAt,
@@ -224,6 +225,18 @@ public class ShipmentFunctions
             Notes = body.Notes ?? "",
             Status = "Packing"
         };
+
+        // Allot the first free outgoing staging location (OUT-1..OUT-20) — where every box of this
+        // shipment is put. A location is occupied while its shipment is still in-house and frees up
+        // once the shipment is Shipped/Delivered/Cancelled. All 20 taken -> no location (null).
+        var doneStatuses = new[] { "Shipped", "Delivered", "Cancelled" };
+        var takenLocations = await _db.Shipments
+            .Where(s => s.OutLocation != null && !doneStatuses.Contains(s.Status))
+            .Select(s => s.OutLocation!)
+            .ToListAsync();
+        shipment.OutLocation = Enumerable.Range(1, 20)
+            .Select(i => $"OUT-{i}")
+            .FirstOrDefault(loc => !takenLocations.Contains(loc));
 
         foreach (var lotNumber in body.LotNumbers)
         {
@@ -471,7 +484,7 @@ public class ShipmentFunctions
 
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
-        await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true, id = shipment.Id, shipmentNumber = shipment.ShipmentNumber }, JsonOptions));
+        await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true, id = shipment.Id, shipmentNumber = shipment.ShipmentNumber, outLocation = shipment.OutLocation }, JsonOptions));
         return response;
         }
         catch (Exception ex)
