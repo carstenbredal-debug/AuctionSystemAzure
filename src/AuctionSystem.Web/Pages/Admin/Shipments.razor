@@ -73,8 +73,7 @@ else
                                 </button>
                             </td>
                             <td>
-                                <button class="btn btn-sm btn-link p-0" @onclick="() => OpenBoxSkinsPdf(s)"
-                                        title="Box contents PDF — skins per box with country of origin">
+                                <button class="btn btn-sm btn-link p-0" @onclick="() => ToggleBoxes(s.Id)">
                                     @s.BoxCount box(es)
                                 </button>
                             </td>
@@ -133,10 +132,65 @@ else
                                 }
                             </td>
                         </tr>
+                        @if (_expandedBoxesShipmentId == s.Id)
+                        {
+                            <tr>
+                                <td colspan="11" class="bg-light">
+                                    <div class="ps-4">
+                                        <strong>Boxes in this shipment:</strong>
+                                        @if (_loadingShipmentBoxes)
+                                        {
+                                            <em class="ms-2">Loading...</em>
+                                        }
+                                        else if (_shipmentBoxLines.Count == 0)
+                                        {
+                                            <span class="ms-2 text-muted">No boxes found.</span>
+                                        }
+                                        else
+                                        {
+                                            <table class="table table-sm mt-2 mb-0">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Box #</th>
+                                                        <th>Lot #</th>
+                                                        <th>Type</th>
+                                                        <th class="text-end">Skins</th>
+                                                        <th class="text-end">Gross (kg)</th>
+                                                        <th class="text-end">Net (kg)</th>
+                                                        <th>Location</th>
+                                                        <th>Skins PDF</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var line in _shipmentBoxLines)
+                                                    {
+                                                        <tr>
+                                                            <td><strong>@line.BoxNumber</strong></td>
+                                                            <td>@line.LotNumber</td>
+                                                            <td>@line.BoxType</td>
+                                                            <td class="text-end">@line.Skins</td>
+                                                            <td class="text-end">@line.GrossWeightKg.ToString("N2")</td>
+                                                            <td class="text-end">@line.NetWeightKg.ToString("N2")</td>
+                                                            <td>@line.Location</td>
+                                                            <td>
+                                                                <button class="btn btn-sm btn-outline-primary" @onclick="() => OpenBoxSkinsPdf(s, line.BoxNumber)"
+                                                                        title="Skins in this box with country of origin">
+                                                                    Skins PDF
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
                         @if (_expandedShipmentId == s.Id)
                         {
                             <tr>
-                                <td colspan="10" class="bg-light">
+                                <td colspan="11" class="bg-light">
                                     <div class="ps-4">
                                         <strong>Lots in this shipment:</strong>
                                         @if (!string.IsNullOrEmpty(s.ShippingAddressSummary))
@@ -184,7 +238,7 @@ else
                     }
                     @if (!_shipments.Any())
                     {
-                        <tr><td colspan="10" class="text-center text-muted">No shipments found.</td></tr>
+                        <tr><td colspan="11" class="text-center text-muted">No shipments found.</td></tr>
                     }
                 </tbody>
             </table>
@@ -476,6 +530,7 @@ else
     private void ToggleLots(int shipmentId)
     {
         _expandedShipmentId = _expandedShipmentId == shipmentId ? null : shipmentId;
+        if (_expandedShipmentId != null) _expandedBoxesShipmentId = null;
     }
 
     private void MarkShipped(ShipmentListDto s)
@@ -648,10 +703,36 @@ else
         _saving = false;
     }
 
-    private async Task OpenBoxSkinsPdf(ShipmentListDto shipment)
+    private int? _expandedBoxesShipmentId;
+    private bool _loadingShipmentBoxes;
+    private List<PackingLineDto> _shipmentBoxLines = new();
+
+    private async Task ToggleBoxes(int shipmentId)
+    {
+        if (_expandedBoxesShipmentId == shipmentId)
+        {
+            _expandedBoxesShipmentId = null;
+            return;
+        }
+        _expandedBoxesShipmentId = shipmentId;
+        _expandedShipmentId = null;
+        _loadingShipmentBoxes = true;
+        _shipmentBoxLines = new();
+        StateHasChanged();
+
+        try
+        {
+            var packingList = await Api.GetShipmentPackingListAsync(shipmentId);
+            _shipmentBoxLines = packingList?.PackingLines ?? new();
+        }
+        catch { _shipmentBoxLines = new(); }
+        _loadingShipmentBoxes = false;
+    }
+
+    private async Task OpenBoxSkinsPdf(ShipmentListDto shipment, int boxNumber)
     {
         // GET endpoint streams the PDF inline — the browser tab does the rest.
-        await JS.InvokeVoidAsync("open", $"api/shipments/{shipment.Id}/box-skins-pdf", "_blank");
+        await JS.InvokeVoidAsync("open", $"api/shipments/{shipment.Id}/box-skins-pdf?box={boxNumber}", "_blank");
     }
 
     private async Task OpenPackingListPdf(ShipmentListDto shipment)

@@ -1053,6 +1053,11 @@ public class ShipmentFunctions
                     boxToLot[n] = cl.LotNumber;
         }
 
+        // ?box={n}: one box's contents only (the per-box "Skins PDF" button on the boxes list).
+        var boxQuery = System.Web.HttpUtility.ParseQueryString(req.Url.Query)["box"];
+        if (int.TryParse(boxQuery, out var singleBox) && singleBox > 0)
+            boxToLot = boxToLot.Where(kv => kv.Key == singleBox).ToDictionary(kv => kv.Key, kv => kv.Value);
+
         if (boxToLot.Count == 0)
         {
             var none = req.CreateResponse(System.Net.HttpStatusCode.NotFound);
