@@ -475,6 +475,7 @@ public class ShippingBoxDto
     public int BoxNumber { get; set; }
     public string BoxType { get; set; } = "";
     public int Skins { get; set; }
+    public bool IsShow { get; set; }
     public decimal PricePerSkin { get; set; }
     public decimal HammerPrice { get; set; }
     public decimal? VolumeM3 { get; set; }

@@ -227,7 +227,7 @@ else
                     {
                         <p><em>Loading invoices ready for shipment...</em></p>
                     }
-                    else if (_confirmInvoice == null)
+                    else if (_confirmInvoices.Count == 0)
                     {
                         <div class="row mb-3">
                             <div class="col-md-6">
@@ -274,44 +274,49 @@ else
                                 <table class="table table-sm table-hover">
                                     <thead>
                                         <tr>
+                                            <th></th>
                                             <th>Invoice #</th>
                                             <th>Buyer</th>
                                             <th class="text-end">Lots</th>
                                             <th class="text-end">Skins</th>
                                             <th class="text-end">Value</th>
-                                            <th></th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         @foreach (var inv in GetInvoiceGroups())
                                         {
-                                            <tr>
+                                            var otherBuyer = SelectedBuyerId != 0 && inv.BuyerId != SelectedBuyerId;
+                                            <tr class="@(_selectedInvoiceNumbers.Contains(inv.InvoiceNumber) ? "table-primary" : "") @(otherBuyer ? "text-muted" : "")">
+                                                <td>
+                                                    <input type="checkbox" checked="@_selectedInvoiceNumbers.Contains(inv.InvoiceNumber)"
+                                                           disabled="@otherBuyer"
+                                                           title="@(otherBuyer ? "A shipment goes to one buyer — deselect the other invoices first." : "")"
+                                                           @onchange="() => ToggleInvoiceSelection(inv)" />
+                                                </td>
                                                 <td><strong>@inv.InvoiceNumber</strong></td>
                                                 <td>@inv.BuyerNumber - @inv.BuyerName</td>
                                                 <td class="text-end">@inv.Lots.Count</td>
                                                 <td class="text-end">@inv.Lots.Sum(l => l.Skins).ToString("N0")</td>
                                                 <td class="text-end">€@inv.Lots.Sum(l => l.HammerPrice).ToString("N2")</td>
-                                                <td class="text-end">
-                                                    <button class="btn btn-sm btn-primary" @onclick="() => SelectInvoice(inv)" disabled="@(_createShipperId == 0)">Select</button>
-                                                </td>
                                             </tr>
                                         }
                                     </tbody>
                                 </table>
-                                @if (_createShipperId == 0)
-                                {
-                                    <div class="text-muted small">Select a shipper first.</div>
-                                }
+                                <div class="text-muted small">
+                                    @(_selectedInvoiceNumbers.Count) invoice(s) selected — one shipment, one buyer.
+                                    @(_createShipperId == 0 ? " Select a shipper first." : "")
+                                </div>
                             }
                         </div>
                     }
                     else
                     {
-                        @* Confirm step: the boxes that ship on the chosen invoice *@
+                        @* Confirm step: the boxes that ship on the chosen invoices *@
                         <p class="mb-2">
-                            Invoice <strong>@_confirmInvoice.InvoiceNumber</strong> (@_confirmInvoice.BuyerName)
+                            Invoice(s) <strong>@string.Join(", ", _confirmInvoices.Select(i => i.InvoiceNumber))</strong>
+                            (@_confirmInvoices.First().BuyerName)
                             via <strong>@(_shippers.FirstOrDefault(s => s.Id == _createShipperId)?.Name)</strong>
-                            — confirm the boxes below ship on this invoice.
+                            — confirm the boxes below ship on @(_confirmInvoices.Count == 1 ? "this invoice" : "these invoices").
                         </p>
                         @if (_loadingBoxes)
                         {
@@ -319,13 +324,14 @@ else
                         }
                         else if (_confirmBoxes.Count == 0)
                         {
-                            <div class="alert alert-warning">No boxes found for this invoice.</div>
+                            <div class="alert alert-warning">No boxes found for the selected invoice(s).</div>
                         }
                         else
                         {
                             <table class="table table-sm table-striped">
                                 <thead class="table-dark">
                                     <tr>
+                                        <th>Invoice</th>
                                         <th>Box #</th>
                                         <th>Lot #</th>
                                         <th>Type</th>
@@ -336,11 +342,12 @@ else
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach (var box in _confirmBoxes.OrderBy(b => b.LotNumber).ThenBy(b => b.BoxNumber))
+                                    @foreach (var box in _confirmBoxes.OrderBy(b => b.InvoiceNumber).ThenBy(b => b.LotNumber).ThenBy(b => b.BoxNumber))
                                     {
                                         <tr>
+                                            <td>@box.InvoiceNumber</td>
                                             <td>@box.BoxNumber</td>
-                                            <td>@box.LotNumber</td>
+                                            <td>@box.LotNumber @(box.IsShow ? "★" : "")</td>
                                             <td>@box.BoxType</td>
                                             <td class="text-end">@box.Skins</td>
                                             <td class="text-end">@(box.GrossWeight?.ToString("N2") ?? "—")</td>
@@ -351,7 +358,7 @@ else
                                 </tbody>
                                 <tfoot class="fw-bold">
                                     <tr>
-                                        <td colspan="3">Total: @_confirmBoxes.Count box(es)</td>
+                                        <td colspan="4">Total: @_confirmBoxes.Count box(es)</td>
                                         <td class="text-end">@_confirmBoxes.Sum(b => b.Skins).ToString("N0")</td>
                                         <td class="text-end">@_confirmBoxes.Sum(b => b.GrossWeight ?? 0).ToString("N2")</td>
                                         <td class="text-end">@_confirmBoxes.Sum(b => b.NetWeight ?? 0).ToString("N2")</td>
@@ -359,13 +366,18 @@ else
                                     </tr>
                                 </tfoot>
                             </table>
+                            <div class="text-muted small">★ = showlot box — location is the catalogue rack number.</div>
                         }
                     }
                 </div>
                 <div class="modal-footer">
-                    @if (_confirmInvoice == null)
+                    @if (_confirmInvoices.Count == 0)
                     {
                         <button class="btn btn-secondary" @onclick="CloseCreateModal">Cancel</button>
+                        <button class="btn btn-primary" @onclick="ContinueToConfirm"
+                                disabled="@(_loadingCreate || _createShipperId == 0 || _selectedInvoiceNumbers.Count == 0)">
+                            Continue (@_selectedInvoiceNumbers.Count invoice(s))
+                        </button>
                     }
                     else
                     {
@@ -395,7 +407,8 @@ else
     private string _trackingNumber = "";
     private bool _saving;
 
-    // Create modal — invoice-driven: choose shipper + address, pick an invoice, confirm its boxes.
+    // Create modal — invoice-driven: choose shipper + address, tick one or more invoices (same
+    // buyer), confirm their boxes.
     private bool _showCreateModal;
     private bool _loadingCreate;
     private int _createShipperId;
@@ -403,9 +416,13 @@ else
     private string _createTrackingNumber = "";
     private string _createNotes = "";
     private List<ShippingAddressListDto> _allAddresses = new();
-    private InvoiceGroup? _confirmInvoice;
+    private HashSet<string> _selectedInvoiceNumbers = new();
+    private List<InvoiceGroup> _confirmInvoices = new();
     private List<ShippingBoxDto> _confirmBoxes = new();
     private bool _loadingBoxes;
+
+    private int SelectedBuyerId =>
+        GetInvoiceGroups().FirstOrDefault(g => _selectedInvoiceNumbers.Contains(g.InvoiceNumber))?.BuyerId ?? 0;
 
     private class InvoiceGroup
     {
@@ -503,7 +520,8 @@ else
         _createAddressId = 0;
         _createTrackingNumber = "";
         _createNotes = "";
-        _confirmInvoice = null;
+        _selectedInvoiceNumbers.Clear();
+        _confirmInvoices.Clear();
         _confirmBoxes.Clear();
         _allAddresses.Clear();
         _error = null;
@@ -539,9 +557,19 @@ else
             .ToList();
     }
 
-    private async Task SelectInvoice(InvoiceGroup inv)
+    private void ToggleInvoiceSelection(InvoiceGroup inv)
     {
-        _confirmInvoice = inv;
+        if (!_selectedInvoiceNumbers.Remove(inv.InvoiceNumber))
+            _selectedInvoiceNumbers.Add(inv.InvoiceNumber);
+    }
+
+    private async Task ContinueToConfirm()
+    {
+        _confirmInvoices = GetInvoiceGroups()
+            .Where(g => _selectedInvoiceNumbers.Contains(g.InvoiceNumber))
+            .ToList();
+        if (_confirmInvoices.Count == 0) return;
+
         _confirmBoxes.Clear();
         _loadingBoxes = true;
         _error = null;
@@ -549,36 +577,37 @@ else
 
         try
         {
-            // The released-boxes list carries per-box detail (type, weights, location); scope it to
-            // this invoice for the confirmation view.
+            // The released-boxes list carries per-box detail (type, weights, location — showlot
+            // boxes get the catalogue rack); scope it to the chosen invoices for confirmation.
             var allBoxes = await Api.GetShippingBoxesAsync();
-            _confirmBoxes = allBoxes.Where(b => b.InvoiceNumber == inv.InvoiceNumber).ToList();
+            _confirmBoxes = allBoxes.Where(b => _selectedInvoiceNumbers.Contains(b.InvoiceNumber)).ToList();
         }
         catch (Exception ex)
         {
             _error = ex.Message;
-            _confirmInvoice = null;
+            _confirmInvoices.Clear();
         }
         _loadingBoxes = false;
     }
 
     private void BackToInvoices()
     {
-        _confirmInvoice = null;
+        _confirmInvoices.Clear();
         _confirmBoxes.Clear();
     }
 
     private void CloseCreateModal()
     {
         _showCreateModal = false;
-        _confirmInvoice = null;
+        _selectedInvoiceNumbers.Clear();
+        _confirmInvoices.Clear();
         _confirmBoxes.Clear();
         _error = null;
     }
 
     private async Task CreateShipment()
     {
-        if (_confirmInvoice == null) return;
+        if (_confirmInvoices.Count == 0) return;
         _saving = true;
         _error = null;
         _success = null;
@@ -586,11 +615,11 @@ else
         var payload = new
         {
             shipperId = _createShipperId,
-            buyerId = _confirmInvoice.BuyerId,
+            buyerId = _confirmInvoices.First().BuyerId,
             shippingAddressId = _createAddressId > 0 ? (int?)_createAddressId : null,
             trackingNumber = _createTrackingNumber,
             notes = _createNotes,
-            lotNumbers = _confirmInvoice.Lots.Select(l => l.LotNumber).Distinct().ToList(),
+            lotNumbers = _confirmInvoices.SelectMany(i => i.Lots.Select(l => l.LotNumber)).Distinct().ToList(),
             boxNumbers = _confirmBoxes.Select(b => b.BoxNumber).Distinct().ToList()
         };
 
@@ -598,10 +627,11 @@ else
         {
             var (ok, err, num) = await Api.CreateShipmentAsync(payload);
             if (!ok) { _error = err; _saving = false; return; }
-            _success = $"Shipment {num} created for invoice {_confirmInvoice.InvoiceNumber}: " +
+            _success = $"Shipment {num} created for invoice(s) {string.Join(", ", _confirmInvoices.Select(i => i.InvoiceNumber))}: " +
                        $"{_confirmBoxes.Count} box(es), {_confirmBoxes.Sum(b => b.Skins):N0} skins.";
             _showCreateModal = false;
-            _confirmInvoice = null;
+            _selectedInvoiceNumbers.Clear();
+            _confirmInvoices.Clear();
             await LoadShipments();
         }
         catch (Exception ex)
