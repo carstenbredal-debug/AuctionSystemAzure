@@ -1605,6 +1605,7 @@ public class ShipmentFunctions
             BuyerName = po.Shipment?.Buyer?.Name ?? "",
             BuyerNumber = po.Shipment?.Buyer?.BuyerNumber ?? "",
             ShipperName = po.Shipment?.Shipper?.Name ?? "",
+            OutLocation = po.Shipment?.OutLocation,
             po.Status,
             po.Type,
             po.CreatedAt,

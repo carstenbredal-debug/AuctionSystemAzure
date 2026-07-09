@@ -1038,6 +1038,7 @@ public class PackingOrderDto
     public string BuyerName { get; set; } = "";
     public string BuyerNumber { get; set; } = "";
     public string ShipperName { get; set; } = "";
+    public string? OutLocation { get; set; }
     public string Status { get; set; } = "";
     public string Type { get; set; } = "ShowLot";
     public DateTime CreatedAt { get; set; }

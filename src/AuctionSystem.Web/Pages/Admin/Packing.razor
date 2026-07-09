@@ -93,7 +93,16 @@ else
                                                         <td>@line.LotNumber</td>
                                                         <td>@line.Skins</td>
                                                         <td>@line.BoxType</td>
-                                                        <td>@(string.IsNullOrEmpty(line.Location) ? "—" : line.Location)</td>
+                                                        <td>
+                                                            @if (line.MovedToOutAt != null)
+                                                            {
+                                                                <span class="badge bg-dark" title="Moved @line.MovedToOutAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm")">@(po.OutLocation ?? "OUT")</span>
+                                                            }
+                                                            else
+                                                            {
+                                                                @(string.IsNullOrEmpty(line.Location) ? "—" : line.Location)
+                                                            }
+                                                        </td>
                                                     </tr>
                                                 }
                                             </tbody>
