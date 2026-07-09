@@ -167,7 +167,7 @@ else
     private string GetStatusBadgeClass(string status) => status switch
     {
         "Ready to Pack" => "bg-warning text-dark",
-        "In Production" => "bg-info text-dark",
+        "In Production" => "text-danger",
         "Packed" => "bg-success",
         _ => "bg-secondary"
     };
