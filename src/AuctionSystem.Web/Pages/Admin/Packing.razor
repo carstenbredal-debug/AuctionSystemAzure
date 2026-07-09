@@ -55,17 +55,16 @@ else
                             <td>@po.BoxCount</td>
                             <td>@po.CreatedAt.ToString("yyyy-MM-dd")</td>
                             <td>
-                                @if (po.Status != "Packed")
+                                @if (po.Status == "Ready to Pack")
                                 {
-                                    @if (po.Status == "Ready to Pack")
-                                    {
-                                        <button class="btn btn-sm btn-primary me-1" @onclick='() => UpdateStatus(po, "In Production")'>Start Packing</button>
-                                    }
-                                    <button class="btn btn-sm btn-success" @onclick='() => UpdateStatus(po, "Packed")'
-                                            disabled="@(po.Status == "Ready to Pack")"
-                                            title="@(po.Status == "Ready to Pack" ? "Start packing first." : "Confirm all boxes are packed")">
-                                        Confirm
+                                    <button class="btn btn-sm btn-primary" @onclick='() => UpdateStatus(po, "In Production")'
+                                            title="Makes this order visible to the scanner — completes automatically when all boxes reach the OUT location">
+                                        Start Packing
                                     </button>
+                                }
+                                else if (po.Status == "In Production")
+                                {
+                                    <span class="text-muted small">Scanning — completes when all boxes are at @(po.OutLocation ?? "the OUT location")</span>
                                 }
                             </td>
                         </tr>

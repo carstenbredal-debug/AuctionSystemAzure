@@ -73,6 +73,8 @@ public class BoxMoveFunctions
             return await Json(req, new { found = false, boxNumber, message = $"Box {boxNumber} is not on any active shipment." });
         if (line.OrderType == "ShowLot")
             return await Json(req, new { found = false, boxNumber, isShowlot = true, message = $"Box {boxNumber} is a showlot — it is packed at the show (Showlot flow), not moved from storage." });
+        if (line.OrderStatus == "Ready to Pack")
+            return await Json(req, new { found = false, boxNumber, notStarted = true, message = $"Packing has not been started for order {line.PackingOrderNumber} — press Start Packing in the system first." });
 
         var (moved, total) = await ShipmentMoveProgressAsync(line.ShipmentId);
 
@@ -116,6 +118,8 @@ public class BoxMoveFunctions
             return await Json(req, new { success = false, boxNumber, message = $"Box {boxNumber} is not on any active shipment." });
         if (line.OrderType == "ShowLot")
             return await Json(req, new { success = false, boxNumber, isShowlot = true, message = $"Box {boxNumber} is a showlot — it is packed at the show (Showlot flow), not moved from storage." });
+        if (line.OrderStatus == "Ready to Pack")
+            return await Json(req, new { success = false, boxNumber, notStarted = true, message = $"Packing has not been started for order {line.PackingOrderNumber} — press Start Packing in the system first." });
 
         var alreadyMoved = line.MovedToOutAt != null;
         if (!alreadyMoved)
@@ -124,6 +128,22 @@ public class BoxMoveFunctions
             await _db.Database.ExecuteSqlRawAsync(
                 "UPDATE auction.PackingOrderLines SET MovedToOutAt = SYSUTCDATETIME() WHERE Id = {0} AND MovedToOutAt IS NULL",
                 line.LineId);
+        }
+
+        // Last box of the ORDER arrived -> the packing order completes automatically (no manual
+        // Confirm in the UI).
+        var orderCompleted = false;
+        var remainingInOrder = await _db.PackingOrderLines
+            .CountAsync(l => l.PackingOrderId == line.PackingOrderId && l.MovedToOutAt == null);
+        if (remainingInOrder == 0 && line.OrderStatus != "Packed")
+        {
+            var order = await _db.PackingOrders.FindAsync(line.PackingOrderId);
+            if (order != null && order.Status != "Packed")
+            {
+                order.Status = "Packed";
+                await _db.SaveChangesAsync();
+                orderCompleted = true;
+            }
         }
 
         var (moved, total) = await ShipmentMoveProgressAsync(line.ShipmentId);
@@ -135,14 +155,16 @@ public class BoxMoveFunctions
             boxNumber = line.BoxNumber,
             outLocation = line.OutLocation,
             shipmentNumber = line.ShipmentNumber,
+            packingOrderNumber = line.PackingOrderNumber,
             alreadyMoved,
             movedBoxes = moved,
             totalBoxes = total,
             allMoved,
+            orderCompleted,
             message = alreadyMoved
                 ? $"Box {line.BoxNumber} was already at {line.OutLocation ?? "?"} ({moved}/{total} boxes)."
-                : allMoved
-                    ? $"Box {line.BoxNumber} moved to {line.OutLocation ?? "?"} — ALL {total} boxes for shipment {line.ShipmentNumber} are now there."
+                : orderCompleted
+                    ? $"Box {line.BoxNumber} moved to {line.OutLocation ?? "?"} — order {line.PackingOrderNumber} COMPLETE ({moved}/{total} boxes for shipment {line.ShipmentNumber})."
                     : $"Box {line.BoxNumber} moved to {line.OutLocation ?? "?"} ({moved}/{total} boxes for shipment {line.ShipmentNumber})."
         });
     }
@@ -152,8 +174,11 @@ public class BoxMoveFunctions
     // the show racks and go through the Showlot packing flow, not a storage->OUT move.
     private async Task<HttpResponseData> ListPackingOrdersAsync(HttpRequestData req)
     {
+        // Only orders where packing has been STARTED (Start Packing pressed -> In Production) are
+        // scanner work; Ready to Pack orders stay invisible, Packed ones are done.
         var orders = await _db.PackingOrders
-            .Where(p => p.Type == "Packing" && p.Shipment != null && !DoneStatuses.Contains(p.Shipment.Status))
+            .Where(p => p.Type == "Packing" && p.Status == "In Production"
+                        && p.Shipment != null && !DoneStatuses.Contains(p.Shipment.Status))
             .OrderBy(p => p.Shipment!.CreatedAt).ThenBy(p => p.PackingOrderNumber)
             .Select(p => new
             {
@@ -214,8 +239,10 @@ public class BoxMoveFunctions
                 Skins = l.Skins,
                 Location = l.Location,
                 MovedToOutAt = l.MovedToOutAt,
+                PackingOrderId = l.PackingOrderId,
                 PackingOrderNumber = l.PackingOrder!.PackingOrderNumber,
                 OrderType = l.PackingOrder.Type,
+                OrderStatus = l.PackingOrder.Status,
                 ShipmentId = l.PackingOrder.ShipmentId,
                 ShipmentNumber = l.PackingOrder.Shipment!.ShipmentNumber,
                 OutLocation = l.PackingOrder.Shipment.OutLocation
@@ -258,8 +285,10 @@ public class BoxMoveFunctions
         public int Skins { get; set; }
         public string Location { get; set; } = "";
         public DateTime? MovedToOutAt { get; set; }
+        public int PackingOrderId { get; set; }
         public string PackingOrderNumber { get; set; } = "";
         public string OrderType { get; set; } = "";
+        public string OrderStatus { get; set; } = "";
         public int ShipmentId { get; set; }
         public string ShipmentNumber { get; set; } = "";
         public string? OutLocation { get; set; }
