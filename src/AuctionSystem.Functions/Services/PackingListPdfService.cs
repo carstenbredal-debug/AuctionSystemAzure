@@ -53,6 +53,13 @@ public static class PackingListPdfService
 {
     private static readonly string LogoPath = Path.Combine(AppContext.BaseDirectory, "Assets", "kopenhagenfur-logo.png");
 
+    // European number formatting (1.500,00) + unit suffixes on every figure.
+    private static readonly System.Globalization.CultureInfo Eu = System.Globalization.CultureInfo.GetCultureInfo("da-DK");
+    private static string Pcs(int n) => n.ToString("N0", Eu) + " pcs.";
+    private static string Eur(decimal d) => d.ToString("N2", Eu) + " EUR";
+    private static string Vol(decimal d) => d.ToString("N4", Eu) + " m3";
+    private static string Kg(decimal d) => d.ToString("N2", Eu) + " kg";
+
     public static byte[] GeneratePdf(PackingListData data)
     {
         QuestPDF.Settings.License = LicenseType.Community;
@@ -135,7 +142,9 @@ public static class PackingListPdfService
                     }
                 });
 
-                row.RelativeItem(5).Column(right =>
+                // Spacer pushes the forwarding-agent block to the right edge of the page.
+                row.RelativeItem(2);
+                row.RelativeItem(3).Column(right =>
                 {
                     right.Item().Text(data.IsShippingInvoice ? "Shipping invoice" : "Packing list").Bold().FontSize(16);
                     right.Item().Height(10);
@@ -157,7 +166,7 @@ public static class PackingListPdfService
     {
         col.Item().Row(r =>
         {
-            r.ConstantItem(120).Text(label).FontSize(8);
+            r.ConstantItem(85).Text(label).FontSize(8);
             r.RelativeItem().Text(value).Bold().FontSize(8);
         });
     }
@@ -244,8 +253,8 @@ public static class PackingListPdfService
                     table.Cell().PaddingVertical(2).PaddingLeft(2).Text(line.Text).FontSize(7.5f);
                     table.Cell().PaddingVertical(2).AlignRight().Text(line.LotNo).FontSize(7.5f);
                     table.Cell().PaddingVertical(2).AlignRight().Text(line.Carton).FontSize(7.5f);
-                    table.Cell().PaddingVertical(2).AlignRight().Text(line.Skins.ToString("N0")).FontSize(7.5f);
-                    if (isInvoice) table.Cell().PaddingVertical(2).AlignRight().Text(line.HammerPrice > 0 ? (line.HammerPrice * line.Skins).ToString("N2") : "").FontSize(7.5f);
+                    table.Cell().PaddingVertical(2).AlignRight().Text(Pcs(line.Skins)).FontSize(7.5f);
+                    if (isInvoice) table.Cell().PaddingVertical(2).AlignRight().Text(line.HammerPrice > 0 ? Eur(line.HammerPrice * line.Skins) : "").FontSize(7.5f);
                     table.Cell().PaddingVertical(2).Text("").FontSize(7.5f);
                     table.Cell().PaddingVertical(2).Text("").FontSize(7.5f);
                     table.Cell().PaddingVertical(2).Text("").FontSize(7.5f);
@@ -255,11 +264,11 @@ public static class PackingListPdfService
                     table.Cell().PaddingVertical(2).Text("").FontSize(7.5f);
                     table.Cell().PaddingVertical(2).Text("").FontSize(7.5f);
                     table.Cell().PaddingVertical(2).AlignRight().Text(line.Carton).Bold().FontSize(7.5f);
-                    table.Cell().PaddingVertical(2).AlignRight().Text(line.Skins.ToString("N0")).Bold().FontSize(7.5f);
+                    table.Cell().PaddingVertical(2).AlignRight().Text(Pcs(line.Skins)).Bold().FontSize(7.5f);
                     if (isInvoice) table.Cell().PaddingVertical(2).Text("").FontSize(7.5f);
-                    table.Cell().PaddingVertical(2).AlignRight().Text(line.VolumeM3 > 0 ? line.VolumeM3.ToString("N4") : "").Bold().FontSize(7.5f);
-                    table.Cell().PaddingVertical(2).AlignRight().Text(line.NetWeight > 0 ? line.NetWeight.ToString("N2") : "").Bold().FontSize(7.5f);
-                    table.Cell().PaddingVertical(2).AlignRight().Text(line.GrossWeight > 0 ? line.GrossWeight.ToString("N2") : "").Bold().FontSize(7.5f);
+                    table.Cell().PaddingVertical(2).AlignRight().Text(line.VolumeM3 > 0 ? Vol(line.VolumeM3) : "").Bold().FontSize(7.5f);
+                    table.Cell().PaddingVertical(2).AlignRight().Text(line.NetWeight > 0 ? Kg(line.NetWeight) : "").Bold().FontSize(7.5f);
+                    table.Cell().PaddingVertical(2).AlignRight().Text(line.GrossWeight > 0 ? Kg(line.GrossWeight) : "").Bold().FontSize(7.5f);
                 }
                 else
                 {
@@ -267,11 +276,11 @@ public static class PackingListPdfService
                     table.Cell().PaddingVertical(2).PaddingLeft(2).Text(line.Text).FontSize(7.5f);
                     table.Cell().PaddingVertical(2).AlignRight().Text(line.LotNo).FontSize(7.5f);
                     table.Cell().PaddingVertical(2).AlignRight().Text(line.Carton).FontSize(7.5f);
-                    table.Cell().PaddingVertical(2).AlignRight().Text(line.Skins.ToString("N0")).FontSize(7.5f);
-                    if (isInvoice) table.Cell().PaddingVertical(2).AlignRight().Text(price > 0 ? price.ToString("N2") : "").FontSize(7.5f);
-                    table.Cell().PaddingVertical(2).AlignRight().Text(line.VolumeM3 > 0 ? line.VolumeM3.ToString("N4") : "").FontSize(7.5f);
-                    table.Cell().PaddingVertical(2).AlignRight().Text(line.NetWeight > 0 ? line.NetWeight.ToString("N2") : "").FontSize(7.5f);
-                    table.Cell().PaddingVertical(2).AlignRight().Text(line.GrossWeight > 0 ? line.GrossWeight.ToString("N2") : "").FontSize(7.5f);
+                    table.Cell().PaddingVertical(2).AlignRight().Text(Pcs(line.Skins)).FontSize(7.5f);
+                    if (isInvoice) table.Cell().PaddingVertical(2).AlignRight().Text(price > 0 ? Eur(price) : "").FontSize(7.5f);
+                    table.Cell().PaddingVertical(2).AlignRight().Text(line.VolumeM3 > 0 ? Vol(line.VolumeM3) : "").FontSize(7.5f);
+                    table.Cell().PaddingVertical(2).AlignRight().Text(line.NetWeight > 0 ? Kg(line.NetWeight) : "").FontSize(7.5f);
+                    table.Cell().PaddingVertical(2).AlignRight().Text(line.GrossWeight > 0 ? Kg(line.GrossWeight) : "").FontSize(7.5f);
                 }
             }
         });
@@ -288,12 +297,12 @@ public static class PackingListPdfService
             {
                 row.RelativeItem(5).Text(label).Bold().FontSize(8);       // Text
                 row.RelativeItem(1.5f).Text("").FontSize(8);               // Lot no. (empty)
-                row.RelativeItem(1.5f).AlignRight().Text(boxes.ToString("N0")).Bold().FontSize(8);  // Cartons
-                row.RelativeItem(1.2f).AlignRight().Text(skins.ToString("N0")).Bold().FontSize(8);  // Skins
-                if (isInvoice) row.RelativeItem(1.5f).AlignRight().Text(price.ToString("N2")).Bold().FontSize(8); // Price
-                row.RelativeItem(1).AlignRight().Text(vol.ToString("N4")).Bold().FontSize(8);       // Volume
-                row.RelativeItem(1.2f).AlignRight().Text(net.ToString("N2")).Bold().FontSize(8);    // Net
-                row.RelativeItem(1.2f).AlignRight().Text(gross.ToString("N2")).Bold().FontSize(8);  // Gross
+                row.RelativeItem(1.5f).AlignRight().Text(boxes.ToString("N0", Eu)).Bold().FontSize(8);  // Cartons
+                row.RelativeItem(1.2f).AlignRight().Text(Pcs(skins)).Bold().FontSize(8);  // Skins
+                if (isInvoice) row.RelativeItem(1.5f).AlignRight().Text(Eur(price)).Bold().FontSize(8); // Price
+                row.RelativeItem(1).AlignRight().Text(Vol(vol)).Bold().FontSize(8);       // Volume
+                row.RelativeItem(1.2f).AlignRight().Text(Kg(net)).Bold().FontSize(8);    // Net
+                row.RelativeItem(1.2f).AlignRight().Text(Kg(gross)).Bold().FontSize(8);  // Gross
             });
         });
     }
@@ -309,12 +318,12 @@ public static class PackingListPdfService
             {
                 row.RelativeItem(5).Text("Grand total").Bold().FontSize(9);       // Text
                 row.RelativeItem(1.5f).Text("").FontSize(9);                        // Lot no. (empty)
-                row.RelativeItem(1.5f).AlignRight().Text(data.TotalCartons.ToString("N0")).Bold().FontSize(9);  // Cartons
-                row.RelativeItem(1.2f).AlignRight().Text(data.TotalSkins.ToString("N0")).Bold().FontSize(9);    // Skins
-                if (data.IsShippingInvoice) row.RelativeItem(1.5f).AlignRight().Text(data.TotalPrice.ToString("N2")).Bold().FontSize(9); // Price
-                row.RelativeItem(1).AlignRight().Text(data.TotalVolume.ToString("N4")).Bold().FontSize(9);      // Volume
-                row.RelativeItem(1.2f).AlignRight().Text(data.TotalNetWeight.ToString("N2")).Bold().FontSize(9); // Net
-                row.RelativeItem(1.2f).AlignRight().Text(data.TotalGrossWeight.ToString("N2")).Bold().FontSize(9); // Gross
+                row.RelativeItem(1.5f).AlignRight().Text(data.TotalCartons.ToString("N0", Eu)).Bold().FontSize(9);  // Cartons
+                row.RelativeItem(1.2f).AlignRight().Text(Pcs(data.TotalSkins)).Bold().FontSize(9);    // Skins
+                if (data.IsShippingInvoice) row.RelativeItem(1.5f).AlignRight().Text(Eur(data.TotalPrice)).Bold().FontSize(9); // Price
+                row.RelativeItem(1).AlignRight().Text(Vol(data.TotalVolume)).Bold().FontSize(9);      // Volume
+                row.RelativeItem(1.2f).AlignRight().Text(Kg(data.TotalNetWeight)).Bold().FontSize(9); // Net
+                row.RelativeItem(1.2f).AlignRight().Text(Kg(data.TotalGrossWeight)).Bold().FontSize(9); // Gross
             });
         });
     }
