@@ -159,6 +159,21 @@ public class ShowlotPackFunctions
         {
             line.PackedBoxId = packedBox.Id;
             line.MovedToOutAt = DateTime.UtcNow;   // the packed box goes straight to the OUT location
+
+            // Persist the physical work OUTSIDE the shipment: which carton this showlot sits in and
+            // where — survives shipment deletion and is re-applied on recreate.
+            var state = await _db.BoxPhysicalStates.FindAsync(line.BoxNumber);
+            if (state == null)
+            {
+                state = new BoxPhysicalState { BoxNumber = line.BoxNumber };
+                _db.BoxPhysicalStates.Add(state);
+            }
+            state.OutLocation = order.Shipment.OutLocation;
+            state.MovedAt = DateTime.UtcNow;
+            state.PackedBoxNumber = body.BoxNumber;
+            state.PackedBoxType = body.BoxType;
+            state.PackedGrossWeight = body.GrossWeight;
+            state.UpdatedAt = DateTime.UtcNow;
         }
 
         // Last showlot packed -> order completes; the shipment moves on from ShowLot Packing.

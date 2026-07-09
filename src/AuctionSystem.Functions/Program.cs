@@ -835,6 +835,19 @@ using (var scope = host.Services.CreateScope())
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.PackingOrderLines') AND name = 'MovedToOutAt')
                 ALTER TABLE auction.PackingOrderLines ADD MovedToOutAt DATETIME2 NULL;
         ");
+        // BoxPhysicalState: physical staging/packing state per box, survives shipment deletion
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'BoxPhysicalState')
+            CREATE TABLE auction.BoxPhysicalState (
+                BoxNumber INT NOT NULL PRIMARY KEY,
+                OutLocation NVARCHAR(20) NULL,
+                MovedAt DATETIME2 NULL,
+                PackedBoxNumber NVARCHAR(50) NULL,
+                PackedBoxType NVARCHAR(100) NULL,
+                PackedGrossWeight DECIMAL(18,4) NULL,
+                UpdatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+            );
+        ");
         // Drop auction.Boxes table if it exists (replaced by view)
         db.Database.ExecuteSqlRaw(@"
             IF EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'Boxes')

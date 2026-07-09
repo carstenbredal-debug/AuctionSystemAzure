@@ -1,5 +1,6 @@
 using AuctionSystem.Domain.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace AuctionSystem.Functions.Services;
@@ -11,15 +12,15 @@ namespace AuctionSystem.Functions.Services;
 public class ShipmentReadyService
 {
     private readonly AuctionDbContext _db;
-    private readonly Functions.ShipmentFunctions _shipmentFunctions;
+    private readonly IServiceProvider _services;   // lazy — ShipmentFunctions also depends on this service
     private readonly ILogger<ShipmentReadyService> _logger;
 
     private static readonly string[] DoneStatuses = { "Ready", "Shipped", "Delivered", "Cancelled" };
 
-    public ShipmentReadyService(AuctionDbContext db, Functions.ShipmentFunctions shipmentFunctions, ILogger<ShipmentReadyService> logger)
+    public ShipmentReadyService(AuctionDbContext db, IServiceProvider services, ILogger<ShipmentReadyService> logger)
     {
         _db = db;
-        _shipmentFunctions = shipmentFunctions;
+        _services = services;
         _logger = logger;
     }
 
@@ -52,9 +53,10 @@ public class ShipmentReadyService
 
         // Regenerate BOTH documents so the stored URLs reflect the final packed state. Failures are
         // logged but never break the scanner confirmation — the docs regenerate on demand anyway.
-        try { await _shipmentFunctions.GenerateAndStorePackingListPdfAsync(shipmentId, isShippingInvoice: false); }
+        var shipmentFunctions = _services.GetRequiredService<Functions.ShipmentFunctions>();
+        try { await shipmentFunctions.GenerateAndStorePackingListPdfAsync(shipmentId, isShippingInvoice: false); }
         catch (Exception ex) { _logger.LogError(ex, "Packing list regeneration failed for shipment {Id}", shipmentId); }
-        try { await _shipmentFunctions.GenerateAndStorePackingListPdfAsync(shipmentId, isShippingInvoice: true); }
+        try { await shipmentFunctions.GenerateAndStorePackingListPdfAsync(shipmentId, isShippingInvoice: true); }
         catch (Exception ex) { _logger.LogError(ex, "Shipping invoice regeneration failed for shipment {Id}", shipmentId); }
 
         return true;

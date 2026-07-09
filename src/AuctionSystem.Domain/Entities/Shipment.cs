@@ -64,6 +64,21 @@ public class PackingOrderLine
     public DateTime? MovedToOutAt { get; set; }
 }
 
+// Physical box state that OUTLIVES shipments: where a box was staged (OUT location) and, for
+// showlots, which carton it was packed into. Written by the scanner flows, re-applied when a new
+// shipment claims the box (deleting a shipment must not undo physical work), cleared when the box
+// actually ships.
+public class BoxPhysicalState
+{
+    public int BoxNumber { get; set; }
+    public string? OutLocation { get; set; }
+    public DateTime? MovedAt { get; set; }
+    public string? PackedBoxNumber { get; set; }
+    public string? PackedBoxType { get; set; }
+    public decimal? PackedGrossWeight { get; set; }
+    public DateTime UpdatedAt { get; set; }
+}
+
 public class PackedBox
 {
     public int Id { get; set; }

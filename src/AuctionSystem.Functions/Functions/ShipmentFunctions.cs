@@ -18,6 +18,7 @@ public class ShipmentFunctions
     private readonly AuctionDbContext _db;
     private readonly CatalogDbContext _catalogDb;
     private readonly BlobStorageService? _blobStorage;
+    private readonly ShipmentReadyService? _readyService;
     private readonly ILogger<ShipmentFunctions> _logger;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -26,8 +27,9 @@ public class ShipmentFunctions
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public ShipmentFunctions(AuctionDbContext db, CatalogDbContext catalogDb, ILogger<ShipmentFunctions> logger, BlobStorageService? blobStorage = null)
+    public ShipmentFunctions(AuctionDbContext db, CatalogDbContext catalogDb, ILogger<ShipmentFunctions> logger, BlobStorageService? blobStorage = null, ShipmentReadyService? readyService = null)
     {
+        _readyService = readyService;
         _db = db;
         _catalogDb = catalogDb;
         _logger = logger;
@@ -234,9 +236,23 @@ public class ShipmentFunctions
             .Where(s => s.OutLocation != null && !doneStatuses.Contains(s.Status))
             .Select(s => s.OutLocation!)
             .ToListAsync();
-        shipment.OutLocation = Enumerable.Range(1, 20)
-            .Select(i => $"OUT-{i}")
-            .FirstOrDefault(loc => !takenLocations.Contains(loc));
+        // Prefer the location where this shipment's boxes ALREADY physically sit (surviving state
+        // from a deleted shipment) so a recreate doesn't ask anyone to move boxes.
+        string? preferredLocation = null;
+        if (body.BoxNumbers != null && body.BoxNumbers.Count > 0)
+        {
+            preferredLocation = await _db.BoxPhysicalStates
+                .Where(s => body.BoxNumbers.Contains(s.BoxNumber) && s.OutLocation != null)
+                .GroupBy(s => s.OutLocation)
+                .OrderByDescending(g => g.Count())
+                .Select(g => g.Key)
+                .FirstOrDefaultAsync();
+        }
+        shipment.OutLocation = preferredLocation != null && !takenLocations.Contains(preferredLocation)
+            ? preferredLocation
+            : Enumerable.Range(1, 20)
+                .Select(i => $"OUT-{i}")
+                .FirstOrDefault(loc => !takenLocations.Contains(loc));
 
         foreach (var lotNumber in body.LotNumbers)
         {
@@ -482,6 +498,12 @@ public class ShipmentFunctions
         // leave it Released so the remaining boxes stay shippable.
         await RefreshInvoiceShippingStatusAsync(invoiceIds, useSnapshot ? snapshotLotsTable : null);
 
+        // Re-apply surviving physical work (boxes already at an OUT location, showlots already in
+        // packed cartons) — deleting a shipment must not undo what happened on the floor.
+        await RehydratePhysicalStateAsync(shipment);
+        if (_readyService != null)
+            await _readyService.TryCompleteAsync(shipment.Id);
+
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
         await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true, id = shipment.Id, shipmentNumber = shipment.ShipmentNumber, outLocation = shipment.OutLocation }, JsonOptions));
@@ -597,6 +619,79 @@ public class ShipmentFunctions
         return doc.ToString();
     }
 
+    // Re-applies surviving BoxPhysicalState to a freshly created shipment's packing orders: storage
+    // boxes already confirmed at an OUT location get their MovedToOutAt back; showlots already in a
+    // packed carton get the carton (PackedBox) recreated. Order statuses follow the restored work.
+    private async Task RehydratePhysicalStateAsync(Shipment shipment)
+    {
+        var orders = await _db.PackingOrders
+            .Include(p => p.Lines)
+            .Where(p => p.ShipmentId == shipment.Id)
+            .ToListAsync();
+        if (orders.Count == 0) return;
+
+        var boxNumbers = orders.SelectMany(o => o.Lines).Select(l => l.BoxNumber).ToList();
+        var states = await _db.BoxPhysicalStates.Where(s => boxNumbers.Contains(s.BoxNumber)).ToListAsync();
+        if (states.Count == 0) return;
+        var stateByBox = states.ToDictionary(s => s.BoxNumber);
+
+        foreach (var order in orders)
+        {
+            if (order.Type == "Packing")
+            {
+                foreach (var line in order.Lines)
+                    if (stateByBox.TryGetValue(line.BoxNumber, out var st) && st.MovedAt != null)
+                        line.MovedToOutAt = st.MovedAt;
+                var moved = order.Lines.Count(l => l.MovedToOutAt != null);
+                if (moved == order.Lines.Count) order.Status = "Packed";
+                else if (moved > 0) order.Status = "In Production";
+            }
+            else
+            {
+                // Rebuild the packed cartons from the surviving per-showlot state.
+                var packedGroups = order.Lines
+                    .Where(l => stateByBox.TryGetValue(l.BoxNumber, out var st) && !string.IsNullOrEmpty(st.PackedBoxNumber))
+                    .GroupBy(l => stateByBox[l.BoxNumber].PackedBoxNumber!)
+                    .ToList();
+                foreach (var grp in packedGroups)
+                {
+                    var st = stateByBox[grp.First().BoxNumber];
+                    var dims = await _db.Set<BoxTypeDimension>().FirstOrDefaultAsync(d => d.BoxType == st.PackedBoxType);
+                    var tareParam = await _db.Set<SystemParameter>().FirstOrDefaultAsync(p => p.Key == $"BoxTareWeight_{st.PackedBoxType}");
+                    var tare = tareParam != null && decimal.TryParse(tareParam.Value, out var tw) ? tw : 0m;
+                    var gross = st.PackedGrossWeight ?? 0m;
+                    var packedBox = new PackedBox
+                    {
+                        PackingOrderId = order.Id,
+                        BoxNumber = st.PackedBoxNumber!,
+                        BoxType = st.PackedBoxType ?? "",
+                        GrossWeight = gross,
+                        NetWeight = gross - tare > 0 ? gross - tare : gross,
+                        TareWeight = tare,
+                        Weight = gross,
+                        HeightM = dims?.HeightM ?? 0,
+                        WidthM = dims?.WidthM ?? 0,
+                        LengthM = dims?.LengthM ?? 0,
+                        Status = "Approved"
+                    };
+                    _db.PackedBoxes.Add(packedBox);
+                    await _db.SaveChangesAsync();
+                    foreach (var line in grp)
+                    {
+                        line.PackedBoxId = packedBox.Id;
+                        line.MovedToOutAt = stateByBox[line.BoxNumber].MovedAt ?? DateTime.UtcNow;
+                    }
+                }
+                var packed = order.Lines.Count(l => l.PackedBoxId != null);
+                if (packed == order.Lines.Count) order.Status = "Packed";
+                else if (packed > 0) order.Status = "In Production";
+            }
+        }
+        await _db.SaveChangesAsync();
+        _logger.LogInformation("Rehydrated physical state onto shipment {Number}: {Count} boxes had surviving state",
+            shipment.ShipmentNumber, states.Count);
+    }
+
     [Function("UpdateShipmentStatus")]
     public async Task<HttpResponseData> UpdateStatus(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "shipments/{id:int}/status")] HttpRequestData req,
@@ -626,7 +721,17 @@ public class ShipmentFunctions
             shipment.TrackingNumber = body.TrackingNumber;
 
         if (body.Status == "Shipped")
+        {
             shipment.ShippedAt = DateTime.UtcNow;
+            // The boxes have left the building — their physical staging/packing state is history.
+            var shippedBoxNumbers = await _db.PackingOrders
+                .Where(p => p.ShipmentId == id)
+                .SelectMany(p => p.Lines)
+                .Select(l => l.BoxNumber)
+                .ToListAsync();
+            var states = await _db.BoxPhysicalStates.Where(s => shippedBoxNumbers.Contains(s.BoxNumber)).ToListAsync();
+            _db.BoxPhysicalStates.RemoveRange(states);
+        }
         else if (body.Status == "Delivered")
             shipment.DeliveredAt = DateTime.UtcNow;
 

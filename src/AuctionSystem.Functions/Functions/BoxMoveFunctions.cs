@@ -130,6 +130,19 @@ public class BoxMoveFunctions
             await _db.Database.ExecuteSqlRawAsync(
                 "UPDATE auction.PackingOrderLines SET MovedToOutAt = SYSUTCDATETIME() WHERE Id = {0} AND MovedToOutAt IS NULL",
                 line.LineId);
+
+            // Persist the box's physical location OUTSIDE the shipment: deleting and recreating the
+            // shipment must not forget where the box actually is.
+            var state = await _db.BoxPhysicalStates.FindAsync(line.BoxNumber);
+            if (state == null)
+            {
+                state = new Domain.Entities.BoxPhysicalState { BoxNumber = line.BoxNumber };
+                _db.BoxPhysicalStates.Add(state);
+            }
+            state.OutLocation = line.OutLocation;
+            state.MovedAt = DateTime.UtcNow;
+            state.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
         }
 
         // Last box of the ORDER arrived -> the packing order completes automatically (no manual
