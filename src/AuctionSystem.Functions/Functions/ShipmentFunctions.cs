@@ -1619,7 +1619,8 @@ public class ShipmentFunctions
                 l.Skins,
                 l.BoxType,
                 l.Location,
-                l.PackedBoxId
+                l.PackedBoxId,
+                l.MovedToOutAt
             })
         });
 

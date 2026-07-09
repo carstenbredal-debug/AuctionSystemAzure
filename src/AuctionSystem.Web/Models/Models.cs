@@ -1055,6 +1055,7 @@ public class PackingOrderLineDto
     public string BoxType { get; set; } = "";
     public string Location { get; set; } = "";
     public int? PackedBoxId { get; set; }
+    public DateTime? MovedToOutAt { get; set; }
 }
 
 public class ShowLotWeightDto
