@@ -89,6 +89,10 @@ var host = new HostBuilder()
         // Lot generation services
         services.AddScoped<LotGenerationService>();
         services.AddScoped<CatalogBuildService>();
+        // Scanner completion flows resolve these to flip a fully-packed shipment to Ready and
+        // regenerate its shipping documents.
+        services.AddScoped<AuctionSystem.Functions.Functions.ShipmentFunctions>();
+        services.AddScoped<ShipmentReadyService>();
 
         // Storage clients: a connection string (local dev / key-based) OR the func's managed identity.
         // In Azure (PROD/TEST) we use identity-based AzureWebJobsStorage (`__accountName`, no key/connection

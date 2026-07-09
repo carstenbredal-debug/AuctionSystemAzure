@@ -24,6 +24,7 @@ public class BoxMoveFunctions
     private readonly CatalogDbContext _catalogDb;
     private readonly IConfiguration _configuration;
     private readonly ILogger<BoxMoveFunctions> _logger;
+    private readonly Services.ShipmentReadyService _readyService;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -33,12 +34,13 @@ public class BoxMoveFunctions
     // A location is only occupied (and its boxes movable) while the shipment is still in-house.
     private static readonly string[] DoneStatuses = { "Shipped", "Delivered", "Cancelled" };
 
-    public BoxMoveFunctions(AuctionDbContext db, CatalogDbContext catalogDb, IConfiguration configuration, ILogger<BoxMoveFunctions> logger)
+    public BoxMoveFunctions(AuctionDbContext db, CatalogDbContext catalogDb, IConfiguration configuration, ILogger<BoxMoveFunctions> logger, Services.ShipmentReadyService readyService)
     {
         _db = db;
         _catalogDb = catalogDb;
         _configuration = configuration;
         _logger = logger;
+        _readyService = readyService;
     }
 
     // Machine auth for the scanner app: x-api-key against SCANNER_API_KEY. Fails closed.
@@ -146,6 +148,11 @@ public class BoxMoveFunctions
             }
         }
 
+        // Everything packed and staged turns the whole SHIPMENT Ready and regenerates its shipping
+        // documents. Checked on every confirm (cheap no-op otherwise) so a re-scan can also heal a
+        // shipment whose orders completed before this check existed.
+        var shipmentReady = await _readyService.TryCompleteAsync(line.ShipmentId);
+
         var (moved, total) = await ShipmentMoveProgressAsync(line.ShipmentId);
         var allMoved = total > 0 && moved >= total;
 
@@ -161,11 +168,14 @@ public class BoxMoveFunctions
             totalBoxes = total,
             allMoved,
             orderCompleted,
+            shipmentReady,
             message = alreadyMoved
                 ? $"Box {line.BoxNumber} was already at {line.OutLocation ?? "?"} ({moved}/{total} boxes)."
-                : orderCompleted
-                    ? $"Box {line.BoxNumber} moved to {line.OutLocation ?? "?"} — order {line.PackingOrderNumber} COMPLETE ({moved}/{total} boxes for shipment {line.ShipmentNumber})."
-                    : $"Box {line.BoxNumber} moved to {line.OutLocation ?? "?"} ({moved}/{total} boxes for shipment {line.ShipmentNumber})."
+                : shipmentReady
+                    ? $"Box {line.BoxNumber} moved to {line.OutLocation ?? "?"} — shipment {line.ShipmentNumber} is READY (all boxes staged, documents generated)."
+                    : orderCompleted
+                        ? $"Box {line.BoxNumber} moved to {line.OutLocation ?? "?"} — order {line.PackingOrderNumber} COMPLETE ({moved}/{total} boxes for shipment {line.ShipmentNumber})."
+                        : $"Box {line.BoxNumber} moved to {line.OutLocation ?? "?"} ({moved}/{total} boxes for shipment {line.ShipmentNumber})."
         });
     }
 

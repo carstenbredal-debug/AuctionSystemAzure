@@ -24,7 +24,9 @@
         <select class="form-select" @onchange="OnStatusFilterChanged">
             <option value="">All Statuses</option>
             <option value="Pending">Pending</option>
+            <option value="Packing">Packing</option>
             <option value="ShowLot Packing">ShowLot Packing</option>
+            <option value="Ready">Ready</option>
             <option value="Shipped">Shipped</option>
             <option value="Delivered">Delivered</option>
             <option value="Cancelled">Cancelled</option>
@@ -129,7 +131,7 @@ else
                                         }
                                     </div>
                                 }
-                                @if (s.Status == "Pending" || s.Status == "ShowLot Packing" || s.Status == "Packing" || s.Status == "Packed")
+                                @if (s.Status == "Pending" || s.Status == "ShowLot Packing" || s.Status == "Packing" || s.Status == "Packed" || s.Status == "Ready")
                                 {
                                     <button class="btn btn-sm btn-success me-1" @onclick="() => MarkShipped(s)">Ship</button>
                                     @if (s.Status != "Packed")
@@ -901,6 +903,7 @@ else
     {
         "Pending" => "bg-warning text-dark",
         "ShowLot Packing" => "bg-light text-dark border",
+        "Ready" => "bg-success",
         "Shipped" => "bg-primary",
         "Delivered" => "bg-success",
         "Cancelled" => "bg-secondary",

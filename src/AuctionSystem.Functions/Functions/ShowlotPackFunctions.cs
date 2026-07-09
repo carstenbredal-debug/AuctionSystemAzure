@@ -36,12 +36,15 @@ public class ShowlotPackFunctions
 
     private static readonly string[] DoneStatuses = { "Shipped", "Delivered", "Cancelled" };
 
-    public ShowlotPackFunctions(AuctionDbContext db, CatalogDbContext catalogDb, IConfiguration configuration, ILogger<ShowlotPackFunctions> logger)
+    private readonly Services.ShipmentReadyService _readyService;
+
+    public ShowlotPackFunctions(AuctionDbContext db, CatalogDbContext catalogDb, IConfiguration configuration, ILogger<ShowlotPackFunctions> logger, Services.ShipmentReadyService readyService)
     {
         _db = db;
         _catalogDb = catalogDb;
         _configuration = configuration;
         _logger = logger;
+        _readyService = readyService;
     }
 
     private bool CheckScannerApiKey(HttpRequestData req)
@@ -170,6 +173,10 @@ public class ShowlotPackFunctions
         }
         await _db.SaveChangesAsync();
 
+        // Everything packed and staged turns the whole SHIPMENT Ready and regenerates its shipping
+        // documents (checked on every close — cheap no-op until the shipment is actually complete).
+        var shipmentReady = await _readyService.TryCompleteAsync(order.ShipmentId);
+
         var outLoc = order.Shipment.OutLocation;
         return await Json(req, new
         {
@@ -185,9 +192,12 @@ public class ShowlotPackFunctions
             outLocation = outLoc,
             remainingShowlots = remaining,
             orderCompleted,
-            message = orderCompleted
-                ? $"Box {packedBox.BoxNumber} closed ({lines.Count} showlots, {lines.Sum(l => l.Skins)} skins) — put it at {outLoc ?? "?"}. Order {order.PackingOrderNumber} COMPLETE."
-                : $"Box {packedBox.BoxNumber} closed ({lines.Count} showlots, {lines.Sum(l => l.Skins)} skins) — put it at {outLoc ?? "?"}. {remaining} showlot(s) left to pack."
+            shipmentReady,
+            message = shipmentReady
+                ? $"Box {packedBox.BoxNumber} closed ({lines.Count} showlots, {lines.Sum(l => l.Skins)} skins) — put it at {outLoc ?? "?"}. Shipment {order.Shipment.ShipmentNumber} is READY (documents generated)."
+                : orderCompleted
+                    ? $"Box {packedBox.BoxNumber} closed ({lines.Count} showlots, {lines.Sum(l => l.Skins)} skins) — put it at {outLoc ?? "?"}. Order {order.PackingOrderNumber} COMPLETE."
+                    : $"Box {packedBox.BoxNumber} closed ({lines.Count} showlots, {lines.Sum(l => l.Skins)} skins) — put it at {outLoc ?? "?"}. {remaining} showlot(s) left to pack."
         });
     }
 

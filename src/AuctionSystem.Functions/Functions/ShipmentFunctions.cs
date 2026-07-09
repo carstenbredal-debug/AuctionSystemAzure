@@ -612,7 +612,7 @@ public class ShipmentFunctions
         if (shipment == null)
             return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
 
-        var validStatuses = new[] { "Pending", "Packing", "ShowLot Packing", "Shipped", "Delivered", "Cancelled" };
+        var validStatuses = new[] { "Pending", "Packing", "ShowLot Packing", "Ready", "Shipped", "Delivered", "Cancelled" };
         if (!validStatuses.Contains(body.Status))
         {
             var bad = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
@@ -1204,6 +1204,23 @@ public class ShipmentFunctions
         var pdfQuery = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
         var isShippingInvoice = pdfQuery["type"] == "shipping-invoice";
 
+        var pdfBytes = await GenerateAndStorePackingListPdfAsync(id, isShippingInvoice);
+        if (pdfBytes == null)
+            return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        var docName = isShippingInvoice ? "Shipping invoice" : "Packing list";
+        var pdfResponse = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        pdfResponse.Headers.Add("Content-Type", "application/pdf");
+        pdfResponse.Headers.Add("Content-Disposition", $"attachment; filename=\"{docName}.pdf\"");
+        await pdfResponse.Body.WriteAsync(pdfBytes);
+        return pdfResponse;
+    }
+
+    // Builds the packing list / shipping invoice, uploads it to blob storage (overwriting any stale
+    // cached document) and stores the URL on the shipment. Also called by ShipmentReadyService when
+    // the shipment turns Ready. Returns null if the shipment doesn't exist.
+    public async Task<byte[]?> GenerateAndStorePackingListPdfAsync(int id, bool isShippingInvoice)
+    {
         var shipment = await _db.Shipments
             .Include(s => s.Shipper)
             .Include(s => s.Buyer)
@@ -1211,7 +1228,7 @@ public class ShipmentFunctions
             .Include(s => s.Lines)
             .FirstOrDefaultAsync(s => s.Id == id);
         if (shipment == null)
-            return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+            return null;
 
         // Collect lot numbers from shipment lines
         var pdfLotNumbers = shipment.Lines.Select(l => l.LotNumber).Distinct().ToList();
@@ -1567,12 +1584,7 @@ public class ShipmentFunctions
             }
         }
 
-        var docName = isShippingInvoice ? "Shipping invoice" : "Packing list";
-        var pdfResponse = req.CreateResponse(System.Net.HttpStatusCode.OK);
-        pdfResponse.Headers.Add("Content-Type", "application/pdf");
-        pdfResponse.Headers.Add("Content-Disposition", $"attachment; filename=\"{docName} - {shipment.ShipmentNumber}.pdf\"");
-        await pdfResponse.Body.WriteAsync(pdfBytes);
-        return pdfResponse;
+        return pdfBytes;
     }
 
     [Function("GetPackingOrders")]
