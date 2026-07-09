@@ -71,6 +71,8 @@ public class BoxMoveFunctions
         var line = await FindActiveLineAsync(boxNumber.Value);
         if (line == null)
             return await Json(req, new { found = false, boxNumber, message = $"Box {boxNumber} is not on any active shipment." });
+        if (line.OrderType == "ShowLot")
+            return await Json(req, new { found = false, boxNumber, isShowlot = true, message = $"Box {boxNumber} is a showlot — it is packed at the show (Showlot flow), not moved from storage." });
 
         var (moved, total) = await ShipmentMoveProgressAsync(line.ShipmentId);
 
@@ -112,6 +114,8 @@ public class BoxMoveFunctions
         var line = await FindActiveLineAsync(boxNumber.Value);
         if (line == null)
             return await Json(req, new { success = false, boxNumber, message = $"Box {boxNumber} is not on any active shipment." });
+        if (line.OrderType == "ShowLot")
+            return await Json(req, new { success = false, boxNumber, isShowlot = true, message = $"Box {boxNumber} is a showlot — it is packed at the show (Showlot flow), not moved from storage." });
 
         var alreadyMoved = line.MovedToOutAt != null;
         if (!alreadyMoved)
@@ -143,12 +147,13 @@ public class BoxMoveFunctions
         });
     }
 
-    // The scanner's work list: active packing orders (shipment not yet shipped) with their boxes
-    // and move state, oldest shipment first.
+    // The scanner's work list: active STORAGE packing orders (shipment not yet shipped) with their
+    // boxes and move state, oldest shipment first. ShowLot orders are excluded — those boxes sit on
+    // the show racks and go through the Showlot packing flow, not a storage->OUT move.
     private async Task<HttpResponseData> ListPackingOrdersAsync(HttpRequestData req)
     {
         var orders = await _db.PackingOrders
-            .Where(p => p.Shipment != null && !DoneStatuses.Contains(p.Shipment.Status))
+            .Where(p => p.Type == "Packing" && p.Shipment != null && !DoneStatuses.Contains(p.Shipment.Status))
             .OrderBy(p => p.Shipment!.CreatedAt).ThenBy(p => p.PackingOrderNumber)
             .Select(p => new
             {
@@ -220,8 +225,9 @@ public class BoxMoveFunctions
 
     private async Task<(int Moved, int Total)> ShipmentMoveProgressAsync(int shipmentId)
     {
+        // Storage boxes only — showlots are packed at the show, not moved from storage.
         var counts = await _db.PackingOrders
-            .Where(p => p.ShipmentId == shipmentId)
+            .Where(p => p.ShipmentId == shipmentId && p.Type == "Packing")
             .SelectMany(p => p.Lines)
             .GroupBy(_ => 1)
             .Select(g => new { Total = g.Count(), Moved = g.Count(l => l.MovedToOutAt != null) })
