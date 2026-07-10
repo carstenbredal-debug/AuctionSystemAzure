@@ -160,6 +160,7 @@ public static class PackingListPdfService
                     {
                         right.Item().Height(8);
                         right.Item().Text("Sales invoices").Bold().FontSize(8);
+                        right.Item().Height(10);   // one blank line before the first invoice
                         foreach (var invNo in data.SalesInvoiceNumbers)
                             right.Item().Text(invNo).FontSize(8);
                     }
