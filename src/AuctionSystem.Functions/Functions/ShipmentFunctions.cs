@@ -790,7 +790,8 @@ public class ShipmentFunctions
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to email shipping documents for {Number}", shipment.ShipmentNumber);
+            // Message inlined — the portal Log stream omits exception details from the template.
+            _logger.LogError(ex, "Failed to email shipping documents for {Number}: {Error}", shipment.ShipmentNumber, ex.Message);
             return (null, $"Email failed: {ex.Message}");
         }
     }
