@@ -27,6 +27,7 @@ public class PackingListData
     public string Date { get; set; } = "";
     public string Destination { get; set; } = "";
     public string Marking { get; set; } = "";
+    public List<string> SalesInvoiceNumbers { get; set; } = new();
 
     // Buyer / bill-to address
     public string BuyerName { get; set; } = "";
@@ -155,6 +156,13 @@ public static class PackingListPdfService
                     AddHeaderField(right, "Date", data.Date);
                     AddHeaderField(right, "Destination", data.Destination);
                     AddHeaderField(right, "Marking", data.Marking);
+                    if (data.SalesInvoiceNumbers.Count > 0)
+                    {
+                        right.Item().Height(8);
+                        right.Item().Text("Sales invoices").Bold().FontSize(8);
+                        foreach (var invNo in data.SalesInvoiceNumbers)
+                            right.Item().Text(invNo).FontSize(8);
+                    }
                 });
             });
 

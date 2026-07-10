@@ -1642,6 +1642,15 @@ public class ShipmentFunctions
 
         var pdfTotalPrice = pdfLines.Sum(l => l.HammerPrice * l.Skins);
 
+        // The shipment's sales invoices, one line each in the header block.
+        var pdfInvoiceIds = shipment.Lines.Where(l => l.InvoiceId.HasValue).Select(l => l.InvoiceId!.Value).Distinct().ToList();
+        var pdfInvoiceNumbers = await _db.Invoices
+            .Where(i => pdfInvoiceIds.Contains(i.Id) && i.InvoiceNumber != "")
+            .Select(i => i.InvoiceNumber)
+            .Distinct()
+            .OrderBy(n => n)
+            .ToListAsync();
+
         var pdfData = new PackingListData
         {
             ShipmentNumber = shipment.ShipmentNumber,
@@ -1651,6 +1660,7 @@ public class ShipmentFunctions
             Date = shipment.CreatedAt.ToString("dd/MM/yyyy"),
             Destination = shipment.ShippingAddress?.Country ?? "",
             Marking = "",
+            SalesInvoiceNumbers = pdfInvoiceNumbers,
             BuyerName = shipment.Buyer?.Name ?? "",
             BuyerAddressLines = buyerAddrLines,
             ShipToName = shipToName,
