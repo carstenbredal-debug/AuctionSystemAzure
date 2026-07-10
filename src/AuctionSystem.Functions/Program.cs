@@ -93,6 +93,7 @@ var host = new HostBuilder()
         // regenerate its shipping documents.
         services.AddScoped<AuctionSystem.Functions.Functions.ShipmentFunctions>();
         services.AddScoped<ShipmentReadyService>();
+        services.AddSingleton<EmailService>();
 
         // Storage clients: a connection string (local dev / key-based) OR the func's managed identity.
         // In Azure (PROD/TEST) we use identity-based AzureWebJobsStorage (`__accountName`, no key/connection
@@ -810,6 +811,9 @@ using (var scope = host.Services.CreateScope())
             IF NOT EXISTS (SELECT 1 FROM auction.SystemParameters WHERE [Key] = 'BcItem_AuctionFee')
                 INSERT INTO auction.SystemParameters ([Key], Value, Description, DataType, UpdatedAt)
                 VALUES ('BcItem_AuctionFee', 'AUCTFEE', 'BC item number for the auction fee line', 'string', GETUTCDATE());
+            IF NOT EXISTS (SELECT 1 FROM auction.SystemParameters WHERE [Key] = 'ShippingDocsEmail')
+                INSERT INTO auction.SystemParameters ([Key], Value, Description, DataType, UpdatedAt)
+                VALUES ('ShippingDocsEmail', '', 'Email address that receives the packing list + shipping invoice when a shipment is marked Shipped (empty = no email)', 'string', GETUTCDATE());
             IF NOT EXISTS (SELECT 1 FROM auction.SystemParameters WHERE [Key] = 'BcItem_Commission')
                 INSERT INTO auction.SystemParameters ([Key], Value, Description, DataType, UpdatedAt)
                 VALUES ('BcItem_Commission', 'BROKERCOM', 'BC item number for the commission line', 'string', GETUTCDATE());

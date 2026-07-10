@@ -19,6 +19,7 @@ public class ShipmentFunctions
     private readonly CatalogDbContext _catalogDb;
     private readonly BlobStorageService? _blobStorage;
     private readonly ShipmentReadyService? _readyService;
+    private readonly EmailService? _emailService;
     private readonly ILogger<ShipmentFunctions> _logger;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -27,9 +28,10 @@ public class ShipmentFunctions
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public ShipmentFunctions(AuctionDbContext db, CatalogDbContext catalogDb, ILogger<ShipmentFunctions> logger, BlobStorageService? blobStorage = null, ShipmentReadyService? readyService = null)
+    public ShipmentFunctions(AuctionDbContext db, CatalogDbContext catalogDb, ILogger<ShipmentFunctions> logger, BlobStorageService? blobStorage = null, ShipmentReadyService? readyService = null, EmailService? emailService = null)
     {
         _readyService = readyService;
+        _emailService = emailService;
         _db = db;
         _catalogDb = catalogDb;
         _logger = logger;
@@ -750,10 +752,47 @@ public class ShipmentFunctions
 
         await _db.SaveChangesAsync();
 
+        // Shipping the shipment emails both documents to the address from the ShippingDocsEmail
+        // parameter. Email trouble never blocks the ship itself — it comes back as a warning.
+        string? emailedTo = null, emailWarning = null;
+        if (body.Status == "Shipped")
+            (emailedTo, emailWarning) = await EmailShippingDocumentsAsync(shipment);
+
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
-        await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true }, JsonOptions));
+        await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true, emailedTo, emailWarning }, JsonOptions));
         return response;
+    }
+
+    private async Task<(string? EmailedTo, string? Warning)> EmailShippingDocumentsAsync(Shipment shipment)
+    {
+        try
+        {
+            var toParam = await _db.Set<SystemParameter>().FirstOrDefaultAsync(p => p.Key == "ShippingDocsEmail");
+            var to = toParam?.Value?.Trim();
+            if (string.IsNullOrEmpty(to))
+                return (null, "No email sent — the ShippingDocsEmail parameter is empty.");
+            if (_emailService == null || !_emailService.IsConfigured)
+                return (null, "No email sent — SMTP is not configured (SMTP_HOST app setting).");
+
+            var packingList = await GenerateAndStorePackingListPdfAsync(shipment.Id, isShippingInvoice: false);
+            var shippingInvoice = await GenerateAndStorePackingListPdfAsync(shipment.Id, isShippingInvoice: true);
+            if (packingList == null || shippingInvoice == null)
+                return (null, "No email sent — document generation failed.");
+
+            await _emailService.SendAsync(
+                to,
+                $"Shipment {shipment.ShipmentNumber} — shipping documents",
+                $"Shipment {shipment.ShipmentNumber} has been shipped.\n\nAttached: packing list ({shipment.ShipmentNumber}-PL) and shipping invoice ({shipment.ShipmentNumber}-SI).",
+                ($"{shipment.ShipmentNumber}-PL.pdf", packingList),
+                ($"{shipment.ShipmentNumber}-SI.pdf", shippingInvoice));
+            return (to, null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to email shipping documents for {Number}", shipment.ShipmentNumber);
+            return (null, $"Email failed: {ex.Message}");
+        }
     }
 
     [Function("UpdateShipment")]
@@ -769,6 +808,8 @@ public class ShipmentFunctions
         if (shipment == null)
             return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
 
+        if (body.ShipperId.HasValue && body.ShipperId.Value > 0)
+            shipment.ShipperId = body.ShipperId.Value;
         if (body.ShippingAddressId.HasValue)
             shipment.ShippingAddressId = body.ShippingAddressId;
         if (body.TrackingNumber != null)
@@ -2314,6 +2355,7 @@ public class UpdateShipmentStatusDto
 
 public class UpdateShipmentDto
 {
+    public int? ShipperId { get; set; }
     public int? ShippingAddressId { get; set; }
     public string? TrackingNumber { get; set; }
     public string? Notes { get; set; }

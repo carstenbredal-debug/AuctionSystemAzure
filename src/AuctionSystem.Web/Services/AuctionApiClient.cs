@@ -1156,6 +1156,15 @@ public class AuctionApiClient
         return (true, null, num, loc);
     }
 
+    public async Task<(bool Success, string? Error, string? EmailedTo, string? EmailWarning)> UpdateShipmentStatusWithEmailAsync(int id, object status)
+    {
+        var resp = await _http.PutAsJsonAsync($"api/shipments/{id}/status", status);
+        if (!resp.IsSuccessStatusCode) return (false, await GetErrorMessage(resp), null, null);
+        var doc = System.Text.Json.JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+        string? Str(string name) => doc.RootElement.TryGetProperty(name, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.String ? v.GetString() : null;
+        return (true, null, Str("emailedTo"), Str("emailWarning"));
+    }
+
     public async Task<(bool Success, string? Error)> UpdateShipmentStatusAsync(int id, object status)
     {
         var resp = await _http.PutAsJsonAsync($"api/shipments/{id}/status", status);
