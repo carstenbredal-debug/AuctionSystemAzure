@@ -160,7 +160,6 @@ public static class PackingListPdfService
                     {
                         right.Item().Height(8);
                         right.Item().Text("Sales invoices").Bold().FontSize(8);
-                        right.Item().Height(10);   // one blank line before the first invoice
                         foreach (var invNo in data.SalesInvoiceNumbers)
                             right.Item().Text(invNo).FontSize(8);
                     }
@@ -238,7 +237,7 @@ public static class PackingListPdfService
                 c.RelativeColumn(1.5f); // Cartons (box number)
                 c.RelativeColumn(1.2f); // No. of skins
                 if (isInvoice) c.RelativeColumn(1.5f); // Price
-                c.RelativeColumn(1);   // Volume
+                c.RelativeColumn(1.4f); // Volume ("0,1234 m3" must fit on one line)
                 c.RelativeColumn(1.2f); // Net Weight
                 c.RelativeColumn(1.2f); // Gross Weight
             });
@@ -309,7 +308,7 @@ public static class PackingListPdfService
                 row.RelativeItem(1.5f).AlignRight().Text(boxes.ToString("N0", Eu)).Bold().FontSize(8);  // Cartons
                 row.RelativeItem(1.2f).AlignRight().Text(Pcs(skins)).Bold().FontSize(8);  // Skins
                 if (isInvoice) row.RelativeItem(1.5f).AlignRight().Text(Eur(price)).Bold().FontSize(8); // Price
-                row.RelativeItem(1).AlignRight().Text(Vol(vol)).Bold().FontSize(8);       // Volume
+                row.RelativeItem(1.4f).AlignRight().Text(Vol(vol)).Bold().FontSize(8);       // Volume
                 row.RelativeItem(1.2f).AlignRight().Text(Kg(net)).Bold().FontSize(8);    // Net
                 row.RelativeItem(1.2f).AlignRight().Text(Kg(gross)).Bold().FontSize(8);  // Gross
             });
@@ -325,14 +324,14 @@ public static class PackingListPdfService
             col.Item().Height(5);
             col.Item().Row(row =>
             {
-                row.RelativeItem(5).Text("Grand total").Bold().FontSize(9);       // Text
-                row.RelativeItem(1.5f).Text("").FontSize(9);                        // Lot no. (empty)
-                row.RelativeItem(1.5f).AlignRight().Text(data.TotalCartons.ToString("N0", Eu)).Bold().FontSize(9);  // Cartons
-                row.RelativeItem(1.2f).AlignRight().Text(Pcs(data.TotalSkins)).Bold().FontSize(9);    // Skins
-                if (data.IsShippingInvoice) row.RelativeItem(1.5f).AlignRight().Text(Eur(data.TotalPrice)).Bold().FontSize(9); // Price
-                row.RelativeItem(1).AlignRight().Text(Vol(data.TotalVolume)).Bold().FontSize(9);      // Volume
-                row.RelativeItem(1.2f).AlignRight().Text(Kg(data.TotalNetWeight)).Bold().FontSize(9); // Net
-                row.RelativeItem(1.2f).AlignRight().Text(Kg(data.TotalGrossWeight)).Bold().FontSize(9); // Gross
+                row.RelativeItem(5).Text("Grand total").Bold().FontSize(8);       // Text
+                row.RelativeItem(1.5f).Text("").FontSize(8);                        // Lot no. (empty)
+                row.RelativeItem(1.5f).AlignRight().Text(data.TotalCartons.ToString("N0", Eu)).Bold().FontSize(8);  // Cartons
+                row.RelativeItem(1.2f).AlignRight().Text(Pcs(data.TotalSkins)).Bold().FontSize(8);    // Skins
+                if (data.IsShippingInvoice) row.RelativeItem(1.5f).AlignRight().Text(Eur(data.TotalPrice)).Bold().FontSize(8); // Price
+                row.RelativeItem(1.4f).AlignRight().Text(Vol(data.TotalVolume)).Bold().FontSize(8);      // Volume
+                row.RelativeItem(1.2f).AlignRight().Text(Kg(data.TotalNetWeight)).Bold().FontSize(8); // Net
+                row.RelativeItem(1.2f).AlignRight().Text(Kg(data.TotalGrossWeight)).Bold().FontSize(8); // Gross
             });
         });
     }
