@@ -710,7 +710,7 @@ public class ShipmentFunctions
         if (shipment == null)
             return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
 
-        var validStatuses = new[] { "Pending", "Packing", "ShowLot Packing", "Ready", "Shipped", "Delivered", "Cancelled" };
+        var validStatuses = new[] { "Pending", "Packing", "ShowLot Packing", "Ready", "Ready for courier", "Shipped", "Delivered", "Cancelled" };
         if (!validStatuses.Contains(body.Status))
         {
             var bad = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
@@ -753,10 +753,11 @@ public class ShipmentFunctions
 
         await _db.SaveChangesAsync();
 
-        // Shipping the shipment emails both documents to the address from the ShippingDocsEmail
-        // parameter. Email trouble never blocks the ship itself — it comes back as a warning.
+        // Ready for courier = the office confirmed the ship: documents are (re)generated and emailed
+        // now; the scanner then confirms the truck loading, which flips the shipment to Shipped.
+        // Email trouble never blocks the transition — it comes back as a warning.
         string? emailedTo = null, emailWarning = null;
-        if (body.Status == "Shipped")
+        if (body.Status == "Ready for courier")
             (emailedTo, emailWarning) = await EmailShippingDocumentsAsync(shipment);
 
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);

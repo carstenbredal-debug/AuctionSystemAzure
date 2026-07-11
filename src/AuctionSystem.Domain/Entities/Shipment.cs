@@ -64,6 +64,8 @@ public class PackingOrderLine
     public PackedBox? PackedBox { get; set; }
     // Set when the scanner confirms the box was moved from storage to the shipment's OUT location.
     public DateTime? MovedToOutAt { get; set; }
+    // Set when the scanner confirms the box was loaded onto the courier's truck.
+    public DateTime? LoadedAt { get; set; }
 }
 
 // Physical box state that OUTLIVES shipments: where a box was staged (OUT location) and, for
@@ -97,5 +99,7 @@ public class PackedBox
     public decimal LengthM { get; set; }
     public string Status { get; set; } = "Open"; // Open, Closed
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    // Set when the scanner confirms the carton was loaded onto the courier's truck.
+    public DateTime? LoadedAt { get; set; }
     public ICollection<PackingOrderLine> ShowLots { get; set; } = new List<PackingOrderLine>();
 }

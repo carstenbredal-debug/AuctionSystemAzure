@@ -228,10 +228,12 @@ else
         _locModalLoading = false;
     }
 
-    // Header label: nothing packed yet -> NOT STARTED; everything packed -> PACKED; else the
-    // shipment's own status (Packing / ShowLot Packing).
+    // Header label: Ready for courier wins; else nothing packed yet -> NOT STARTED; everything
+    // packed -> PACKED; else the shipment's own status (Packing / ShowLot Packing).
     private string GetPackingStatus(ShipmentListDto s)
     {
+        if (s.Status == "Ready for courier")
+            return "READY FOR COURIER";
         var statuses = _orderStatusesByShipment.GetValueOrDefault(s.Id);
         if (statuses == null || statuses.Count == 0 || statuses.All(st => st == "Ready to Pack"))
             return "NOT STARTED";

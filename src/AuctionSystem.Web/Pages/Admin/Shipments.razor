@@ -27,6 +27,7 @@
             <option value="Packing">Packing</option>
             <option value="ShowLot Packing">ShowLot Packing</option>
             <option value="Ready">Ready</option>
+            <option value="Ready for courier">Ready for courier</option>
             <option value="Shipped">Shipped</option>
             <option value="Delivered">Delivered</option>
             <option value="Cancelled">Cancelled</option>
@@ -131,6 +132,10 @@ else
                                     {
                                         <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteShipment(s.Id)">Delete</button>
                                     }
+                                }
+                                else if (s.Status == "Ready for courier")
+                                {
+                                    <span class="text-muted small">Loading — ships when the scanner confirms all boxes on the truck</span>
                                 }
                             </td>
                         </tr>
@@ -259,8 +264,9 @@ else
                     <button type="button" class="btn-close" @onclick="() => _showShippedModal = false"></button>
                 </div>
                 <div class="modal-body">
-                    <p>Mark shipment <strong>@_selectedShipment?.ShipmentNumber</strong> (@_selectedShipment?.BuyerName) as shipped?</p>
-                    <p class="mb-0 text-muted">The packing list (@(_selectedShipment?.ShipmentNumber)-PL) and shipping invoice (@(_selectedShipment?.ShipmentNumber)-SI) will be emailed to the address set in Parameters (ShippingDocsEmail).</p>
+                    <p>Mark shipment <strong>@_selectedShipment?.ShipmentNumber</strong> (@_selectedShipment?.BuyerName) as <strong>Ready for courier</strong>?</p>
+                    <p class="text-muted">The packing list (@(_selectedShipment?.ShipmentNumber)-PL) and shipping invoice (@(_selectedShipment?.ShipmentNumber)-SI) will be emailed to the address set in Parameters (ShippingDocsEmail).</p>
+                    <p class="mb-0 text-muted">The shipment ships automatically when the scanner confirms every box is loaded onto the truck — the OUT location frees at that moment.</p>
                     @if (string.IsNullOrWhiteSpace(_selectedShipment?.TrackingNumber))
                     {
                         <div class="alert alert-warning mt-2 mb-0 py-1">No AWB number set — use the AWB button first if one is needed.</div>
@@ -631,9 +637,9 @@ else
         _saving = true;
         _error = null;
         _success = null;
-        var (ok, err, emailedTo, emailWarning) = await Api.UpdateShipmentStatusWithEmailAsync(_selectedShipment.Id, new { status = "Shipped" });
+        var (ok, err, emailedTo, emailWarning) = await Api.UpdateShipmentStatusWithEmailAsync(_selectedShipment.Id, new { status = "Ready for courier" });
         if (!ok) { _error = err; _saving = false; return; }
-        _success = $"Shipment {_selectedShipment.ShipmentNumber} marked as Shipped." +
+        _success = $"Shipment {_selectedShipment.ShipmentNumber} is Ready for courier — it ships automatically when the scanner confirms all boxes are loaded." +
                    (emailedTo != null ? $" Documents emailed to {emailedTo}." : "");
         if (emailWarning != null) _error = emailWarning;
         _showShippedModal = false;
@@ -992,6 +998,7 @@ else
         "Pending" => "bg-warning text-dark",
         "ShowLot Packing" => "bg-light text-dark border",
         "Ready" => "bg-success",
+        "Ready for courier" => "bg-info text-dark",
         "Shipped" => "bg-primary",
         "Delivered" => "bg-success",
         "Cancelled" => "bg-secondary",

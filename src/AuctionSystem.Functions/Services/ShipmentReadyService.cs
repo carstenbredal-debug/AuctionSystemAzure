@@ -15,7 +15,7 @@ public class ShipmentReadyService
     private readonly IServiceProvider _services;   // lazy — ShipmentFunctions also depends on this service
     private readonly ILogger<ShipmentReadyService> _logger;
 
-    private static readonly string[] DoneStatuses = { "Ready", "Shipped", "Delivered", "Cancelled" };
+    private static readonly string[] DoneStatuses = { "Ready", "Ready for courier", "Shipped", "Delivered", "Cancelled" };
 
     public ShipmentReadyService(AuctionDbContext db, IServiceProvider services, ILogger<ShipmentReadyService> logger)
     {
