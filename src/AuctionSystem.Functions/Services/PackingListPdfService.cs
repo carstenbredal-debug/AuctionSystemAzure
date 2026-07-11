@@ -91,30 +91,25 @@ public static class PackingListPdfService
     {
         container.Column(col =>
         {
-            // Kopenhagen Fur letterhead
+            // Company letterhead
             col.Item().Row(row =>
             {
-                row.RelativeItem(7).Column(left =>
+                row.RelativeItem(4).Column(left =>
                 {
-                    left.Item().Text("KOPENHAGEN FUR").Bold().FontSize(9);
-                    left.Item().Height(6);
-                    left.Item().Row(infoRow =>
-                    {
-                        infoRow.RelativeItem().Text("UL. SKŁADOWA 10").FontSize(6.5f);
-                        infoRow.RelativeItem().Text("KOPENHAGENFUR.COM").FontSize(6.5f);
-                    });
+                    left.Item().Text("KPHG (Holland) Coöperatief U.A.").Bold().FontSize(9);
                     left.Item().Height(2);
-                    left.Item().Row(infoRow =>
-                    {
-                        infoRow.RelativeItem().Text("62-023 ŻERNIKI").FontSize(6.5f);
-                        infoRow.RelativeItem().Text("NIP: 5253073718").FontSize(6.5f);
-                    });
-                    left.Item().Height(2);
-                    left.Item().Row(infoRow =>
-                    {
-                        infoRow.RelativeItem().Text("POLAND").FontSize(6.5f);
-                        infoRow.RelativeItem().Text("cargobooking@kopenhagenfur.com").FontSize(6.5f);
-                    });
+                    left.Item().Text("(Spółdzielnia) Oddział w Polsce").FontSize(6.5f);
+                    left.Item().Text("ul. Sienna 39, XV P. (15th floor)").FontSize(6.5f);
+                    left.Item().Text("00-121 Warszawa").FontSize(6.5f);
+                    left.Item().Text("Poland").FontSize(6.5f);
+                });
+                row.RelativeItem(3).Column(mid =>
+                {
+                    mid.Item().Height(11);
+                    mid.Item().Text("KOPENHAGENFUR.COM").FontSize(6.5f);
+                    mid.Item().Text("NIP: 5253073718").FontSize(6.5f);
+                    mid.Item().Text("KRS 0001207691").FontSize(6.5f);
+                    mid.Item().Text("cargobooking@kopenhagenfur.com").FontSize(6.5f);
                 });
                 row.RelativeItem(3).AlignRight().AlignTop()
                     .Height(45)
