@@ -114,23 +114,6 @@ else
                                         <span>Shipping Invoice</span>
                                     }
                                 </button>
-                                @if (!string.IsNullOrEmpty(s.PackingListPdfUrl) || !string.IsNullOrEmpty(s.ShippingInvoicePdfUrl))
-                                {
-                                    <div class="btn-group me-1">
-                                        @if (!string.IsNullOrEmpty(s.PackingListPdfUrl))
-                                        {
-                                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => RegeneratePackingListPdf(s)" disabled="@_generatingPdf" title="Regenerate Packing List">
-                                                @(_generatingPdfId == s.Id ? "..." : "↻ PL")
-                                            </button>
-                                        }
-                                        @if (!string.IsNullOrEmpty(s.ShippingInvoicePdfUrl))
-                                        {
-                                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => RegenerateShippingInvoicePdf(s)" disabled="@_generatingInvoice" title="Regenerate Shipping Invoice">
-                                                @(_generatingInvoiceId == s.Id ? "..." : "↻ SI")
-                                            </button>
-                                        }
-                                    </div>
-                                }
                                 @if (s.Status == "Pending" || s.Status == "ShowLot Packing" || s.Status == "Packing" || s.Status == "Packed" || s.Status == "Ready")
                                 {
                                     <button class="btn btn-sm btn-outline-secondary me-1" @onclick="() => OpenEdit(s)">Edit</button>
@@ -888,14 +871,9 @@ else
         await JS.InvokeVoidAsync("open", $"api/shipments/{shipment.Id}/box-skins-pdf?box={boxNumber}", "_blank");
     }
 
+    // Always regenerates — the document must reflect the current packed state, never a cached PDF.
     private async Task OpenPackingListPdf(ShipmentListDto shipment)
     {
-        if (!string.IsNullOrEmpty(shipment.PackingListPdfUrl))
-        {
-            await JS.InvokeVoidAsync("open", shipment.PackingListPdfUrl, "_blank");
-            return;
-        }
-
         _generatingPdf = true;
         _generatingPdfId = shipment.Id;
         _error = null;
@@ -928,48 +906,9 @@ else
         _generatingPdfId = 0;
     }
 
-    private async Task RegeneratePackingListPdf(ShipmentListDto shipment)
-    {
-        _generatingPdf = true;
-        _generatingPdfId = shipment.Id;
-        _error = null;
-        StateHasChanged();
-
-        try
-        {
-            var url = await Api.GeneratePackingListPdfAsync(shipment.Id);
-            if (url != null)
-            {
-                await LoadShipments();
-                var updated = _shipments.FirstOrDefault(s => s.Id == shipment.Id);
-                var blobUrl = updated?.PackingListPdfUrl;
-                if (!string.IsNullOrEmpty(blobUrl))
-                    await JS.InvokeVoidAsync("open", blobUrl, "_blank");
-                else
-                    await JS.InvokeVoidAsync("open", url, "_blank");
-            }
-            else
-            {
-                _error = "Failed to regenerate packing list PDF.";
-            }
-        }
-        catch (Exception ex)
-        {
-            _error = ex.Message;
-        }
-
-        _generatingPdf = false;
-        _generatingPdfId = 0;
-    }
-
+    // Always regenerates — same rule as the packing list.
     private async Task OpenShippingInvoicePdf(ShipmentListDto shipment)
     {
-        if (!string.IsNullOrEmpty(shipment.ShippingInvoicePdfUrl))
-        {
-            await JS.InvokeVoidAsync("open", shipment.ShippingInvoicePdfUrl, "_blank");
-            return;
-        }
-
         _generatingInvoice = true;
         _generatingInvoiceId = shipment.Id;
         _error = null;
@@ -991,40 +930,6 @@ else
             else
             {
                 _error = "Failed to generate shipping invoice PDF.";
-            }
-        }
-        catch (Exception ex)
-        {
-            _error = ex.Message;
-        }
-
-        _generatingInvoice = false;
-        _generatingInvoiceId = 0;
-    }
-
-    private async Task RegenerateShippingInvoicePdf(ShipmentListDto shipment)
-    {
-        _generatingInvoice = true;
-        _generatingInvoiceId = shipment.Id;
-        _error = null;
-        StateHasChanged();
-
-        try
-        {
-            var url = await Api.GenerateShippingInvoicePdfAsync(shipment.Id);
-            if (url != null)
-            {
-                await LoadShipments();
-                var updated = _shipments.FirstOrDefault(s => s.Id == shipment.Id);
-                var blobUrl = updated?.ShippingInvoicePdfUrl;
-                if (!string.IsNullOrEmpty(blobUrl))
-                    await JS.InvokeVoidAsync("open", blobUrl, "_blank");
-                else
-                    await JS.InvokeVoidAsync("open", url, "_blank");
-            }
-            else
-            {
-                _error = "Failed to regenerate shipping invoice PDF.";
             }
         }
         catch (Exception ex)
