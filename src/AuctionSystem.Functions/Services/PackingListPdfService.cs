@@ -16,6 +16,7 @@ public class PackingListLine
     public decimal GrossWeight { get; set; }
     public bool IsShowLot { get; set; }
     public bool IsPackedBoxSummary { get; set; }
+    public string BoxType { get; set; } = "";
 }
 
 public class PackingListData
@@ -48,6 +49,9 @@ public class PackingListData
     public decimal TotalGrossWeight { get; set; }
 
     public bool IsShippingInvoice { get; set; }
+
+    // "12 x Small (600 x 400 x 400 mm)" lines shown under the grand total.
+    public List<string> BoxTypeSummaries { get; set; } = new();
 }
 
 public static class PackingListPdfService
@@ -337,6 +341,14 @@ public static class PackingListPdfService
                 row.RelativeItem(1.2f).AlignRight().Text(Kg(data.TotalNetWeight)).Bold().FontSize(8); // Net
                 row.RelativeItem(1.2f).AlignRight().Text(Kg(data.TotalGrossWeight)).Bold().FontSize(8); // Gross
             });
+
+            // Box types + their dimensions (from the box-type parameters), one line per type.
+            if (data.BoxTypeSummaries.Count > 0)
+            {
+                col.Item().Height(6);
+                foreach (var line in data.BoxTypeSummaries)
+                    col.Item().Text(line).FontSize(8);
+            }
         });
     }
 

@@ -1604,7 +1604,8 @@ public class ShipmentFunctions
                     HammerPrice = pdfLotPrices.GetValueOrDefault(cl.LotNumber),
                     VolumeM3 = vol,
                     NetWeight = net,
-                    GrossWeight = gross
+                    GrossWeight = gross,
+                    BoxType = boxType
                 });
                 pdfTotalSkins += bi.Skins;
                 pdfTotalBoxes++;
@@ -1695,7 +1696,8 @@ public class ShipmentFunctions
                         VolumeM3 = vol,
                         NetWeight = net,
                         GrossWeight = gross,
-                        IsPackedBoxSummary = true
+                        IsPackedBoxSummary = true,
+                        BoxType = pb.BoxType
                     });
                     newSkins += pbSkins;
                     newBoxes++;
@@ -1739,6 +1741,22 @@ public class ShipmentFunctions
 
         var pdfTotalPrice = pdfLines.Sum(l => l.HammerPrice * l.Skins);
 
+        // Carton counts per box type + dimensions (millimetres) for the lines under the grand total.
+        // Cartons = storage boxes + packed showlot boxes; showlot detail lines aren't cartons.
+        var boxTypeSummaries = pdfLines
+            .Where(l => !l.IsShowLot && !string.IsNullOrEmpty(l.BoxType))
+            .GroupBy(l => l.BoxType)
+            .OrderBy(g => g.Key)
+            .Select(g =>
+            {
+                var dim = pdfDimLookup.GetValueOrDefault(g.Key);
+                var dims = dim != null
+                    ? $" ({(int)Math.Round(dim.LengthM * 1000)} x {(int)Math.Round(dim.WidthM * 1000)} x {(int)Math.Round(dim.HeightM * 1000)} mm)"
+                    : "";
+                return $"{g.Count()} x {g.Key}{dims}";
+            })
+            .ToList();
+
         // The shipment's sales invoices, one line each in the header block.
         var pdfInvoiceIds = shipment.Lines.Where(l => l.InvoiceId.HasValue).Select(l => l.InvoiceId!.Value).Distinct().ToList();
         var pdfInvoiceNumbers = await _db.Invoices
@@ -1758,6 +1776,7 @@ public class ShipmentFunctions
             Destination = shipment.ShippingAddress?.Country ?? "",
             Marking = "",
             SalesInvoiceNumbers = pdfInvoiceNumbers,
+            BoxTypeSummaries = boxTypeSummaries,
             BuyerName = shipment.Buyer?.Name ?? "",
             BuyerAddressLines = buyerAddrLines,
             ShipToName = shipToName,
