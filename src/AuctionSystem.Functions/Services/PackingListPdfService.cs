@@ -105,8 +105,6 @@ public static class PackingListPdfService
                 });
                 row.RelativeItem(3).Column(mid =>
                 {
-                    mid.Item().Height(11);
-                    mid.Item().Text("KOPENHAGENFUR.COM").FontSize(6.5f);
                     mid.Item().Text("NIP: 5253073718").FontSize(6.5f);
                     mid.Item().Text("KRS 0001207691").FontSize(6.5f);
                     mid.Item().Text("cargobooking@kopenhagenfur.com").FontSize(6.5f);
