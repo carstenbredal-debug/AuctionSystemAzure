@@ -434,7 +434,14 @@ else
                                     </tbody>
                                 </table>
                                 <div class="text-muted small">
-                                    @(_selectedInvoiceNumbers.Count) invoice(s) selected — one shipment, one buyer.
+                                    @if (_selectedInvoiceNumbers.Count > 0)
+                                    {
+                                        <strong>Selected: @_selectedInvoiceNumbers.Count invoice(s) — @SelectedBoxCount box(es), @SelectedSkinCount.ToString("N0") skins.</strong>
+                                    }
+                                    else
+                                    {
+                                        <span>No invoices selected — one shipment, one buyer.</span>
+                                    }
                                     @(SelectedBuyerId != 0 ? " Other buyers' invoices are hidden — deselect all to see them again." : "")
                                     @(_createShipperId == 0 ? " Select a shipper first." : "")
                                 </div>
@@ -508,7 +515,7 @@ else
                         <button class="btn btn-secondary" @onclick="CloseCreateModal">Cancel</button>
                         <button class="btn btn-primary" @onclick="ContinueToConfirm"
                                 disabled="@(_loadingCreate || _createShipperId == 0 || _selectedInvoiceNumbers.Count == 0)">
-                            Continue (@_selectedInvoiceNumbers.Count invoice(s))
+                            Continue (@_selectedInvoiceNumbers.Count invoice(s), @SelectedBoxCount box(es), @SelectedSkinCount.ToString("N0") skins)
                         </button>
                     }
                     else
@@ -555,6 +562,10 @@ else
 
     private int SelectedBuyerId =>
         GetInvoiceGroups().FirstOrDefault(g => _selectedInvoiceNumbers.Contains(g.InvoiceNumber))?.BuyerId ?? 0;
+
+    private List<ShippingBoxDto> _modalBoxes = new();
+    private int SelectedBoxCount => _modalBoxes.Count(b => _selectedInvoiceNumbers.Contains(b.InvoiceNumber));
+    private int SelectedSkinCount => _modalBoxes.Where(b => _selectedInvoiceNumbers.Contains(b.InvoiceNumber)).Sum(b => b.Skins);
 
     private class InvoiceGroup
     {
@@ -724,6 +735,9 @@ else
         {
             _shippers = await Api.GetShippersAsync();
             _releasedLots = await Api.GetReleasedLotsForShipmentAsync();
+            // Per-box detail for the whole released pool: powers the selected-totals line and the
+            // box-confirm step without a second fetch.
+            _modalBoxes = await Api.GetShippingBoxesAsync();
             _allAddresses = await Api.GetShippingAddressesAsync();
             var defaultAddr = _allAddresses.FirstOrDefault(a => a.IsDefault);
             _createAddressId = defaultAddr?.Id ?? 0;
@@ -771,10 +785,9 @@ else
 
         try
         {
-            // The released-boxes list carries per-box detail (type, weights, location — showlot
-            // boxes get the catalogue rack); scope it to the chosen invoices for confirmation.
-            var allBoxes = await Api.GetShippingBoxesAsync();
-            _confirmBoxes = allBoxes.Where(b => _selectedInvoiceNumbers.Contains(b.InvoiceNumber)).ToList();
+            // The released-boxes list (loaded at modal open) carries per-box detail — type, weights,
+            // location, showlot rack; scope it to the chosen invoices for confirmation.
+            _confirmBoxes = _modalBoxes.Where(b => _selectedInvoiceNumbers.Contains(b.InvoiceNumber)).ToList();
         }
         catch (Exception ex)
         {
