@@ -416,14 +416,12 @@ else
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        @foreach (var inv in GetInvoiceGroups())
+                                        @* One shipment = one buyer: once an invoice is ticked, other buyers' invoices are hidden. *@
+                                        @foreach (var inv in GetInvoiceGroups().Where(g => SelectedBuyerId == 0 || g.BuyerId == SelectedBuyerId))
                                         {
-                                            var otherBuyer = SelectedBuyerId != 0 && inv.BuyerId != SelectedBuyerId;
-                                            <tr class="@(_selectedInvoiceNumbers.Contains(inv.InvoiceNumber) ? "table-primary" : "") @(otherBuyer ? "text-muted" : "")">
+                                            <tr class="@(_selectedInvoiceNumbers.Contains(inv.InvoiceNumber) ? "table-primary" : "")">
                                                 <td>
                                                     <input type="checkbox" checked="@_selectedInvoiceNumbers.Contains(inv.InvoiceNumber)"
-                                                           disabled="@otherBuyer"
-                                                           title="@(otherBuyer ? "A shipment goes to one buyer — deselect the other invoices first." : "")"
                                                            @onchange="() => ToggleInvoiceSelection(inv)" />
                                                 </td>
                                                 <td><strong>@inv.InvoiceNumber</strong></td>
@@ -437,6 +435,7 @@ else
                                 </table>
                                 <div class="text-muted small">
                                     @(_selectedInvoiceNumbers.Count) invoice(s) selected — one shipment, one buyer.
+                                    @(SelectedBuyerId != 0 ? " Other buyers' invoices are hidden — deselect all to see them again." : "")
                                     @(_createShipperId == 0 ? " Select a shipper first." : "")
                                 </div>
                             }
