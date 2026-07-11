@@ -1753,7 +1753,7 @@ public class ShipmentFunctions
                 var dims = dim != null
                     ? $" ({(int)Math.Round(dim.LengthM * 1000)} x {(int)Math.Round(dim.WidthM * 1000)} x {(int)Math.Round(dim.HeightM * 1000)} mm)"
                     : "";
-                return $"{g.Count()} x {g.Key}{dims}";
+                return $"{g.Count()} x {g.Key} boxes{dims}";
             })
             .ToList();
 
