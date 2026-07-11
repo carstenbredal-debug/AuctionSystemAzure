@@ -116,14 +116,17 @@ public class BlobStorageService
         return deleted;
     }
 
-    public async Task<string> UploadPdfAsync(string fileName, byte[] pdfData)
+    public Task<string> UploadPdfAsync(string fileName, byte[] pdfData)
+        => UploadFileAsync(fileName, pdfData, "application/pdf");
+
+    public async Task<string> UploadFileAsync(string fileName, byte[] data, string contentType)
     {
         await EnsureContainerAsync();
         var blob = _container.GetBlobClient(fileName);
-        _logger.LogInformation("Uploading PDF {FileName} ({Bytes} bytes) to blob storage", fileName, pdfData.Length);
-        using var stream = new MemoryStream(pdfData);
+        _logger.LogInformation("Uploading {FileName} ({Bytes} bytes, {ContentType}) to blob storage", fileName, data.Length, contentType);
+        using var stream = new MemoryStream(data);
         await blob.UploadAsync(stream, overwrite: true);
-        await blob.SetHttpHeadersAsync(new BlobHttpHeaders { ContentType = "application/pdf" });
+        await blob.SetHttpHeadersAsync(new BlobHttpHeaders { ContentType = contentType });
 
         // Generate a SAS URL valid for 10 years (container may be private)
         string uri;
@@ -133,7 +136,7 @@ public class BlobStorageService
             {
                 BlobContainerName = _container.Name,
                 BlobName = fileName,
-                ContentType = "application/pdf"
+                ContentType = contentType
             };
             uri = blob.GenerateSasUri(sasBuilder).ToString();
         }
@@ -142,7 +145,7 @@ public class BlobStorageService
             uri = blob.Uri.ToString();
         }
 
-        _logger.LogInformation("PDF uploaded to {Uri}", uri);
+        _logger.LogInformation("File uploaded to {Uri}", uri);
         return uri;
     }
 }

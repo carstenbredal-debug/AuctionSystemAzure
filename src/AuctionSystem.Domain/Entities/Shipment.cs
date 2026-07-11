@@ -18,6 +18,8 @@ public class Shipment
     public string? OutLocation { get; set; }
     public string? PackingListPdfUrl { get; set; }
     public string? ShippingInvoicePdfUrl { get; set; }
+    // Uploaded certificate document (any file type), stored in blob storage.
+    public string? CertUrl { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? ShippedAt { get; set; }
     public DateTime? DeliveredAt { get; set; }

@@ -828,6 +828,11 @@ using (var scope = host.Services.CreateScope())
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Shipments') AND name = 'ShippingInvoicePdfUrl')
                 ALTER TABLE auction.Shipments ADD ShippingInvoicePdfUrl NVARCHAR(MAX) NULL;
         ");
+        // Add CertUrl column to Shipments if missing (uploaded certificate document)
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Shipments') AND name = 'CertUrl')
+                ALTER TABLE auction.Shipments ADD CertUrl NVARCHAR(MAX) NULL;
+        ");
         // Add OutLocation column to Shipments if missing (outgoing staging location OUT-1..OUT-20)
         db.Database.ExecuteSqlRaw(@"
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Shipments') AND name = 'OutLocation')

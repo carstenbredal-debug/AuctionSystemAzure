@@ -114,6 +114,14 @@ else
                                         <span>Shipping Invoice</span>
                                     }
                                 </button>
+                                <label class="btn btn-sm btn-outline-dark me-1 mb-0" title="Upload a certificate document (replaces any existing one)">
+                                    @(_uploadingCertId == s.Id ? "Uploading..." : "Upload Cert")
+                                    <InputFile OnChange="e => UploadCert(s, e)" style="display:none" disabled="@(_uploadingCertId != 0)" />
+                                </label>
+                                @if (!string.IsNullOrEmpty(s.CertUrl))
+                                {
+                                    <button class="btn btn-sm btn-outline-success me-1" @onclick="() => ViewCert(s)">View Cert</button>
+                                }
                                 @if (s.Status == "Pending" || s.Status == "ShowLot Packing" || s.Status == "Packing" || s.Status == "Packed" || s.Status == "Ready")
                                 {
                                     <button class="btn btn-sm btn-outline-secondary me-1" @onclick="() => OpenEdit(s)">Edit</button>
@@ -951,6 +959,46 @@ else
 
         _generatingInvoice = false;
         _generatingInvoiceId = 0;
+    }
+
+    // Certificate upload/view
+    private int _uploadingCertId;
+
+    private async Task UploadCert(ShipmentListDto shipment, InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file == null) return;
+        if (file.Size > 20 * 1024 * 1024) { _error = "Certificate file too large (max 20 MB)."; return; }
+
+        _uploadingCertId = shipment.Id;
+        _error = null;
+        _success = null;
+        StateHasChanged();
+
+        try
+        {
+            using var stream = file.OpenReadStream(20 * 1024 * 1024);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            var (ok, err, _) = await Api.UploadShipmentCertAsync(shipment.Id, file.Name, file.ContentType, Convert.ToBase64String(ms.ToArray()));
+            if (!ok) { _error = err; }
+            else
+            {
+                _success = $"Certificate '{file.Name}' uploaded for {shipment.ShipmentNumber}.";
+                await LoadShipments();
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        _uploadingCertId = 0;
+    }
+
+    private async Task ViewCert(ShipmentListDto shipment)
+    {
+        if (!string.IsNullOrEmpty(shipment.CertUrl))
+            await JS.InvokeVoidAsync("open", shipment.CertUrl, "_blank");
     }
 
     private static string GetStatusBadgeClass(string status) => status switch

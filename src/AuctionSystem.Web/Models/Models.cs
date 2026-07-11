@@ -998,6 +998,7 @@ public class ShipmentListDto
     public string Notes { get; set; } = "";
     public string? PackingListPdfUrl { get; set; }
     public string? ShippingInvoicePdfUrl { get; set; }
+    public string? CertUrl { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? ShippedAt { get; set; }
     public DateTime? DeliveredAt { get; set; }

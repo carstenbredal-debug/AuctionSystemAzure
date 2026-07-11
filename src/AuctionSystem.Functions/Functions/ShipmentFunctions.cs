@@ -80,6 +80,7 @@ public class ShipmentFunctions
                 s.OutLocation,
                 s.PackingListPdfUrl,
                 s.ShippingInvoicePdfUrl,
+                s.CertUrl,
                 s.CreatedAt,
                 s.ShippedAt,
                 s.DeliveredAt,
@@ -878,6 +879,60 @@ public class ShipmentFunctions
         response.Headers.Add("Content-Type", "application/json");
         await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true }, JsonOptions));
         return response;
+    }
+
+    // Upload a certificate document for the shipment (any file type, base64 body). Replaces an
+    // existing certificate; the URL is stored on the shipment for the View Cert button.
+    [Function("UploadShipmentCert")]
+    public async Task<HttpResponseData> UploadCert(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "shipments/{id:int}/cert")] HttpRequestData req,
+        int id)
+    {
+        var body = await req.ReadFromJsonAsync<UploadCertDto>();
+        if (body == null || string.IsNullOrWhiteSpace(body.FileName) || string.IsNullOrWhiteSpace(body.ContentBase64))
+            return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+
+        var shipment = await _db.Shipments.FindAsync(id);
+        if (shipment == null)
+            return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+        if (_blobStorage == null)
+        {
+            var err = req.CreateResponse(System.Net.HttpStatusCode.InternalServerError);
+            await err.WriteStringAsync("Blob storage is not configured.");
+            return err;
+        }
+
+        byte[] data;
+        try { data = Convert.FromBase64String(body.ContentBase64); }
+        catch { return req.CreateResponse(System.Net.HttpStatusCode.BadRequest); }
+        if (data.Length > 20 * 1024 * 1024)
+        {
+            var tooBig = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+            await tooBig.WriteStringAsync("File too large (max 20 MB).");
+            return tooBig;
+        }
+
+        // Blob name from the shipment + a sanitized file name so re-uploads overwrite predictably.
+        var safeName = string.Concat(body.FileName.Split(Path.GetInvalidFileNameChars()));
+        var url = await _blobStorage.UploadFileAsync(
+            $"certs/{shipment.ShipmentNumber}-{safeName}",
+            data,
+            string.IsNullOrWhiteSpace(body.ContentType) ? "application/octet-stream" : body.ContentType);
+
+        shipment.CertUrl = url;
+        await _db.SaveChangesAsync();
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true, certUrl = url }, JsonOptions));
+        return response;
+    }
+
+    public class UploadCertDto
+    {
+        public string FileName { get; set; } = "";
+        public string? ContentType { get; set; }
+        public string ContentBase64 { get; set; } = "";
     }
 
     [Function("GetShipmentPackingList")]
