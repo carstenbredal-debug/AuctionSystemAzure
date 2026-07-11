@@ -102,7 +102,15 @@ public class CatalogPdfFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "catalog/pdf-auc")] HttpRequestData req)
         => RenderAsync(req, allowAuc: true);
 
-    private async Task<HttpResponseData> RenderAsync(HttpRequestData req, bool allowAuc)
+    // Result catalogue PDF: the Price column shows what each lot actually SOLD for (hammer price per
+    // skin); unsold lots stay blank. Admin-only, same layout as the customer catalogue.
+    [RequireRole("Admin")]
+    [Function("GenerateResultCatalogPdf")]
+    public Task<HttpResponseData> GenerateResultPdf(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "catalog/pdf-result")] HttpRequestData req)
+        => RenderAsync(req, allowAuc: false, showResults: true);
+
+    private async Task<HttpResponseData> RenderAsync(HttpRequestData req, bool allowAuc, bool showResults = false)
     {
         try
         {
@@ -368,6 +376,24 @@ public class CatalogPdfFunctions
                 }
             }
 
+            // Result catalogue: hammer price per skin for every sold lot of this auction.
+            var resultPrices = new Dictionary<int, decimal>();
+            if (showResults)
+            {
+                var resAuctionNumber = query["auctionNumber"];
+                if (!string.IsNullOrEmpty(resAuctionNumber))
+                {
+                    var resRows = await connection.QueryAsync<dynamic>(
+                        @"SELECT ar.LotNumber, ar.PriceEur
+                          FROM auction.AuctionResults ar
+                          INNER JOIN auction.Auctions a ON ar.AuctionId = a.Id
+                          WHERE a.AuctionNumber = @AuctionNumber",
+                        new { AuctionNumber = resAuctionNumber });
+                    foreach (var rr in resRows)
+                        resultPrices[(int)rr.LotNumber] = (decimal)rr.PriceEur;
+                }
+            }
+
             if (!rows.Any())
             {
                 var notFound = req.CreateResponse(HttpStatusCode.NotFound);
@@ -476,7 +502,7 @@ public class CatalogPdfFunctions
                                                     groupRows.Add(sectionRows[j]);
                                                     j++;
                                                 }
-                                                AddStringGroup(table, groupRows, isFarmerCatalog, lotSaleData);
+                                                AddStringGroup(table, groupRows, isFarmerCatalog, lotSaleData, showResults ? resultPrices : null);
                                                 i = j;
                                             }
                                             else
@@ -484,7 +510,7 @@ public class CatalogPdfFunctions
                                                 bool nextIsStringStart = i + 1 < sectionRows.Count
                                                     && sectionRows[i + 1].IsMultiLotString
                                                     && sectionRows[i + 1].LotSequenceInString == 1;
-                                                AddCatalogRow(table, row, nextIsStringStart, isFarmerCatalog, lotSaleData);
+                                                AddCatalogRow(table, row, nextIsStringStart, isFarmerCatalog, lotSaleData, showResults ? resultPrices : null);
                                                 i++;
                                             }
                                         }
@@ -599,12 +625,16 @@ public class CatalogPdfFunctions
         }
     }
 
+    // European price format for the result catalogue (matches the shipping documents).
+    private static readonly System.Globalization.CultureInfo EuCulture = System.Globalization.CultureInfo.GetCultureInfo("da-DK");
+
     private static void AddCatalogRow(
         TableDescriptor table,
         CatalogPdfRow row,
         bool nextIsStringStart = false,
         bool isFarmerCatalog = false,
-        Dictionary<int, LotSaleInfo>? lotSaleData = null)
+        Dictionary<int, LotSaleInfo>? lotSaleData = null,
+        Dictionary<int, decimal>? resultPrices = null)
     {
         var lastColIndex = isFarmerCatalog ? 5 : 4;
         var colIndex = 0;
@@ -640,6 +670,12 @@ public class CatalogPdfFunctions
             Cell().Text("-");
             Cell().Text("");
         }
+        else if (resultPrices != null)
+        {
+            // Result catalogue: the price each lot sold for (per skin); unsold stays blank.
+            Cell().AlignRight().Text(resultPrices.TryGetValue(row.LotNumber, out var rp) ? rp.ToString("N2", EuCulture) : "");
+            Cell().Text("");
+        }
         else
         {
             // Price = estimated price, Comments = remarks (auctioneer PDF); empty on the customer catalogue.
@@ -652,7 +688,8 @@ public class CatalogPdfFunctions
         TableDescriptor table,
         List<CatalogPdfRow> groupRows,
         bool isFarmerCatalog = false,
-        Dictionary<int, LotSaleInfo>? lotSaleData = null)
+        Dictionary<int, LotSaleInfo>? lotSaleData = null,
+        Dictionary<int, decimal>? resultPrices = null)
     {
         // Render the multi-lot string as flat rows in the SAME section table (identical column
         // widths as single-lot rows) and draw the group "box" with borders on those cells, instead
@@ -696,6 +733,11 @@ public class CatalogPdfFunctions
             {
                 Cell().Text("-");
                 Cell().Text("-");
+                Cell().Text("");
+            }
+            else if (resultPrices != null)
+            {
+                Cell().AlignRight().Text(resultPrices.TryGetValue(row.LotNumber, out var rp) ? rp.ToString("N2", EuCulture) : "");
                 Cell().Text("");
             }
             else
