@@ -42,10 +42,14 @@ else
                             <div class="small">@loc.Shipment.BuyerNumber - @loc.Shipment.BuyerName</div>
                             <div class="small text-muted">@loc.Shipment.BoxCount box(es), @loc.Shipment.LotCount lot(s)</div>
                             var mv = GetMoveProgress(loc.Shipment.Id);
-                            @if (mv.Total > 0)
+                            @if (mv.StorageTotal > 0 || mv.Cartons > 0)
                             {
-                                <div class="small @(mv.Moved >= mv.Total ? "text-success fw-bold" : "")">
-                                    @mv.Moved / @mv.Total boxes moved here
+                                var atLocation = mv.StorageMoved + mv.Cartons;
+                                <div class="fw-bold @(mv.StorageMoved >= mv.StorageTotal ? "text-success" : "")">
+                                    @atLocation box(es) at location
+                                </div>
+                                <div class="small text-muted">
+                                    @mv.StorageMoved/@mv.StorageTotal storage moved@(mv.Cartons > 0 ? $", {mv.Cartons} packed carton(s)" : "")
                                 </div>
                             }
                             <div class="small text-muted">Created @loc.Shipment.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</div>
@@ -72,7 +76,7 @@ else
     private static readonly string[] DoneStatuses = { "Shipped", "Delivered", "Cancelled" };
 
     private Dictionary<int, List<string>> _orderStatusesByShipment = new();
-    private Dictionary<int, (int Moved, int Total)> _moveProgressByShipment = new();
+    private Dictionary<int, (int StorageMoved, int StorageTotal, int Cartons)> _moveProgressByShipment = new();
 
     protected override async Task OnInitializedAsync() => await Load();
 
@@ -94,13 +98,18 @@ else
                 .Where(o => o.ShipmentId > 0)
                 .GroupBy(o => o.ShipmentId)
                 .ToDictionary(g => g.Key, g => g.Select(o => o.Status).ToList());
+            // Physical boxes AT the location = moved storage boxes + packed showlot CARTONS
+            // (each distinct PackedBox is one physical box standing there).
             _moveProgressByShipment = orders
-                .Where(o => o.ShipmentId > 0 && o.Type == "Packing")
+                .Where(o => o.ShipmentId > 0)
                 .GroupBy(o => o.ShipmentId)
                 .ToDictionary(
                     g => g.Key,
-                    g => (g.SelectMany(o => o.Lines).Count(l => l.MovedToOutAt != null),
-                          g.SelectMany(o => o.Lines).Count()));
+                    g => (
+                        g.Where(o => o.Type == "Packing").SelectMany(o => o.Lines).Count(l => l.MovedToOutAt != null),
+                        g.Where(o => o.Type == "Packing").SelectMany(o => o.Lines).Count(),
+                        g.Where(o => o.Type == "ShowLot").SelectMany(o => o.Lines)
+                            .Where(l => l.PackedBoxId != null).Select(l => l.PackedBoxId!.Value).Distinct().Count()));
         }
         catch { _orderStatusesByShipment = new(); _moveProgressByShipment = new(); }
 
@@ -111,7 +120,7 @@ else
         _loading = false;
     }
 
-    private (int Moved, int Total) GetMoveProgress(int shipmentId) =>
+    private (int StorageMoved, int StorageTotal, int Cartons) GetMoveProgress(int shipmentId) =>
         _moveProgressByShipment.GetValueOrDefault(shipmentId);
 
     // Header label: nothing packed yet -> NOT STARTED; everything packed -> PACKED; else the

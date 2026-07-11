@@ -132,10 +132,6 @@ else
                                         <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteShipment(s.Id)">Delete</button>
                                     }
                                 }
-                                else if (s.Status == "Shipped")
-                                {
-                                    <button class="btn btn-sm btn-primary" @onclick="() => MarkDelivered(s)">Delivered</button>
-                                }
                             </td>
                         </tr>
                         @if (_expandedBoxesShipmentId == s.Id)
@@ -702,16 +698,6 @@ else
         _success = $"Shipment {_selectedShipment.ShipmentNumber} updated.";
         _showEditModal = false;
         _saving = false;
-        await LoadShipments();
-    }
-
-    private async Task MarkDelivered(ShipmentListDto s)
-    {
-        _error = null;
-        _success = null;
-        var (ok, err) = await Api.UpdateShipmentStatusAsync(s.Id, new { status = "Delivered" });
-        if (!ok) { _error = err; return; }
-        _success = $"Shipment {s.ShipmentNumber} marked as Delivered.";
         await LoadShipments();
     }
 
