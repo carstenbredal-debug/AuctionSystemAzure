@@ -27,7 +27,10 @@ else
             <div class="col-md-3 col-sm-4 col-6">
                 <div class="card h-100 @(loc.Shipment == null ? "border-success" : "border-dark")">
                     <div class="card-header py-1 d-flex justify-content-between align-items-center
-                                @(loc.Shipment == null ? "bg-success text-white" : "bg-dark text-white")">
+                                @(loc.Shipment == null ? "bg-success text-white" : "bg-dark text-white")"
+                         style="@(loc.Shipment != null ? "cursor:pointer" : "")"
+                         title="@(loc.Shipment != null ? "Show the boxes at this location" : "")"
+                         @onclick="() => OpenLocation(loc)">
                         <strong>@loc.Name</strong>
                         <small>@(loc.Shipment == null ? "EMPTY" : GetPackingStatus(loc.Shipment))</small>
                     </div>
@@ -40,7 +43,6 @@ else
                         {
                             <div><strong>@loc.Shipment.ShipmentNumber</strong></div>
                             <div class="small">@loc.Shipment.BuyerNumber - @loc.Shipment.BuyerName</div>
-                            <div class="small text-muted">@loc.Shipment.BoxCount box(es), @loc.Shipment.LotCount lot(s)</div>
                             var mv = GetMoveProgress(loc.Shipment.Id);
                             @if (mv.StorageTotal > 0 || mv.Cartons > 0)
                             {
@@ -58,6 +60,75 @@ else
                 </div>
             </div>
         }
+    </div>
+}
+
+@* Location contents popup: the boxes physically standing at the OUT location *@
+@if (_locModal != null)
+{
+    <div class="modal show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@_locModal.Name — @_locModal.Shipment?.ShipmentNumber (@_locModal.Shipment?.BuyerName)</h5>
+                    <button type="button" class="btn-close" @onclick="() => _locModal = null"></button>
+                </div>
+                <div class="modal-body">
+                    @if (_locModalLoading)
+                    {
+                        <p><em>Loading...</em></p>
+                    }
+                    else
+                    {
+                        @if (_locStorageBoxes.Count == 0 && _locCartons.Count == 0)
+                        {
+                            <div class="alert alert-info">No boxes at this location yet.</div>
+                        }
+                        @if (_locStorageBoxes.Count > 0)
+                        {
+                            <h6>Storage boxes (@_locStorageBoxes.Count)</h6>
+                            <table class="table table-sm table-striped mb-3">
+                                <thead><tr><th>Box #</th><th>Lot #</th><th>Type</th><th class="text-end">Skins</th><th>Moved</th></tr></thead>
+                                <tbody>
+                                    @foreach (var b in _locStorageBoxes.OrderBy(b => b.BoxNumber))
+                                    {
+                                        <tr>
+                                            <td>@b.BoxNumber</td>
+                                            <td>@b.LotNumber</td>
+                                            <td>@b.BoxType</td>
+                                            <td class="text-end">@b.Skins</td>
+                                            <td>@b.MovedToOutAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                        @if (_locCartons.Count > 0)
+                        {
+                            <h6>Packed cartons (@_locCartons.Count)</h6>
+                            <table class="table table-sm table-striped mb-0">
+                                <thead><tr><th>Carton #</th><th>Type</th><th class="text-end">Weight (kg)</th><th class="text-end">Showlots</th><th class="text-end">Skins</th></tr></thead>
+                                <tbody>
+                                    @foreach (var c in _locCartons)
+                                    {
+                                        <tr>
+                                            <td>@(string.IsNullOrEmpty(c.BoxNumber) ? c.Id.ToString() : c.BoxNumber)</td>
+                                            <td>@c.BoxType</td>
+                                            <td class="text-end">@c.Weight.ToString("N2")</td>
+                                            <td class="text-end">@c.ShowLotCount</td>
+                                            <td class="text-end">@c.TotalSkins</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => _locModal = null">Close</button>
+                </div>
+            </div>
+        </div>
     </div>
 }
 
@@ -94,6 +165,7 @@ else
         try
         {
             var orders = await Api.GetPackingOrdersAsync();
+            _allOrders = orders;
             _orderStatusesByShipment = orders
                 .Where(o => o.ShipmentId > 0)
                 .GroupBy(o => o.ShipmentId)
@@ -122,6 +194,39 @@ else
 
     private (int StorageMoved, int StorageTotal, int Cartons) GetMoveProgress(int shipmentId) =>
         _moveProgressByShipment.GetValueOrDefault(shipmentId);
+
+    // Location contents popup
+    private List<PackingOrderDto> _allOrders = new();
+    private LocationSlot? _locModal;
+    private bool _locModalLoading;
+    private List<PackingOrderLineDto> _locStorageBoxes = new();
+    private List<PackedBoxDto> _locCartons = new();
+
+    private async Task OpenLocation(LocationSlot loc)
+    {
+        if (loc.Shipment == null) return;
+        _locModal = loc;
+        _locModalLoading = true;
+        _locStorageBoxes = new();
+        _locCartons = new();
+        StateHasChanged();
+
+        var orders = _allOrders.Where(o => o.ShipmentId == loc.Shipment.Id).ToList();
+
+        // Storage boxes physically moved to the location.
+        _locStorageBoxes = orders.Where(o => o.Type == "Packing")
+            .SelectMany(o => o.Lines)
+            .Where(l => l.MovedToOutAt != null)
+            .ToList();
+
+        // Packed showlot cartons (each is one physical box at the location).
+        foreach (var order in orders.Where(o => o.Type == "ShowLot"))
+        {
+            try { _locCartons.AddRange(await Api.GetPackedBoxesAsync(order.Id)); }
+            catch { }
+        }
+        _locModalLoading = false;
+    }
 
     // Header label: nothing packed yet -> NOT STARTED; everything packed -> PACKED; else the
     // shipment's own status (Packing / ShowLot Packing).

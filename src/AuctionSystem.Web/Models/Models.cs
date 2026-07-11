@@ -1083,6 +1083,7 @@ public class PackShowLotsResponseDto
 public class PackedBoxDto
 {
     public int Id { get; set; }
+    public string BoxNumber { get; set; } = "";
     public string BoxType { get; set; } = "";
     public decimal Weight { get; set; }
     public decimal HeightM { get; set; }

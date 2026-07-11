@@ -2242,6 +2242,7 @@ public class ShipmentFunctions
         var results = boxes.Select(b => new
         {
             b.Id,
+            b.BoxNumber,
             b.BoxType,
             b.Weight,
             b.HeightM,
