@@ -149,13 +149,24 @@ public static class PackingListPdfService
                     AddHeaderField(right, "Date", data.Date);
                     AddHeaderField(right, "Destination", data.Destination);
                     AddHeaderField(right, "Marking", data.Marking);
-                    if (data.SalesInvoiceNumbers.Count > 0)
+                    right.Item().Height(8);
+                    right.Item().Row(blocks =>
                     {
-                        right.Item().Height(8);
-                        right.Item().Text("Sales invoices").Bold().FontSize(8);
-                        foreach (var invNo in data.SalesInvoiceNumbers)
-                            right.Item().Text(invNo).FontSize(8);
-                    }
+                        blocks.RelativeItem().Column(inv =>
+                        {
+                            if (data.SalesInvoiceNumbers.Count > 0)
+                            {
+                                inv.Item().Text("Sales invoices").Bold().FontSize(8);
+                                foreach (var invNo in data.SalesInvoiceNumbers)
+                                    inv.Item().Text(invNo).FontSize(8);
+                            }
+                        });
+                        blocks.RelativeItem().Column(inco =>
+                        {
+                            inco.Item().Text("Incoterms").Bold().FontSize(8);
+                            inco.Item().Text("EXW Żerniki").FontSize(8);
+                        });
+                    });
                 });
             });
 
