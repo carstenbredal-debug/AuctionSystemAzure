@@ -99,7 +99,7 @@ public class BoxMoveFunctions
                 ? $"Box {line.BoxNumber} was already moved to {line.OutLocation ?? "?"}."
                 : line.OutLocation != null
                     ? $"Move box {line.BoxNumber} to {line.OutLocation} (shipment {line.ShipmentNumber})."
-                    : $"Shipment {line.ShipmentNumber} has NO outgoing location — ask the office."
+                    : $"Shipment {line.ShipmentNumber} has NO lane assigned — ask the office."
         });
     }
 
