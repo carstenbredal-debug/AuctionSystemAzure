@@ -54,6 +54,10 @@ else
                                     @mv.StorageMoved/@mv.StorageTotal storage moved@(mv.Cartons > 0 ? $", {mv.Cartons} packed carton(s)" : "")
                                 </div>
                             }
+                            @if (loc.Shipment.Pallets is > 0)
+                            {
+                                <div class="small">@loc.Shipment.Pallets pallet(s)</div>
+                            }
                             <div class="small text-muted">Created @loc.Shipment.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</div>
                         }
                     </div>
@@ -125,7 +129,33 @@ else
                     }
                 </div>
                 <div class="modal-footer">
+                    <button class="btn btn-primary" @onclick="OpenPallets">Set Pallets…</button>
                     <button class="btn btn-secondary" @onclick="() => _locModal = null">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* Pallet count popup *@
+@if (_palletModal)
+{
+    <div class="modal show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Pallets — @_locModal?.Shipment?.ShipmentNumber</h5>
+                    <button type="button" class="btn-close" @onclick="() => _palletModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label fw-bold">Number of pallets</label>
+                    <input type="number" min="0" class="form-control" @bind="_palletCount" />
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => _palletModal = false">Cancel</button>
+                    <button class="btn btn-primary" @onclick="SavePallets" disabled="@_savingPallets">
+                        @(_savingPallets ? "Saving..." : "Save")
+                    </button>
                 </div>
             </div>
         </div>
@@ -201,6 +231,31 @@ else
     private bool _locModalLoading;
     private List<PackingOrderLineDto> _locStorageBoxes = new();
     private List<PackedBoxDto> _locCartons = new();
+
+    // Pallets popup
+    private bool _palletModal;
+    private int _palletCount;
+    private bool _savingPallets;
+
+    private void OpenPallets()
+    {
+        _palletCount = _locModal?.Shipment?.Pallets ?? 0;
+        _palletModal = true;
+    }
+
+    private async Task SavePallets()
+    {
+        if (_locModal?.Shipment == null) return;
+        _savingPallets = true;
+        var (ok, _) = await Api.UpdateShipmentAsync(_locModal.Shipment.Id, new { pallets = _palletCount });
+        _savingPallets = false;
+        if (ok)
+        {
+            _locModal.Shipment.Pallets = _palletCount > 0 ? _palletCount : null;
+            _palletModal = false;
+            StateHasChanged();
+        }
+    }
 
     private async Task OpenLocation(LocationSlot loc)
     {

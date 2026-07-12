@@ -54,6 +54,7 @@ else
                         <th>Location</th>
                         <th>Lots</th>
                         <th>Boxes</th>
+                        <th>Pallets</th>
                         <th>Created</th>
                         <th>Shipped</th>
                         <th>Delivered</th>
@@ -91,6 +92,7 @@ else
                                     @s.BoxCount box(es)
                                 </button>
                             </td>
+                            <td>@(s.Pallets is > 0 ? s.Pallets.ToString() : "—")</td>
                             <td>@s.CreatedAt.ToString("yyyy-MM-dd")</td>
                             <td>@(s.ShippedAt?.ToString("yyyy-MM-dd") ?? "-")</td>
                             <td>@(s.DeliveredAt?.ToString("yyyy-MM-dd") ?? "-")</td>
@@ -142,7 +144,7 @@ else
                         @if (_expandedBoxesShipmentId == s.Id)
                         {
                             <tr>
-                                <td colspan="12" class="bg-light">
+                                <td colspan="13" class="bg-light">
                                     <div class="ps-4">
                                         <strong>Boxes in this shipment:</strong>
                                         @if (_loadingShipmentBoxes)
@@ -197,7 +199,7 @@ else
                         @if (_expandedShipmentId == s.Id)
                         {
                             <tr>
-                                <td colspan="12" class="bg-light">
+                                <td colspan="13" class="bg-light">
                                     <div class="ps-4">
                                         <strong>Lots in this shipment:</strong>
                                         @if (!string.IsNullOrEmpty(s.ShippingAddressSummary))
@@ -245,7 +247,7 @@ else
                     }
                     @if (!_shipments.Any())
                     {
-                        <tr><td colspan="12" class="text-center text-muted">No shipments found.</td></tr>
+                        <tr><td colspan="13" class="text-center text-muted">No shipments found.</td></tr>
                     }
                 </tbody>
             </table>

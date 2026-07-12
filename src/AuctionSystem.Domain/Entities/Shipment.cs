@@ -16,6 +16,8 @@ public class Shipment
     // Outgoing staging location (OUT-1..OUT-20) where the shipment's boxes are collected.
     // Occupied while the shipment is active; freed (derived) once Shipped/Delivered/Cancelled.
     public string? OutLocation { get; set; }
+    // Number of pallets the boxes are stacked on at the OUT location (entered manually).
+    public int? Pallets { get; set; }
     public string? PackingListPdfUrl { get; set; }
     public string? ShippingInvoicePdfUrl { get; set; }
     // Uploaded certificate document (any file type), stored in blob storage.

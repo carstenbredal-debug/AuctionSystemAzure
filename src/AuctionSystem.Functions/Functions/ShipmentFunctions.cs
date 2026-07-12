@@ -78,6 +78,7 @@ public class ShipmentFunctions
                 s.Status,
                 s.Notes,
                 s.OutLocation,
+                s.Pallets,
                 s.PackingListPdfUrl,
                 s.ShippingInvoicePdfUrl,
                 s.CertUrl,
@@ -822,6 +823,8 @@ public class ShipmentFunctions
             shipment.TrackingNumber = body.TrackingNumber;
         if (body.Notes != null)
             shipment.Notes = body.Notes;
+        if (body.Pallets.HasValue)
+            shipment.Pallets = body.Pallets.Value > 0 ? body.Pallets.Value : null;
 
         await _db.SaveChangesAsync();
 
@@ -2439,6 +2442,7 @@ public class UpdateShipmentDto
     public int? ShippingAddressId { get; set; }
     public string? TrackingNumber { get; set; }
     public string? Notes { get; set; }
+    public int? Pallets { get; set; }
 }
 
 public class UpdatePackingOrderStatusDto
