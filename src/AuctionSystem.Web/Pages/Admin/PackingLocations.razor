@@ -27,9 +27,13 @@ else
         {
             <div class="col-md-3 col-sm-4 col-6">
                 <div class="card h-100 @(loc.Shipment == null ? "border-success" : "border-dark")">
-                    <div class="card-header py-1 d-flex justify-content-between align-items-center
-                                @(loc.Shipment == null ? "bg-success text-white" : "bg-dark text-white")"
-                         style="@(loc.Shipment != null ? "cursor:pointer" : "")"
+                    @{
+                        var isRfc = loc.Shipment?.Status == "Ready for courier";
+                        var headerClass = loc.Shipment == null ? "bg-success text-white" : (isRfc ? "text-white" : "bg-dark text-white");
+                        var headerStyle = (loc.Shipment != null ? "cursor:pointer;" : "") + (isRfc ? "background-color:#fd7e14;" : "");
+                    }
+                    <div class="card-header py-1 d-flex justify-content-between align-items-center @headerClass"
+                         style="@headerStyle"
                          title="@(loc.Shipment != null ? "Show the boxes at this location" : "")"
                          @onclick="() => OpenLocation(loc)">
                         <strong>@loc.Name</strong>

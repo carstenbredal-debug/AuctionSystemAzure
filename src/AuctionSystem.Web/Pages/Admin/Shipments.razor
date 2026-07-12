@@ -70,7 +70,8 @@ else
                             <td>@s.BuyerNumber - @s.BuyerName</td>
                             <td>@s.TrackingNumber</td>
                             <td>
-                                <span class="badge @GetStatusBadgeClass(s.Status)">@s.Status</span>
+                                <span class="badge @GetStatusBadgeClass(s.Status)"
+                                      style="@(s.Status == "Ready for courier" ? "background-color:#fd7e14;" : "")">@s.Status</span>
                             </td>
                             <td>
                                 @if (!string.IsNullOrEmpty(s.OutLocation))
@@ -1000,7 +1001,7 @@ else
         "Pending" => "bg-warning text-dark",
         "ShowLot Packing" => "bg-light text-dark border",
         "Ready" => "bg-success",
-        "Ready for courier" => "bg-info text-dark",
+        "Ready for courier" => "text-white",   // orange background via inline style
         "Shipped" => "bg-primary",
         "Delivered" => "bg-success",
         "Cancelled" => "bg-secondary",

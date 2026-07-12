@@ -909,9 +909,21 @@ public class ShipmentFunctions
             return bad;
         }
 
-        var line = await _db.PackingOrderLines.FirstOrDefaultAsync(l => l.Id == lineId);
+        var line = await _db.PackingOrderLines
+            .Include(l => l.PackingOrder).ThenInclude(o => o!.Shipment)
+            .FirstOrDefaultAsync(l => l.Id == lineId);
         if (line == null)
             return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        // From Ready for courier on, the shipment is locked — only the loading scanner touches it.
+        var lockedStatuses = new[] { "Ready for courier", "Shipped", "Delivered", "Cancelled" };
+        if (line.PackingOrder?.Shipment != null && lockedStatuses.Contains(line.PackingOrder.Shipment.Status))
+        {
+            var locked = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+            locked.Headers.Add("Content-Type", "application/json");
+            await locked.WriteStringAsync(JsonSerializer.Serialize(new { error = $"Shipment {line.PackingOrder.Shipment.ShipmentNumber} is {line.PackingOrder.Shipment.Status} — boxes are read-only." }, JsonOptions));
+            return locked;
+        }
 
         // Every line carrying this box, not just the clicked one.
         var lines = await _db.PackingOrderLines.Where(l => l.BoxNumber == line.BoxNumber).ToListAsync();
@@ -1913,6 +1925,7 @@ public class ShipmentFunctions
             po.PackingOrderNumber,
             ShipmentNumber = po.Shipment?.ShipmentNumber ?? "",
             ShipmentId = po.ShipmentId,
+            ShipmentStatus = po.Shipment?.Status ?? "",
             BuyerName = po.Shipment?.Buyer?.Name ?? "",
             BuyerNumber = po.Shipment?.Buyer?.BuyerNumber ?? "",
             ShipperName = po.Shipment?.Shipper?.Name ?? "",

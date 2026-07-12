@@ -1038,6 +1038,7 @@ public class PackingOrderDto
     public string PackingOrderNumber { get; set; } = "";
     public string ShipmentNumber { get; set; } = "";
     public int ShipmentId { get; set; }
+    public string ShipmentStatus { get; set; } = "";
     public string BuyerName { get; set; } = "";
     public string BuyerNumber { get; set; } = "";
     public string ShipperName { get; set; } = "";

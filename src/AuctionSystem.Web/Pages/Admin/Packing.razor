@@ -55,7 +55,11 @@ else
                             <td>@po.BoxCount</td>
                             <td>@po.CreatedAt.ToString("yyyy-MM-dd")</td>
                             <td>
-                                @if (po.Status == "Ready to Pack")
+                                @if (IsLocked(po))
+                                {
+                                    <span class="text-muted small">Ready for courier — scanner only</span>
+                                }
+                                else if (po.Status == "Ready to Pack")
                                 {
                                     <button class="btn btn-sm btn-primary" @onclick='() => UpdateStatus(po, "In Production")'
                                             title="Makes this order visible to the scanner — completes automatically when all boxes reach the OUT location">
@@ -92,18 +96,25 @@ else
                                                         <td>@line.LotNumber</td>
                                                         <td>@line.Skins</td>
                                                         <td>
-                                                            <select class="form-select form-select-sm" style="width:110px"
-                                                                    value="@line.BoxType"
-                                                                    @onchange="e => ChangeBoxType(line, e)">
-                                                                @if (!_boxTypes.Any(bt => bt.BoxType == line.BoxType))
-                                                                {
-                                                                    <option value="@line.BoxType">@line.BoxType</option>
-                                                                }
-                                                                @foreach (var bt in _boxTypes)
-                                                                {
-                                                                    <option value="@bt.BoxType">@bt.BoxType</option>
-                                                                }
-                                                            </select>
+                                                            @if (IsLocked(po))
+                                                            {
+                                                                @line.BoxType
+                                                            }
+                                                            else
+                                                            {
+                                                                <select class="form-select form-select-sm" style="width:110px"
+                                                                        value="@line.BoxType"
+                                                                        @onchange="e => ChangeBoxType(line, e)">
+                                                                    @if (!_boxTypes.Any(bt => bt.BoxType == line.BoxType))
+                                                                    {
+                                                                        <option value="@line.BoxType">@line.BoxType</option>
+                                                                    }
+                                                                    @foreach (var bt in _boxTypes)
+                                                                    {
+                                                                        <option value="@bt.BoxType">@bt.BoxType</option>
+                                                                    }
+                                                                </select>
+                                                            }
                                                         </td>
                                                         <td>
                                                             @if (line.MovedToOutAt != null)
@@ -145,6 +156,10 @@ else
         try { _boxTypes = await Api.GetBoxTypeDimensionsAsync(); } catch { }
         await LoadOrders();
     }
+
+    // From Ready for courier on, the shipment is scanner-only — no edits here.
+    private static bool IsLocked(PackingOrderDto po) =>
+        po.ShipmentStatus is "Ready for courier" or "Shipped" or "Delivered" or "Cancelled";
 
     // Changing the type here corrects it everywhere: every packing-order line with the box and the
     // auction snapshot the shipping documents read from.

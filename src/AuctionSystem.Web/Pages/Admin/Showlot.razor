@@ -55,7 +55,11 @@ else
                             <td>@po.ShowLotCount</td>
                             <td>@po.CreatedAt.ToString("yyyy-MM-dd")</td>
                             <td>
-                                @if (po.Status == "Ready to Pack")
+                                @if (IsLocked(po))
+                                {
+                                    <span class="text-muted small">Ready for courier — scanner only</span>
+                                }
+                                else if (po.Status == "Ready to Pack")
                                 {
                                     <button class="btn btn-sm btn-primary" @onclick='() => UpdateStatus(po, "In Production")'
                                             title="Makes this order visible to the scanner — completes automatically when all showlots are packed">
@@ -121,7 +125,7 @@ else
                                                         <div class="card-body p-2">
                                                             <strong>@box.BoxType</strong> — @box.Weight kg — @box.ShowLotCount showlots, @box.TotalSkins skins
                                                             <span class="badge @(box.Status == "Approved" ? "bg-success" : "bg-warning text-dark") ms-2">@box.Status</span>
-                                                            @if (box.Status == "Packed")
+                                                            @if (box.Status == "Packed" && !IsLocked(po))
                                                             {
                                                                 <button class="btn btn-sm btn-success ms-2" @onclick="() => ApproveBox(box)">Approve</button>
                                                             }
@@ -186,6 +190,10 @@ else
             catch { _packedBoxes[id] = new(); }
         }
     }
+
+    // From Ready for courier on, the shipment is scanner-only — no edits here.
+    private static bool IsLocked(PackingOrderDto po) =>
+        po.ShipmentStatus is "Ready for courier" or "Shipped" or "Delivered" or "Cancelled";
 
     private async Task UpdateStatus(PackingOrderDto po, string newStatus)
     {
