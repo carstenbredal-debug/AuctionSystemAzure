@@ -3,6 +3,7 @@
 @using AuctionSystem.Web.Services
 @attribute [Authorize(Roles = "Admin")]
 @inject AuctionApiClient Api
+@inject IJSRuntime JS
 
 <PageTitle>Outgoing Locations - Admin</PageTitle>
 
@@ -129,6 +130,7 @@ else
                     }
                 </div>
                 <div class="modal-footer">
+                    <button class="btn btn-outline-dark" @onclick="PrintLocation" title="PDF of this location's boxes with barcodes">Print…</button>
                     <button class="btn btn-primary" @onclick="OpenPallets">Set Pallets…</button>
                     <button class="btn btn-secondary" @onclick="() => _locModal = null">Close</button>
                 </div>
@@ -231,6 +233,12 @@ else
     private bool _locModalLoading;
     private List<PackingOrderLineDto> _locStorageBoxes = new();
     private List<PackedBoxDto> _locCartons = new();
+
+    private async Task PrintLocation()
+    {
+        if (_locModal?.Shipment == null) return;
+        await JS.InvokeVoidAsync("open", $"api/shipments/{_locModal.Shipment.Id}/location-pdf", "_blank");
+    }
 
     // Pallets popup
     private bool _palletModal;
