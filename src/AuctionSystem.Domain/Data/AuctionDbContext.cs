@@ -34,10 +34,22 @@ public class AuctionDbContext : DbContext
     public DbSet<PackingOrder> PackingOrders => Set<PackingOrder>();
     public DbSet<PackingOrderLine> PackingOrderLines => Set<PackingOrderLine>();
     public DbSet<PackedBox> PackedBoxes => Set<PackedBox>();
+    public DbSet<BoxPhysicalState> BoxPhysicalStates => Set<BoxPhysicalState>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema("auction");
+
+        modelBuilder.Entity<BoxPhysicalState>(e =>
+        {
+            e.ToTable("BoxPhysicalState");
+            e.HasKey(b => b.BoxNumber);
+            e.Property(b => b.BoxNumber).ValueGeneratedNever();
+            e.Property(b => b.OutLocation).HasMaxLength(20);
+            e.Property(b => b.PackedBoxNumber).HasMaxLength(50);
+            e.Property(b => b.PackedBoxType).HasMaxLength(100);
+            e.Property(b => b.PackedGrossWeight).HasColumnType("decimal(18,4)");
+        });
 
         modelBuilder.Entity<Auction>(e =>
         {

@@ -3,6 +3,7 @@
 @using AuctionSystem.Web.Services
 @attribute [Authorize(Roles = "Admin")]
 @inject AuctionApiClient Api
+@inject IJSRuntime JS
 
 <PageTitle>Outgoing Locations - Admin</PageTitle>
 
@@ -26,8 +27,15 @@ else
         {
             <div class="col-md-3 col-sm-4 col-6">
                 <div class="card h-100 @(loc.Shipment == null ? "border-success" : "border-dark")">
-                    <div class="card-header py-1 d-flex justify-content-between align-items-center
-                                @(loc.Shipment == null ? "bg-success text-white" : "bg-dark text-white")">
+                    @{
+                        var isRfc = loc.Shipment?.Status == "Ready for courier";
+                        var headerClass = loc.Shipment == null ? "bg-success text-white" : (isRfc ? "text-white" : "bg-dark text-white");
+                        var headerStyle = (loc.Shipment != null ? "cursor:pointer;" : "") + (isRfc ? "background-color:#fd7e14;" : "");
+                    }
+                    <div class="card-header py-1 d-flex justify-content-between align-items-center @headerClass"
+                         style="@headerStyle"
+                         title="@(loc.Shipment != null ? "Show the boxes at this location" : "")"
+                         @onclick="() => OpenLocation(loc)">
                         <strong>@loc.Name</strong>
                         <small>@(loc.Shipment == null ? "EMPTY" : GetPackingStatus(loc.Shipment))</small>
                     </div>
@@ -40,13 +48,123 @@ else
                         {
                             <div><strong>@loc.Shipment.ShipmentNumber</strong></div>
                             <div class="small">@loc.Shipment.BuyerNumber - @loc.Shipment.BuyerName</div>
-                            <div class="small text-muted">@loc.Shipment.BoxCount box(es), @loc.Shipment.LotCount lot(s)</div>
+                            var mv = GetMoveProgress(loc.Shipment.Id);
+                            @if (mv.StorageTotal > 0 || mv.Cartons > 0)
+                            {
+                                var atLocation = mv.StorageMoved + mv.Cartons;
+                                <div class="fw-bold @(mv.StorageMoved >= mv.StorageTotal ? "text-success" : "")">
+                                    @atLocation box(es) at location
+                                </div>
+                                <div class="small text-muted">
+                                    @mv.StorageMoved/@mv.StorageTotal storage moved@(mv.Cartons > 0 ? $", {mv.Cartons} packed carton(s)" : "")
+                                </div>
+                            }
+                            @if (loc.Shipment.Pallets is > 0)
+                            {
+                                <div class="small">@loc.Shipment.Pallets pallet(s)</div>
+                            }
                             <div class="small text-muted">Created @loc.Shipment.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</div>
                         }
                     </div>
                 </div>
             </div>
         }
+    </div>
+}
+
+@* Location contents popup: the boxes physically standing at the OUT location *@
+@if (_locModal != null)
+{
+    <div class="modal show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@_locModal.Name — @_locModal.Shipment?.ShipmentNumber (@_locModal.Shipment?.BuyerName)</h5>
+                    <button type="button" class="btn-close" @onclick="() => _locModal = null"></button>
+                </div>
+                <div class="modal-body">
+                    @if (_locModalLoading)
+                    {
+                        <p><em>Loading...</em></p>
+                    }
+                    else
+                    {
+                        @if (_locStorageBoxes.Count == 0 && _locCartons.Count == 0)
+                        {
+                            <div class="alert alert-info">No boxes at this location yet.</div>
+                        }
+                        @if (_locStorageBoxes.Count > 0)
+                        {
+                            <h6>Storage boxes (@_locStorageBoxes.Count)</h6>
+                            <table class="table table-sm table-striped mb-3">
+                                <thead><tr><th>Box #</th><th>Lot #</th><th>Type</th><th class="text-end">Skins</th><th>Moved</th></tr></thead>
+                                <tbody>
+                                    @foreach (var b in _locStorageBoxes.OrderBy(b => b.BoxNumber))
+                                    {
+                                        <tr>
+                                            <td>@b.BoxNumber</td>
+                                            <td>@b.LotNumber</td>
+                                            <td>@b.BoxType</td>
+                                            <td class="text-end">@b.Skins</td>
+                                            <td>@b.MovedToOutAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                        @if (_locCartons.Count > 0)
+                        {
+                            <h6>Packed cartons (@_locCartons.Count)</h6>
+                            <table class="table table-sm table-striped mb-0">
+                                <thead><tr><th>Carton #</th><th>Type</th><th class="text-end">Weight (kg)</th><th class="text-end">Showlots</th><th class="text-end">Skins</th></tr></thead>
+                                <tbody>
+                                    @foreach (var c in _locCartons)
+                                    {
+                                        <tr>
+                                            <td>@(string.IsNullOrEmpty(c.BoxNumber) ? c.Id.ToString() : c.BoxNumber)</td>
+                                            <td>@c.BoxType</td>
+                                            <td class="text-end">@c.Weight.ToString("N2")</td>
+                                            <td class="text-end">@c.ShowLotCount</td>
+                                            <td class="text-end">@c.TotalSkins</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline-dark" @onclick="PrintLocation" title="PDF of this location's boxes with barcodes">Print…</button>
+                    <button class="btn btn-primary" @onclick="OpenPallets">Set Pallets…</button>
+                    <button class="btn btn-secondary" @onclick="() => _locModal = null">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* Pallet count popup *@
+@if (_palletModal)
+{
+    <div class="modal show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Pallets — @_locModal?.Shipment?.ShipmentNumber</h5>
+                    <button type="button" class="btn-close" @onclick="() => _palletModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label fw-bold">Number of pallets</label>
+                    <input type="number" min="0" class="form-control" @bind="_palletCount" />
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => _palletModal = false">Cancel</button>
+                    <button class="btn btn-primary" @onclick="SavePallets" disabled="@_savingPallets">
+                        @(_savingPallets ? "Saving..." : "Save")
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 }
 
@@ -65,6 +183,7 @@ else
     private static readonly string[] DoneStatuses = { "Shipped", "Delivered", "Cancelled" };
 
     private Dictionary<int, List<string>> _orderStatusesByShipment = new();
+    private Dictionary<int, (int StorageMoved, int StorageTotal, int Cartons)> _moveProgressByShipment = new();
 
     protected override async Task OnInitializedAsync() => await Load();
 
@@ -77,16 +196,30 @@ else
             .GroupBy(s => s.OutLocation!)
             .ToDictionary(g => g.Key, g => g.OrderBy(s => s.CreatedAt).First());
 
-        // Packing-order statuses tell whether work at the location has actually begun.
+        // Packing-order statuses tell whether work at the location has actually begun; the moved
+        // counts (scanner confirmations, storage boxes only) show how much has arrived at the location.
         try
         {
             var orders = await Api.GetPackingOrdersAsync();
+            _allOrders = orders;
             _orderStatusesByShipment = orders
                 .Where(o => o.ShipmentId > 0)
                 .GroupBy(o => o.ShipmentId)
                 .ToDictionary(g => g.Key, g => g.Select(o => o.Status).ToList());
+            // Physical boxes AT the location = moved storage boxes + packed showlot CARTONS
+            // (each distinct PackedBox is one physical box standing there).
+            _moveProgressByShipment = orders
+                .Where(o => o.ShipmentId > 0)
+                .GroupBy(o => o.ShipmentId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => (
+                        g.Where(o => o.Type == "Packing").SelectMany(o => o.Lines).Count(l => l.MovedToOutAt != null),
+                        g.Where(o => o.Type == "Packing").SelectMany(o => o.Lines).Count(),
+                        g.Where(o => o.Type == "ShowLot").SelectMany(o => o.Lines)
+                            .Where(l => l.PackedBoxId != null).Select(l => l.PackedBoxId!.Value).Distinct().Count()));
         }
-        catch { _orderStatusesByShipment = new(); }
+        catch { _orderStatusesByShipment = new(); _moveProgressByShipment = new(); }
 
         _locations = Enumerable.Range(1, LocationCount)
             .Select(i => $"OUT-{i}")
@@ -95,15 +228,84 @@ else
         _loading = false;
     }
 
-    // Header label: nothing packed yet -> NOT STARTED; everything packed -> PACKED; else the
-    // shipment's own status (Packing / ShowLot Packing).
+    private (int StorageMoved, int StorageTotal, int Cartons) GetMoveProgress(int shipmentId) =>
+        _moveProgressByShipment.GetValueOrDefault(shipmentId);
+
+    // Location contents popup
+    private List<PackingOrderDto> _allOrders = new();
+    private LocationSlot? _locModal;
+    private bool _locModalLoading;
+    private List<PackingOrderLineDto> _locStorageBoxes = new();
+    private List<PackedBoxDto> _locCartons = new();
+
+    private async Task PrintLocation()
+    {
+        if (_locModal?.Shipment == null) return;
+        await JS.InvokeVoidAsync("open", $"api/shipments/{_locModal.Shipment.Id}/location-pdf", "_blank");
+    }
+
+    // Pallets popup
+    private bool _palletModal;
+    private int _palletCount;
+    private bool _savingPallets;
+
+    private void OpenPallets()
+    {
+        _palletCount = _locModal?.Shipment?.Pallets ?? 0;
+        _palletModal = true;
+    }
+
+    private async Task SavePallets()
+    {
+        if (_locModal?.Shipment == null) return;
+        _savingPallets = true;
+        var (ok, _) = await Api.UpdateShipmentAsync(_locModal.Shipment.Id, new { pallets = _palletCount });
+        _savingPallets = false;
+        if (ok)
+        {
+            _locModal.Shipment.Pallets = _palletCount > 0 ? _palletCount : null;
+            _palletModal = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OpenLocation(LocationSlot loc)
+    {
+        if (loc.Shipment == null) return;
+        _locModal = loc;
+        _locModalLoading = true;
+        _locStorageBoxes = new();
+        _locCartons = new();
+        StateHasChanged();
+
+        var orders = _allOrders.Where(o => o.ShipmentId == loc.Shipment.Id).ToList();
+
+        // Storage boxes physically moved to the location.
+        _locStorageBoxes = orders.Where(o => o.Type == "Packing")
+            .SelectMany(o => o.Lines)
+            .Where(l => l.MovedToOutAt != null)
+            .ToList();
+
+        // Packed showlot cartons (each is one physical box at the location).
+        foreach (var order in orders.Where(o => o.Type == "ShowLot"))
+        {
+            try { _locCartons.AddRange(await Api.GetPackedBoxesAsync(order.Id)); }
+            catch { }
+        }
+        _locModalLoading = false;
+    }
+
+    // Header label: Ready for courier wins; else nothing packed yet -> NOT STARTED; everything
+    // packed -> PACKED; else the shipment's own status (Packing / ShowLot Packing).
     private string GetPackingStatus(ShipmentListDto s)
     {
+        if (s.Status == "Ready for courier")
+            return "READY FOR COURIER";
         var statuses = _orderStatusesByShipment.GetValueOrDefault(s.Id);
         if (statuses == null || statuses.Count == 0 || statuses.All(st => st == "Ready to Pack"))
             return "NOT STARTED";
         if (statuses.All(st => st == "Packed"))
             return "PACKED";
-        return s.Status;
+        return "PRODUCTION";
     }
 }

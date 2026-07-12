@@ -24,6 +24,7 @@ public class BoxMoveFunctions
     private readonly CatalogDbContext _catalogDb;
     private readonly IConfiguration _configuration;
     private readonly ILogger<BoxMoveFunctions> _logger;
+    private readonly Services.ShipmentReadyService _readyService;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -33,12 +34,13 @@ public class BoxMoveFunctions
     // A location is only occupied (and its boxes movable) while the shipment is still in-house.
     private static readonly string[] DoneStatuses = { "Shipped", "Delivered", "Cancelled" };
 
-    public BoxMoveFunctions(AuctionDbContext db, CatalogDbContext catalogDb, IConfiguration configuration, ILogger<BoxMoveFunctions> logger)
+    public BoxMoveFunctions(AuctionDbContext db, CatalogDbContext catalogDb, IConfiguration configuration, ILogger<BoxMoveFunctions> logger, Services.ShipmentReadyService readyService)
     {
         _db = db;
         _catalogDb = catalogDb;
         _configuration = configuration;
         _logger = logger;
+        _readyService = readyService;
     }
 
     // Machine auth for the scanner app: x-api-key against SCANNER_API_KEY. Fails closed.
@@ -71,6 +73,10 @@ public class BoxMoveFunctions
         var line = await FindActiveLineAsync(boxNumber.Value);
         if (line == null)
             return await Json(req, new { found = false, boxNumber, message = $"Box {boxNumber} is not on any active shipment." });
+        if (line.OrderType == "ShowLot")
+            return await Json(req, new { found = false, boxNumber, isShowlot = true, message = $"Box {boxNumber} is a showlot — it is packed at the show (Showlot flow), not moved from storage." });
+        if (line.OrderStatus == "Ready to Pack")
+            return await Json(req, new { found = false, boxNumber, notStarted = true, message = $"Packing has not been started for order {line.PackingOrderNumber} — press Start Packing in the system first." });
 
         var (moved, total) = await ShipmentMoveProgressAsync(line.ShipmentId);
 
@@ -112,6 +118,10 @@ public class BoxMoveFunctions
         var line = await FindActiveLineAsync(boxNumber.Value);
         if (line == null)
             return await Json(req, new { success = false, boxNumber, message = $"Box {boxNumber} is not on any active shipment." });
+        if (line.OrderType == "ShowLot")
+            return await Json(req, new { success = false, boxNumber, isShowlot = true, message = $"Box {boxNumber} is a showlot — it is packed at the show (Showlot flow), not moved from storage." });
+        if (line.OrderStatus == "Ready to Pack")
+            return await Json(req, new { success = false, boxNumber, notStarted = true, message = $"Packing has not been started for order {line.PackingOrderNumber} — press Start Packing in the system first." });
 
         var alreadyMoved = line.MovedToOutAt != null;
         if (!alreadyMoved)
@@ -120,7 +130,41 @@ public class BoxMoveFunctions
             await _db.Database.ExecuteSqlRawAsync(
                 "UPDATE auction.PackingOrderLines SET MovedToOutAt = SYSUTCDATETIME() WHERE Id = {0} AND MovedToOutAt IS NULL",
                 line.LineId);
+
+            // Persist the box's physical location OUTSIDE the shipment: deleting and recreating the
+            // shipment must not forget where the box actually is.
+            var state = await _db.BoxPhysicalStates.FindAsync(line.BoxNumber);
+            if (state == null)
+            {
+                state = new Domain.Entities.BoxPhysicalState { BoxNumber = line.BoxNumber };
+                _db.BoxPhysicalStates.Add(state);
+            }
+            state.OutLocation = line.OutLocation;
+            state.MovedAt = DateTime.UtcNow;
+            state.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
         }
+
+        // Last box of the ORDER arrived -> the packing order completes automatically (no manual
+        // Confirm in the UI).
+        var orderCompleted = false;
+        var remainingInOrder = await _db.PackingOrderLines
+            .CountAsync(l => l.PackingOrderId == line.PackingOrderId && l.MovedToOutAt == null);
+        if (remainingInOrder == 0 && line.OrderStatus != "Packed")
+        {
+            var order = await _db.PackingOrders.FindAsync(line.PackingOrderId);
+            if (order != null && order.Status != "Packed")
+            {
+                order.Status = "Packed";
+                await _db.SaveChangesAsync();
+                orderCompleted = true;
+            }
+        }
+
+        // Everything packed and staged turns the whole SHIPMENT Ready and regenerates its shipping
+        // documents. Checked on every confirm (cheap no-op otherwise) so a re-scan can also heal a
+        // shipment whose orders completed before this check existed.
+        var shipmentReady = await _readyService.TryCompleteAsync(line.ShipmentId);
 
         var (moved, total) = await ShipmentMoveProgressAsync(line.ShipmentId);
         var allMoved = total > 0 && moved >= total;
@@ -131,24 +175,33 @@ public class BoxMoveFunctions
             boxNumber = line.BoxNumber,
             outLocation = line.OutLocation,
             shipmentNumber = line.ShipmentNumber,
+            packingOrderNumber = line.PackingOrderNumber,
             alreadyMoved,
             movedBoxes = moved,
             totalBoxes = total,
             allMoved,
+            orderCompleted,
+            shipmentReady,
             message = alreadyMoved
                 ? $"Box {line.BoxNumber} was already at {line.OutLocation ?? "?"} ({moved}/{total} boxes)."
-                : allMoved
-                    ? $"Box {line.BoxNumber} moved to {line.OutLocation ?? "?"} — ALL {total} boxes for shipment {line.ShipmentNumber} are now there."
-                    : $"Box {line.BoxNumber} moved to {line.OutLocation ?? "?"} ({moved}/{total} boxes for shipment {line.ShipmentNumber})."
+                : shipmentReady
+                    ? $"Box {line.BoxNumber} moved to {line.OutLocation ?? "?"} — shipment {line.ShipmentNumber} is READY (all boxes staged, documents generated)."
+                    : orderCompleted
+                        ? $"Box {line.BoxNumber} moved to {line.OutLocation ?? "?"} — order {line.PackingOrderNumber} COMPLETE ({moved}/{total} boxes for shipment {line.ShipmentNumber})."
+                        : $"Box {line.BoxNumber} moved to {line.OutLocation ?? "?"} ({moved}/{total} boxes for shipment {line.ShipmentNumber})."
         });
     }
 
-    // The scanner's work list: active packing orders (shipment not yet shipped) with their boxes
-    // and move state, oldest shipment first.
+    // The scanner's work list: active STORAGE packing orders (shipment not yet shipped) with their
+    // boxes and move state, oldest shipment first. ShowLot orders are excluded — those boxes sit on
+    // the show racks and go through the Showlot packing flow, not a storage->OUT move.
     private async Task<HttpResponseData> ListPackingOrdersAsync(HttpRequestData req)
     {
+        // Only orders where packing has been STARTED (Start Packing pressed -> In Production) are
+        // scanner work; Ready to Pack orders stay invisible, Packed ones are done.
         var orders = await _db.PackingOrders
-            .Where(p => p.Shipment != null && !DoneStatuses.Contains(p.Shipment.Status))
+            .Where(p => p.Type == "Packing" && p.Status == "In Production"
+                        && p.Shipment != null && !DoneStatuses.Contains(p.Shipment.Status))
             .OrderBy(p => p.Shipment!.CreatedAt).ThenBy(p => p.PackingOrderNumber)
             .Select(p => new
             {
@@ -209,8 +262,10 @@ public class BoxMoveFunctions
                 Skins = l.Skins,
                 Location = l.Location,
                 MovedToOutAt = l.MovedToOutAt,
+                PackingOrderId = l.PackingOrderId,
                 PackingOrderNumber = l.PackingOrder!.PackingOrderNumber,
                 OrderType = l.PackingOrder.Type,
+                OrderStatus = l.PackingOrder.Status,
                 ShipmentId = l.PackingOrder.ShipmentId,
                 ShipmentNumber = l.PackingOrder.Shipment!.ShipmentNumber,
                 OutLocation = l.PackingOrder.Shipment.OutLocation
@@ -220,8 +275,9 @@ public class BoxMoveFunctions
 
     private async Task<(int Moved, int Total)> ShipmentMoveProgressAsync(int shipmentId)
     {
+        // Storage boxes only — showlots are packed at the show, not moved from storage.
         var counts = await _db.PackingOrders
-            .Where(p => p.ShipmentId == shipmentId)
+            .Where(p => p.ShipmentId == shipmentId && p.Type == "Packing")
             .SelectMany(p => p.Lines)
             .GroupBy(_ => 1)
             .Select(g => new { Total = g.Count(), Moved = g.Count(l => l.MovedToOutAt != null) })
@@ -252,8 +308,10 @@ public class BoxMoveFunctions
         public int Skins { get; set; }
         public string Location { get; set; } = "";
         public DateTime? MovedToOutAt { get; set; }
+        public int PackingOrderId { get; set; }
         public string PackingOrderNumber { get; set; } = "";
         public string OrderType { get; set; } = "";
+        public string OrderStatus { get; set; } = "";
         public int ShipmentId { get; set; }
         public string ShipmentNumber { get; set; } = "";
         public string? OutLocation { get; set; }

@@ -16,8 +16,12 @@ public class Shipment
     // Outgoing staging location (OUT-1..OUT-20) where the shipment's boxes are collected.
     // Occupied while the shipment is active; freed (derived) once Shipped/Delivered/Cancelled.
     public string? OutLocation { get; set; }
+    // Number of pallets the boxes are stacked on at the OUT location (entered manually).
+    public int? Pallets { get; set; }
     public string? PackingListPdfUrl { get; set; }
     public string? ShippingInvoicePdfUrl { get; set; }
+    // Uploaded certificate document (any file type), stored in blob storage.
+    public string? CertUrl { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? ShippedAt { get; set; }
     public DateTime? DeliveredAt { get; set; }
@@ -62,6 +66,23 @@ public class PackingOrderLine
     public PackedBox? PackedBox { get; set; }
     // Set when the scanner confirms the box was moved from storage to the shipment's OUT location.
     public DateTime? MovedToOutAt { get; set; }
+    // Set when the scanner confirms the box was loaded onto the courier's truck.
+    public DateTime? LoadedAt { get; set; }
+}
+
+// Physical box state that OUTLIVES shipments: where a box was staged (OUT location) and, for
+// showlots, which carton it was packed into. Written by the scanner flows, re-applied when a new
+// shipment claims the box (deleting a shipment must not undo physical work), cleared when the box
+// actually ships.
+public class BoxPhysicalState
+{
+    public int BoxNumber { get; set; }
+    public string? OutLocation { get; set; }
+    public DateTime? MovedAt { get; set; }
+    public string? PackedBoxNumber { get; set; }
+    public string? PackedBoxType { get; set; }
+    public decimal? PackedGrossWeight { get; set; }
+    public DateTime UpdatedAt { get; set; }
 }
 
 public class PackedBox
@@ -80,5 +101,7 @@ public class PackedBox
     public decimal LengthM { get; set; }
     public string Status { get; set; } = "Open"; // Open, Closed
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    // Set when the scanner confirms the carton was loaded onto the courier's truck.
+    public DateTime? LoadedAt { get; set; }
     public ICollection<PackingOrderLine> ShowLots { get; set; } = new List<PackingOrderLine>();
 }

@@ -18,6 +18,8 @@ public class ShipmentFunctions
     private readonly AuctionDbContext _db;
     private readonly CatalogDbContext _catalogDb;
     private readonly BlobStorageService? _blobStorage;
+    private readonly ShipmentReadyService? _readyService;
+    private readonly EmailService? _emailService;
     private readonly ILogger<ShipmentFunctions> _logger;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -26,8 +28,10 @@ public class ShipmentFunctions
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public ShipmentFunctions(AuctionDbContext db, CatalogDbContext catalogDb, ILogger<ShipmentFunctions> logger, BlobStorageService? blobStorage = null)
+    public ShipmentFunctions(AuctionDbContext db, CatalogDbContext catalogDb, ILogger<ShipmentFunctions> logger, BlobStorageService? blobStorage = null, ShipmentReadyService? readyService = null, EmailService? emailService = null)
     {
+        _readyService = readyService;
+        _emailService = emailService;
         _db = db;
         _catalogDb = catalogDb;
         _logger = logger;
@@ -74,14 +78,19 @@ public class ShipmentFunctions
                 s.Status,
                 s.Notes,
                 s.OutLocation,
+                s.Pallets,
                 s.PackingListPdfUrl,
                 s.ShippingInvoicePdfUrl,
+                s.CertUrl,
                 s.CreatedAt,
                 s.ShippedAt,
                 s.DeliveredAt,
                 LotCount = s.Lines.Count,
                 BoxCount = _db.PackingOrders.Where(p => p.ShipmentId == s.Id)
                     .SelectMany(p => p.Lines).Select(l => l.BoxNumber).Distinct().Count(),
+                // Packing has started (Start Packing pressed on any order) -> the shipment must not
+                // be deletable anymore.
+                PackingStarted = _db.PackingOrders.Any(p => p.ShipmentId == s.Id && p.Status != "Ready to Pack"),
                 Lots = s.Lines.Select(l => new
                 {
                     l.LotNumber,
@@ -234,9 +243,23 @@ public class ShipmentFunctions
             .Where(s => s.OutLocation != null && !doneStatuses.Contains(s.Status))
             .Select(s => s.OutLocation!)
             .ToListAsync();
-        shipment.OutLocation = Enumerable.Range(1, 20)
-            .Select(i => $"OUT-{i}")
-            .FirstOrDefault(loc => !takenLocations.Contains(loc));
+        // Prefer the location where this shipment's boxes ALREADY physically sit (surviving state
+        // from a deleted shipment) so a recreate doesn't ask anyone to move boxes.
+        string? preferredLocation = null;
+        if (body.BoxNumbers != null && body.BoxNumbers.Count > 0)
+        {
+            preferredLocation = await _db.BoxPhysicalStates
+                .Where(s => body.BoxNumbers.Contains(s.BoxNumber) && s.OutLocation != null)
+                .GroupBy(s => s.OutLocation)
+                .OrderByDescending(g => g.Count())
+                .Select(g => g.Key)
+                .FirstOrDefaultAsync();
+        }
+        shipment.OutLocation = preferredLocation != null && !takenLocations.Contains(preferredLocation)
+            ? preferredLocation
+            : Enumerable.Range(1, 20)
+                .Select(i => $"OUT-{i}")
+                .FirstOrDefault(loc => !takenLocations.Contains(loc));
 
         foreach (var lotNumber in body.LotNumbers)
         {
@@ -482,6 +505,12 @@ public class ShipmentFunctions
         // leave it Released so the remaining boxes stay shippable.
         await RefreshInvoiceShippingStatusAsync(invoiceIds, useSnapshot ? snapshotLotsTable : null);
 
+        // Re-apply surviving physical work (boxes already at an OUT location, showlots already in
+        // packed cartons) — deleting a shipment must not undo what happened on the floor.
+        await RehydratePhysicalStateAsync(shipment);
+        if (_readyService != null)
+            await _readyService.TryCompleteAsync(shipment.Id);
+
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
         await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true, id = shipment.Id, shipmentNumber = shipment.ShipmentNumber, outLocation = shipment.OutLocation }, JsonOptions));
@@ -597,6 +626,79 @@ public class ShipmentFunctions
         return doc.ToString();
     }
 
+    // Re-applies surviving BoxPhysicalState to a freshly created shipment's packing orders: storage
+    // boxes already confirmed at an OUT location get their MovedToOutAt back; showlots already in a
+    // packed carton get the carton (PackedBox) recreated. Order statuses follow the restored work.
+    private async Task RehydratePhysicalStateAsync(Shipment shipment)
+    {
+        var orders = await _db.PackingOrders
+            .Include(p => p.Lines)
+            .Where(p => p.ShipmentId == shipment.Id)
+            .ToListAsync();
+        if (orders.Count == 0) return;
+
+        var boxNumbers = orders.SelectMany(o => o.Lines).Select(l => l.BoxNumber).ToList();
+        var states = await _db.BoxPhysicalStates.Where(s => boxNumbers.Contains(s.BoxNumber)).ToListAsync();
+        if (states.Count == 0) return;
+        var stateByBox = states.ToDictionary(s => s.BoxNumber);
+
+        foreach (var order in orders)
+        {
+            if (order.Type == "Packing")
+            {
+                foreach (var line in order.Lines)
+                    if (stateByBox.TryGetValue(line.BoxNumber, out var st) && st.MovedAt != null)
+                        line.MovedToOutAt = st.MovedAt;
+                var moved = order.Lines.Count(l => l.MovedToOutAt != null);
+                if (moved == order.Lines.Count) order.Status = "Packed";
+                else if (moved > 0) order.Status = "In Production";
+            }
+            else
+            {
+                // Rebuild the packed cartons from the surviving per-showlot state.
+                var packedGroups = order.Lines
+                    .Where(l => stateByBox.TryGetValue(l.BoxNumber, out var st) && !string.IsNullOrEmpty(st.PackedBoxNumber))
+                    .GroupBy(l => stateByBox[l.BoxNumber].PackedBoxNumber!)
+                    .ToList();
+                foreach (var grp in packedGroups)
+                {
+                    var st = stateByBox[grp.First().BoxNumber];
+                    var dims = await _db.Set<BoxTypeDimension>().FirstOrDefaultAsync(d => d.BoxType == st.PackedBoxType);
+                    var tareParam = await _db.Set<SystemParameter>().FirstOrDefaultAsync(p => p.Key == $"BoxTareWeight_{st.PackedBoxType}");
+                    var tare = tareParam != null && decimal.TryParse(tareParam.Value, out var tw) ? tw : 0m;
+                    var gross = st.PackedGrossWeight ?? 0m;
+                    var packedBox = new PackedBox
+                    {
+                        PackingOrderId = order.Id,
+                        BoxNumber = st.PackedBoxNumber!,
+                        BoxType = st.PackedBoxType ?? "",
+                        GrossWeight = gross,
+                        NetWeight = gross - tare > 0 ? gross - tare : gross,
+                        TareWeight = tare,
+                        Weight = gross,
+                        HeightM = dims?.HeightM ?? 0,
+                        WidthM = dims?.WidthM ?? 0,
+                        LengthM = dims?.LengthM ?? 0,
+                        Status = "Approved"
+                    };
+                    _db.PackedBoxes.Add(packedBox);
+                    await _db.SaveChangesAsync();
+                    foreach (var line in grp)
+                    {
+                        line.PackedBoxId = packedBox.Id;
+                        line.MovedToOutAt = stateByBox[line.BoxNumber].MovedAt ?? DateTime.UtcNow;
+                    }
+                }
+                var packed = order.Lines.Count(l => l.PackedBoxId != null);
+                if (packed == order.Lines.Count) order.Status = "Packed";
+                else if (packed > 0) order.Status = "In Production";
+            }
+        }
+        await _db.SaveChangesAsync();
+        _logger.LogInformation("Rehydrated physical state onto shipment {Number}: {Count} boxes had surviving state",
+            shipment.ShipmentNumber, states.Count);
+    }
+
     [Function("UpdateShipmentStatus")]
     public async Task<HttpResponseData> UpdateStatus(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "shipments/{id:int}/status")] HttpRequestData req,
@@ -612,7 +714,7 @@ public class ShipmentFunctions
         if (shipment == null)
             return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
 
-        var validStatuses = new[] { "Pending", "Packing", "ShowLot Packing", "Shipped", "Delivered", "Cancelled" };
+        var validStatuses = new[] { "Pending", "Packing", "ShowLot Packing", "Ready", "Ready for courier", "Shipped", "Delivered", "Cancelled" };
         if (!validStatuses.Contains(body.Status))
         {
             var bad = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
@@ -626,7 +728,17 @@ public class ShipmentFunctions
             shipment.TrackingNumber = body.TrackingNumber;
 
         if (body.Status == "Shipped")
+        {
             shipment.ShippedAt = DateTime.UtcNow;
+            // The boxes have left the building — their physical staging/packing state is history.
+            var shippedBoxNumbers = await _db.PackingOrders
+                .Where(p => p.ShipmentId == id)
+                .SelectMany(p => p.Lines)
+                .Select(l => l.BoxNumber)
+                .ToListAsync();
+            var states = await _db.BoxPhysicalStates.Where(s => shippedBoxNumbers.Contains(s.BoxNumber)).ToListAsync();
+            _db.BoxPhysicalStates.RemoveRange(states);
+        }
         else if (body.Status == "Delivered")
             shipment.DeliveredAt = DateTime.UtcNow;
 
@@ -645,10 +757,49 @@ public class ShipmentFunctions
 
         await _db.SaveChangesAsync();
 
+        // Ready for courier = the office confirmed the ship: documents are (re)generated and emailed
+        // now; the scanner then confirms the truck loading, which flips the shipment to Shipped.
+        // Email trouble never blocks the transition — it comes back as a warning.
+        string? emailedTo = null, emailWarning = null;
+        if (body.Status == "Ready for courier")
+            (emailedTo, emailWarning) = await EmailShippingDocumentsAsync(shipment);
+
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/json");
-        await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true }, JsonOptions));
+        await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true, emailedTo, emailWarning }, JsonOptions));
         return response;
+    }
+
+    private async Task<(string? EmailedTo, string? Warning)> EmailShippingDocumentsAsync(Shipment shipment)
+    {
+        try
+        {
+            var toParam = await _db.Set<SystemParameter>().FirstOrDefaultAsync(p => p.Key == "ShippingDocsEmail");
+            var to = toParam?.Value?.Trim();
+            if (string.IsNullOrEmpty(to))
+                return (null, "No email sent — the ShippingDocsEmail parameter is empty.");
+            if (_emailService == null || !_emailService.IsConfigured)
+                return (null, "No email sent — SMTP is not configured (SMTP_HOST app setting).");
+
+            var packingList = await GenerateAndStorePackingListPdfAsync(shipment.Id, isShippingInvoice: false);
+            var shippingInvoice = await GenerateAndStorePackingListPdfAsync(shipment.Id, isShippingInvoice: true);
+            if (packingList == null || shippingInvoice == null)
+                return (null, "No email sent — document generation failed.");
+
+            await _emailService.SendAsync(
+                to,
+                $"Shipment {shipment.ShipmentNumber} — shipping documents",
+                $"Shipment {shipment.ShipmentNumber} has been shipped.\n\nAttached: packing list ({shipment.ShipmentNumber}-PL) and shipping invoice ({shipment.ShipmentNumber}-SI).",
+                ($"{shipment.ShipmentNumber}-PL.pdf", packingList),
+                ($"{shipment.ShipmentNumber}-SI.pdf", shippingInvoice));
+            return (to, null);
+        }
+        catch (Exception ex)
+        {
+            // Message inlined — the portal Log stream omits exception details from the template.
+            _logger.LogError(ex, "Failed to email shipping documents for {Number}: {Error}", shipment.ShipmentNumber, ex.Message);
+            return (null, $"Email failed: {ex.Message}");
+        }
     }
 
     [Function("UpdateShipment")]
@@ -664,12 +815,16 @@ public class ShipmentFunctions
         if (shipment == null)
             return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
 
+        if (body.ShipperId.HasValue && body.ShipperId.Value > 0)
+            shipment.ShipperId = body.ShipperId.Value;
         if (body.ShippingAddressId.HasValue)
             shipment.ShippingAddressId = body.ShippingAddressId;
         if (body.TrackingNumber != null)
             shipment.TrackingNumber = body.TrackingNumber;
         if (body.Notes != null)
             shipment.Notes = body.Notes;
+        if (body.Pallets.HasValue)
+            shipment.Pallets = body.Pallets.Value > 0 ? body.Pallets.Value : null;
 
         await _db.SaveChangesAsync();
 
@@ -731,6 +886,133 @@ public class ShipmentFunctions
         response.Headers.Add("Content-Type", "application/json");
         await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true }, JsonOptions));
         return response;
+    }
+
+    // Change a box's TYPE from the packing order line. The type is corrected everywhere it is
+    // read from: every packing-order line carrying the box and the auction snapshot boxes table
+    // (which feeds the shipping documents' dimensions/tare lookups).
+    [Function("UpdateBoxType")]
+    public async Task<HttpResponseData> UpdateBoxType(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "shipments/packing-orders/lines/{lineId:int}/boxtype")] HttpRequestData req,
+        int lineId)
+    {
+        var body = await req.ReadFromJsonAsync<UpdateBoxTypeDto>();
+        if (body == null || string.IsNullOrWhiteSpace(body.BoxType))
+            return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+
+        var validType = await _db.BoxTypeDimensions.AnyAsync(d => d.BoxType == body.BoxType);
+        if (!validType)
+        {
+            var bad = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+            bad.Headers.Add("Content-Type", "application/json");
+            await bad.WriteStringAsync(JsonSerializer.Serialize(new { error = $"Unknown box type '{body.BoxType}' — define it under parameters first." }, JsonOptions));
+            return bad;
+        }
+
+        var line = await _db.PackingOrderLines
+            .Include(l => l.PackingOrder).ThenInclude(o => o!.Shipment)
+            .FirstOrDefaultAsync(l => l.Id == lineId);
+        if (line == null)
+            return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        // From Ready for courier on, the shipment is locked — only the loading scanner touches it.
+        var lockedStatuses = new[] { "Ready for courier", "Shipped", "Delivered", "Cancelled" };
+        if (line.PackingOrder?.Shipment != null && lockedStatuses.Contains(line.PackingOrder.Shipment.Status))
+        {
+            var locked = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+            locked.Headers.Add("Content-Type", "application/json");
+            await locked.WriteStringAsync(JsonSerializer.Serialize(new { error = $"Shipment {line.PackingOrder.Shipment.ShipmentNumber} is {line.PackingOrder.Shipment.Status} — boxes are read-only." }, JsonOptions));
+            return locked;
+        }
+
+        // Every line carrying this box, not just the clicked one.
+        var lines = await _db.PackingOrderLines.Where(l => l.BoxNumber == line.BoxNumber).ToListAsync();
+        foreach (var l in lines)
+            l.BoxType = body.BoxType;
+        await _db.SaveChangesAsync();
+
+        // The auction snapshot boxes table is what the documents read box types from.
+        var auctionNumber = await _db.Lots
+            .Where(l => l.LotNumber == line.LotNumber)
+            .Select(l => l.Auction.AuctionNumber)
+            .FirstOrDefaultAsync();
+        if (!string.IsNullOrEmpty(auctionNumber) && System.Text.RegularExpressions.Regex.IsMatch(auctionNumber, "^[A-Za-z0-9]{1,20}$"))
+        {
+            try
+            {
+                await _catalogDb.Database.ExecuteSqlRawAsync(
+                    $"UPDATE auction.[{auctionNumber}.Boxes] SET BoxType = {{0}} WHERE BoxNumber = {{1}}",
+                    body.BoxType, line.BoxNumber);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Snapshot box-type update failed for box {Box} in auction {Num}", line.BoxNumber, auctionNumber);
+            }
+        }
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true }, JsonOptions));
+        return response;
+    }
+
+    public class UpdateBoxTypeDto
+    {
+        public string BoxType { get; set; } = "";
+    }
+
+    // Upload a certificate document for the shipment (any file type, base64 body). Replaces an
+    // existing certificate; the URL is stored on the shipment for the View Cert button.
+    [Function("UploadShipmentCert")]
+    public async Task<HttpResponseData> UploadCert(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "shipments/{id:int}/cert")] HttpRequestData req,
+        int id)
+    {
+        var body = await req.ReadFromJsonAsync<UploadCertDto>();
+        if (body == null || string.IsNullOrWhiteSpace(body.FileName) || string.IsNullOrWhiteSpace(body.ContentBase64))
+            return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+
+        var shipment = await _db.Shipments.FindAsync(id);
+        if (shipment == null)
+            return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+        if (_blobStorage == null)
+        {
+            var err = req.CreateResponse(System.Net.HttpStatusCode.InternalServerError);
+            await err.WriteStringAsync("Blob storage is not configured.");
+            return err;
+        }
+
+        byte[] data;
+        try { data = Convert.FromBase64String(body.ContentBase64); }
+        catch { return req.CreateResponse(System.Net.HttpStatusCode.BadRequest); }
+        if (data.Length > 20 * 1024 * 1024)
+        {
+            var tooBig = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+            await tooBig.WriteStringAsync("File too large (max 20 MB).");
+            return tooBig;
+        }
+
+        // Blob name from the shipment + a sanitized file name so re-uploads overwrite predictably.
+        var safeName = string.Concat(body.FileName.Split(Path.GetInvalidFileNameChars()));
+        var url = await _blobStorage.UploadFileAsync(
+            $"certs/{shipment.ShipmentNumber}-{safeName}",
+            data,
+            string.IsNullOrWhiteSpace(body.ContentType) ? "application/octet-stream" : body.ContentType);
+
+        shipment.CertUrl = url;
+        await _db.SaveChangesAsync();
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true, certUrl = url }, JsonOptions));
+        return response;
+    }
+
+    public class UploadCertDto
+    {
+        public string FileName { get; set; } = "";
+        public string? ContentType { get; set; }
+        public string ContentBase64 { get; set; } = "";
     }
 
     [Function("GetShipmentPackingList")]
@@ -1204,6 +1486,23 @@ public class ShipmentFunctions
         var pdfQuery = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
         var isShippingInvoice = pdfQuery["type"] == "shipping-invoice";
 
+        var pdfBytes = await GenerateAndStorePackingListPdfAsync(id, isShippingInvoice);
+        if (pdfBytes == null)
+            return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        var docName = isShippingInvoice ? "Shipping invoice" : "Packing list";
+        var pdfResponse = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        pdfResponse.Headers.Add("Content-Type", "application/pdf");
+        pdfResponse.Headers.Add("Content-Disposition", $"attachment; filename=\"{docName}.pdf\"");
+        await pdfResponse.Body.WriteAsync(pdfBytes);
+        return pdfResponse;
+    }
+
+    // Builds the packing list / shipping invoice, uploads it to blob storage (overwriting any stale
+    // cached document) and stores the URL on the shipment. Also called by ShipmentReadyService when
+    // the shipment turns Ready. Returns null if the shipment doesn't exist.
+    public async Task<byte[]?> GenerateAndStorePackingListPdfAsync(int id, bool isShippingInvoice)
+    {
         var shipment = await _db.Shipments
             .Include(s => s.Shipper)
             .Include(s => s.Buyer)
@@ -1211,7 +1510,7 @@ public class ShipmentFunctions
             .Include(s => s.Lines)
             .FirstOrDefaultAsync(s => s.Id == id);
         if (shipment == null)
-            return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+            return null;
 
         // Collect lot numbers from shipment lines
         var pdfLotNumbers = shipment.Lines.Select(l => l.LotNumber).Distinct().ToList();
@@ -1385,7 +1684,8 @@ public class ShipmentFunctions
                     HammerPrice = pdfLotPrices.GetValueOrDefault(cl.LotNumber),
                     VolumeM3 = vol,
                     NetWeight = net,
-                    GrossWeight = gross
+                    GrossWeight = gross,
+                    BoxType = boxType
                 });
                 pdfTotalSkins += bi.Skins;
                 pdfTotalBoxes++;
@@ -1476,7 +1776,8 @@ public class ShipmentFunctions
                         VolumeM3 = vol,
                         NetWeight = net,
                         GrossWeight = gross,
-                        IsPackedBoxSummary = true
+                        IsPackedBoxSummary = true,
+                        BoxType = pb.BoxType
                     });
                     newSkins += pbSkins;
                     newBoxes++;
@@ -1520,6 +1821,31 @@ public class ShipmentFunctions
 
         var pdfTotalPrice = pdfLines.Sum(l => l.HammerPrice * l.Skins);
 
+        // Carton counts per box type + dimensions (millimetres) for the lines under the grand total.
+        // Cartons = storage boxes + packed showlot boxes; showlot detail lines aren't cartons.
+        var boxTypeSummaries = pdfLines
+            .Where(l => !l.IsShowLot && !string.IsNullOrEmpty(l.BoxType))
+            .GroupBy(l => l.BoxType)
+            .OrderBy(g => g.Key)
+            .Select(g =>
+            {
+                var dim = pdfDimLookup.GetValueOrDefault(g.Key);
+                var dims = dim != null
+                    ? $" ({(int)Math.Round(dim.LengthM * 1000)} x {(int)Math.Round(dim.WidthM * 1000)} x {(int)Math.Round(dim.HeightM * 1000)} mm)"
+                    : "";
+                return $"{g.Count()} x {g.Key} boxes{dims}";
+            })
+            .ToList();
+
+        // The shipment's sales invoices, one line each in the header block.
+        var pdfInvoiceIds = shipment.Lines.Where(l => l.InvoiceId.HasValue).Select(l => l.InvoiceId!.Value).Distinct().ToList();
+        var pdfInvoiceNumbers = await _db.Invoices
+            .Where(i => pdfInvoiceIds.Contains(i.Id) && i.InvoiceNumber != "")
+            .Select(i => i.InvoiceNumber)
+            .Distinct()
+            .OrderBy(n => n)
+            .ToListAsync();
+
         var pdfData = new PackingListData
         {
             ShipmentNumber = shipment.ShipmentNumber,
@@ -1529,6 +1855,8 @@ public class ShipmentFunctions
             Date = shipment.CreatedAt.ToString("dd/MM/yyyy"),
             Destination = shipment.ShippingAddress?.Country ?? "",
             Marking = "",
+            SalesInvoiceNumbers = pdfInvoiceNumbers,
+            BoxTypeSummaries = boxTypeSummaries,
             BuyerName = shipment.Buyer?.Name ?? "",
             BuyerAddressLines = buyerAddrLines,
             ShipToName = shipToName,
@@ -1567,12 +1895,7 @@ public class ShipmentFunctions
             }
         }
 
-        var docName = isShippingInvoice ? "Shipping invoice" : "Packing list";
-        var pdfResponse = req.CreateResponse(System.Net.HttpStatusCode.OK);
-        pdfResponse.Headers.Add("Content-Type", "application/pdf");
-        pdfResponse.Headers.Add("Content-Disposition", $"attachment; filename=\"{docName} - {shipment.ShipmentNumber}.pdf\"");
-        await pdfResponse.Body.WriteAsync(pdfBytes);
-        return pdfResponse;
+        return pdfBytes;
     }
 
     [Function("GetPackingOrders")]
@@ -1602,9 +1925,11 @@ public class ShipmentFunctions
             po.PackingOrderNumber,
             ShipmentNumber = po.Shipment?.ShipmentNumber ?? "",
             ShipmentId = po.ShipmentId,
+            ShipmentStatus = po.Shipment?.Status ?? "",
             BuyerName = po.Shipment?.Buyer?.Name ?? "",
             BuyerNumber = po.Shipment?.Buyer?.BuyerNumber ?? "",
             ShipperName = po.Shipment?.Shipper?.Name ?? "",
+            OutLocation = po.Shipment?.OutLocation,
             po.Status,
             po.Type,
             po.CreatedAt,
@@ -1619,7 +1944,8 @@ public class ShipmentFunctions
                 l.Skins,
                 l.BoxType,
                 l.Location,
-                l.PackedBoxId
+                l.PackedBoxId,
+                l.MovedToOutAt
             })
         });
 
@@ -1997,6 +2323,7 @@ public class ShipmentFunctions
         var results = boxes.Select(b => new
         {
             b.Id,
+            b.BoxNumber,
             b.BoxType,
             b.Weight,
             b.HeightM,
@@ -2185,9 +2512,11 @@ public class UpdateShipmentStatusDto
 
 public class UpdateShipmentDto
 {
+    public int? ShipperId { get; set; }
     public int? ShippingAddressId { get; set; }
     public string? TrackingNumber { get; set; }
     public string? Notes { get; set; }
+    public int? Pallets { get; set; }
 }
 
 public class UpdatePackingOrderStatusDto

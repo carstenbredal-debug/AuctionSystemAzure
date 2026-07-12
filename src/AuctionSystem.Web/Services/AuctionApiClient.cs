@@ -1156,11 +1156,36 @@ public class AuctionApiClient
         return (true, null, num, loc);
     }
 
+    public async Task<(bool Success, string? Error, string? EmailedTo, string? EmailWarning)> UpdateShipmentStatusWithEmailAsync(int id, object status)
+    {
+        var resp = await _http.PutAsJsonAsync($"api/shipments/{id}/status", status);
+        if (!resp.IsSuccessStatusCode) return (false, await GetErrorMessage(resp), null, null);
+        var doc = System.Text.Json.JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+        string? Str(string name) => doc.RootElement.TryGetProperty(name, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.String ? v.GetString() : null;
+        return (true, null, Str("emailedTo"), Str("emailWarning"));
+    }
+
     public async Task<(bool Success, string? Error)> UpdateShipmentStatusAsync(int id, object status)
     {
         var resp = await _http.PutAsJsonAsync($"api/shipments/{id}/status", status);
         if (!resp.IsSuccessStatusCode) return (false, await GetErrorMessage(resp));
         return (true, null);
+    }
+
+    public async Task<(bool Success, string? Error)> UpdateBoxTypeAsync(int lineId, string boxType)
+    {
+        var resp = await _http.PutAsJsonAsync($"api/shipments/packing-orders/lines/{lineId}/boxtype", new { boxType });
+        if (!resp.IsSuccessStatusCode) return (false, await GetErrorMessage(resp));
+        return (true, null);
+    }
+
+    public async Task<(bool Success, string? Error, string? CertUrl)> UploadShipmentCertAsync(int id, string fileName, string? contentType, string contentBase64)
+    {
+        var resp = await _http.PostAsJsonAsync($"api/shipments/{id}/cert", new { fileName, contentType, contentBase64 });
+        if (!resp.IsSuccessStatusCode) return (false, await GetErrorMessage(resp), null);
+        var doc = System.Text.Json.JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+        var url = doc.RootElement.TryGetProperty("certUrl", out var u) ? u.GetString() : null;
+        return (true, null, url);
     }
 
     public async Task<(bool Success, string? Error)> UpdateShipmentAsync(int id, object shipment)

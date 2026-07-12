@@ -34,15 +34,25 @@ public class ShippingParameterFunctions
             .ToListAsync();
 
         var saved = await _db.BoxTypeDimensions.ToListAsync();
-        var savedMap = saved.ToDictionary(d => d.BoxType, d => d);
+        var savedMap = saved
+            .GroupBy(d => d.BoxType.Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
-        var result = distinctBoxTypes
-            .Select(bt =>
+        // UNION of the types seen on actual boxes AND every saved definition — manually added types
+        // (e.g. for showlot packing cartons) exist only in BoxTypeDimensions and must still show.
+        var names = distinctBoxTypes.Select(bt => bt.BoxType.Trim())
+            .Concat(saved.Select(d => d.BoxType.Trim()))
+            .Where(n => n != "")
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var result = names
+            .Select(name =>
             {
-                savedMap.TryGetValue(bt.BoxType, out var dim);
+                savedMap.TryGetValue(name, out var dim);
                 return new
                 {
-                    boxType = bt.BoxType,
+                    boxType = dim?.BoxType ?? name,
                     heightM = dim?.HeightM ?? 0m,
                     widthM = dim?.WidthM ?? 0m,
                     lengthM = dim?.LengthM ?? 0m,
@@ -110,13 +120,16 @@ public class ShippingParameterFunctions
         if (body == null || body.Count == 0)
             return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
 
+        // Match trimmed and case-insensitively — the unique index is case-insensitive, so a
+        // case/whitespace variant of an existing type must UPDATE it, never insert a duplicate.
         var existing = await _db.BoxTypeDimensions.ToListAsync();
-        var map = existing.ToDictionary(d => d.BoxType, d => d);
+        var map = existing.ToDictionary(d => d.BoxType.Trim(), d => d, StringComparer.OrdinalIgnoreCase);
 
         foreach (var item in body)
         {
-            if (string.IsNullOrWhiteSpace(item.BoxType)) continue;
-            if (map.TryGetValue(item.BoxType, out var dim))
+            var name = item.BoxType?.Trim();
+            if (string.IsNullOrWhiteSpace(name)) continue;
+            if (map.TryGetValue(name, out var dim))
             {
                 dim.HeightM = item.HeightM;
                 dim.WidthM = item.WidthM;
@@ -126,15 +139,17 @@ public class ShippingParameterFunctions
             }
             else
             {
-                _db.BoxTypeDimensions.Add(new BoxTypeDimension
+                var added = new BoxTypeDimension
                 {
-                    BoxType = item.BoxType,
+                    BoxType = name,
                     HeightM = item.HeightM,
                     WidthM = item.WidthM,
                     LengthM = item.LengthM,
                     WeightKg = item.WeightKg,
                     UpdatedAt = DateTime.UtcNow
-                });
+                };
+                _db.BoxTypeDimensions.Add(added);
+                map[name] = added;   // de-dup within the submitted list too
             }
         }
 
