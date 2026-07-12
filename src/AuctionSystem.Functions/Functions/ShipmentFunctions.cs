@@ -888,6 +888,67 @@ public class ShipmentFunctions
         return response;
     }
 
+    // Change a box's TYPE from the packing order line. The type is corrected everywhere it is
+    // read from: every packing-order line carrying the box and the auction snapshot boxes table
+    // (which feeds the shipping documents' dimensions/tare lookups).
+    [Function("UpdateBoxType")]
+    public async Task<HttpResponseData> UpdateBoxType(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "shipments/packing-orders/lines/{lineId:int}/boxtype")] HttpRequestData req,
+        int lineId)
+    {
+        var body = await req.ReadFromJsonAsync<UpdateBoxTypeDto>();
+        if (body == null || string.IsNullOrWhiteSpace(body.BoxType))
+            return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+
+        var validType = await _db.BoxTypeDimensions.AnyAsync(d => d.BoxType == body.BoxType);
+        if (!validType)
+        {
+            var bad = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+            bad.Headers.Add("Content-Type", "application/json");
+            await bad.WriteStringAsync(JsonSerializer.Serialize(new { error = $"Unknown box type '{body.BoxType}' — define it under parameters first." }, JsonOptions));
+            return bad;
+        }
+
+        var line = await _db.PackingOrderLines.FirstOrDefaultAsync(l => l.Id == lineId);
+        if (line == null)
+            return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        // Every line carrying this box, not just the clicked one.
+        var lines = await _db.PackingOrderLines.Where(l => l.BoxNumber == line.BoxNumber).ToListAsync();
+        foreach (var l in lines)
+            l.BoxType = body.BoxType;
+        await _db.SaveChangesAsync();
+
+        // The auction snapshot boxes table is what the documents read box types from.
+        var auctionNumber = await _db.Lots
+            .Where(l => l.LotNumber == line.LotNumber)
+            .Select(l => l.Auction.AuctionNumber)
+            .FirstOrDefaultAsync();
+        if (!string.IsNullOrEmpty(auctionNumber) && System.Text.RegularExpressions.Regex.IsMatch(auctionNumber, "^[A-Za-z0-9]{1,20}$"))
+        {
+            try
+            {
+                await _catalogDb.Database.ExecuteSqlRawAsync(
+                    $"UPDATE auction.[{auctionNumber}.Boxes] SET BoxType = {{0}} WHERE BoxNumber = {{1}}",
+                    body.BoxType, line.BoxNumber);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Snapshot box-type update failed for box {Box} in auction {Num}", line.BoxNumber, auctionNumber);
+            }
+        }
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(new { success = true }, JsonOptions));
+        return response;
+    }
+
+    public class UpdateBoxTypeDto
+    {
+        public string BoxType { get; set; } = "";
+    }
+
     // Upload a certificate document for the shipment (any file type, base64 body). Replaces an
     // existing certificate; the URL is stored on the shipment for the View Cert button.
     [Function("UploadShipmentCert")]

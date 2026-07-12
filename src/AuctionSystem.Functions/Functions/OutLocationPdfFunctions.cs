@@ -82,6 +82,7 @@ public class OutLocationPdfFunctions
                             {
                                 c.ConstantColumn(60);   // Box #
                                 c.ConstantColumn(60);   // Lot #
+                                c.ConstantColumn(50);   // Type
                                 c.ConstantColumn(45);   // Skins
                                 c.ConstantColumn(130);  // Barcode
                                 c.ConstantColumn(25);   // Checkbox
@@ -89,13 +90,14 @@ public class OutLocationPdfFunctions
                             });
                             table.Header(h =>
                             {
-                                foreach (var t in new[] { "Box #", "Lot #", "Skins", "Barcode", "", "Remarks" })
+                                foreach (var t in new[] { "Box #", "Lot #", "Type", "Skins", "Barcode", "", "Remarks" })
                                     h.Cell().BorderBottom(1).PaddingBottom(2).Text(t).Bold().FontSize(8);
                             });
                             foreach (var b in storageBoxes)
                             {
                                 table.Cell().PaddingVertical(5).Text(b.BoxNumber.ToString()).Bold();
                                 table.Cell().PaddingVertical(5).Text(b.LotNumber.ToString());
+                                table.Cell().PaddingVertical(5).Text(b.BoxType);
                                 table.Cell().PaddingVertical(5).Text(b.Skins.ToString());
                                 table.Cell().PaddingVertical(3).MaxWidth(130).Height(26).Element(e => RenderBarcode(e, b.BoxNumber.ToString()));
                                 table.Cell().PaddingVertical(6).AlignCenter().Width(12).Height(12).Border(1);

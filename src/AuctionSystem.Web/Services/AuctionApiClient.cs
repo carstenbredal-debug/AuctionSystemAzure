@@ -1172,6 +1172,13 @@ public class AuctionApiClient
         return (true, null);
     }
 
+    public async Task<(bool Success, string? Error)> UpdateBoxTypeAsync(int lineId, string boxType)
+    {
+        var resp = await _http.PutAsJsonAsync($"api/shipments/packing-orders/lines/{lineId}/boxtype", new { boxType });
+        if (!resp.IsSuccessStatusCode) return (false, await GetErrorMessage(resp));
+        return (true, null);
+    }
+
     public async Task<(bool Success, string? Error, string? CertUrl)> UploadShipmentCertAsync(int id, string fileName, string? contentType, string contentBase64)
     {
         var resp = await _http.PostAsJsonAsync($"api/shipments/{id}/cert", new { fileName, contentType, contentBase64 });
