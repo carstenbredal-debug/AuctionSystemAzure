@@ -24,8 +24,8 @@
         <select class="form-select" @onchange="OnStatusFilterChanged">
             <option value="">All Statuses</option>
             <option value="Pending">Pending</option>
-            <option value="Packing">Packing</option>
-            <option value="ShowLot Packing">ShowLot Packing</option>
+            <option value="Packing">Production (boxes)</option>
+            <option value="ShowLot Packing">Production (showlots)</option>
             <option value="Ready">Ready</option>
             <option value="Ready for courier">Ready for courier</option>
             <option value="Shipped">Shipped</option>
@@ -71,7 +71,7 @@ else
                             <td>@s.TrackingNumber</td>
                             <td>
                                 <span class="badge @GetStatusBadgeClass(s.Status)"
-                                      style="@(s.Status == "Ready for courier" ? "background-color:#fd7e14;" : "")">@s.Status</span>
+                                      style="@(s.Status == "Ready for courier" ? "background-color:#fd7e14;" : "")">@GetDisplayStatus(s.Status)</span>
                             </td>
                             <td>
                                 @if (!string.IsNullOrEmpty(s.OutLocation))
@@ -130,7 +130,10 @@ else
                                 {
                                     <button class="btn btn-sm btn-outline-secondary me-1" @onclick="() => OpenEdit(s)">Edit</button>
                                     <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => OpenAwb(s)" title="Set the AWB / tracking number">AWB</button>
-                                    <button class="btn btn-sm btn-success me-1" @onclick="() => MarkShipped(s)">Ship</button>
+                                    @if (s.Status == "Ready")
+                                    {
+                                        <button class="btn btn-sm btn-success me-1" @onclick="() => MarkShipped(s)">Ship</button>
+                                    }
                                     @if (s.Status != "Packed" && !s.PackingStarted)
                                     {
                                         <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteShipment(s.Id)">Delete</button>
@@ -996,9 +999,14 @@ else
             await JS.InvokeVoidAsync("open", shipment.CertUrl, "_blank");
     }
 
+    // Both packing statuses are shown as "Production" — the split is an internal detail.
+    private static string GetDisplayStatus(string status) =>
+        status is "Packing" or "ShowLot Packing" ? "Production" : status;
+
     private static string GetStatusBadgeClass(string status) => status switch
     {
         "Pending" => "bg-warning text-dark",
+        "Packing" => "bg-light text-dark border",
         "ShowLot Packing" => "bg-light text-dark border",
         "Ready" => "bg-success",
         "Ready for courier" => "text-white",   // orange background via inline style
