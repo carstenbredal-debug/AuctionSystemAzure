@@ -63,7 +63,7 @@ public class OutLocationPdfFunctions
 
                 page.Header().PaddingBottom(8).Column(col =>
                 {
-                    col.Item().Text($"{shipment.OutLocation ?? "OUT location"} — Shipment {shipment.ShipmentNumber}").Bold().FontSize(14);
+                    col.Item().Text($"{shipment.OutLocation ?? "Lane"} — Shipment {shipment.ShipmentNumber}").Bold().FontSize(14);
                     col.Item().Text($"Buyer: {shipment.Buyer?.BuyerNumber} - {shipment.Buyer?.Name}    Shipper: {shipment.Shipper?.Name}").FontSize(9);
                     col.Item().Text($"Date: {DateTime.UtcNow:yyyy-MM-dd}    Boxes at location: {storageBoxes.Count + cartons.Count}" +
                         (shipment.Pallets is > 0 ? $"    Pallets: {shipment.Pallets}" : "") +

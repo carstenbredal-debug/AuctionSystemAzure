@@ -5,10 +5,10 @@
 @inject AuctionApiClient Api
 @inject IJSRuntime JS
 
-<PageTitle>Outgoing Locations - Admin</PageTitle>
+<PageTitle>Outgoing Lanes - Admin</PageTitle>
 
-<h4 class="mb-2">Outgoing Locations</h4>
-<p class="text-muted">Each active shipment is allotted one OUT location — all its boxes are collected there. The location frees up when the shipment is shipped.</p>
+<h4 class="mb-2">Outgoing Lanes</h4>
+<p class="text-muted">Each active shipment is allotted one lane — all its boxes are collected there. The lane frees up when the shipment is shipped.</p>
 
 @if (_loading)
 {
@@ -72,7 +72,7 @@ else
     </div>
 }
 
-@* Location contents popup: the boxes physically standing at the OUT location *@
+@* Lane contents popup: the boxes physically standing in the lane *@
 @if (_locModal != null)
 {
     <div class="modal show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
@@ -222,7 +222,7 @@ else
         catch { _orderStatusesByShipment = new(); _moveProgressByShipment = new(); }
 
         _locations = Enumerable.Range(1, LocationCount)
-            .Select(i => $"OUT-{i}")
+            .Select(i => $"LANE-{i}")
             .Select(name => new LocationSlot { Name = name, Shipment = active.GetValueOrDefault(name) })
             .ToList();
         _loading = false;
