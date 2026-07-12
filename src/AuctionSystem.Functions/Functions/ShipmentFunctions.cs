@@ -235,9 +235,9 @@ public class ShipmentFunctions
             Status = "Packing"
         };
 
-        // Allot the first free outgoing staging location (OUT-1..OUT-20) — where every box of this
-        // shipment is put. A location is occupied while its shipment is still in-house and frees up
-        // once the shipment is Shipped/Delivered/Cancelled. All 20 taken -> no location (null).
+        // Allot the first free outgoing lane (LANE-1..LANE-20) — where every box of this shipment
+        // is put. A lane is occupied while its shipment is still in-house and frees up once the
+        // shipment is Shipped/Delivered/Cancelled. All 20 taken -> no lane (null).
         var doneStatuses = new[] { "Shipped", "Delivered", "Cancelled" };
         var takenLocations = await _db.Shipments
             .Where(s => s.OutLocation != null && !doneStatuses.Contains(s.Status))
@@ -258,7 +258,7 @@ public class ShipmentFunctions
         shipment.OutLocation = preferredLocation != null && !takenLocations.Contains(preferredLocation)
             ? preferredLocation
             : Enumerable.Range(1, 20)
-                .Select(i => $"OUT-{i}")
+                .Select(i => $"LANE-{i}")
                 .FirstOrDefault(loc => !takenLocations.Contains(loc));
 
         foreach (var lotNumber in body.LotNumbers)

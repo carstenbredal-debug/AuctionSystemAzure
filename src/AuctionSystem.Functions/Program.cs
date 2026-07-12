@@ -838,10 +838,16 @@ using (var scope = host.Services.CreateScope())
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Shipments') AND name = 'CertUrl')
                 ALTER TABLE auction.Shipments ADD CertUrl NVARCHAR(MAX) NULL;
         ");
-        // Add OutLocation column to Shipments if missing (outgoing staging location OUT-1..OUT-20)
+        // Add OutLocation column to Shipments if missing (outgoing lane LANE-1..LANE-20)
         db.Database.ExecuteSqlRaw(@"
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Shipments') AND name = 'OutLocation')
                 ALTER TABLE auction.Shipments ADD OutLocation NVARCHAR(20) NULL;
+        ");
+        // One-time rename: outgoing locations are called LANEs (OUT-3 -> LANE-3). Idempotent.
+        db.Database.ExecuteSqlRaw(@"
+            UPDATE auction.Shipments SET OutLocation = REPLACE(OutLocation, 'OUT-', 'LANE-') WHERE OutLocation LIKE 'OUT-%';
+            IF OBJECT_ID('auction.BoxPhysicalState', 'U') IS NOT NULL
+                UPDATE auction.BoxPhysicalState SET OutLocation = REPLACE(OutLocation, 'OUT-', 'LANE-') WHERE OutLocation LIKE 'OUT-%';
         ");
         // Add MovedToOutAt column to PackingOrderLines if missing (scanner confirms the box was
         // moved from storage to the shipment's OUT location)

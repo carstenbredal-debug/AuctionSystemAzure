@@ -62,13 +62,13 @@ else
                                 else if (po.Status == "Ready to Pack")
                                 {
                                     <button class="btn btn-sm btn-primary" @onclick='() => UpdateStatus(po, "In Production")'
-                                            title="Makes this order visible to the scanner — completes automatically when all boxes reach the OUT location">
+                                            title="Makes this order visible to the scanner — completes automatically when all boxes reach the lane">
                                         Start Packing
                                     </button>
                                 }
                                 else if (po.Status == "In Production")
                                 {
-                                    <span class="text-muted small">Scanning — completes when all boxes are at @(po.OutLocation ?? "the OUT location")</span>
+                                    <span class="text-muted small">Scanning — completes when all boxes are at @(po.OutLocation ?? "the lane")</span>
                                 }
                             </td>
                         </tr>
