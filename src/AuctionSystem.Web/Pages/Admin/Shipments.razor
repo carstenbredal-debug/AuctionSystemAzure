@@ -128,7 +128,7 @@ else
                                     <button class="btn btn-sm btn-outline-secondary me-1" @onclick="() => OpenEdit(s)">Edit</button>
                                     <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => OpenAwb(s)" title="Set the AWB / tracking number">AWB</button>
                                     <button class="btn btn-sm btn-success me-1" @onclick="() => MarkShipped(s)">Ship</button>
-                                    @if (s.Status != "Packed")
+                                    @if (s.Status != "Packed" && !s.PackingStarted)
                                     {
                                         <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteShipment(s.Id)">Delete</button>
                                     }

@@ -87,6 +87,9 @@ public class ShipmentFunctions
                 LotCount = s.Lines.Count,
                 BoxCount = _db.PackingOrders.Where(p => p.ShipmentId == s.Id)
                     .SelectMany(p => p.Lines).Select(l => l.BoxNumber).Distinct().Count(),
+                // Packing has started (Start Packing pressed on any order) -> the shipment must not
+                // be deletable anymore.
+                PackingStarted = _db.PackingOrders.Any(p => p.ShipmentId == s.Id && p.Status != "Ready to Pack"),
                 Lots = s.Lines.Select(l => new
                 {
                     l.LotNumber,
