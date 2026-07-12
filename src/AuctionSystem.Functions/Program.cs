@@ -89,6 +89,11 @@ var host = new HostBuilder()
         // Lot generation services
         services.AddScoped<LotGenerationService>();
         services.AddScoped<CatalogBuildService>();
+        // Scanner completion flows resolve these to flip a fully-packed shipment to Ready and
+        // regenerate its shipping documents.
+        services.AddScoped<AuctionSystem.Functions.Functions.ShipmentFunctions>();
+        services.AddScoped<ShipmentReadyService>();
+        services.AddSingleton<EmailService>();
 
         // Storage clients: a connection string (local dev / key-based) OR the func's managed identity.
         // In Azure (PROD/TEST) we use identity-based AzureWebJobsStorage (`__accountName`, no key/connection
@@ -806,6 +811,9 @@ using (var scope = host.Services.CreateScope())
             IF NOT EXISTS (SELECT 1 FROM auction.SystemParameters WHERE [Key] = 'BcItem_AuctionFee')
                 INSERT INTO auction.SystemParameters ([Key], Value, Description, DataType, UpdatedAt)
                 VALUES ('BcItem_AuctionFee', 'AUCTFEE', 'BC item number for the auction fee line', 'string', GETUTCDATE());
+            IF NOT EXISTS (SELECT 1 FROM auction.SystemParameters WHERE [Key] = 'ShippingDocsEmail')
+                INSERT INTO auction.SystemParameters ([Key], Value, Description, DataType, UpdatedAt)
+                VALUES ('ShippingDocsEmail', '', 'Email address that receives the packing list + shipping invoice when a shipment is marked Shipped (empty = no email)', 'string', GETUTCDATE());
             IF NOT EXISTS (SELECT 1 FROM auction.SystemParameters WHERE [Key] = 'BcItem_Commission')
                 INSERT INTO auction.SystemParameters ([Key], Value, Description, DataType, UpdatedAt)
                 VALUES ('BcItem_Commission', 'BROKERCOM', 'BC item number for the commission line', 'string', GETUTCDATE());
@@ -820,6 +828,16 @@ using (var scope = host.Services.CreateScope())
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Shipments') AND name = 'ShippingInvoicePdfUrl')
                 ALTER TABLE auction.Shipments ADD ShippingInvoicePdfUrl NVARCHAR(MAX) NULL;
         ");
+        // Add Pallets column to Shipments if missing (pallet count at the OUT location)
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Shipments') AND name = 'Pallets')
+                ALTER TABLE auction.Shipments ADD Pallets INT NULL;
+        ");
+        // Add CertUrl column to Shipments if missing (uploaded certificate document)
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Shipments') AND name = 'CertUrl')
+                ALTER TABLE auction.Shipments ADD CertUrl NVARCHAR(MAX) NULL;
+        ");
         // Add OutLocation column to Shipments if missing (outgoing staging location OUT-1..OUT-20)
         db.Database.ExecuteSqlRaw(@"
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Shipments') AND name = 'OutLocation')
@@ -830,6 +848,26 @@ using (var scope = host.Services.CreateScope())
         db.Database.ExecuteSqlRaw(@"
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.PackingOrderLines') AND name = 'MovedToOutAt')
                 ALTER TABLE auction.PackingOrderLines ADD MovedToOutAt DATETIME2 NULL;
+        ");
+        // Add LoadedAt columns (scanner confirms boxes/cartons loaded onto the courier's truck)
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.PackingOrderLines') AND name = 'LoadedAt')
+                ALTER TABLE auction.PackingOrderLines ADD LoadedAt DATETIME2 NULL;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.PackedBoxes') AND name = 'LoadedAt')
+                ALTER TABLE auction.PackedBoxes ADD LoadedAt DATETIME2 NULL;
+        ");
+        // BoxPhysicalState: physical staging/packing state per box, survives shipment deletion
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('auction') AND name = 'BoxPhysicalState')
+            CREATE TABLE auction.BoxPhysicalState (
+                BoxNumber INT NOT NULL PRIMARY KEY,
+                OutLocation NVARCHAR(20) NULL,
+                MovedAt DATETIME2 NULL,
+                PackedBoxNumber NVARCHAR(50) NULL,
+                PackedBoxType NVARCHAR(100) NULL,
+                PackedGrossWeight DECIMAL(18,4) NULL,
+                UpdatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+            );
         ");
         // Drop auction.Boxes table if it exists (replaced by view)
         db.Database.ExecuteSqlRaw(@"

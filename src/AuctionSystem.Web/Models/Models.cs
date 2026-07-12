@@ -995,14 +995,17 @@ public class ShipmentListDto
     public string TrackingNumber { get; set; } = "";
     public string Status { get; set; } = "";
     public string? OutLocation { get; set; }
+    public int? Pallets { get; set; }
     public string Notes { get; set; } = "";
     public string? PackingListPdfUrl { get; set; }
     public string? ShippingInvoicePdfUrl { get; set; }
+    public string? CertUrl { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? ShippedAt { get; set; }
     public DateTime? DeliveredAt { get; set; }
     public int LotCount { get; set; }
     public int BoxCount { get; set; }
+    public bool PackingStarted { get; set; }
     public List<ShipmentLotDto> Lots { get; set; } = new();
 }
 
@@ -1035,9 +1038,11 @@ public class PackingOrderDto
     public string PackingOrderNumber { get; set; } = "";
     public string ShipmentNumber { get; set; } = "";
     public int ShipmentId { get; set; }
+    public string ShipmentStatus { get; set; } = "";
     public string BuyerName { get; set; } = "";
     public string BuyerNumber { get; set; } = "";
     public string ShipperName { get; set; } = "";
+    public string? OutLocation { get; set; }
     public string Status { get; set; } = "";
     public string Type { get; set; } = "ShowLot";
     public DateTime CreatedAt { get; set; }
@@ -1055,6 +1060,7 @@ public class PackingOrderLineDto
     public string BoxType { get; set; } = "";
     public string Location { get; set; } = "";
     public int? PackedBoxId { get; set; }
+    public DateTime? MovedToOutAt { get; set; }
 }
 
 public class ShowLotWeightDto
@@ -1080,6 +1086,7 @@ public class PackShowLotsResponseDto
 public class PackedBoxDto
 {
     public int Id { get; set; }
+    public string BoxNumber { get; set; } = "";
     public string BoxType { get; set; } = "";
     public decimal Weight { get; set; }
     public decimal HeightM { get; set; }

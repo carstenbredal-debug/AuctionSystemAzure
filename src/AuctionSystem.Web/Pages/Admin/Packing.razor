@@ -55,17 +55,20 @@ else
                             <td>@po.BoxCount</td>
                             <td>@po.CreatedAt.ToString("yyyy-MM-dd")</td>
                             <td>
-                                @if (po.Status != "Packed")
+                                @if (IsLocked(po))
                                 {
-                                    @if (po.Status == "Ready to Pack")
-                                    {
-                                        <button class="btn btn-sm btn-primary me-1" @onclick='() => UpdateStatus(po, "In Production")'>Start Packing</button>
-                                    }
-                                    <button class="btn btn-sm btn-success" @onclick='() => UpdateStatus(po, "Packed")'
-                                            disabled="@(po.Status == "Ready to Pack")"
-                                            title="@(po.Status == "Ready to Pack" ? "Start packing first." : "Confirm all boxes are packed")">
-                                        Confirm
+                                    <span class="text-muted small">Ready for courier — scanner only</span>
+                                }
+                                else if (po.Status == "Ready to Pack")
+                                {
+                                    <button class="btn btn-sm btn-primary" @onclick='() => UpdateStatus(po, "In Production")'
+                                            title="Makes this order visible to the scanner — completes automatically when all boxes reach the OUT location">
+                                        Start Packing
                                     </button>
+                                }
+                                else if (po.Status == "In Production")
+                                {
+                                    <span class="text-muted small">Scanning — completes when all boxes are at @(po.OutLocation ?? "the OUT location")</span>
                                 }
                             </td>
                         </tr>
@@ -92,8 +95,37 @@ else
                                                         <td>@line.BoxNumber</td>
                                                         <td>@line.LotNumber</td>
                                                         <td>@line.Skins</td>
-                                                        <td>@line.BoxType</td>
-                                                        <td>@(string.IsNullOrEmpty(line.Location) ? "—" : line.Location)</td>
+                                                        <td>
+                                                            @if (IsLocked(po))
+                                                            {
+                                                                @line.BoxType
+                                                            }
+                                                            else
+                                                            {
+                                                                <select class="form-select form-select-sm" style="width:110px"
+                                                                        value="@line.BoxType"
+                                                                        @onchange="e => ChangeBoxType(line, e)">
+                                                                    @if (!_boxTypes.Any(bt => bt.BoxType == line.BoxType))
+                                                                    {
+                                                                        <option value="@line.BoxType">@line.BoxType</option>
+                                                                    }
+                                                                    @foreach (var bt in _boxTypes)
+                                                                    {
+                                                                        <option value="@bt.BoxType">@bt.BoxType</option>
+                                                                    }
+                                                                </select>
+                                                            }
+                                                        </td>
+                                                        <td>
+                                                            @if (line.MovedToOutAt != null)
+                                                            {
+                                                                <span class="badge bg-dark" title="Moved @line.MovedToOutAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm")">@(po.OutLocation ?? "OUT")</span>
+                                                            }
+                                                            else
+                                                            {
+                                                                @(string.IsNullOrEmpty(line.Location) ? "—" : line.Location)
+                                                            }
+                                                        </td>
                                                     </tr>
                                                 }
                                             </tbody>
@@ -114,13 +146,38 @@ else
 
 @code {
     private List<PackingOrderDto> _orders = new();
+    private List<BoxTypeDimensionDto> _boxTypes = new();
     private bool _loading = true;
     private int? _expandedId;
     private string? _statusFilter;
 
     protected override async Task OnInitializedAsync()
     {
+        try { _boxTypes = await Api.GetBoxTypeDimensionsAsync(); } catch { }
         await LoadOrders();
+    }
+
+    // From Ready for courier on, the shipment is scanner-only — no edits here.
+    private static bool IsLocked(PackingOrderDto po) =>
+        po.ShipmentStatus is "Ready for courier" or "Shipped" or "Delivered" or "Cancelled";
+
+    // Changing the type here corrects it everywhere: every packing-order line with the box and the
+    // auction snapshot the shipping documents read from.
+    private async Task ChangeBoxType(PackingOrderLineDto line, ChangeEventArgs e)
+    {
+        var newType = e.Value?.ToString();
+        if (string.IsNullOrEmpty(newType) || newType == line.BoxType) return;
+        var (ok, err) = await Api.UpdateBoxTypeAsync(line.Id, newType);
+        if (ok)
+        {
+            line.BoxType = newType;
+        }
+        else
+        {
+            // Reload to reset the dropdown to the stored value.
+            await LoadOrders();
+        }
+        StateHasChanged();
     }
 
     private async Task LoadOrders()
@@ -159,7 +216,7 @@ else
     private string GetStatusBadgeClass(string status) => status switch
     {
         "Ready to Pack" => "bg-warning text-dark",
-        "In Production" => "bg-info text-dark",
+        "In Production" => "text-danger",
         "Packed" => "bg-success",
         _ => "bg-secondary"
     };
