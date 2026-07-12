@@ -80,14 +80,16 @@ public class OutLocationPdfFunctions
                         {
                             table.ColumnsDefinition(c =>
                             {
-                                c.ConstantColumn(70);   // Box #
-                                c.ConstantColumn(70);   // Lot #
-                                c.ConstantColumn(55);   // Skins
-                                c.RelativeColumn();     // Barcode
+                                c.ConstantColumn(60);   // Box #
+                                c.ConstantColumn(60);   // Lot #
+                                c.ConstantColumn(45);   // Skins
+                                c.ConstantColumn(130);  // Barcode
+                                c.ConstantColumn(25);   // Checkbox
+                                c.RelativeColumn();     // Remarks (handwriting space)
                             });
                             table.Header(h =>
                             {
-                                foreach (var t in new[] { "Box #", "Lot #", "Skins", "Barcode" })
+                                foreach (var t in new[] { "Box #", "Lot #", "Skins", "Barcode", "", "Remarks" })
                                     h.Cell().BorderBottom(1).PaddingBottom(2).Text(t).Bold().FontSize(8);
                             });
                             foreach (var b in storageBoxes)
@@ -95,7 +97,9 @@ public class OutLocationPdfFunctions
                                 table.Cell().PaddingVertical(5).Text(b.BoxNumber.ToString()).Bold();
                                 table.Cell().PaddingVertical(5).Text(b.LotNumber.ToString());
                                 table.Cell().PaddingVertical(5).Text(b.Skins.ToString());
-                                table.Cell().PaddingVertical(3).MaxWidth(220).Height(26).Element(e => RenderBarcode(e, b.BoxNumber.ToString()));
+                                table.Cell().PaddingVertical(3).MaxWidth(130).Height(26).Element(e => RenderBarcode(e, b.BoxNumber.ToString()));
+                                table.Cell().PaddingVertical(6).AlignCenter().Width(12).Height(12).Border(1);
+                                table.Cell().PaddingVertical(5).PaddingHorizontal(4).BorderBottom(0.5f).BorderColor(Colors.Grey.Medium).Text("");
                             }
                         });
                     }
@@ -107,15 +111,17 @@ public class OutLocationPdfFunctions
                         {
                             table.ColumnsDefinition(c =>
                             {
-                                c.ConstantColumn(90);   // Carton #
-                                c.ConstantColumn(55);   // Type
-                                c.ConstantColumn(70);   // Weight
-                                c.ConstantColumn(55);   // Skins
-                                c.RelativeColumn();     // Barcode
+                                c.ConstantColumn(80);   // Carton #
+                                c.ConstantColumn(45);   // Type
+                                c.ConstantColumn(60);   // Weight
+                                c.ConstantColumn(45);   // Skins
+                                c.ConstantColumn(130);  // Barcode
+                                c.ConstantColumn(25);   // Checkbox
+                                c.RelativeColumn();     // Remarks (handwriting space)
                             });
                             table.Header(h =>
                             {
-                                foreach (var t in new[] { "Carton #", "Type", "Weight (kg)", "Skins", "Barcode" })
+                                foreach (var t in new[] { "Carton #", "Type", "Weight (kg)", "Skins", "Barcode", "", "Remarks" })
                                     h.Cell().BorderBottom(1).PaddingBottom(2).Text(t).Bold().FontSize(8);
                             });
                             foreach (var c in cartons)
@@ -124,7 +130,9 @@ public class OutLocationPdfFunctions
                                 table.Cell().PaddingVertical(5).Text(c.BoxType);
                                 table.Cell().PaddingVertical(5).Text(c.GrossWeight > 0 ? c.GrossWeight.ToString("N2") : c.Weight.ToString("N2"));
                                 table.Cell().PaddingVertical(5).Text(c.ShowLots.Sum(l => l.Skins).ToString());
-                                table.Cell().PaddingVertical(3).MaxWidth(220).Height(26).Element(e => RenderBarcode(e, c.BoxNumber));
+                                table.Cell().PaddingVertical(3).MaxWidth(130).Height(26).Element(e => RenderBarcode(e, c.BoxNumber));
+                                table.Cell().PaddingVertical(6).AlignCenter().Width(12).Height(12).Border(1);
+                                table.Cell().PaddingVertical(5).PaddingHorizontal(4).BorderBottom(0.5f).BorderColor(Colors.Grey.Medium).Text("");
                             }
                         });
                     }
