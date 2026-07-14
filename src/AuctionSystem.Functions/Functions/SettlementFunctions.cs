@@ -796,6 +796,20 @@ public class SettlementFunctions
         // Auto-correct status mismatches: Paid locally but BC still has remaining, or vice versa
         if (bcRemainingMap.Count > 0)
         {
+            // Fully credited invoices are excluded from the Paid upgrade — the credit note also
+            // closes the BC ledger entry (remaining 0), but that invoice must not read as "Paid".
+            // Partially credited invoices still upgrade: remaining 0 there means the rest was paid.
+            var creditedLotsByOriginal = invoices
+                .Where(i => i.IsCreditNote && i.OriginalInvoiceId != null)
+                .GroupBy(i => i.OriginalInvoiceId!.Value)
+                .ToDictionary(g => g.Key, g => g.SelectMany(cn => cn.Lines.Select(l => l.LotNumber)).ToHashSet());
+            var fullyCreditedIds = invoices
+                .Where(i => !i.IsCreditNote
+                            && creditedLotsByOriginal.TryGetValue(i.Id, out var credited)
+                            && i.Lines.All(l => credited.Contains(l.LotNumber)))
+                .Select(i => i.Id)
+                .ToHashSet();
+
             var needsSave = false;
             foreach (var inv in invoices.Where(i => !i.IsCreditNote && !string.IsNullOrEmpty(i.BcInvoiceNumber)))
             {
@@ -808,12 +822,21 @@ public class SettlementFunctions
                     _logger.LogInformation("Auto-corrected invoice {Id} ({Num}) from Paid to Downpayment — BC remaining: {Rem}",
                         inv.Id, inv.BcInvoiceNumber, bcRemaining);
                 }
-                else if (inv.Status == InvoiceStatus.Downpayment && bcRemaining == 0)
+                else if ((inv.Status == InvoiceStatus.Downpayment
+                          || inv.Status == InvoiceStatus.Issued
+                          || inv.Status == InvoiceStatus.Sent
+                          || inv.Status == InvoiceStatus.Overdue)
+                         && bcRemaining == 0
+                         && !fullyCreditedIds.Contains(inv.Id))
                 {
+                    // Payment was applied directly in BC (never via the system's payment buttons) —
+                    // without this upgrade the invoice is stuck: BC remaining 0 hides the payment
+                    // buttons while a non-Paid status hides the To Shipping button.
+                    var from = inv.Status;
                     inv.Status = InvoiceStatus.Paid;
                     needsSave = true;
-                    _logger.LogInformation("Auto-corrected invoice {Id} ({Num}) from Downpayment to Paid — BC remaining: 0",
-                        inv.Id, inv.BcInvoiceNumber);
+                    _logger.LogInformation("Auto-corrected invoice {Id} ({Num}) from {From} to Paid — BC remaining: 0",
+                        inv.Id, inv.BcInvoiceNumber, from);
                 }
             }
             if (needsSave)
