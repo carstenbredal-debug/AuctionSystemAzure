@@ -1,6 +1,7 @@
 @page "/admin/packing"
 @attribute [Authorize(Roles = "Admin")]
 @inject AuctionApiClient Api
+@inject IJSRuntime JS
 
 <h4 class="mb-4">Packing Orders</h4>
 
@@ -55,6 +56,8 @@ else
                             <td>@po.BoxCount</td>
                             <td>@po.CreatedAt.ToString("yyyy-MM-dd")</td>
                             <td>
+                                <button class="btn btn-sm btn-outline-dark me-1" @onclick="() => PrintOrder(po)"
+                                        title="PDF of this order's boxes with barcodes">Print</button>
                                 @if (IsLocked(po))
                                 {
                                     <span class="text-muted small">Ready for courier — scanner only</span>
@@ -155,6 +158,11 @@ else
     {
         try { _boxTypes = await Api.GetBoxTypeDimensionsAsync(); } catch { }
         await LoadOrders();
+    }
+
+    private async Task PrintOrder(PackingOrderDto po)
+    {
+        await JS.InvokeVoidAsync("open", $"api/shipments/packing-orders/{po.Id}/pdf", "_blank");
     }
 
     // From Ready for courier on, the shipment is scanner-only — no edits here.

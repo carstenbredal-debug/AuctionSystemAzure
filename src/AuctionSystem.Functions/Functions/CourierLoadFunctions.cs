@@ -115,32 +115,19 @@ public class CourierLoadFunctions
                     "UPDATE auction.PackingOrderLines SET LoadedAt = SYSUTCDATETIME() WHERE Id = {0} AND LoadedAt IS NULL", hit.LineId!.Value);
         }
 
-        // Last box on the truck -> the shipment SHIPS: invoices follow, the physical state clears
-        // and the OUT location frees (occupancy is derived from active statuses).
+        // Last box on the truck -> the shipment becomes SCANNED. The office presses Ship on the
+        // lane, which flips it to Shipped and frees the lane.
         var (loaded, total) = await LoadProgressAsync(hit.ShipmentId);
-        var shipmentShipped = false;
+        var shipmentScanned = false;
         if (total > 0 && loaded >= total)
         {
             var shipment = await _db.Shipments.FindAsync(hit.ShipmentId);
             if (shipment != null && shipment.Status == "Ready for courier")
             {
-                shipment.Status = "Shipped";
-                shipment.ShippedAt = DateTime.UtcNow;
-
-                var shipLines = await _db.ShipmentLines.Where(l => l.ShipmentId == hit.ShipmentId).ToListAsync();
-                var invoiceIds = shipLines.Where(l => l.InvoiceId.HasValue).Select(l => l.InvoiceId!.Value).Distinct().ToList();
-                var invoices = await _db.Invoices.Where(i => invoiceIds.Contains(i.Id)).ToListAsync();
-                foreach (var inv in invoices)
-                    inv.ShippingStatus = "Shipped";
-
-                var boxNumbers = await _db.PackingOrders.Where(p => p.ShipmentId == hit.ShipmentId)
-                    .SelectMany(p => p.Lines).Select(l => l.BoxNumber).ToListAsync();
-                var states = await _db.BoxPhysicalStates.Where(s => boxNumbers.Contains(s.BoxNumber)).ToListAsync();
-                _db.BoxPhysicalStates.RemoveRange(states);
-
+                shipment.Status = "Scanned";
                 await _db.SaveChangesAsync();
-                shipmentShipped = true;
-                _logger.LogInformation("Shipment {Number} fully loaded — SHIPPED, location {Loc} freed",
+                shipmentScanned = true;
+                _logger.LogInformation("Shipment {Number} fully loaded — SCANNED, awaiting Ship on lane {Loc}",
                     shipment.ShipmentNumber, shipment.OutLocation);
             }
         }
@@ -156,11 +143,11 @@ public class CourierLoadFunctions
             alreadyLoaded,
             loadedBoxes = loaded,
             totalBoxes = total,
-            shipmentShipped,
+            shipmentScanned,
             message = alreadyLoaded
                 ? $"{hit.DisplayNumber} was already on the truck ({loaded}/{total})."
-                : shipmentShipped
-                    ? $"{hit.DisplayNumber} loaded — ALL {total} boxes on the truck. Shipment {hit.ShipmentNumber} SHIPPED, {hit.OutLocation ?? "the location"} is now free."
+                : shipmentScanned
+                    ? $"{hit.DisplayNumber} loaded — ALL {total} boxes on the truck. Shipment {hit.ShipmentNumber} is SCANNED — press Ship on {hit.OutLocation ?? "the lane"} to release it."
                     : $"{hit.DisplayNumber} loaded ({loaded}/{total} for shipment {hit.ShipmentNumber})."
         });
     }
@@ -217,11 +204,12 @@ public class CourierLoadFunctions
             if (line != null) return line;
         }
 
-        // 2. Packed carton number (string barcode from the packing step)
+        // 2. Packed carton number (string barcode from the packing step). "Scanned" is included so
+        //    re-scans after completion still answer idempotently.
         var carton = await _db.PackedBoxes
             .Where(b => b.BoxNumber == code
                         && b.PackingOrder!.Shipment != null
-                        && b.PackingOrder.Shipment.Status == "Ready for courier")
+                        && (b.PackingOrder.Shipment.Status == "Ready for courier" || b.PackingOrder.Shipment.Status == "Scanned"))
             .OrderByDescending(b => b.Id)
             .Select(b => new LoadHit
             {
@@ -253,7 +241,7 @@ public class CourierLoadFunctions
             .Where(l => l.BoxNumber == boxNumber
                         && l.PackingOrder!.Type == "Packing"
                         && l.PackingOrder.Shipment != null
-                        && l.PackingOrder.Shipment.Status == "Ready for courier")
+                        && (l.PackingOrder.Shipment.Status == "Ready for courier" || l.PackingOrder.Shipment.Status == "Scanned"))
             .OrderByDescending(l => l.Id)
             .Select(l => new LoadHit
             {

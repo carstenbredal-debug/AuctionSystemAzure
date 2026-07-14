@@ -159,6 +159,86 @@ public class OutLocationPdfFunctions
         return resp;
     }
 
+    // Print-out of a packing order: the same box overview the Boxes page shows (box, lot, skins,
+    // type, location) with a scannable barcode per box.
+    [RequireRole("Admin")]
+    [Function("GetPackingOrderPdf")]
+    public async Task<HttpResponseData> GetPackingOrderPdf(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "shipments/packing-orders/{id:int}/pdf")] HttpRequestData req,
+        int id)
+    {
+        var order = await _db.PackingOrders
+            .Include(p => p.Lines)
+            .Include(p => p.Shipment).ThenInclude(s => s!.Buyer)
+            .FirstOrDefaultAsync(p => p.Id == id);
+        if (order == null)
+            return req.CreateResponse(HttpStatusCode.NotFound);
+
+        var lines = order.Lines.OrderBy(l => l.BoxNumber).ToList();
+        var lane = order.Shipment?.OutLocation;
+
+        QuestPDF.Settings.License = LicenseType.Community;
+        var pdfBytes = Document.Create(container =>
+        {
+            container.Page(page =>
+            {
+                page.Size(PageSizes.A4);
+                page.Margin(30);
+                page.DefaultTextStyle(x => x.FontSize(9));
+
+                page.Header().PaddingBottom(8).Column(col =>
+                {
+                    col.Item().Text($"Packing order {order.PackingOrderNumber} — Shipment {order.Shipment?.ShipmentNumber}").Bold().FontSize(14);
+                    col.Item().Text($"Buyer: {order.Shipment?.Buyer?.BuyerNumber} - {order.Shipment?.Buyer?.Name}    Lane: {lane ?? "—"}    Status: {order.Status}").FontSize(9);
+                    col.Item().Text($"Date: {DateTime.UtcNow:yyyy-MM-dd}    Boxes: {lines.Count}    Skins: {lines.Sum(l => l.Skins):N0}").FontSize(9);
+                    col.Item().PaddingTop(4).LineHorizontal(0.75f);
+                });
+
+                page.Content().Table(table =>
+                {
+                    table.ColumnsDefinition(c =>
+                    {
+                        c.ConstantColumn(60);   // Box #
+                        c.ConstantColumn(60);   // Lot #
+                        c.ConstantColumn(45);   // Skins
+                        c.ConstantColumn(55);   // Type
+                        c.ConstantColumn(80);   // Location
+                        c.RelativeColumn();     // Barcode
+                    });
+                    table.Header(h =>
+                    {
+                        foreach (var t in new[] { "Box #", "Lot #", "Skins", "Type", "Location", "Barcode" })
+                            h.Cell().BorderBottom(1).PaddingBottom(2).Text(t).Bold().FontSize(8);
+                    });
+                    foreach (var l in lines)
+                    {
+                        // Moved boxes are at the lane, the rest at their storage location.
+                        var location = l.MovedToOutAt != null ? (lane ?? "LANE") : (string.IsNullOrEmpty(l.Location) ? "—" : l.Location);
+                        table.Cell().PaddingVertical(5).Text(l.BoxNumber.ToString()).Bold();
+                        table.Cell().PaddingVertical(5).Text(l.LotNumber.ToString());
+                        table.Cell().PaddingVertical(5).Text(l.Skins.ToString());
+                        table.Cell().PaddingVertical(5).Text(l.BoxType);
+                        table.Cell().PaddingVertical(5).Text(location);
+                        table.Cell().PaddingVertical(3).MaxWidth(130).Height(26).Element(e => RenderBarcode(e, l.BoxNumber.ToString()));
+                    }
+                });
+
+                page.Footer().AlignCenter().Text(t =>
+                {
+                    t.CurrentPageNumber();
+                    t.Span(" of ");
+                    t.TotalPages();
+                });
+            });
+        }).GeneratePdf();
+
+        var resp = req.CreateResponse(HttpStatusCode.OK);
+        resp.Headers.Add("Content-Type", "application/pdf");
+        resp.Headers.Add("Content-Disposition", $"inline; filename=\"{order.PackingOrderNumber}.pdf\"");
+        await resp.Body.WriteAsync(pdfBytes);
+        return resp;
+    }
+
     private static void RenderBarcode(IContainer container, string data)
     {
         var segments = Code128.EncodeB(data);

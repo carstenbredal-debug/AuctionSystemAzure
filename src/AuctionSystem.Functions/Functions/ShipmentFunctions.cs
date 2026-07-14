@@ -714,7 +714,7 @@ public class ShipmentFunctions
         if (shipment == null)
             return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
 
-        var validStatuses = new[] { "Pending", "Packing", "ShowLot Packing", "Ready", "Ready for courier", "Shipped", "Delivered", "Cancelled" };
+        var validStatuses = new[] { "Pending", "Packing", "ShowLot Packing", "Ready", "Ready for courier", "Scanned", "Shipped", "Delivered", "Cancelled" };
         if (!validStatuses.Contains(body.Status))
         {
             var bad = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
@@ -916,7 +916,7 @@ public class ShipmentFunctions
             return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
 
         // From Ready for courier on, the shipment is locked — only the loading scanner touches it.
-        var lockedStatuses = new[] { "Ready for courier", "Shipped", "Delivered", "Cancelled" };
+        var lockedStatuses = new[] { "Ready for courier", "Scanned", "Shipped", "Delivered", "Cancelled" };
         if (line.PackingOrder?.Shipment != null && lockedStatuses.Contains(line.PackingOrder.Shipment.Status))
         {
             var locked = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
