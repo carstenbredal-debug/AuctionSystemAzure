@@ -443,9 +443,12 @@ else
                                         @* One shipment = one buyer: once an invoice is ticked, other buyers' invoices are hidden. *@
                                         @foreach (var inv in GetInvoiceGroups().Where(g => SelectedBuyerId == 0 || g.BuyerId == SelectedBuyerId))
                                         {
-                                            <tr class="@(_selectedInvoiceNumbers.Contains(inv.InvoiceNumber) ? "table-primary" : "")">
+                                            @* @key: without it Blazor reuses checkbox elements by POSITION when the buyer
+                                               filter collapses the list, leaving a clicked checkbox visually ticked on a
+                                               row that now shows a different invoice. *@
+                                            <tr @key="inv.InvoiceId" class="@(_selectedInvoiceIds.Contains(inv.InvoiceId) ? "table-primary" : "")">
                                                 <td>
-                                                    <input type="checkbox" checked="@_selectedInvoiceNumbers.Contains(inv.InvoiceNumber)"
+                                                    <input type="checkbox" checked="@_selectedInvoiceIds.Contains(inv.InvoiceId)"
                                                            @onchange="() => ToggleInvoiceSelection(inv)" />
                                                 </td>
                                                 <td><strong>@inv.InvoiceNumber</strong></td>
@@ -458,9 +461,9 @@ else
                                     </tbody>
                                 </table>
                                 <div class="text-muted small">
-                                    @if (_selectedInvoiceNumbers.Count > 0)
+                                    @if (_selectedInvoiceIds.Count > 0)
                                     {
-                                        <strong>Selected: @_selectedInvoiceNumbers.Count invoice(s) — @SelectedBoxCount box(es), @SelectedSkinCount.ToString("N0") skins.</strong>
+                                        <strong>Selected: @_selectedInvoiceIds.Count invoice(s) — @SelectedBoxCount box(es), @SelectedSkinCount.ToString("N0") skins.</strong>
                                     }
                                     else
                                     {
@@ -538,8 +541,8 @@ else
                     {
                         <button class="btn btn-secondary" @onclick="CloseCreateModal">Cancel</button>
                         <button class="btn btn-primary" @onclick="ContinueToConfirm"
-                                disabled="@(_loadingCreate || _createShipperId == 0 || _selectedInvoiceNumbers.Count == 0)">
-                            Continue (@_selectedInvoiceNumbers.Count invoice(s), @SelectedBoxCount box(es), @SelectedSkinCount.ToString("N0") skins)
+                                disabled="@(_loadingCreate || _createShipperId == 0 || _selectedInvoiceIds.Count == 0)">
+                            Continue (@_selectedInvoiceIds.Count invoice(s), @SelectedBoxCount box(es), @SelectedSkinCount.ToString("N0") skins)
                         </button>
                     }
                     else
@@ -579,20 +582,23 @@ else
     private string _createTrackingNumber = "";
     private string _createNotes = "";
     private List<ShippingAddressListDto> _allAddresses = new();
-    private HashSet<string> _selectedInvoiceNumbers = new();
+    // Selection is keyed on InvoiceId — invoice numbers are not guaranteed unique (blank until
+    // BC posting), and a shared number would make one checkbox select several invoices.
+    private HashSet<int> _selectedInvoiceIds = new();
     private List<InvoiceGroup> _confirmInvoices = new();
     private List<ShippingBoxDto> _confirmBoxes = new();
     private bool _loadingBoxes;
 
     private int SelectedBuyerId =>
-        GetInvoiceGroups().FirstOrDefault(g => _selectedInvoiceNumbers.Contains(g.InvoiceNumber))?.BuyerId ?? 0;
+        GetInvoiceGroups().FirstOrDefault(g => _selectedInvoiceIds.Contains(g.InvoiceId))?.BuyerId ?? 0;
 
     private List<ShippingBoxDto> _modalBoxes = new();
-    private int SelectedBoxCount => _modalBoxes.Count(b => _selectedInvoiceNumbers.Contains(b.InvoiceNumber));
-    private int SelectedSkinCount => _modalBoxes.Where(b => _selectedInvoiceNumbers.Contains(b.InvoiceNumber)).Sum(b => b.Skins);
+    private int SelectedBoxCount => _modalBoxes.Count(b => _selectedInvoiceIds.Contains(b.InvoiceId));
+    private int SelectedSkinCount => _modalBoxes.Where(b => _selectedInvoiceIds.Contains(b.InvoiceId)).Sum(b => b.Skins);
 
     private class InvoiceGroup
     {
+        public int InvoiceId { get; init; }
         public string InvoiceNumber { get; init; } = "";
         public int BuyerId { get; init; }
         public string BuyerNumber { get; init; } = "";
@@ -739,7 +745,7 @@ else
         _createAddressId = 0;
         _createTrackingNumber = "";
         _createNotes = "";
-        _selectedInvoiceNumbers.Clear();
+        _selectedInvoiceIds.Clear();
         _confirmInvoices.Clear();
         _confirmBoxes.Clear();
         _allAddresses.Clear();
@@ -766,10 +772,11 @@ else
     private List<InvoiceGroup> GetInvoiceGroups()
     {
         return _releasedLots
-            .GroupBy(l => l.InvoiceNumber)
+            .GroupBy(l => l.InvoiceId)
             .Select(g => new InvoiceGroup
             {
-                InvoiceNumber = g.Key,
+                InvoiceId = g.Key,
+                InvoiceNumber = g.First().InvoiceNumber,
                 BuyerId = g.First().BuyerId,
                 BuyerNumber = g.First().BuyerNumber,
                 BuyerName = g.First().BuyerName,
@@ -781,14 +788,14 @@ else
 
     private void ToggleInvoiceSelection(InvoiceGroup inv)
     {
-        if (!_selectedInvoiceNumbers.Remove(inv.InvoiceNumber))
-            _selectedInvoiceNumbers.Add(inv.InvoiceNumber);
+        if (!_selectedInvoiceIds.Remove(inv.InvoiceId))
+            _selectedInvoiceIds.Add(inv.InvoiceId);
     }
 
     private async Task ContinueToConfirm()
     {
         _confirmInvoices = GetInvoiceGroups()
-            .Where(g => _selectedInvoiceNumbers.Contains(g.InvoiceNumber))
+            .Where(g => _selectedInvoiceIds.Contains(g.InvoiceId))
             .ToList();
         if (_confirmInvoices.Count == 0) return;
 
@@ -801,7 +808,7 @@ else
         {
             // The released-boxes list (loaded at modal open) carries per-box detail — type, weights,
             // location, showlot rack; scope it to the chosen invoices for confirmation.
-            _confirmBoxes = _modalBoxes.Where(b => _selectedInvoiceNumbers.Contains(b.InvoiceNumber)).ToList();
+            _confirmBoxes = _modalBoxes.Where(b => _selectedInvoiceIds.Contains(b.InvoiceId)).ToList();
         }
         catch (Exception ex)
         {
@@ -820,7 +827,7 @@ else
     private void CloseCreateModal()
     {
         _showCreateModal = false;
-        _selectedInvoiceNumbers.Clear();
+        _selectedInvoiceIds.Clear();
         _confirmInvoices.Clear();
         _confirmBoxes.Clear();
         _error = null;
@@ -854,7 +861,7 @@ else
                            ? $" Lane: {outLocation} — put all boxes there."
                            : " NO lane free — all 20 are occupied!");
             _showCreateModal = false;
-            _selectedInvoiceNumbers.Clear();
+            _selectedInvoiceIds.Clear();
             _confirmInvoices.Clear();
             await LoadShipments();
         }
