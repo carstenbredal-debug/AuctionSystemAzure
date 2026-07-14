@@ -152,25 +152,9 @@ public static class PackingListPdfService
                     AddHeaderField(right, "AWB number", data.AwbNumber);
                     AddHeaderField(right, "Date", data.Date);
                     AddHeaderField(right, "Destination", data.Destination);
-                    AddHeaderField(right, "Marking", data.Marking);
                     right.Item().Height(8);
-                    right.Item().Row(blocks =>
-                    {
-                        blocks.RelativeItem().Column(inv =>
-                        {
-                            if (data.SalesInvoiceNumbers.Count > 0)
-                            {
-                                inv.Item().Text("Sales invoices").Bold().FontSize(8);
-                                foreach (var invNo in data.SalesInvoiceNumbers)
-                                    inv.Item().Text(invNo).FontSize(8);
-                            }
-                        });
-                        blocks.RelativeItem().Column(inco =>
-                        {
-                            inco.Item().Text("Incoterms").Bold().FontSize(8);
-                            inco.Item().Text("EXW Żerniki").FontSize(8);
-                        });
-                    });
+                    right.Item().Text("Incoterms").Bold().FontSize(8);
+                    right.Item().Text("EXW Żerniki").FontSize(8);
                 });
             });
 
@@ -349,10 +333,20 @@ public static class PackingListPdfService
                 row.RelativeItem(1.2f).AlignRight().Text(Kg(data.TotalGrossWeight)).Bold().FontSize(8); // Gross
             });
 
+            // Sales invoices between the grand total and the box dimensions.
+            if (data.SalesInvoiceNumbers.Count > 0)
+            {
+                col.Item().Height(8);
+                col.Item().Text("Sales invoices").Bold().FontSize(8);
+                foreach (var invNo in data.SalesInvoiceNumbers)
+                    col.Item().Text(invNo).FontSize(8);
+            }
+
             // Box types + their dimensions (from the box-type parameters), one line per type.
             if (data.BoxTypeSummaries.Count > 0)
             {
-                col.Item().Height(6);
+                col.Item().Height(8);
+                col.Item().Text("Box dimensions").Bold().FontSize(8);
                 foreach (var line in data.BoxTypeSummaries)
                     col.Item().Text(line).FontSize(8);
             }
