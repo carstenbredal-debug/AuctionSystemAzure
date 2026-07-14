@@ -371,7 +371,6 @@ public class ShipmentFunctions
         {
             if (useSnapshot)
             {
-                // Read from snapshot — boxes table already has BoxLocation
                 allBoxData = await _catalogDb.Database
                     .SqlQueryRaw<BoxViewResult>($"SELECT BoxNumber, Skins, BoxType, BoxStatus FROM {snapshotBoxesTable} WHERE BoxNumber IN (" +
                         string.Join(",", allBoxNumbers) + ")")
@@ -391,19 +390,23 @@ public class ShipmentFunctions
                     .SqlQueryRaw<BoxViewResult>("SELECT BoxNumber, Skins, BoxType, BoxStatus FROM auction.boxes WHERE BoxNumber IN (" +
                         string.Join(",", allBoxNumbers) + ")")
                     .ToListAsync();
-
-                try
-                {
-                    var staging = await _catalogDb.Database
-                        .SqlQueryRaw<BoxStagingResult>("SELECT CAST(BoxNumber AS INT) AS BoxNumber, Weight AS BoxWeight, BoxLocation FROM dbo.boxstatingfromkphg WHERE BoxNumber IN (" +
-                            string.Join(",", allBoxNumbers) + ")")
-                        .ToListAsync();
-                    foreach (var s in staging)
-                        if (!string.IsNullOrEmpty(s.BoxLocation))
-                            boxLocations[s.BoxNumber] = s.BoxLocation;
-                }
-                catch { /* table may not exist */ }
             }
+
+            // The staging table (populated from KPHG, often AFTER the snapshot was frozen) wins over
+            // both sources — the same priority the packing list / shipping invoice generation uses.
+            // Without this overlay, snapshot auctions stamped blank workorder locations whenever the
+            // staging data arrived late.
+            try
+            {
+                var staging = await _catalogDb.Database
+                    .SqlQueryRaw<BoxStagingResult>("SELECT CAST(BoxNumber AS INT) AS BoxNumber, Weight AS BoxWeight, BoxLocation FROM dbo.boxstatingfromkphg WHERE BoxNumber IN (" +
+                        string.Join(",", allBoxNumbers) + ")")
+                    .ToListAsync();
+                foreach (var s in staging)
+                    if (!string.IsNullOrEmpty(s.BoxLocation))
+                        boxLocations[s.BoxNumber] = s.BoxLocation;
+            }
+            catch { /* table may not exist */ }
         }
 
         // Generate packing order number helper
