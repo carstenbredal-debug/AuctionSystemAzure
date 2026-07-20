@@ -3,6 +3,7 @@
 @using AuctionSystem.Web.Services
 @attribute [Authorize(Roles = "Admin")]
 @inject AuctionApiClient Api
+@inject IJSRuntime JS
 
 <h4 class="mb-4">Shippers</h4>
 
@@ -293,6 +294,8 @@ else
 
     private async Task DeleteShipper(int id)
     {
+        if (!await JS.InvokeAsync<bool>("confirm", "Are you sure or did your fingers slip ?"))
+            return;
         _error = null;
         _success = null;
         var (ok, err) = await Api.DeleteShipperAsync(id);
