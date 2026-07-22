@@ -483,7 +483,18 @@ public class SkinFunctions
                 .Where(f => f.FarmerGUID == farmerGuid)
                 .Select(f => f.Name)
                 .FirstOrDefaultAsync();
-        farmerDisplayName ??= farmerNameKey ?? "farmer";
+        // Not in the Farmer master (legacy/import gap) — take the name stored on the auction's skins.
+        if (string.IsNullOrWhiteSpace(farmerDisplayName))
+        {
+            await using var nameConn = new SqlConnection(connStr);
+            await nameConn.OpenAsync();
+            var (farmerClause, farmerValue) = FarmerFilter(farmerGuid, farmerNameKey);
+            await using var nameCmd = new SqlCommand($"SELECT TOP 1 Farmer FROM {skinsTable} WHERE {farmerClause}", nameConn);
+            nameCmd.Parameters.AddWithValue("@farmerKey", farmerValue);
+            farmerDisplayName = (await nameCmd.ExecuteScalarAsync()) as string;
+        }
+        if (string.IsNullOrWhiteSpace(farmerDisplayName))
+            farmerDisplayName = farmerNameKey ?? "farmer";
 
         using var wb = new ClosedXML.Excel.XLWorkbook();
         var ws = wb.AddWorksheet("Sales Breakdown");
@@ -521,7 +532,11 @@ public class SkinFunctions
 
         var resp = req.CreateResponse(System.Net.HttpStatusCode.OK);
         resp.Headers.Add("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        var safeName = string.Join("_", farmerDisplayName.Split(Path.GetInvalidFileNameChars()));
+        // Header values must be ASCII — a farmer name with ø/ł/æ etc. would make the response throw.
+        var safeName = new string(farmerDisplayName
+            .Select(ch => char.IsLetterOrDigit(ch) && ch < 128 ? ch : '_')
+            .ToArray()).Trim('_');
+        if (safeName.Length == 0) safeName = "farmer";
         resp.Headers.Add("Content-Disposition", $"attachment; filename=\"sales-{auction.AuctionNumber}-{safeName}.xlsx\"");
         await resp.WriteBytesAsync(ms.ToArray());
         return resp;
