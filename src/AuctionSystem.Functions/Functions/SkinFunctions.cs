@@ -400,6 +400,133 @@ public class SkinFunctions
         return response;
     }
 
+    // Excel export of the farmer's sales-result breakdown: SalesType × Gender × Group with sold
+    // skins + their value and unsold skins. Same per-box computation as farmer-auction-lots, so the
+    // numbers match the drill-down page exactly.
+    [Function("GetFarmerAuctionBreakdownXlsx")]
+    public async Task<HttpResponseData> GetFarmerAuctionBreakdownXlsx(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "skins/farmer-auction-breakdown-xlsx")] HttpRequestData req)
+    {
+        var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+        var (farmerGuid, farmerNameKey, hasFarmer) = ParseFarmerKey(query);
+        int? auctionId = int.TryParse(query["auctionId"], out var aid) ? aid : null;
+
+        if (!hasFarmer || auctionId == null)
+            return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+
+        var auction = await _auctionDb.Auctions.FindAsync(auctionId.Value);
+        if (auction == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        var skinsTable = $"auction.[{auction.AuctionNumber}.Skins]";
+        var lotsTable = $"auction.[{auction.AuctionNumber}.Lots]";
+        var connStr = _auctionDb.Database.GetConnectionString()!;
+
+        var saleInfoByBox = await GetSoldBoxSaleInfoAsync(auctionId.Value);
+
+        var farmerSkinsByBox = new Dictionary<int, int>();
+        await using (var preConn = new SqlConnection(connStr))
+        {
+            await preConn.OpenAsync();
+            var (farmerClause, farmerValue) = FarmerFilter(farmerGuid, farmerNameKey);
+            await using var preCmd = new SqlCommand($"SELECT BoxNumber, COUNT(*) FROM {skinsTable} WHERE {farmerClause} AND IsActive = 1 GROUP BY BoxNumber", preConn);
+            preCmd.Parameters.AddWithValue("@farmerKey", farmerValue);
+            await using var preReader = await preCmd.ExecuteReaderAsync();
+            while (await preReader.ReadAsync())
+                farmerSkinsByBox[preReader.GetInt32(0)] = preReader.GetInt32(1);
+        }
+
+        // Aggregate per SalesType × Gender × Group
+        var groups = new Dictionary<(string Type, string Gender, string Group), (int Sold, decimal Value, int Unsold)>();
+        string? farmerDisplayName = null;
+
+        await using (var conn = new SqlConnection(connStr))
+        {
+            await conn.OpenAsync();
+            await using var cmd = new SqlCommand($@"
+                SELECT l.IncludedBoxNumbers, l.SalesType, l.Gender, l.[Group]
+                FROM {lotsTable} l", conn);
+            cmd.CommandTimeout = 60;
+
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var boxNumbersCsv = reader.IsDBNull(0) ? "" : reader.GetString(0);
+                var boxNumbers = boxNumbersCsv.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(b => int.TryParse(b.Trim(), out var n) ? n : 0).Where(n => n > 0);
+
+                var sold = 0; var unsold = 0; decimal value = 0;
+                foreach (var bn in boxNumbers)
+                {
+                    if (!farmerSkinsByBox.TryGetValue(bn, out var skinCount)) continue;
+                    if (saleInfoByBox.TryGetValue(bn, out var info))
+                    {
+                        sold += skinCount;
+                        value += skinCount * info.PriceEur;
+                    }
+                    else
+                    {
+                        unsold += skinCount;
+                    }
+                }
+                if (sold == 0 && unsold == 0) continue;
+
+                var key = (reader.IsDBNull(1) ? "" : reader.GetString(1),
+                           reader.IsDBNull(2) ? "" : reader.GetString(2),
+                           reader.IsDBNull(3) ? "" : reader.GetString(3));
+                var agg = groups.GetValueOrDefault(key);
+                groups[key] = (agg.Sold + sold, agg.Value + value, agg.Unsold + unsold);
+            }
+        }
+
+        if (farmerGuid.HasValue)
+            farmerDisplayName = await _auctionDb.Farmers
+                .Where(f => f.FarmerGUID == farmerGuid)
+                .Select(f => f.Name)
+                .FirstOrDefaultAsync();
+        farmerDisplayName ??= farmerNameKey ?? "farmer";
+
+        using var wb = new ClosedXML.Excel.XLWorkbook();
+        var ws = wb.AddWorksheet("Sales Breakdown");
+
+        ws.Cell(1, 1).Value = $"Auction {auction.AuctionNumber} — {farmerDisplayName}";
+        ws.Cell(1, 1).Style.Font.Bold = true;
+
+        var headers = new[] { "Type", "Gender", "Group", "Sold skins", "Sold value (EUR)", "Unsold skins" };
+        for (int c = 0; c < headers.Length; c++) ws.Cell(3, c + 1).Value = headers[c];
+        ws.Row(3).Style.Font.Bold = true;
+
+        var r = 4;
+        foreach (var kv in groups.OrderBy(g => g.Key.Type).ThenBy(g => g.Key.Gender).ThenBy(g => g.Key.Group))
+        {
+            ws.Cell(r, 1).Value = kv.Key.Type;
+            ws.Cell(r, 2).Value = kv.Key.Gender;
+            ws.Cell(r, 3).Value = kv.Key.Group;
+            ws.Cell(r, 4).Value = kv.Value.Sold;
+            ws.Cell(r, 5).Value = kv.Value.Value;
+            ws.Cell(r, 6).Value = kv.Value.Unsold;
+            r++;
+        }
+
+        ws.Cell(r, 3).Value = "Total";
+        ws.Cell(r, 4).Value = groups.Values.Sum(v => v.Sold);
+        ws.Cell(r, 5).Value = groups.Values.Sum(v => v.Value);
+        ws.Cell(r, 6).Value = groups.Values.Sum(v => v.Unsold);
+        ws.Row(r).Style.Font.Bold = true;
+
+        ws.Column(5).Style.NumberFormat.Format = "#,##0.00";
+        ws.Columns().AdjustToContents();
+
+        using var ms = new MemoryStream();
+        wb.SaveAs(ms);
+
+        var resp = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        resp.Headers.Add("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        var safeName = string.Join("_", farmerDisplayName.Split(Path.GetInvalidFileNameChars()));
+        resp.Headers.Add("Content-Disposition", $"attachment; filename=\"sales-{auction.AuctionNumber}-{safeName}.xlsx\"");
+        await resp.WriteBytesAsync(ms.ToArray());
+        return resp;
+    }
+
     [Function("GetFarmerAuctionBoxes")]
     public async Task<HttpResponseData> GetFarmerAuctionBoxes(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "skins/farmer-auction-boxes")] HttpRequestData req)
