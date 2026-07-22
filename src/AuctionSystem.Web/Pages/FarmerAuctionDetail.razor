@@ -74,9 +74,13 @@ else
 
     @if (_activeTab == "results")
     {
-        <div class="bg-white border rounded p-2 mb-3 d-flex gap-4" style="font-size:0.9rem;">
+        <div class="bg-white border rounded p-2 mb-3 d-flex gap-4 align-items-center" style="font-size:0.9rem;">
             <span><span class="badge bg-success">Sold</span> Sold</span>
             <span><span class="badge bg-secondary">Auction</span> Still to be auctioned</span>
+            <button class="btn btn-sm btn-outline-success ms-auto" @onclick="DownloadBreakdownExcel"
+                    title="Excel: sold/unsold skins and value per Type / Gender / Group">
+                <i class="bi bi-file-earmark-excel me-1"></i>Export Excel
+            </button>
         </div>
 
         @* Breadcrumb *@
@@ -428,6 +432,12 @@ else
         }
         BuildGroupRows();
         StateHasChanged();
+    }
+
+    private async Task DownloadBreakdownExcel()
+    {
+        var url = $"api/skins/farmer-auction-breakdown-xlsx?{FarmerKeyQuery()}&auctionId={AuctionId}";
+        await JS.InvokeVoidAsync("open", url, "_blank");
     }
 
     private async Task DownloadCatalogPdf()
