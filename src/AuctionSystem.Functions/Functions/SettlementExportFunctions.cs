@@ -140,7 +140,106 @@ public class SettlementExportFunctions
                 var first = g.First();
                 return first.FarmerGuid.HasValue && farmerByGuid.TryGetValue(first.FarmerGuid.Value, out var fm)
                     ? fm.FarmerNumber : first.FarmerName ?? "";
-            });
+            })
+            .ToList();
+
+        // --- Summary page first: totals across all farmers + the combined breakdown. VAT is summed
+        // per farmer (rates differ by VAT group), so the summary reconciles with the farmer sheets.
+        if (perFarmer.Count > 0)
+        {
+            var totDelivered = 0; var totSold = 0; var totUnsold = 0;
+            decimal totSales = 0, totSalesVat = 0, totFee = 0, totFeeVat = 0;
+            foreach (var g in perFarmer)
+            {
+                var gFirst = g.First();
+                var gMaster = gFirst.FarmerGuid.HasValue ? farmerByGuid.GetValueOrDefault(gFirst.FarmerGuid.Value) : null;
+                var gRate = VatRules.RateFor(gMaster?.VatBusPostingGroup);
+                var gSold = g.Sum(r => r.Sold);
+                var gSales = g.Sum(r => r.SoldValue);
+                var gFee = gSold * feePerSkin;
+                totDelivered += gFirst.FarmerGuid.HasValue ? deliveredByGuid.GetValueOrDefault(gFirst.FarmerGuid.Value) : 0;
+                totSold += gSold;
+                totUnsold += g.Sum(r => r.Unsold);
+                totSales += gSales; totSalesVat += gSales * gRate;
+                totFee += gFee; totFeeVat += gFee * gRate;
+            }
+            var totInAuction = totSold + totUnsold;
+            var totMissing = totDelivered - totInAuction;
+            var totAfregning = totSales - totFee;
+            var totAfregningVat = totSalesVat - totFeeVat;
+
+            usedSheetNames.Add("Summary");
+            var sum = wb.AddWorksheet("Summary");
+            sum.Cell(1, 1).Value = "Settlement — Summary (all farmers)";
+            sum.Cell(1, 1).Style.Font.Bold = true;
+
+            sum.Cell(3, 1).Value = "Delivered"; sum.Cell(3, 2).Value = totDelivered;
+            sum.Cell(4, 1).Value = "In Auction"; sum.Cell(4, 2).Value = totInAuction;
+            sum.Cell(6, 1).Value = "Missing Skins"; sum.Cell(6, 2).Value = totMissing;
+            sum.Cell(8, 1).Value = "Sold"; sum.Cell(8, 2).Value = totSold;
+            sum.Cell(9, 1).Value = "Unsold"; sum.Cell(9, 2).Value = totUnsold;
+
+            sum.Cell(11, 2).Value = "Excluding VAT";
+            sum.Cell(11, 3).Value = "VAT";
+            sum.Cell(11, 4).Value = "Including VAT";
+            sum.Range(11, 2, 11, 4).Style.Font.Bold = true;
+
+            var sumFeeLabel = feePerSkin.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture).Replace('.', ',');
+            sum.Cell(13, 1).Value = "Salesresult";
+            sum.Cell(13, 2).Value = totSales;
+            sum.Cell(13, 3).Value = totSalesVat;
+            sum.Cell(13, 4).Value = totSales + totSalesVat;
+
+            sum.Cell(15, 1).Value = $"Grading Fee {sumFeeLabel} Euro Cent";
+            sum.Cell(15, 2).Value = totFee;
+            sum.Cell(15, 3).Value = totFeeVat;
+            sum.Cell(15, 4).Value = totFee + totFeeVat;
+
+            sum.Cell(17, 1).Value = "Til Afregning";
+            sum.Cell(17, 2).Value = totAfregning;
+            sum.Cell(17, 3).Value = totAfregningVat;
+            sum.Cell(17, 4).Value = totAfregning + totAfregningVat;
+            sum.Range(17, 1, 17, 4).Style.Font.Bold = true;
+
+            sum.Cell(19, 1).Value = "Still til Settle";
+            sum.Cell(19, 2).Value = $"{totMissing} Skins at Average Price";
+
+            sum.Cell(21, 1).Value = "Sales Result";
+            sum.Cell(21, 1).Style.Font.Bold = true;
+
+            sum.Cell(23, 1).Value = "Type";
+            sum.Cell(23, 2).Value = "Gender";
+            sum.Cell(23, 3).Value = "Group";
+            sum.Cell(23, 4).Value = "Sold skins";
+            sum.Cell(23, 5).Value = "Sold value (EUR)";
+            sum.Cell(23, 6).Value = "Unsold skins";
+            sum.Range(23, 1, 23, 6).Style.Font.Bold = true;
+
+            var sr = 25;
+            var combined = rows
+                .GroupBy(x => (x.SalesType, x.Gender, x.Group))
+                .OrderBy(x => x.Key.SalesType).ThenBy(x => x.Key.Gender).ThenBy(x => x.Key.Group);
+            foreach (var c in combined)
+            {
+                sum.Cell(sr, 1).Value = c.Key.SalesType;
+                sum.Cell(sr, 2).Value = c.Key.Gender;
+                sum.Cell(sr, 3).Value = c.Key.Group;
+                sum.Cell(sr, 4).Value = c.Sum(x => x.Sold);
+                sum.Cell(sr, 5).Value = c.Sum(x => x.SoldValue);
+                sum.Cell(sr, 6).Value = c.Sum(x => x.Unsold);
+                sr++;
+            }
+            sr++;
+            sum.Cell(sr, 3).Value = "Total";
+            sum.Cell(sr, 4).Value = totSold;
+            sum.Cell(sr, 5).Value = totSales;
+            sum.Cell(sr, 6).Value = totUnsold;
+            sum.Row(sr).Style.Font.Bold = true;
+
+            sum.Column(5).Style.NumberFormat.Format = "#,##0.00";
+            sum.Range(11, 2, 17, 4).Style.NumberFormat.Format = "#,##0.00";
+            sum.Columns().AdjustToContents();
+        }
 
         foreach (var farmerGroup in perFarmer)
         {
