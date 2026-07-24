@@ -42,6 +42,17 @@ public class KSeFApiClient
     public string BaseUrl => _config["KSeF:BaseUrl"] ?? "https://api-demo.ksef.mf.gov.pl/v2";
     private string Token => _config["KSeF:Token"] ?? "";
 
+    // KSeF tokens are bound to the context (NIP) they were generated in. Our default token
+    // authenticates in OUR company's context; a self-invoicing session runs in the SUPPLIER's
+    // context and needs a token generated there (possible once the supplier granted us the
+    // samofakturowanie permission). Config: KSeF__TokenByNip__{nip} app setting per supplier,
+    // falling back to the default token.
+    private string TokenFor(string nip)
+    {
+        var perNip = _config[$"KSeF:TokenByNip:{nip}"];
+        return string.IsNullOrEmpty(perNip) ? Token : perNip;
+    }
+
     /// <summary>
     /// Authenticate with KSeF v2 using a KSeF token.
     /// 1. POST /auth/challenge
@@ -54,7 +65,7 @@ public class KSeFApiClient
     {
         _logger.LogInformation("KSeF v2 auth: starting for NIP {NIP} against {BaseUrl}", nip, BaseUrl);
 
-        if (string.IsNullOrEmpty(Token))
+        if (string.IsNullOrEmpty(TokenFor(nip)))
             throw new Exception("KSeF token not configured. Set the KSeF__Token environment variable on the Function App.");
 
         // Step 1: Get challenge
@@ -117,7 +128,10 @@ public class KSeFApiClient
             throw new Exception("No SymmetricKeyEncryption certificate found");
 
         // Step 3: Encrypt token|timestampMs with RSA-OAEP SHA-256
-        var payload = $"{Token}|{timestampMs}";
+        var contextToken = TokenFor(nip);
+        if (contextToken != Token)
+            _logger.LogInformation("KSeF auth: using per-context token for NIP {NIP}", nip);
+        var payload = $"{contextToken}|{timestampMs}";
         var certDer = Convert.FromBase64String(tokenCertB64);
         var x509 = new X509Certificate2(certDer);
         var rsa = x509.GetRSAPublicKey()

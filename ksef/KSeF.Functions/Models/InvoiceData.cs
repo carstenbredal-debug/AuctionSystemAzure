@@ -36,6 +36,13 @@ public class InvoiceData
     // FA(3) statutory legal basis for VAT exemption (P_19A), required when any line
     // is exempt (TaxCategory = "ZW"). Supplied by BC per invoice.
     public string? ExemptionLegalBasis { get; set; }
+
+    // Self-invoicing (samofakturowanie, art. 106d): WE issue on behalf of the supplier.
+    // Seller = the supplier (e.g. farmer), Buyer = our company. Sets Adnotacje P_17 = 1 and
+    // the KSeF session is opened in the SELLER's NIP context — which requires the supplier
+    // to have granted us the self-invoicing permission in KSeF (and, for token auth, a
+    // KSeF token issued in their context; see KSeFApiClient.TokenFor).
+    public bool SelfInvoicing { get; set; }
 }
 
 public class SellerData
