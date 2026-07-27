@@ -1,6 +1,7 @@
 using AuctionSystem.Domain.Data;
 using AuctionSystem.Domain.Services;
 using AuctionSystem.Functions.Auth;
+using AuctionSystem.Functions.Services;
 using ClosedXML.Excel;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
@@ -34,6 +35,134 @@ public class SettlementExportFunctions
         public int Unsold;
     }
 
+    // Per farmer x Type x Gender x Group: sold/unsold skins + sold value (lot has a hammer
+    // result). Shared by the RAW Excel export and the Sales Notes PDF so they always agree.
+    private async Task<List<BreakdownRow>> LoadBreakdownRowsAsync(string auctionNumber, int auctionId)
+    {
+        var skinsTable = $"auction.[{auctionNumber}.Skins]";
+        var lotsTable = $"auction.[{auctionNumber}.Lots]";
+        var rows = new List<BreakdownRow>();
+
+        await using var conn = new SqlConnection(_db.Database.GetConnectionString()!);
+        await conn.OpenAsync();
+        await using var cmd = new SqlCommand($@"
+            WITH BoxLot AS (
+                SELECT l.LotNumber, l.SalesType, l.Gender, l.[Group],
+                       TRY_CAST(s.value AS INT) AS BoxNumber
+                FROM {lotsTable} l
+                CROSS APPLY STRING_SPLIT(l.IncludedBoxNumbers, ',') s
+                WHERE TRY_CAST(s.value AS INT) IS NOT NULL
+            ),
+            Res AS (
+                SELECT r.LotNumber, r.PriceEur
+                FROM auction.AuctionResults r
+                WHERE r.AuctionId = @auctionId
+            )
+            SELECT sk.farmerGUID, MAX(sk.Farmer) AS Farmer,
+                   ISNULL(bl.SalesType, '') AS SalesType,
+                   ISNULL(bl.Gender, '') AS Gender,
+                   ISNULL(bl.[Group], '') AS [Group],
+                   SUM(CASE WHEN res.LotNumber IS NOT NULL THEN 1 ELSE 0 END) AS Sold,
+                   SUM(CASE WHEN res.LotNumber IS NOT NULL THEN res.PriceEur ELSE 0 END) AS SoldValue,
+                   SUM(CASE WHEN res.LotNumber IS NULL THEN 1 ELSE 0 END) AS Unsold
+            FROM {skinsTable} sk
+            JOIN BoxLot bl ON bl.BoxNumber = sk.BoxNumber
+            LEFT JOIN Res res ON res.LotNumber = bl.LotNumber
+            WHERE sk.IsActive = 1
+            GROUP BY sk.farmerGUID, bl.SalesType, bl.Gender, bl.[Group]", conn);
+        cmd.Parameters.AddWithValue("@auctionId", auctionId);
+        cmd.CommandTimeout = 120;
+
+        await using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            rows.Add(new BreakdownRow
+            {
+                FarmerGuid = reader.IsDBNull(0) ? null : reader.GetGuid(0),
+                FarmerName = reader.IsDBNull(1) ? null : reader.GetString(1),
+                SalesType = reader.GetString(2),
+                Gender = reader.GetString(3),
+                Group = reader.GetString(4),
+                Sold = reader.GetInt32(5),
+                SoldValue = reader.IsDBNull(6) ? 0 : reader.GetDecimal(6),
+                Unsold = reader.GetInt32(7)
+            });
+        }
+        return rows;
+    }
+
+    // One PDF with a SALES NOTE per farmer (sold Type/Gender/Group breakdown + VAT), same
+    // data as the RAW Excel export. Presentation only — settlement documents are posted in BC.
+    [RequireRole("Admin")]
+    [Function("ExportSalesNotesPdf")]
+    public async Task<HttpResponseData> ExportSalesNotesPdf(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements/sales-notes-pdf")] HttpRequestData req)
+    {
+        var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+        if (!int.TryParse(query["auctionId"], out var auctionId))
+            return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+
+        var auction = await _db.Auctions.FindAsync(auctionId);
+        if (auction == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        var rows = await LoadBreakdownRowsAsync(auction.AuctionNumber, auctionId);
+
+        var farmers = await _db.Farmers.AsNoTracking()
+            .Where(f => f.FarmerGUID != null)
+            .ToListAsync();
+        var farmerByGuid = farmers
+            .GroupBy(f => f.FarmerGUID!.Value)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        var notes = rows
+            .Where(r => r.Sold > 0)
+            .GroupBy(r => r.FarmerGuid.HasValue ? r.FarmerGuid.Value.ToString() : (r.FarmerName ?? ""))
+            .Select(g =>
+            {
+                var first = g.First();
+                var master = first.FarmerGuid.HasValue ? farmerByGuid.GetValueOrDefault(first.FarmerGuid.Value) : null;
+                return new SalesNotesPdfService.FarmerNote
+                {
+                    FarmerNumber = master?.FarmerNumber ?? "",
+                    Name = master?.Name ?? first.FarmerName ?? "(unknown)",
+                    Name2 = master?.Name2,
+                    AddressLine1 = master?.AddressLine1,
+                    AddressLine2 = master?.AddressLine2,
+                    PostalCode = master?.PostalCode,
+                    City = master?.City,
+                    Country = master?.Country,
+                    VatRegistrationNo = master?.VatRegistrationNo,
+                    VatRate = VatRules.RateFor(master?.VatBusPostingGroup),
+                    Lines = g.Where(r => r.Sold > 0)
+                        .Select(r => new SalesNotesPdfService.FarmerNote.Line
+                        {
+                            SalesType = r.SalesType,
+                            Gender = r.Gender,
+                            Group = r.Group,
+                            SoldSkins = r.Sold,
+                            SoldValue = r.SoldValue
+                        }).ToList()
+                };
+            })
+            .OrderBy(n => n.FarmerNumber)
+            .ToList();
+
+        if (notes.Count == 0)
+        {
+            var empty = req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+            await empty.WriteStringAsync("No farmers with sold skins found for this auction.");
+            return empty;
+        }
+
+        var pdf = SalesNotesPdfService.Generate(notes, auction.AuctionNumber, DateTime.UtcNow.Date);
+
+        var resp = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        resp.Headers.Add("Content-Type", "application/pdf");
+        resp.Headers.Add("Content-Disposition", $"inline; filename=\"SalesNotes-{auction.AuctionNumber}.pdf\"");
+        await resp.WriteBytesAsync(pdf);
+        return resp;
+    }
+
     [RequireRole("Admin")]
     [Function("ExportSettlementXlsx")]
     public async Task<HttpResponseData> ExportSettlementXlsx(
@@ -58,54 +187,7 @@ public class SettlementExportFunctions
             feePerSkin = fp;
 
         // Per farmer x Type x Gender x Group: sold/unsold skins + sold value (lot has a hammer result).
-        var rows = new List<BreakdownRow>();
-        await using (var conn = new SqlConnection(connStr))
-        {
-            await conn.OpenAsync();
-            await using var cmd = new SqlCommand($@"
-                WITH BoxLot AS (
-                    SELECT l.LotNumber, l.SalesType, l.Gender, l.[Group],
-                           TRY_CAST(s.value AS INT) AS BoxNumber
-                    FROM {lotsTable} l
-                    CROSS APPLY STRING_SPLIT(l.IncludedBoxNumbers, ',') s
-                    WHERE TRY_CAST(s.value AS INT) IS NOT NULL
-                ),
-                Res AS (
-                    SELECT r.LotNumber, r.PriceEur
-                    FROM auction.AuctionResults r
-                    WHERE r.AuctionId = @auctionId
-                )
-                SELECT sk.farmerGUID, MAX(sk.Farmer) AS Farmer,
-                       ISNULL(bl.SalesType, '') AS SalesType,
-                       ISNULL(bl.Gender, '') AS Gender,
-                       ISNULL(bl.[Group], '') AS [Group],
-                       SUM(CASE WHEN res.LotNumber IS NOT NULL THEN 1 ELSE 0 END) AS Sold,
-                       SUM(CASE WHEN res.LotNumber IS NOT NULL THEN res.PriceEur ELSE 0 END) AS SoldValue,
-                       SUM(CASE WHEN res.LotNumber IS NULL THEN 1 ELSE 0 END) AS Unsold
-                FROM {skinsTable} sk
-                JOIN BoxLot bl ON bl.BoxNumber = sk.BoxNumber
-                LEFT JOIN Res res ON res.LotNumber = bl.LotNumber
-                WHERE sk.IsActive = 1
-                GROUP BY sk.farmerGUID, bl.SalesType, bl.Gender, bl.[Group]", conn);
-            cmd.Parameters.AddWithValue("@auctionId", auctionId);
-            cmd.CommandTimeout = 120;
-
-            await using var reader = await cmd.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
-            {
-                rows.Add(new BreakdownRow
-                {
-                    FarmerGuid = reader.IsDBNull(0) ? null : reader.GetGuid(0),
-                    FarmerName = reader.IsDBNull(1) ? null : reader.GetString(1),
-                    SalesType = reader.GetString(2),
-                    Gender = reader.GetString(3),
-                    Group = reader.GetString(4),
-                    Sold = reader.GetInt32(5),
-                    SoldValue = reader.IsDBNull(6) ? 0 : reader.GetDecimal(6),
-                    Unsold = reader.GetInt32(7)
-                });
-            }
-        }
+        var rows = await LoadBreakdownRowsAsync(auction.AuctionNumber, auctionId);
 
         // Delivered skins per farmer (support table loaded from the portal).
         var deliveredByGuid = new Dictionary<Guid, int>();
