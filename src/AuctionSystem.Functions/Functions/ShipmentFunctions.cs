@@ -108,6 +108,72 @@ public class ShipmentFunctions
         return response;
     }
 
+    // Shipping-process funnel over all invoices released to shipping: per lot, skins are
+    // Shipped (in a Shipped/Delivered shipment), In Packing (in any other live shipment),
+    // or Not Started (released but in no shipment). Credited lots are excluded.
+    [AuctionSystem.Functions.Auth.RequireRole("Admin")]
+    [Function("GetShippingOverview")]
+    public async Task<HttpResponseData> GetShippingOverview(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "backoffice/shipping-overview")] HttpRequestData req)
+    {
+        var invoices = await _db.Invoices
+            .Include(i => i.Lines)
+            .Where(i => !i.IsCreditNote &&
+                        (i.ShippingStatus == "Released" || i.ShippingStatus == "Shipped" ||
+                         i.Status == InvoiceStatus.ReleasedToShip || i.Status == InvoiceStatus.Packing))
+            .ToListAsync();
+
+        var creditedLotsByInvoice = (await _db.Invoices
+                .Include(i => i.Lines)
+                .Where(i => i.IsCreditNote && i.OriginalInvoiceId != null)
+                .ToListAsync())
+            .GroupBy(cn => cn.OriginalInvoiceId!.Value)
+            .ToDictionary(g => g.Key, g => g.SelectMany(cn => cn.Lines.Select(l => l.LotNumber)).ToHashSet());
+
+        // Lot -> "best" shipment status (a lot sits in at most one live shipment; if a cancelled
+        // one lingers, any live shipment wins over it).
+        var lotShipmentStatus = new Dictionary<int, string>();
+        var shipmentLots = await _db.ShipmentLines
+            .Select(sl => new { sl.LotNumber, sl.Shipment!.Status })
+            .ToListAsync();
+        foreach (var sl in shipmentLots)
+        {
+            if (!lotShipmentStatus.TryGetValue(sl.LotNumber, out var existing) || existing == "Cancelled")
+                lotShipmentStatus[sl.LotNumber] = sl.Status;
+        }
+
+        int shippedLots = 0, shippedSkins = 0, packingLots = 0, packingSkins = 0, notStartedLots = 0, notStartedSkins = 0;
+        var seenLots = new HashSet<int>();
+        foreach (var inv in invoices)
+        {
+            var credited = creditedLotsByInvoice.GetValueOrDefault(inv.Id) ?? new HashSet<int>();
+            foreach (var line in inv.Lines)
+            {
+                if (credited.Contains(line.LotNumber) || !seenLots.Add(line.LotNumber)) continue;
+
+                if (lotShipmentStatus.TryGetValue(line.LotNumber, out var status) && status != "Cancelled")
+                {
+                    if (status is "Shipped" or "Delivered") { shippedLots++; shippedSkins += line.Skins; }
+                    else { packingLots++; packingSkins += line.Skins; }
+                }
+                else { notStartedLots++; notStartedSkins += line.Skins; }
+            }
+        }
+
+        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+        await response.WriteStringAsync(JsonSerializer.Serialize(new
+        {
+            invoices = invoices.Count,
+            totalLots = shippedLots + packingLots + notStartedLots,
+            totalSkins = shippedSkins + packingSkins + notStartedSkins,
+            shipped = new { lots = shippedLots, skins = shippedSkins },
+            packing = new { lots = packingLots, skins = packingSkins },
+            notStarted = new { lots = notStartedLots, skins = notStartedSkins }
+        }, JsonOptions));
+        return response;
+    }
+
     [Function("GetReleasedLotsForShipment")]
     public async Task<HttpResponseData> GetReleasedLots(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "shipments/released-lots")] HttpRequestData req)
