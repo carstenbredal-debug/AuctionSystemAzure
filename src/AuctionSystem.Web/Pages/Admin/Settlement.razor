@@ -21,9 +21,13 @@
     </div>
 </div>
 
-<button class="btn btn-success" @onclick="ExportRaw" disabled="@(_auctionId <= 0)"
+<button class="btn btn-success me-2" @onclick="ExportRaw" disabled="@(_auctionId <= 0)"
         title="Excel workbook: one sheet per farmer — delivered vs in auction, sold/unsold, salesresult with grading fee and VAT, and the Type/Gender/Group breakdown">
     <i class="bi bi-file-earmark-excel me-1"></i>Export Sales Result (RAW)
+</button>
+<button class="btn btn-outline-primary" @onclick="ExportSalesNotes" disabled="@(_auctionId <= 0)"
+        title="One PDF with a sales note per farmer: sold Type/Gender/Group breakdown, SubTotal, VAT and TOTAL — invoice layout">
+    <i class="bi bi-file-earmark-pdf me-1"></i>Sales Notes (all farmers)
 </button>
 
 @code {
@@ -35,5 +39,10 @@
     private async Task ExportRaw()
     {
         await JS.InvokeVoidAsync("open", $"api/settlements/export-settlement-xlsx?auctionId={_auctionId}", "_blank");
+    }
+
+    private async Task ExportSalesNotes()
+    {
+        await JS.InvokeVoidAsync("open", $"api/settlements/sales-notes-pdf?auctionId={_auctionId}", "_blank");
     }
 }
