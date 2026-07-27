@@ -291,7 +291,8 @@ public class InvoiceXmlBuilder
 
         fa.Add(new XElement(Ns + "Adnotacje",
             new XElement(Ns + "P_16", 2),
-            new XElement(Ns + "P_17", 2),
+            // P_17 = 1 marks "samofakturowanie" (art. 106d) — buyer-issued invoice.
+            new XElement(Ns + "P_17", inv.SelfInvoicing ? 1 : 2),
             new XElement(Ns + "P_18", hasReverseCharge ? 1 : 2),
             new XElement(Ns + "P_18A", 2),
             zwolnienie,
