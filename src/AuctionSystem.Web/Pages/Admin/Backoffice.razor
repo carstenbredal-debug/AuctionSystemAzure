@@ -9,6 +9,48 @@
 <h1>Backoffice</h1>
 <p class="text-muted">Look up a lot: sell it to a broker if unsold, correct the price while un-invoiced, view invoice details once invoiced.</p>
 
+@if (_overview != null)
+{
+    <div class="row mb-4" style="max-width:900px">
+        <div class="col-md-3">
+            <div class="card text-bg-success">
+                <div class="card-body text-center py-3">
+                    <h6 class="card-title mb-1">Shipped</h6>
+                    <div class="fs-3 fw-bold">@_overview.Shipped.Skins.ToString("N0")</div>
+                    <small>skins · @_overview.Shipped.Lots lot(s)</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-bg-primary">
+                <div class="card-body text-center py-3">
+                    <h6 class="card-title mb-1">In Packing</h6>
+                    <div class="fs-3 fw-bold">@_overview.Packing.Skins.ToString("N0")</div>
+                    <small>skins · @_overview.Packing.Lots lot(s)</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-bg-secondary">
+                <div class="card-body text-center py-3">
+                    <h6 class="card-title mb-1">Not Started</h6>
+                    <div class="fs-3 fw-bold">@_overview.NotStarted.Skins.ToString("N0")</div>
+                    <small>skins · @_overview.NotStarted.Lots lot(s)</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-dark">
+                <div class="card-body text-center py-3">
+                    <h6 class="card-title mb-1">Ready for Shipping</h6>
+                    <div class="fs-3 fw-bold">@_overview.TotalSkins.ToString("N0")</div>
+                    <small>skins · @_overview.TotalLots lot(s) · @_overview.Invoices invoice(s)</small>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 <div class="d-flex gap-2 mb-4" style="max-width:420px">
     <input type="number" class="form-control" placeholder="Lot #" @bind="_lotNumber" @bind:event="oninput" @onkeydown="OnSearchKeydown" />
     <button class="btn btn-primary" @onclick="Search" disabled="@(_busy || _lotNumber <= 0)">Search</button>
@@ -106,9 +148,28 @@
 
     private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNameCaseInsensitive = true };
 
+    private ShippingOverview? _overview;
+
     protected override async Task OnInitializedAsync()
     {
         try { _brokers = await Api.GetBrokersAsync(); } catch { }
+        try
+        {
+            var json = await Http.GetStringAsync("api/backoffice/shipping-overview");
+            _overview = JsonSerializer.Deserialize<ShippingOverview>(json, JsonOpts);
+        }
+        catch { /* overview is informational — the lot lookup works without it */ }
+    }
+
+    private class ShippingOverview
+    {
+        public int Invoices { get; set; }
+        public int TotalLots { get; set; }
+        public int TotalSkins { get; set; }
+        public Bucket Shipped { get; set; } = new();
+        public Bucket Packing { get; set; } = new();
+        public Bucket NotStarted { get; set; } = new();
+        public class Bucket { public int Lots { get; set; } public int Skins { get; set; } }
     }
 
     private async Task OnSearchKeydown(KeyboardEventArgs e)
