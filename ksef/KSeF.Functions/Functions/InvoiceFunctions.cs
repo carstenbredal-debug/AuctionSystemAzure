@@ -36,6 +36,137 @@ public class InvoiceFunctions
     }
 
     /// <summary>
+    /// Fetch an invoice / credit note from KSeF by its KSeF number and render it as a
+    /// readable HTML page (with the raw XML collapsible at the bottom).
+    /// GET /api/invoice/view/{ksefNumber}?nip={ourNip}
+    /// </summary>
+    [Function("ViewInvoice")]
+    public async Task<HttpResponseData> ViewInvoice(
+        [HttpTrigger(AuthorizationLevel.Function, "get", Route = "invoice/view/{ksefNumber}")] HttpRequestData req,
+        string ksefNumber)
+    {
+        var nip = req.Query["nip"];
+        if (string.IsNullOrEmpty(nip))
+            return await CreateResponse(req, HttpStatusCode.BadRequest,
+                new StatusResult { Success = false, Error = "Missing 'nip' query parameter" });
+
+        try
+        {
+            var session = await _ksef.InitSessionAsync(nip);
+            string xml;
+            try
+            {
+                xml = await _ksef.GetInvoiceXmlByKsefNumberAsync(ksefNumber, session.SessionToken);
+            }
+            finally
+            {
+                await _ksef.TerminateSessionAsync(session.SessionToken);
+            }
+
+            var html = RenderInvoiceHtml(ksefNumber, xml);
+            var resp = req.CreateResponse(HttpStatusCode.OK);
+            resp.Headers.Add("Content-Type", "text/html; charset=utf-8");
+            await resp.WriteStringAsync(html);
+            return resp;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ViewInvoice failed for {KsefNumber}", ksefNumber);
+            var resp = req.CreateResponse(HttpStatusCode.InternalServerError);
+            resp.Headers.Add("Content-Type", "text/html; charset=utf-8");
+            await resp.WriteStringAsync($"<html><body><h2>Could not fetch invoice</h2><p>{System.Net.WebUtility.HtmlEncode(ex.Message)}</p></body></html>");
+            return resp;
+        }
+    }
+
+    // Namespace-agnostic FA(2)/FA(3) rendering: query by local element name so both schema
+    // generations display. Unknown/missing elements render blank, never throw.
+    private static string RenderInvoiceHtml(string ksefNumber, string xml)
+    {
+        var doc = System.Xml.Linq.XDocument.Parse(xml);
+        string E(string name) => System.Net.WebUtility.HtmlEncode(name);
+        string Val(System.Xml.Linq.XElement? scope, params string[] path)
+        {
+            var cur = scope;
+            foreach (var p in path)
+            {
+                cur = cur?.Elements().FirstOrDefault(e => e.Name.LocalName == p);
+                if (cur == null) return "";
+            }
+            return System.Net.WebUtility.HtmlEncode(cur?.Value ?? "");
+        }
+
+        var root = doc.Root!;
+        var fa = root.Elements().FirstOrDefault(e => e.Name.LocalName == "Fa");
+        var podmiot1 = root.Elements().FirstOrDefault(e => e.Name.LocalName == "Podmiot1");
+        var podmiot2 = root.Elements().FirstOrDefault(e => e.Name.LocalName == "Podmiot2");
+
+        string PartyBlock(System.Xml.Linq.XElement? p)
+        {
+            if (p == null) return "";
+            var ident = p.Elements().FirstOrDefault(e => e.Name.LocalName == "DaneIdentyfikacyjne");
+            var adres = p.Elements().FirstOrDefault(e => e.Name.LocalName == "Adres");
+            var nipEl = ident?.Elements().FirstOrDefault(e => e.Name.LocalName is "NIP" or "NrVatUE");
+            var name = ident?.Elements().FirstOrDefault(e => e.Name.LocalName == "Nazwa")?.Value ?? "";
+            var lines = adres?.Elements().Where(e => e.Name.LocalName.StartsWith("AdresL")).Select(e => e.Value) ?? Enumerable.Empty<string>();
+            return $"<strong>{E(name)}</strong><br/>{(nipEl != null ? $"NIP/VAT: {E(nipEl.Value)}<br/>" : "")}{string.Join("<br/>", lines.Select(E))}";
+        }
+
+        var rodzaj = fa?.Elements().FirstOrDefault(e => e.Name.LocalName == "RodzajFaktury")?.Value ?? "";
+        var docKind = rodzaj switch { "KOR" => "Credit note / correction (KOR)", "VAT" => "Invoice (VAT)", _ => rodzaj };
+        var currency = fa?.Elements().FirstOrDefault(e => e.Name.LocalName == "KodWaluty")?.Value ?? "";
+
+        var sb = new StringBuilder();
+        sb.Append("<html><head><meta charset='utf-8'/><title>").Append(E(ksefNumber)).Append("</title><style>");
+        sb.Append("body{font-family:Segoe UI,Arial,sans-serif;margin:24px;color:#222}h2{margin-bottom:2px}");
+        sb.Append(".meta{color:#666;margin-bottom:16px}.grid{display:flex;gap:40px;margin-bottom:16px}");
+        sb.Append("table{border-collapse:collapse;width:100%;margin-bottom:16px}th,td{border:1px solid #ccc;padding:6px 10px;font-size:14px;text-align:left}");
+        sb.Append("th{background:#f2f2f2}td.num,th.num{text-align:right}details{margin-top:24px}pre{background:#f7f7f7;padding:12px;overflow:auto;font-size:12px}");
+        sb.Append("</style></head><body>");
+
+        sb.Append("<h2>").Append(E(docKind)).Append(" — ").Append(Val(fa, "P_2")).Append("</h2>");
+        sb.Append("<div class='meta'>KSeF number: <strong>").Append(E(ksefNumber)).Append("</strong>");
+        sb.Append(" · Issue date: ").Append(Val(fa, "P_1"));
+        if (!string.IsNullOrEmpty(currency)) sb.Append(" · Currency: ").Append(E(currency));
+        sb.Append("</div>");
+
+        sb.Append("<div class='grid'><div><h4>Seller (Podmiot1)</h4>").Append(PartyBlock(podmiot1)).Append("</div>");
+        sb.Append("<div><h4>Buyer (Podmiot2)</h4>").Append(PartyBlock(podmiot2)).Append("</div></div>");
+
+        // Correction reference (KOR only)
+        var korekta = fa?.Descendants().FirstOrDefault(e => e.Name.LocalName == "DaneFaKorygowanej");
+        if (korekta != null)
+        {
+            sb.Append("<p><strong>Corrects:</strong> ").Append(Val(korekta, "NrFaKorygowanej"))
+              .Append(" of ").Append(Val(korekta, "DataWystFaKorygowanej"));
+            var origKsef = korekta.Elements().FirstOrDefault(e => e.Name.LocalName == "NrKSeFFaKorygowanej")?.Value;
+            if (!string.IsNullOrEmpty(origKsef)) sb.Append(" (KSeF ").Append(E(origKsef)).Append(")");
+            sb.Append("</p>");
+        }
+
+        sb.Append("<table><tr><th>#</th><th>Description</th><th class='num'>Qty</th><th>Unit</th><th class='num'>Unit price</th><th class='num'>Net</th><th>VAT</th></tr>");
+        foreach (var w in fa?.Elements().Where(e => e.Name.LocalName == "FaWiersz") ?? Enumerable.Empty<System.Xml.Linq.XElement>())
+        {
+            string WV(string n) => System.Net.WebUtility.HtmlEncode(w.Elements().FirstOrDefault(e => e.Name.LocalName == n)?.Value ?? "");
+            sb.Append("<tr><td>").Append(WV("NrWierszaFa")).Append("</td><td>").Append(WV("P_7"))
+              .Append("</td><td class='num'>").Append(WV("P_8B")).Append("</td><td>").Append(WV("P_8A"))
+              .Append("</td><td class='num'>").Append(WV("P_9A")).Append("</td><td class='num'>").Append(WV("P_11"))
+              .Append("</td><td>").Append(WV("P_12")).Append("</td></tr>");
+        }
+        sb.Append("</table>");
+
+        sb.Append("<h3>Total due: ").Append(Val(fa, "P_15"));
+        if (!string.IsNullOrEmpty(currency)) sb.Append(" ").Append(E(currency));
+        sb.Append("</h3>");
+
+        sb.Append("<details><summary>Raw XML</summary><pre>")
+          .Append(System.Net.WebUtility.HtmlEncode(doc.ToString()))
+          .Append("</pre></details>");
+        sb.Append("</body></html>");
+        return sb.ToString();
+    }
+
+    /// <summary>
     /// Submit an invoice to KSeF.
     /// POST /api/invoice/submit
     /// Body: InvoiceData JSON
