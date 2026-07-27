@@ -154,12 +154,27 @@ public class SettlementExportFunctions
             return empty;
         }
 
-        var pdf = SalesNotesPdfService.Generate(notes, auction.AuctionNumber, DateTime.UtcNow.Date);
+        // One PDF per farmer, delivered as a ZIP (SN-{auction}-{farmerNo}.pdf each).
+        using var zipStream = new MemoryStream();
+        using (var zip = new System.IO.Compression.ZipArchive(zipStream, System.IO.Compression.ZipArchiveMode.Create, true))
+        {
+            var date = DateTime.UtcNow.Date;
+            foreach (var note in notes)
+            {
+                var pdf = SalesNotesPdfService.Generate(new List<SalesNotesPdfService.FarmerNote> { note }, auction.AuctionNumber, date);
+                var name = string.IsNullOrWhiteSpace(note.FarmerNumber)
+                    ? new string(note.Name.Where(char.IsLetterOrDigit).Take(20).ToArray())
+                    : note.FarmerNumber;
+                var entry = zip.CreateEntry($"SN-{auction.AuctionNumber}-{name}.pdf", System.IO.Compression.CompressionLevel.Fastest);
+                await using var es = entry.Open();
+                await es.WriteAsync(pdf);
+            }
+        }
 
         var resp = req.CreateResponse(System.Net.HttpStatusCode.OK);
-        resp.Headers.Add("Content-Type", "application/pdf");
-        resp.Headers.Add("Content-Disposition", $"inline; filename=\"SalesNotes-{auction.AuctionNumber}.pdf\"");
-        await resp.WriteBytesAsync(pdf);
+        resp.Headers.Add("Content-Type", "application/zip");
+        resp.Headers.Add("Content-Disposition", $"attachment; filename=\"SalesNotes-{auction.AuctionNumber}.zip\"");
+        await resp.WriteBytesAsync(zipStream.ToArray());
         return resp;
     }
 
