@@ -403,6 +403,28 @@ public class KSeFApiClient
     }
 
     /// <summary>
+    /// Download an invoice's original XML by its KSeF number (works for invoices and
+    /// credit notes, FA(2) and FA(3) alike). Requires an authenticated session whose
+    /// context is allowed to read the invoice (issuer or recipient).
+    /// </summary>
+    public async Task<string> GetInvoiceXmlByKsefNumberAsync(string ksefNumber, string? sessionToken = null)
+    {
+        var token = sessionToken ?? _accessToken
+            ?? throw new InvalidOperationException("No active KSeF session. Call InitSessionAsync first.");
+
+        var request = new HttpRequestMessage(HttpMethod.Get,
+            $"{BaseUrl}/invoices/ksef/{Uri.EscapeDataString(ksefNumber)}");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await _http.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+        if (!response.IsSuccessStatusCode)
+            throw new Exception($"KSeF invoice fetch failed: {response.StatusCode} - {TruncateForLog(body)}");
+
+        return body;
+    }
+
+    /// <summary>
     /// Close the active KSeF interactive session.
     /// </summary>
     public async Task TerminateSessionAsync(string? sessionToken = null)
