@@ -264,6 +264,27 @@ else
             </div>
         </div>
 
+        <!-- Contractual Section -->
+        <div class="section-container mb-3">
+            <div class="section-header">Contractual</div>
+            <div class="section-body p-3">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Grading Fee (EUR per skin)</label>
+                        <input class="form-control" type="number" step="0.01" min="0" @bind="_editDto!.GradingFeePerSkin"
+                               placeholder="system default" />
+                        <div class="form-text">Leave empty to use the system default.</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Interest (% per annum)</label>
+                        <input class="form-control" type="number" step="0.01" min="0" @bind="_editDto!.InterestPctPerAnnum"
+                               placeholder="system default" />
+                        <div class="form-text">Used for advance-payment handling fees.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="mt-2">
             <button class="btn btn-success me-2" @onclick="SaveEdit">Save</button>
         </div>
@@ -386,7 +407,9 @@ else
             AssignmentOfReceivable = _farmer.AssignmentOfReceivable,
             CreditLimit = _farmer.CreditLimit, Blocked = _farmer.Blocked,
             IsActive = _farmer.IsActive, Address = _farmer.Address,
-            FarmerGUID = _farmer.FarmerGUID
+            FarmerGUID = _farmer.FarmerGUID,
+            GradingFeePerSkin = _farmer.GradingFeePerSkin,
+            InterestPctPerAnnum = _farmer.InterestPctPerAnnum
         };
     }
 

@@ -122,6 +122,8 @@ public class FarmerFunctions
         farmer.VatBusPostingGroup = dto.VatBusPostingGroup;
         farmer.VendorPostingGroup = dto.VendorPostingGroup;
         farmer.IsActive = dto.IsActive;
+        farmer.GradingFeePerSkin = dto.GradingFeePerSkin;
+        farmer.InterestPctPerAnnum = dto.InterestPctPerAnnum;
         await _db.SaveChangesAsync();
         await TryPushFarmerToBcAsync(farmer);
         return await CreateJsonResponse(req, farmer);

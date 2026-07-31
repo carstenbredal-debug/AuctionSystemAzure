@@ -97,6 +97,10 @@ public class FarmerDto
     public string VendorPostingGroup { get; set; } = "";
     public bool IsActive { get; set; } = true;
     public string Address { get; set; } = "";
+
+    // Contractual terms (null = system default)
+    public decimal? GradingFeePerSkin { get; set; }
+    public decimal? InterestPctPerAnnum { get; set; }
 }
 
 public class BrokerDto
