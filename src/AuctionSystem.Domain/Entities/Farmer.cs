@@ -45,6 +45,10 @@ public class Farmer
     public bool IsActive { get; set; } = true;
     public DateTime? BcSyncedAt { get; set; }
 
+    // Contractual terms (per farmer; NULL = use the system default)
+    public decimal? GradingFeePerSkin { get; set; }
+    public decimal? InterestPctPerAnnum { get; set; }
+
     [Obsolete("Use AddressLine1 instead")]
     public string Address { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
