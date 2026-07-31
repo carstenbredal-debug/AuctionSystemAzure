@@ -221,7 +221,7 @@ public class SettlementExportFunctions
         // Farmer master for number/name/VAT group.
         var farmers = await _db.Farmers.AsNoTracking()
             .Where(f => f.FarmerGUID != null)
-            .Select(f => new { f.FarmerGUID, f.FarmerNumber, f.Name, f.VatBusPostingGroup })
+            .Select(f => new { f.FarmerGUID, f.FarmerNumber, f.Name, f.VatBusPostingGroup, f.GradingFeePerSkin })
             .ToListAsync();
         var farmerByGuid = farmers
             .GroupBy(f => f.FarmerGUID!.Value)
@@ -253,7 +253,7 @@ public class SettlementExportFunctions
                 var gRate = VatRules.RateFor(gMaster?.VatBusPostingGroup);
                 var gSold = g.Sum(r => r.Sold);
                 var gSales = g.Sum(r => r.SoldValue);
-                var gFee = gSold * feePerSkin;
+                var gFee = gSold * (gMaster?.GradingFeePerSkin ?? feePerSkin);
                 totDelivered += gFirst.FarmerGuid.HasValue ? deliveredByGuid.GetValueOrDefault(gFirst.FarmerGuid.Value) : 0;
                 totSold += gSold;
                 totUnsold += g.Sum(r => r.Unsold);
@@ -351,7 +351,8 @@ public class SettlementExportFunctions
             var delivered = first.FarmerGuid.HasValue ? deliveredByGuid.GetValueOrDefault(first.FarmerGuid.Value) : 0;
             var missing = delivered - inAuction;
             var salesResult = farmerGroup.Sum(r => r.SoldValue);
-            var gradingFee = sold * feePerSkin;
+            var farmerFee = master?.GradingFeePerSkin ?? feePerSkin;   // per-farmer contractual fee, system default fallback
+            var gradingFee = sold * farmerFee;
             var tilAfregning = salesResult - gradingFee;
             var vatRate = VatRules.RateFor(master?.VatBusPostingGroup);
 
@@ -383,7 +384,7 @@ public class SettlementExportFunctions
             ws.Cell(14, 4).Value = "Including VAT";
             ws.Range(14, 2, 14, 4).Style.Font.Bold = true;
 
-            var feeLabel = feePerSkin.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture).Replace('.', ',');
+            var feeLabel = farmerFee.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture).Replace('.', ',');
             ws.Cell(16, 1).Value = "Salesresult";
             ws.Cell(16, 2).Value = salesResult;
             ws.Cell(16, 3).Value = salesResult * vatRate;

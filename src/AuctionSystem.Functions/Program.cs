@@ -230,6 +230,10 @@ using (var scope = host.Services.CreateScope())
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Buyers') AND name = 'CustomerPostingGroup')
                 ALTER TABLE auction.Buyers ADD CustomerPostingGroup nvarchar(max) NOT NULL DEFAULT '';
             -- Farmer new columns
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Farmers') AND name = 'GradingFeePerSkin')
+                ALTER TABLE auction.Farmers ADD GradingFeePerSkin decimal(18,4) NULL;
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Farmers') AND name = 'InterestPctPerAnnum')
+                ALTER TABLE auction.Farmers ADD InterestPctPerAnnum decimal(18,4) NULL;
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Farmers') AND name = 'CreditLimit')
                 ALTER TABLE auction.Farmers ADD CreditLimit decimal(18,2) NOT NULL DEFAULT 0;
             IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('auction.Farmers') AND name = 'Blocked')
