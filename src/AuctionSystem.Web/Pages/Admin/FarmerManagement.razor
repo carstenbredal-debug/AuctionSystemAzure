@@ -24,6 +24,11 @@ else
 
     <p class="small text-muted mb-3">To add a new farmer, go to <a href="admin/users">Users & Roles</a> and create a user with the Farmer role.</p>
 
+    <div class="mb-3" style="max-width:320px">
+        <input class="form-control" placeholder="Search farmer number…"
+               value="@_search" @oninput='e => _search = e.Value?.ToString() ?? ""' />
+    </div>
+
     <div class="section-container">
         <div class="section-header">
             Registered Farmers
@@ -40,11 +45,11 @@ else
                     </tr>
                 </thead>
                 <tbody>
-                    @if (_items.Count == 0)
+                    @if (Filtered.Count == 0)
                     {
-                        <tr><td colspan="5" class="text-center text-muted py-4">No farmers registered.</td></tr>
+                        <tr><td colspan="5" class="text-center text-muted py-4">@(_items.Count == 0 ? "No farmers registered." : "No farmer number matches the search.")</td></tr>
                     }
-                    @foreach (var item in _items)
+                    @foreach (var item in Filtered)
                     {
                         <tr style="cursor: pointer;" @onclick="() => ViewFarmer(item.Id)">
                             <td><strong>@item.FarmerNumber</strong></td>
@@ -62,7 +67,12 @@ else
 
 @code {
     private List<FarmerDto> _items = new();
+    private string _search = "";
     private bool _loading = true;
+
+    private List<FarmerDto> Filtered => string.IsNullOrWhiteSpace(_search)
+        ? _items
+        : _items.Where(f => (f.FarmerNumber ?? "").Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
     private string? _message;
     private bool _messageIsError;
 
