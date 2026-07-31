@@ -91,6 +91,87 @@ public class SettlementExportFunctions
         return rows;
     }
 
+    // Grading fee notes for ALL farmers with sold skins, one PDF per farmer in a ZIP.
+    // Fee = the farmer's Contractual GradingFeePerSkin (fallback: parameter, then 0.70);
+    // farmers with fee 0 or nothing sold are skipped. Presentation only — fee posted in BC.
+    [RequireRole("Admin")]
+    [Function("ExportGradingFeeNotesZip")]
+    public async Task<HttpResponseData> ExportGradingFeeNotesZip(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "settlements/grading-fee-notes-zip")] HttpRequestData req)
+    {
+        var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+        if (!int.TryParse(query["auctionId"], out var auctionId))
+            return req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+
+        var auction = await _db.Auctions.FindAsync(auctionId);
+        if (auction == null) return req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+
+        var defaultFee = 0.70m;
+        var feeParam = await _db.SystemParameters.FirstOrDefaultAsync(p => p.Key == "GradingFeePerSkin");
+        if (feeParam != null && decimal.TryParse(feeParam.Value, System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var fp))
+            defaultFee = fp;
+
+        var rows = await LoadBreakdownRowsAsync(auction.AuctionNumber, auctionId);
+        var farmers = await _db.Farmers.AsNoTracking().Where(f => f.FarmerGUID != null).ToListAsync();
+        var farmerByGuid = farmers.GroupBy(f => f.FarmerGUID!.Value).ToDictionary(g => g.Key, g => g.First());
+
+        var soldByFarmer = rows
+            .Where(r => r.FarmerGuid.HasValue)
+            .GroupBy(r => r.FarmerGuid!.Value)
+            .Select(g => new { Guid = g.Key, Sold = g.Sum(r => r.Sold) })
+            .Where(x => x.Sold > 0)
+            .ToList();
+
+        using var zipStream = new MemoryStream();
+        var generated = 0;
+        using (var zip = new System.IO.Compression.ZipArchive(zipStream, System.IO.Compression.ZipArchiveMode.Create, true))
+        {
+            var date = DateTime.UtcNow.Date;
+            foreach (var s in soldByFarmer.OrderBy(x => farmerByGuid.GetValueOrDefault(x.Guid)?.FarmerNumber))
+            {
+                var master = farmerByGuid.GetValueOrDefault(s.Guid);
+                if (master == null) continue;
+                var fee = master.GradingFeePerSkin ?? defaultFee;
+                if (fee <= 0m) continue;   // contractual fee 0 => no note
+
+                var pdf = GradingFeeNotesPdfService.Generate(new GradingFeeNotesPdfService.FarmerFeeNote
+                {
+                    FarmerNumber = master.FarmerNumber,
+                    Name = master.Name,
+                    Name2 = master.Name2,
+                    AddressLine1 = master.AddressLine1,
+                    AddressLine2 = master.AddressLine2,
+                    PostalCode = master.PostalCode,
+                    City = master.City,
+                    Country = master.Country,
+                    VatRegistrationNo = master.VatRegistrationNo,
+                    VatRate = VatRules.RateFor(master.VatBusPostingGroup),
+                    SoldSkins = s.Sold,
+                    FeePerSkin = fee
+                }, auction.AuctionNumber, date);
+
+                var entry = zip.CreateEntry($"GF-{auction.AuctionNumber}-{master.FarmerNumber}.pdf", System.IO.Compression.CompressionLevel.Fastest);
+                await using var es = entry.Open();
+                await es.WriteAsync(pdf);
+                generated++;
+            }
+        }
+
+        if (generated == 0)
+        {
+            var empty = req.CreateResponse(System.Net.HttpStatusCode.NotFound);
+            await empty.WriteStringAsync("No farmers with sold skins and a non-zero grading fee found.");
+            return empty;
+        }
+
+        var resp = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        resp.Headers.Add("Content-Type", "application/zip");
+        resp.Headers.Add("Content-Disposition", $"attachment; filename=\"GradingFeeNotes-{auction.AuctionNumber}.zip\"");
+        await resp.WriteBytesAsync(zipStream.ToArray());
+        return resp;
+    }
+
     // One PDF with a SALES NOTE per farmer (sold Type/Gender/Group breakdown + VAT), same
     // data as the RAW Excel export. Presentation only — settlement documents are posted in BC.
     [RequireRole("Admin")]
