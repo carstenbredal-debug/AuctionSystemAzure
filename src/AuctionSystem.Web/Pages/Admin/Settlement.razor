@@ -25,9 +25,13 @@
         title="Excel workbook: one sheet per farmer — delivered vs in auction, sold/unsold, salesresult with grading fee and VAT, and the Type/Gender/Group breakdown">
     <i class="bi bi-file-earmark-excel me-1"></i>Export Sales Result (RAW)
 </button>
-<button class="btn btn-outline-primary" @onclick="ExportSalesNotes" disabled="@(_auctionId <= 0)"
-        title="One PDF with a sales note per farmer: sold Type/Gender/Group breakdown, SubTotal, VAT and TOTAL — invoice layout">
+<button class="btn btn-outline-primary me-2" @onclick="ExportSalesNotes" disabled="@(_auctionId <= 0)"
+        title="ZIP with a sales note PDF per farmer: sold Type/Gender/Group breakdown, SubTotal, VAT and TOTAL — invoice layout">
     <i class="bi bi-file-earmark-pdf me-1"></i>Sales Notes (all farmers)
+</button>
+<button class="btn btn-outline-secondary" @onclick="ExportGradingFeeNotes" disabled="@(_auctionId <= 0)"
+        title="ZIP with a grading fee note PDF per farmer: sold skins x the farmer's contractual fee with VAT. Farmers with fee 0 are skipped">
+    <i class="bi bi-file-earmark-pdf me-1"></i>Grading Fee Notes (all farmers)
 </button>
 
 @code {
@@ -44,5 +48,10 @@
     private async Task ExportSalesNotes()
     {
         await JS.InvokeVoidAsync("open", $"api/settlements/sales-notes-pdf?auctionId={_auctionId}", "_blank");
+    }
+
+    private async Task ExportGradingFeeNotes()
+    {
+        await JS.InvokeVoidAsync("open", $"api/settlements/grading-fee-notes-zip?auctionId={_auctionId}", "_blank");
     }
 }
