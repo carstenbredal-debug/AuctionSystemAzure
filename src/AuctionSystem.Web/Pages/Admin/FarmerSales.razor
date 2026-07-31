@@ -26,18 +26,24 @@
 }
 else if (_rows != null)
 {
-    <table class="table table-sm table-hover" style="max-width:820px">
+    <div class="mb-3" style="max-width:320px">
+        <input class="form-control" placeholder="Search farmer number…"
+               value="@_search" @oninput='e => _search = e.Value?.ToString() ?? ""' />
+    </div>
+
+    <table class="table table-sm table-hover" style="max-width:920px">
         <thead class="table-dark">
-            <tr><th>Farmer</th><th class="text-end">Skins in auction</th><th class="text-end">Skins sold</th><th class="text-end">Total value (€)</th></tr>
+            <tr><th>Number</th><th>Farmer</th><th class="text-end">Skins in auction</th><th class="text-end">Skins sold</th><th class="text-end">Total value (€)</th></tr>
         </thead>
         <tbody>
-            @if (_rows.Count == 0)
+            @if (FilteredRows.Count == 0)
             {
-                <tr><td colspan="4" class="text-center text-muted py-3">No skins for this auction.</td></tr>
+                <tr><td colspan="5" class="text-center text-muted py-3">@(_rows.Count == 0 ? "No skins for this auction." : "No farmer number matches the search.")</td></tr>
             }
-            @foreach (var r in _rows)
+            @foreach (var r in FilteredRows)
             {
                 <tr>
+                    <td><strong>@NumberFor(r)</strong></td>
                     <td><a href="@(r.FarmerGuid.HasValue ? $"/farmer/auction/{_auctionId}?farmerGuid={r.FarmerGuid}" : $"/farmer/auction/{_auctionId}?farmer={Uri.EscapeDataString(r.Farmer)}")">@r.Farmer</a></td>
                     <td class="text-end">@r.SkinsInAuction.ToString("N0")</td>
                     <td class="text-end">@r.SkinsSold.ToString("N0")</td>
@@ -45,14 +51,15 @@ else if (_rows != null)
                 </tr>
             }
         </tbody>
-        @if (_rows.Count > 0)
+        @if (FilteredRows.Count > 0)
         {
             <tfoot>
                 <tr class="fw-bold">
-                    <td>Total — @_rows.Count farmer(s)</td>
-                    <td class="text-end">@_rows.Sum(x => x.SkinsInAuction).ToString("N0")</td>
-                    <td class="text-end">@_rows.Sum(x => x.SkinsSold).ToString("N0")</td>
-                    <td class="text-end">@_rows.Sum(x => x.TotalValue).ToString("N2")</td>
+                    <td></td>
+                    <td>Total — @FilteredRows.Count farmer(s)</td>
+                    <td class="text-end">@FilteredRows.Sum(x => x.SkinsInAuction).ToString("N0")</td>
+                    <td class="text-end">@FilteredRows.Sum(x => x.SkinsSold).ToString("N0")</td>
+                    <td class="text-end">@FilteredRows.Sum(x => x.TotalValue).ToString("N2")</td>
                 </tr>
             </tfoot>
         }
@@ -64,8 +71,28 @@ else if (_rows != null)
     private int _auctionId;
     private List<FarmerSalesRow>? _rows;
     private bool _loading;
+    private string _search = "";
+    private Dictionary<Guid, string> _numberByGuid = new();
 
-    protected override async Task OnInitializedAsync() => _auctions = await Api.GetAuctionsAsync();
+    private string NumberFor(FarmerSalesRow r) =>
+        r.FarmerGuid.HasValue && _numberByGuid.TryGetValue(r.FarmerGuid.Value, out var n) ? n : "";
+
+    private List<FarmerSalesRow> FilteredRows => string.IsNullOrWhiteSpace(_search) || _rows == null
+        ? _rows ?? new()
+        : _rows.Where(r => NumberFor(r).Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _auctions = await Api.GetAuctionsAsync();
+        try
+        {
+            _numberByGuid = (await Api.GetFarmersAsync())
+                .Where(f => f.FarmerGUID != null)
+                .GroupBy(f => f.FarmerGUID!.Value)
+                .ToDictionary(g => g.Key, g => g.First().FarmerNumber);
+        }
+        catch { }
+    }
 
     private async Task Load()
     {
