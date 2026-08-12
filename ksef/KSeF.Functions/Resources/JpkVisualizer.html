@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JPK_V7M Visualiser — KPHG</title>
+<style>
+  :root{
+    --bg:#F6F7F9; --surface:#FFFFFF; --ink:#1B2430; --ink2:#4A5568; --muted:#8A94A6;
+    --line:#E1E5EC; --accent:#2E4A7A; --accent-ink:#FFFFFF; --accent-soft:#E7EDF7;
+    --good:#1E7A46; --good-bg:#DFF0E5; --warn:#9A6A10; --warn-bg:#F7EDD8;
+    --crit:#A83232; --crit-bg:#F9E4E1; --info:#2E4A7A; --info-bg:#E7EDF7;
+    --mono:Consolas,"Cascadia Mono","Courier New",monospace;
+  }
+  @media (prefers-color-scheme: dark){:root{
+    --bg:#12161D; --surface:#1A202A; --ink:#E6EAF1; --ink2:#A8B2C2; --muted:#71809A;
+    --line:#2A3342; --accent:#8FB0E8; --accent-ink:#12161D; --accent-soft:#22304A;
+    --good:#5CC08A; --good-bg:#1C3527; --warn:#D9A94E; --warn-bg:#3A2F17;
+    --crit:#E08A82; --crit-bg:#3D2220; --info:#8FB0E8; --info-bg:#22304A;
+  }}
+  :root[data-theme="light"]{
+    --bg:#F6F7F9; --surface:#FFFFFF; --ink:#1B2430; --ink2:#4A5568; --muted:#8A94A6;
+    --line:#E1E5EC; --accent:#2E4A7A; --accent-ink:#FFFFFF; --accent-soft:#E7EDF7;
+    --good:#1E7A46; --good-bg:#DFF0E5; --warn:#9A6A10; --warn-bg:#F7EDD8;
+    --crit:#A83232; --crit-bg:#F9E4E1; --info:#2E4A7A; --info-bg:#E7EDF7;
+  }
+  :root[data-theme="dark"]{
+    --bg:#12161D; --surface:#1A202A; --ink:#E6EAF1; --ink2:#A8B2C2; --muted:#71809A;
+    --line:#2A3342; --accent:#8FB0E8; --accent-ink:#12161D; --accent-soft:#22304A;
+    --good:#5CC08A; --good-bg:#1C3527; --warn:#D9A94E; --warn-bg:#3A2F17;
+    --crit:#E08A82; --crit-bg:#3D2220; --info:#8FB0E8; --info-bg:#22304A;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font:15px/1.5 "Segoe UI",system-ui,-apple-system,sans-serif;margin:0;padding:32px 20px 80px}
+  .wrap{max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+  h1{font-size:22px;font-weight:650;margin:0;letter-spacing:-.01em}
+  h2{font-size:15px;font-weight:650;margin:0 0 4px;letter-spacing:-.01em}
+  .sub{color:var(--ink2);font-size:13px;margin:2px 0 0}
+  .eyebrow{font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px 20px}
+  .drop{border:1.5px dashed var(--line);border-radius:8px;background:var(--surface);padding:34px 20px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s}
+  .drop.hover{border-color:var(--accent);background:var(--accent-soft)}
+  .drop strong{font-weight:650}
+  .drop .hint{color:var(--muted);font-size:13px;margin-top:6px}
+  .drop input{display:none}
+  .privacy{font-size:12px;color:var(--muted);text-align:center}
+  .statrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+  .stat{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 16px}
+  .stat .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:20px;font-weight:600;letter-spacing:-.02em}
+  .stat .l{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-top:2px}
+  .stat.acc .v{color:var(--accent)}
+  table{border-collapse:collapse;width:100%;font-size:13.5px}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);text-align:left;font-weight:600;padding:6px 10px;border-bottom:1px solid var(--line)}
+  td{padding:6px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .scroll{overflow-x:auto}
+  .kcode{font-family:var(--mono);font-weight:600;color:var(--accent);white-space:nowrap}
+  .pill{display:inline-flex;align-items:center;gap:6px;border-radius:99px;padding:2px 10px;font-size:12px;font-weight:600}
+  .pill.ok{background:var(--good-bg);color:var(--good)}
+  .pill.warn{background:var(--warn-bg);color:var(--warn)}
+  .pill.crit{background:var(--crit-bg);color:var(--crit)}
+  .pill.info{background:var(--info-bg);color:var(--info)}
+  .checks{display:flex;flex-direction:column;gap:8px}
+  .check{display:flex;gap:10px;align-items:flex-start;padding:9px 12px;border-radius:6px;border:1px solid var(--line)}
+  .check .ico{font-family:var(--mono);font-weight:700;width:18px;text-align:center;flex:none}
+  .check.ok{border-color:transparent;background:var(--good-bg)} .check.ok .ico{color:var(--good)}
+  .check.warn{border-color:transparent;background:var(--warn-bg)} .check.warn .ico{color:var(--warn)}
+  .check.crit{border-color:transparent;background:var(--crit-bg)} .check.crit .ico{color:var(--crit)}
+  .check.info{border-color:transparent;background:var(--info-bg)} .check.info .ico{color:var(--info)}
+  .check b{font-weight:650}
+  .check .d{font-size:13px;color:var(--ink2)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  @media(max-width:820px){.grid2{grid-template-columns:1fr}}
+  .kv{display:grid;grid-template-columns:max-content 1fr;gap:4px 16px;font-size:13.5px}
+  .kv dt{color:var(--muted)} .kv dd{margin:0;font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .kv dd.txt{font-family:inherit}
+  .filebar{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .filebar .name{font-family:var(--mono);font-size:13px}
+  button{background:var(--accent);color:var(--accent-ink);border:none;border-radius:6px;padding:7px 14px;font:600 13px "Segoe UI",system-ui,sans-serif;cursor:pointer}
+  button.ghost{background:transparent;color:var(--accent);border:1px solid var(--line)}
+  button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .bars{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+  .brow{display:grid;grid-template-columns:64px 1fr max-content;gap:10px;align-items:center;font-size:13px}
+  .btrack{height:14px;position:relative}
+  .bfill{position:absolute;left:0;top:2px;height:10px;border-radius:0 4px 4px 0;background:var(--accent);min-width:2px}
+  .bval{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .spark{margin-top:10px;width:100%}
+  .spark rect{fill:var(--accent)}
+  .spark text{fill:var(--muted);font:10.5px var(--mono)}
+  .spark line{stroke:var(--line)}
+  .verdict{font-size:14px;line-height:1.55;border-left:3px solid var(--accent);padding:2px 0 2px 14px;color:var(--ink2)}
+  .verdict b{color:var(--ink);font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .difflist{font-family:var(--mono);font-size:12.5px;column-width:170px;column-gap:18px;margin:8px 0 0;padding:0;list-style:none}
+  .hide{display:none}
+  .tip{position:fixed;pointer-events:none;background:var(--ink);color:var(--bg);border-radius:6px;padding:5px 9px;font:12px var(--mono);z-index:10;opacity:0;transition:opacity .1s}
+  .marker-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  a{color:var(--accent)}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div>
+    <h1>JPK_V7 Visualiser</h1>
+    <p class="sub">Inspect a Polish JPK_V7M/V7K file: header, declaration, registers, control sums and consistency checks. Supports the 2021 (variant 2) and 2025 (variant 3) schemas.</p>
+  </div>
+
+  <label class="drop" id="dropA">
+    <strong>Drop a JPK XML file here</strong> or click to choose
+    <div class="hint">.xml or any extension — the content decides</div>
+    <input type="file" id="fileA">
+  </label>
+  <p class="privacy">The file is parsed entirely in your browser. Nothing is uploaded anywhere.</p>
+
+  <div id="report" class="hide" style="display:flex;flex-direction:column;gap:20px">
+    <div class="card filebar">
+      <span class="eyebrow">File</span><span class="name" id="fname"></span>
+      <span id="formchip" class="pill info"></span>
+      <span style="flex:1"></span>
+      <button class="ghost" id="btnXsd">Validate against XSD (server)</button>
+      <button class="ghost" id="btnCompare">Compare with second file…</button>
+      <button class="ghost" id="btnReset">Load another</button>
+      <input type="file" id="fileB" class="hide">
+    </div>
+
+    <div class="statrow" id="stats"></div>
+
+    <div class="grid2">
+      <div class="card">
+        <span class="eyebrow">Podmiot / Taxpayer</span>
+        <dl class="kv" id="subject" style="margin:10px 0 0"></dl>
+      </div>
+      <div class="card">
+        <span class="eyebrow">Naglowek / Header</span>
+        <dl class="kv" id="header" style="margin:10px 0 0"></dl>
+      </div>
+    </div>
+
+    <div class="card" id="checksCard">
+      <h2>Consistency checks</h2>
+      <div class="checks" id="checks" style="margin-top:10px"></div>
+    </div>
+
+    <div class="card">
+      <h2>Deklaracja — the VAT-7 declaration</h2>
+      <div class="verdict" id="verdict"></div>
+      <div class="scroll" style="margin-top:12px"><table id="dekl"></table></div>
+    </div>
+
+    <div class="card">
+      <h2 id="salesTitle">Sales register</h2>
+      <div class="bars" id="salesBars"></div>
+      <div id="salesSpark"></div>
+      <div class="marker-chips" id="salesMarkers"></div>
+      <div class="grid2" style="margin-top:14px">
+        <div><span class="eyebrow">Largest documents</span>
+          <div class="scroll"><table id="topDocs"></table></div></div>
+        <div><span class="eyebrow">Top contractors by value</span>
+          <div class="scroll"><table id="topParties"></table></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 id="purchTitle">Purchase register</h2>
+      <div id="purchBody"></div>
+    </div>
+
+    <div class="card hide" id="cmpCard">
+      <h2>Comparison</h2>
+      <div id="cmpBody" style="margin-top:8px"></div>
+    </div>
+  </div>
+</div>
+<div class="tip" id="tip"></div>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const fmt=n=>new Intl.NumberFormat("pl-PL",{minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
+const fmt0=n=>new Intl.NumberFormat("pl-PL").format(n);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+const K_LABELS={
+ K_10:"Dostawa zwolniona · exempt supplies",K_11:"Dostawa poza terytorium kraju · supplies outside PL",
+ K_12:"— w tym uslugi art. 100 u.1 p.4 · EU B2B services",K_13:"Dostawa 0% krajowa · domestic 0%",
+ K_14:"— w tym art. 129 · traveller tax-free",K_15:"Podstawa 5%",K_16:"VAT 5%",K_17:"Podstawa 8%",K_18:"VAT 8%",
+ K_19:"Podstawa 23%",K_20:"VAT 23%",K_21:"WDT · intra-EU supply of goods",K_22:"Eksport towarow · export of goods",
+ K_23:"WNT podstawa · intra-EU acquisition",K_24:"WNT VAT",K_25:"Import art. 33a podstawa · postponed import",
+ K_26:"Import art. 33a VAT",K_27:"Import uslug podstawa",K_28:"Import uslug VAT",
+ K_29:"Import uslug art. 28b podstawa",K_30:"Import uslug art. 28b VAT",K_31:"Podstawa — pozycja K_31",
+ K_32:"VAT — pozycja K_32",K_33:"Spis z natury",K_34:"Zwrot za kasy rejestrujace",K_35:"Pozycja K_35",K_36:"Pozycja K_36",
+ K_40:"Nabycie srodkow trwalych — podstawa",K_41:"Nabycie srodkow trwalych — VAT",
+ K_42:"Nabycie pozostale — podstawa",K_43:"Nabycie pozostale — VAT",
+ K_44:"Korekta VAT od srodkow trwalych",K_45:"Korekta VAT od pozostalych nabyc",
+ K_46:"Korekta art. 89b u.1",K_47:"Korekta art. 89b u.4"};
+const P_LABELS={P_10:"Dostawa zwolniona",P_11:"Dostawa poza terytorium kraju",P_12:"— w tym uslugi art. 100",
+ P_13:"Dostawa 0% krajowa",P_14:"— w tym art. 129",P_15:"Podstawa 5%",P_16:"VAT 5%",P_17:"Podstawa 8%",P_18:"VAT 8%",
+ P_19:"Podstawa 23%",P_20:"VAT 23%",P_21:"WDT",P_22:"Eksport towarow",P_23:"WNT podstawa",P_24:"WNT VAT",
+ P_25:"Import art. 33a podstawa",P_26:"Import art. 33a VAT",P_27:"Import uslug podstawa",P_28:"Import uslug VAT",
+ P_29:"Import uslug art. 28b podstawa",P_30:"Import uslug art. 28b VAT",P_33:"Spis z natury",
+ P_37:"Razem podstawa opodatkowania",P_38:"Razem podatek nalezny · output VAT",
+ P_39:"Nadwyzka z poprzedniej deklaracji · carry-in",P_40:"Nabycie ST — podstawa",P_41:"Nabycie ST — VAT",
+ P_42:"Nabycie pozostale — podstawa",P_43:"Nabycie pozostale — VAT",P_48:"Razem podatek naliczony · input VAT",
+ P_49:"Ulga na kasy",P_51:"Do zaplaty · amount payable",P_53:"Nadwyzka naliczonego · excess input VAT",
+ P_54:"Do zwrotu · refund requested",P_55:"Zwrot 25 dni (rach. VAT)",P_56:"Zwrot 25 dni",P_560:"Zwrot 40 dni (KSeF)",
+ P_57:"Zwrot 60 dni",P_58:"Zwrot 180 dni",P_62:"Do przeniesienia · carry-forward",P_540:"Znacznik P_540",
+ P_68:"Korekta podstawy (ulga za zle dlugi)",P_69:"Korekta podatku (ulga za zle dlugi)"};
+
+let A=null,B=null;
+
+function loc(el){return el.localName||el.nodeName.split(":").pop()}
+function findAll(root,name){return Array.from(root.getElementsByTagNameNS("*",name))}
+function findOne(root,name){const l=findAll(root,name);return l.length?l[0]:null}
+function textOf(root,name){const e=findOne(root,name);return e&&e.textContent!=null?e.textContent.trim():""}
+
+function parseJpk(xmlText,fileName){
+  const doc=new DOMParser().parseFromString(xmlText,"application/xml");
+  if(findOne(doc,"parsererror")&&!findOne(doc,"JPK")) throw new Error("Not valid XML");
+  const root=findOne(doc,"JPK"); if(!root) throw new Error("No <JPK> root element found");
+  const ns=root.namespaceURI||"";
+  const j={fileName,ns,xmlText,
+    kodFormularza:textOf(doc,"KodFormularza"),
+    kodSystemowy:(findOne(doc,"KodFormularza")||{getAttribute:()=>""}).getAttribute("kodSystemowy")||"",
+    wariant:textOf(doc,"WariantFormularza"),
+    created:textOf(doc,"DataWytworzeniaJPK")||textOf(doc,"DateWytworzeniaJPK"),
+    system:textOf(doc,"NazwaSystemu"),cel:textOf(doc,"CelZlozenia"),
+    urzad:textOf(doc,"KodUrzedu"),rok:textOf(doc,"Rok"),miesiac:textOf(doc,"Miesiac"),
+    nip:textOf(doc,"NIP"),nazwa:textOf(doc,"PelnaNazwa"),email:textOf(doc,"Email"),
+    dekl:{},sales:[],purch:[],ctrl:{}};
+  const dekl=findOne(doc,"PozycjeSzczegolowe");
+  if(dekl) for(const c of dekl.children){j.dekl[loc(c)]=c.textContent.trim()}
+  for(const row of findAll(doc,"SprzedazWiersz")){
+    const r={k:{},markers:[],lp:"",party:"",partyId:"",docNo:"",date:"",date2:""};
+    for(const c of row.children){const n=loc(c),v=c.textContent.trim();
+      if(n.startsWith("K_"))r.k[n]=parseFloat(v)||0;
+      else if(n==="LpSprzedazy")r.lp=v; else if(n==="NazwaKontrahenta")r.party=v;
+      else if(n==="NrKontrahenta")r.partyId=v; else if(n==="DowodSprzedazy")r.docNo=v;
+      else if(n==="DataWystawienia")r.date=v; else if(n==="DataSprzedazy")r.date2=v;
+      else if(v==="1"&&/^(GTU_\d\d|SW|EE|TP|TT_WNT|TT_D|MR_T|MR_UZ|I_42|I_63|B_SPV|B_SPV_DOSTAWA|B_MPV_PROWIZJA|MPP|WSTO_EE|IED|KorektaPodstawyOpodt|RO|WEW|FP)$/.test(n))r.markers.push(n);}
+    j.sales.push(r);}
+  for(const row of findAll(doc,"ZakupWiersz")){
+    const r={k:{},lp:"",party:"",partyId:"",docNo:"",date:"",date2:"",markers:[]};
+    for(const c of row.children){const n=loc(c),v=c.textContent.trim();
+      if(n.startsWith("K_"))r.k[n]=parseFloat(v)||0;
+      else if(n==="LpZakupu")r.lp=v; else if(n==="NazwaDostawcy")r.party=v;
+      else if(n==="NrDostawcy")r.partyId=v; else if(n==="DowodZakupu")r.docNo=v;
+      else if(n==="DataZakupu")r.date=v; else if(n==="DataWplywu")r.date2=v;
+      else if(v==="1"&&/^(MPP|IMP|VAT_RR|WEW|MK)$/.test(n))r.markers.push(n);}
+    j.purch.push(r);}
+  const sc=findOne(doc,"SprzedazCtrl");
+  if(sc){j.ctrl.salesRows=parseFloat(textOf(sc,"LiczbaWierszySprzedazy"))||0;
+         j.ctrl.salesVat=parseFloat(textOf(sc,"PodatekNalezny"))||0;}
+  const zc=findOne(doc,"ZakupCtrl");
+  if(zc){j.ctrl.purchRows=parseFloat(textOf(zc,"LiczbaWierszyZakupow"))||0;
+         j.ctrl.purchVat=parseFloat(textOf(zc,"PodatekNaliczony"))||0;}
+  return j;
+}
+
+function sumK(rows,pred){const t={};for(const r of rows)for(const[k,v]of Object.entries(r.k)){if(!pred||pred(k))t[k]=(t[k]||0)+v}return t}
+const OUT_VAT_K=["K_16","K_18","K_20","K_24","K_26","K_28","K_30","K_32","K_33","K_34"];
+const IN_VAT_K=["K_41","K_43","K_44","K_45","K_46","K_47"];
+function rowAmount(r){let base=0;for(const[k,v]of Object.entries(r.k)){if(["K_10","K_11","K_13","K_15","K_17","K_19","K_21","K_22","K_23","K_25","K_27","K_29","K_31"].includes(k))base+=v}return base}
+
+function runChecks(j){
+  const cs=[];const add=(level,title,detail)=>cs.push({level,title,detail});
+  const okc=(cond,t,dOk,dBad,lvl="crit")=>cond?add("ok",t,dOk):add(lvl,t,dBad);
+  okc(/^\d{10}$/.test(j.nip),"NIP",`NIP ${j.nip} — present, 10 digits.`,j.nip?`"${j.nip}" is not a 10-digit NIP.`:"Empty — the gateway rejects a file without the taxpayer NIP.");
+  okc(!!j.nazwa,"Taxpayer name","PelnaNazwa present.","PelnaNazwa is empty — required.");
+  okc(/^\d{4}$/.test(j.urzad),"Tax office code",`KodUrzedu ${j.urzad}.`,"KodUrzedu missing/invalid — the 4-digit urzad skarbowy code is required.");
+  const noAmt=j.sales.filter(r=>!Object.keys(r.k).length).length;
+  okc(noAmt===0,"Amounts on sales rows","Every sales row carries K_ amount fields.",`${fmt0(noAmt)} of ${fmt0(j.sales.length)} sales rows have NO K_ amount fields — they declare no values at all.`);
+  if(j.ctrl.salesRows!==undefined)okc(j.ctrl.salesRows===j.sales.length,"Sales control count",`SprzedazCtrl = ${fmt0(j.sales.length)} rows — matches.`,`SprzedazCtrl says ${fmt0(j.ctrl.salesRows)}, file contains ${fmt0(j.sales.length)}.`);
+  const st=sumK(j.sales);const outVat=OUT_VAT_K.reduce((a,k)=>a+(st[k]||0),0);
+  if(j.ctrl.salesVat!==undefined)okc(Math.abs(outVat-j.ctrl.salesVat)<=0.02,"Output VAT control sum",`PodatekNalezny ${fmt(j.ctrl.salesVat)} = sum of VAT K-fields.`,`Ctrl ${fmt(j.ctrl.salesVat)} vs computed ${fmt(outVat)}.`,"warn");
+  for(const[k,v]of Object.entries(st)){const p="P_"+k.slice(2);
+    if(j.dekl[p]!==undefined){const dv=parseFloat(j.dekl[p])||0;
+      okc(Math.abs(dv-v)<=1,`Declaration ${p} vs register ${k}`,`${p} = ${fmt0(dv)} ≈ Σ${k} ${fmt(v)} (rounding OK).`,`${p} = ${fmt0(dv)} but register Σ${k} = ${fmt(v)} — mismatch beyond rounding.`,"warn");}}
+  const dups=(()=>{const seen=new Map(),d=[];for(const r of j.sales){const key=r.docNo;if(!key)continue;seen.set(key,(seen.get(key)||0)+1)}for(const[k,v]of seen)if(v>1)d.push(`${k}(${v}×)`);return d})();
+  okc(dups.length===0,"Duplicate sales documents","No duplicate document numbers.",`${dups.length} duplicated document number(s): ${dups.slice(0,6).join(", ")}${dups.length>6?"…":""}`,"warn");
+  if(j.rok&&j.miesiac){const pre=`${j.rok}-${String(j.miesiac).padStart(2,"0")}`;
+    const outside=j.sales.filter(r=>r.date&&!r.date.startsWith(pre)&&!(r.date2||"").startsWith(pre)).length;
+    okc(outside===0,"Issue dates vs period",`All issue dates fall in ${pre} (or carry a sale date in period).`,`${fmt0(outside)} rows dated outside ${pre} — legal for some corrections, but review.`,"info");}
+  const inVat=IN_VAT_K.reduce((a,k)=>a+((sumK(j.purch)[k])||0),0);
+  if(j.purch.length===0)add("info","Purchase register","Empty — no input VAT deducted this period. If import VAT or Polish cost VAT was paid, it is not being reclaimed in this file.");
+  else if(j.ctrl.purchVat!==undefined)okc(Math.abs(inVat-j.ctrl.purchVat)<=0.02,"Input VAT control sum",`PodatekNaliczony ${fmt(j.ctrl.purchVat)} matches rows.`,`Ctrl ${fmt(j.ctrl.purchVat)} vs computed ${fmt(inVat)}.`,"warn");
+  const p38=parseFloat(j.dekl.P_38)||0,p48=parseFloat(j.dekl.P_48)||0,p39=parseFloat(j.dekl.P_39)||0,
+        p51=parseFloat(j.dekl.P_51)||0,p53=parseFloat(j.dekl.P_53)||0,p54=parseFloat(j.dekl.P_54)||0,p62=parseFloat(j.dekl.P_62)||0;
+  const excess=p48+p39-p38;
+  if(excess>0)okc(Math.abs(p53-excess)<=1||p53===0&&p54===0&&p62===0,"Refund arithmetic",`Excess input VAT ${fmt0(excess)}: P_53 ${fmt0(p53)}, refund P_54 ${fmt0(p54)}, carry P_62 ${fmt0(p62)}.`,`Input+carry-in exceed output by ${fmt0(excess)} but P_53/P_54/P_62 don't account for it.`,"warn");
+  if(excess>0&&p54===0&&p62===0&&p53===0)add("warn","Unclaimed excess",`Input VAT exceeds output by ${fmt0(excess)} PLN but neither refund (P_54) nor carry-forward (P_62) is declared.`);
+  if(p51>0)add("info","Amount payable",`P_51 = ${fmt0(p51)} PLN due to the tax office.`);
+  return cs;
+}
+
+function verdictText(j){
+  const p38=parseFloat(j.dekl.P_38)||0,p48=parseFloat(j.dekl.P_48)||0,p39=parseFloat(j.dekl.P_39)||0,
+        p51=parseFloat(j.dekl.P_51)||0,p54=parseFloat(j.dekl.P_54)||0,p62=parseFloat(j.dekl.P_62)||0,
+        p37=parseFloat(j.dekl.P_37)||0;
+  let s=`Turnover base <b>${fmt0(p37)}</b> PLN · output VAT <b>${fmt0(p38)}</b> · input VAT <b>${fmt0(p48)}</b>`;
+  if(p39)s+=` · carry-in <b>${fmt0(p39)}</b>`;
+  s+=". Result: ";
+  if(p51>0)s+=`<b>${fmt0(p51)}</b> PLN payable.`;
+  else if(p54>0)s+=`refund of <b>${fmt0(p54)}</b> PLN requested${p62?` and <b>${fmt0(p62)}</b> carried forward`:""}.`;
+  else if(p62>0)s+=`<b>${fmt0(p62)}</b> PLN carried forward to the next period.`;
+  else s+="zero — nothing payable, nothing refunded.";
+  return s;
+}
+
+function bar(label,val,max,title){
+  const pct=max>0?Math.max(2,val/max*100):2;
+  return `<div class="brow"><span class="kcode">${esc(label)}</span>
+    <div class="btrack"><div class="bfill" style="width:${pct}%" data-tip="${esc(title)}: ${fmt(val)}"></div></div>
+    <span class="bval">${fmt(val)}</span></div>`;
+}
+
+function sparkline(days,year,mon){
+  if(!days.size)return "";
+  const dim=new Date(year,mon,0).getDate();
+  const W=1000,H=120,pad=24,bw=Math.max(4,(W-pad*2)/dim-2);
+  const max=Math.max(...days.values());
+  let rects="",labels="";
+  for(let d=1;d<=dim;d++){
+    const v=days.get(d)||0;const h=max?Math.round(v/max*(H-40)):0;
+    const x=pad+(d-1)*((W-pad*2)/dim);
+    if(v)rects+=`<rect x="${x}" y="${H-20-h}" width="${bw}" height="${h}" rx="3" data-tip="${year}-${String(mon).padStart(2,"0")}-${String(d).padStart(2,"0")}: ${v} docs"></rect>`;
+    if(d===1||d%5===0)labels+=`<text x="${x+bw/2}" y="${H-6}" text-anchor="middle">${d}</text>`;}
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" role="img" aria-label="Documents per day">
+    <line x1="${pad}" y1="${H-20}" x2="${W-pad}" y2="${H-20}"/>${rects}${labels}</svg>
+    <div class="eyebrow" style="margin-top:2px">Documents per day (issue date)</div>`;
+}
+
+function render(j){
+  $("report").classList.remove("hide");
+  $("dropA").classList.add("hide");
+  $("fname").textContent=j.fileName;
+  $("formchip").textContent=`${j.kodSystemowy||j.kodFormularza} · schema ${j.wariant?"variant "+j.wariant:"?"}`;
+  const st=sumK(j.sales);
+  const outVat=OUT_VAT_K.reduce((a,k)=>a+(st[k]||0),0);
+  const base=Object.entries(st).filter(([k])=>!OUT_VAT_K.includes(k)).reduce((a,[,v])=>a+v,0);
+  const pt=sumK(j.purch);const inVat=IN_VAT_K.reduce((a,k)=>a+(pt[k]||0),0);
+  $("stats").innerHTML=`
+    <div class="stat"><div class="v">${fmt0(j.sales.length)}</div><div class="l">Sales rows</div></div>
+    <div class="stat"><div class="v">${fmt0(j.purch.length)}</div><div class="l">Purchase rows</div></div>
+    <div class="stat acc"><div class="v">${fmt0(base)}</div><div class="l">Sales base PLN</div></div>
+    <div class="stat"><div class="v">${fmt0(outVat)}</div><div class="l">Output VAT PLN</div></div>
+    <div class="stat"><div class="v">${fmt0(inVat)}</div><div class="l">Input VAT PLN</div></div>`;
+  $("subject").innerHTML=`
+    <dt>NIP</dt><dd>${esc(j.nip)||"—"}</dd>
+    <dt>Name</dt><dd class="txt">${esc(j.nazwa)||"—"}</dd>
+    ${j.email?`<dt>Email</dt><dd class="txt">${esc(j.email)}</dd>`:""}
+    <dt>Tax office</dt><dd>${esc(j.urzad)||"—"}</dd>`;
+  $("header").innerHTML=`
+    <dt>Period</dt><dd>${esc(j.rok)}-${esc(String(j.miesiac).padStart(2,"0"))}</dd>
+    <dt>Generated</dt><dd>${esc(j.created)||"—"}</dd>
+    <dt>System</dt><dd class="txt">${esc(j.system)||"—"}</dd>
+    <dt>Purpose</dt><dd>${j.cel==="1"?"1 — first filing":esc(j.cel)+" — correction"}</dd>`;
+  const cs=runChecks(j);
+  const ico={ok:"✓",warn:"!",crit:"✕",info:"i"};
+  $("checks").innerHTML=cs.map(c=>`<div class="check ${c.level}"><span class="ico">${ico[c.level]}</span><div><b>${esc(c.title)}</b><div class="d">${esc(c.detail)}</div></div></div>`).join("");
+  const counts=cs.reduce((a,c)=>(a[c.level]=(a[c.level]||0)+1,a),{});
+  $("checksCard").querySelector("h2").innerHTML=`Consistency checks
+    ${counts.crit?`<span class="pill crit">${counts.crit} critical</span>`:""}
+    ${counts.warn?`<span class="pill warn">${counts.warn} warnings</span>`:""}
+    ${counts.ok?`<span class="pill ok">${counts.ok} passed</span>`:""}`;
+  $("verdict").innerHTML=verdictText(j);
+  const deklRows=Object.entries(j.dekl).filter(([,v])=>v&&parseFloat(v)!==0);
+  $("dekl").innerHTML=`<tr><th>Field</th><th>Meaning</th><th class="num">Value (PLN)</th></tr>`+
+    (deklRows.length?deklRows.map(([k,v])=>`<tr><td class="kcode">${esc(k)}</td><td>${esc(P_LABELS[k]||"—")}</td><td class="num">${isNaN(parseFloat(v))?esc(v):fmt0(parseFloat(v))}</td></tr>`).join(""):`<tr><td colspan="3" style="color:var(--muted)">Declaration part is empty.</td></tr>`);
+  $("salesTitle").textContent=`Sales register — ${fmt0(j.sales.length)} documents`;
+  const kEntries=Object.entries(st).filter(([,v])=>v!==0).sort((a,b)=>b[1]-a[1]);
+  const kmax=kEntries.length?kEntries[0][1]:0;
+  $("salesBars").innerHTML=kEntries.map(([k,v])=>bar(k,v,kmax,K_LABELS[k]||k)).join("")||`<span class="sub">No K_ amounts present in sales rows.</span>`;
+  const days=new Map();
+  for(const r of j.sales){const m=(r.date||"").match(/^(\d{4})-(\d{2})-(\d{2})/);if(m&&+m[1]===+j.rok&&+m[2]===+j.miesiac)days.set(+m[3],(days.get(+m[3])||0)+1)}
+  $("salesSpark").innerHTML=sparkline(days,+j.rok,+j.miesiac);
+  const mk=new Map();for(const r of j.sales)for(const m of r.markers)mk.set(m,(mk.get(m)||0)+1);
+  $("salesMarkers").innerHTML=Array.from(mk.entries()).sort().map(([m,c])=>`<span class="pill info">${esc(m)} × ${fmt0(c)}</span>`).join("");
+  const withAmt=j.sales.map(r=>({r,amt:rowAmount(r)})).sort((a,b)=>b.amt-a.amt);
+  $("topDocs").innerHTML=`<tr><th>Document</th><th>Date</th><th class="num">Base PLN</th></tr>`+
+    withAmt.slice(0,8).map(({r,amt})=>`<tr><td class="kcode">${esc(r.docNo)}</td><td>${esc(r.date)}</td><td class="num">${fmt(amt)}</td></tr>`).join("");
+  const parties=new Map();
+  for(const {r,amt} of withAmt){const key=r.party||r.partyId||"?";const e=parties.get(key)||{n:0,v:0};e.n++;e.v+=amt;parties.set(key,e)}
+  $("topParties").innerHTML=`<tr><th>Contractor</th><th class="num">Docs</th><th class="num">Base PLN</th></tr>`+
+    Array.from(parties.entries()).sort((a,b)=>b[1].v-a[1].v).slice(0,8)
+    .map(([p,e])=>`<tr><td>${esc(p.length>38?p.slice(0,37)+"…":p)}</td><td class="num">${fmt0(e.n)}</td><td class="num">${fmt(e.v)}</td></tr>`).join("");
+  $("purchTitle").textContent=`Purchase register — ${fmt0(j.purch.length)} documents`;
+  if(!j.purch.length){
+    $("purchBody").innerHTML=`<p class="sub">Empty. No input VAT is deducted in this file — any import VAT or Polish cost VAT paid in (or within 3 months before) this period is not being reclaimed here.</p>`;
+  }else{
+    const pEntries=Object.entries(pt).filter(([,v])=>v!==0).sort((a,b)=>b[1]-a[1]);
+    const pmax=pEntries.length?pEntries[0][1]:0;
+    $("purchBody").innerHTML=`<div class="bars">${pEntries.map(([k,v])=>bar(k,v,pmax,K_LABELS[k]||k)).join("")}</div>
+      <div class="scroll" style="margin-top:12px"><table>
+      <tr><th>Document</th><th>Supplier</th><th>Date</th><th class="num">Base PLN</th><th class="num">VAT PLN</th></tr>
+      ${j.purch.slice(0,50).map(r=>{const b=(r.k.K_40||0)+(r.k.K_42||0),v=(r.k.K_41||0)+(r.k.K_43||0);
+        return `<tr><td class="kcode">${esc(r.docNo)}</td><td>${esc(r.party)}</td><td>${esc(r.date)}</td><td class="num">${fmt(b)}</td><td class="num">${fmt(v)}</td></tr>`}).join("")}
+      </table>${j.purch.length>50?`<p class="sub">Showing first 50 of ${fmt0(j.purch.length)}.</p>`:""}</div>`;
+  }
+  renderCompare();
+}
+
+function renderCompare(){
+  if(!A||!B){$("cmpCard").classList.add("hide");return}
+  $("cmpCard").classList.remove("hide");
+  const setA=new Set(A.sales.map(r=>r.docNo).filter(Boolean));
+  const setB=new Set(B.sales.map(r=>r.docNo).filter(Boolean));
+  const onlyA=[...setA].filter(d=>!setB.has(d)).sort();
+  const onlyB=[...setB].filter(d=>!setA.has(d)).sort();
+  $("cmpBody").innerHTML=`
+    <div class="statrow">
+      <div class="stat"><div class="v">${fmt0(setA.size)}</div><div class="l">Docs in A (${esc(A.fileName)})</div></div>
+      <div class="stat"><div class="v">${fmt0(setB.size)}</div><div class="l">Docs in B (${esc(B.fileName)})</div></div>
+      <div class="stat acc"><div class="v">${fmt0(onlyA.length)}</div><div class="l">Only in A</div></div>
+      <div class="stat acc"><div class="v">${fmt0(onlyB.length)}</div><div class="l">Only in B</div></div>
+    </div>
+    ${onlyA.length?`<h2 style="margin-top:16px">Only in A — missing from B</h2><ul class="difflist">${onlyA.map(d=>`<li>${esc(d)}</li>`).join("")}</ul>`:""}
+    ${onlyB.length?`<h2 style="margin-top:16px">Only in B — missing from A</h2><ul class="difflist">${onlyB.map(d=>`<li>${esc(d)}</li>`).join("")}</ul>`:""}
+    ${!onlyA.length&&!onlyB.length?`<p class="sub" style="margin-top:12px">Document sets are identical. ✓</p>`:""}`;
+}
+
+function loadFile(file,slot){
+  const rd=new FileReader();
+  rd.onload=()=>{try{
+      const j=parseJpk(rd.result,file.name);
+      if(slot==="A"){A=j;render(A)}else{B=j;render(A)}
+    }catch(e){alert("Could not parse this file as JPK XML: "+e.message)}};
+  rd.readAsText(file,"utf-8");
+}
+
+const dropA=$("dropA");
+dropA.addEventListener("dragover",e=>{e.preventDefault();dropA.classList.add("hover")});
+dropA.addEventListener("dragleave",()=>dropA.classList.remove("hover"));
+dropA.addEventListener("drop",e=>{e.preventDefault();dropA.classList.remove("hover");if(e.dataTransfer.files[0])loadFile(e.dataTransfer.files[0],"A")});
+$("fileA").addEventListener("change",e=>{if(e.target.files[0])loadFile(e.target.files[0],"A")});
+$("btnReset").addEventListener("click",()=>{A=null;B=null;$("report").classList.add("hide");$("dropA").classList.remove("hide");$("fileA").value="";$("fileB").value=""});
+$("btnCompare").addEventListener("click",()=>$("fileB").click());
+$("fileB").addEventListener("change",e=>{if(e.target.files[0])loadFile(e.target.files[0],"B")});
+$("btnXsd").addEventListener("click",async()=>{
+  if(!A)return;
+  const btn=$("btnXsd");btn.disabled=true;btn.textContent="Validating…";
+  try{
+    const code=new URLSearchParams(location.search).get("code");
+    const url=location.pathname.replace(/visualizer.*$/,"v7m/validate")+(code?`?code=${encodeURIComponent(code)}`:"");
+    const res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/xml"},body:A.xmlText});
+    if(!res.ok)throw new Error("HTTP "+res.status);
+    const v=await res.json();
+    const row=document.createElement("div");
+    if(v.schemaValid){row.className="check ok";row.innerHTML='<span class="ico">✓</span><div><b>XSD schema validation (server)</b><div class="d">The file validates against the official ministry schema.</div></div>';}
+    else{row.className="check crit";row.innerHTML='<span class="ico">✕</span><div><b>XSD schema validation (server)</b><div class="d">'+ (v.errors||[]).slice(0,10).map(e=>esc(e)).join("<br>") +'</div></div>';}
+    $("checks").prepend(row);
+  }catch(e){alert("Server validation unavailable: "+e.message+"
+(The page must be opened via the function URL with a valid key.)");}
+  finally{btn.disabled=false;btn.textContent="Validate against XSD (server)";}
+});
+document.addEventListener("drop",e=>e.preventDefault());
+document.addEventListener("dragover",e=>e.preventDefault());
+
+const tip=$("tip");
+document.addEventListener("mousemove",e=>{
+  const t=e.target.closest("[data-tip]");
+  if(t){tip.textContent=t.getAttribute("data-tip");tip.style.opacity="1";
+    tip.style.left=Math.min(e.clientX+14,window.innerWidth-260)+"px";tip.style.top=(e.clientY+16)+"px";}
+  else tip.style.opacity="0";});
+</script>
+
+</body>
+</html>
