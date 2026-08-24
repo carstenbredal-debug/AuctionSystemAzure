@@ -20,14 +20,17 @@ public class JpkVisualizerFunctions
     private readonly JpkValidator _validator;
     private readonly ILogger<JpkVisualizerFunctions> _logger;
 
-    private static readonly Lazy<string> Page = new(() =>
+    private static readonly Lazy<string> Page = new(() => LoadResource("JpkVisualizer.html"));
+    private static readonly Lazy<string> EditorPage = new(() => LoadResource("JpkEditor.html"));
+
+    private static string LoadResource(string name)
     {
         var assembly = Assembly.GetExecutingAssembly();
-        using var stream = assembly.GetManifestResourceStream("KSeF.Functions.Resources.JpkVisualizer.html")
-            ?? throw new InvalidOperationException("JpkVisualizer.html not found in embedded resources.");
+        using var stream = assembly.GetManifestResourceStream("KSeF.Functions.Resources." + name)
+            ?? throw new InvalidOperationException(name + " not found in embedded resources.");
         using var reader = new StreamReader(stream, Encoding.UTF8);
         return reader.ReadToEnd();
-    });
+    }
 
     public JpkVisualizerFunctions(JpkValidator validator, ILogger<JpkVisualizerFunctions> logger)
     {
@@ -42,6 +45,21 @@ public class JpkVisualizerFunctions
         var resp = req.CreateResponse(HttpStatusCode.OK);
         resp.Headers.Add("Content-Type", "text/html; charset=utf-8");
         await resp.WriteStringAsync(Page.Value);
+        return resp;
+    }
+
+    /// <summary>
+    /// Interactive JPK_V7M declaration editor: loads a BC-produced JPK XML, exposes every
+    /// Deklaracja field (incl. the refund request P_54 + deadline choice), keeps the registers
+    /// untouched, and re-serializes the final XML in schema order for download/validation.
+    /// </summary>
+    [Function("JpkEditor")]
+    public async Task<HttpResponseData> Editor(
+        [HttpTrigger(AuthorizationLevel.Function, "get", Route = "jpk/editor")] HttpRequestData req)
+    {
+        var resp = req.CreateResponse(HttpStatusCode.OK);
+        resp.Headers.Add("Content-Type", "text/html; charset=utf-8");
+        await resp.WriteStringAsync(EditorPage.Value);
         return resp;
     }
 
