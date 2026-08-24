@@ -286,10 +286,24 @@ public class KSeFApiClient
     /// issue-date window. Auth-only — no online session is opened. Returns null when KSeF has no
     /// such invoice.
     /// </summary>
+    // Access tokens cached per NIP across invocations, so a burst of lookups (e.g. "Fetch from
+    // KSeF" on many invoices) authenticates ONCE instead of per call — KSeF rate-limits the auth
+    // endpoints to ~20 requests/window. Static: the typed HttpClient makes this class per-invocation.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string Token, DateTime Expiry)> _queryTokenCache = new();
+
     public async Task<KSeFInvoiceMetadata?> QueryInvoiceByNumberAsync(
         string nip, string invoiceNumber, DateTime issueDateFrom, DateTime issueDateTo)
     {
-        await AcquireAccessTokenAsync(nip);
+        if (_queryTokenCache.TryGetValue(nip, out var cached) && cached.Expiry > DateTime.UtcNow)
+        {
+            _accessToken = cached.Token;
+            _logger.LogInformation("KSeF query: reusing cached access token for NIP {NIP}", nip);
+        }
+        else
+        {
+            await AcquireAccessTokenAsync(nip);
+            _queryTokenCache[nip] = (_accessToken!, DateTime.UtcNow.AddMinutes(10));
+        }
 
         var body = new
         {
@@ -303,14 +317,27 @@ public class KSeFApiClient
             invoiceNumber
         };
         var json = JsonSerializer.Serialize(body, _jsonOpts);
-        var req = new HttpRequestMessage(HttpMethod.Post,
-            $"{BaseUrl}/invoices/query/metadata?pageOffset=0&pageSize=10")
-        {
-            Content = new StringContent(json, Encoding.UTF8, "application/json")
-        };
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
 
-        var resp = await _http.SendAsync(req);
+        HttpRequestMessage BuildRequest()
+        {
+            var r = new HttpRequestMessage(HttpMethod.Post,
+                $"{BaseUrl}/invoices/query/metadata?pageOffset=0&pageSize=10")
+            {
+                Content = new StringContent(json, Encoding.UTF8, "application/json")
+            };
+            r.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
+            return r;
+        }
+
+        var resp = await _http.SendAsync(BuildRequest());
+        if (resp.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            // Cached token expired or was invalidated — re-authenticate once and retry.
+            _queryTokenCache.TryRemove(nip, out _);
+            await AcquireAccessTokenAsync(nip);
+            _queryTokenCache[nip] = (_accessToken!, DateTime.UtcNow.AddMinutes(10));
+            resp = await _http.SendAsync(BuildRequest());
+        }
         var respBody = await resp.Content.ReadAsStringAsync();
         if (!resp.IsSuccessStatusCode)
             throw new Exception($"KSeF metadata query failed: {resp.StatusCode} - {TruncateForLog(respBody)}");
