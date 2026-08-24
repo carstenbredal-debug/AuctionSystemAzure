@@ -390,6 +390,70 @@ public class InvoiceFunctions
     }
 
     /// <summary>
+    /// Look an invoice up directly in KSeF by seller NIP + invoice number (exact match) around its
+    /// issue date. Recovers the KSeF number and QR verification URL for documents whose submit
+    /// response was lost — needs no stored element/session references, and opens no online session.
+    /// GET /api/invoice/lookup?nip={nip}&amp;invoiceNumber={no}&amp;issueDate={yyyy-MM-dd}
+    /// </summary>
+    [Function("LookupInvoice")]
+    public async Task<HttpResponseData> LookupInvoice(
+        [HttpTrigger(AuthorizationLevel.Function, "get", Route = "invoice/lookup")] HttpRequestData req)
+    {
+        try
+        {
+            var nip = req.Query["nip"];
+            var invoiceNumber = req.Query["invoiceNumber"];
+            var issueDateText = req.Query["issueDate"];
+
+            if (string.IsNullOrEmpty(nip) || string.IsNullOrEmpty(invoiceNumber) || string.IsNullOrEmpty(issueDateText))
+                return await CreateResponse(req, HttpStatusCode.BadRequest,
+                    new LookupResult { Success = false, Error = "Missing 'nip', 'invoiceNumber' or 'issueDate' query parameter" });
+
+            if (!DateTime.TryParse(issueDateText, out var issueDate))
+                return await CreateResponse(req, HttpStatusCode.BadRequest,
+                    new LookupResult { Success = false, Error = $"Invalid issueDate '{issueDateText}' — expected yyyy-MM-dd" });
+
+            _logger.LogInformation("LookupInvoice called for {Number} (issue date {Date})", invoiceNumber, issueDateText);
+
+            // Small window around the issue date — the query filter is exact-match on invoice
+            // number, the range only bounds the search.
+            var meta = await _ksef.QueryInvoiceByNumberAsync(nip, invoiceNumber, issueDate.AddDays(-2), issueDate.AddDays(3));
+
+            if (meta == null)
+            {
+                _logger.LogInformation("LookupInvoice: {Number} not found in KSeF", invoiceNumber);
+                return await CreateResponse(req, HttpStatusCode.OK, new LookupResult { Success = true, Found = false });
+            }
+
+            // Same QR format the submit flow produces: /web/verify/{ksefNumber}/{sha256-hex-lower}.
+            string? qrUrl = null;
+            if (!string.IsNullOrEmpty(meta.InvoiceHash))
+            {
+                var hashHex = Convert.ToHexString(Convert.FromBase64String(meta.InvoiceHash)).ToLowerInvariant();
+                qrUrl = $"{_ksef.BaseUrl.Replace("/v2", "")}/web/verify/{meta.KsefNumber}/{hashHex}";
+            }
+
+            _logger.LogInformation("LookupInvoice: {Number} found in KSeF as {KsefNumber}", invoiceNumber, meta.KsefNumber);
+            return await CreateResponse(req, HttpStatusCode.OK, new LookupResult
+            {
+                Success = true,
+                Found = true,
+                KSeFReferenceNumber = meta.KsefNumber,
+                QRVerificationUrl = qrUrl,
+                AcquisitionTimestamp = meta.AcquisitionDate,
+                InvoicingDate = meta.InvoicingDate,
+                IssueDate = meta.IssueDate
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "LookupInvoice failed");
+            return await CreateResponse(req, HttpStatusCode.InternalServerError,
+                new LookupResult { Success = false, Error = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Tests KSeF authentication for a NIP: performs the real auth handshake (InitSession) and
     /// terminates it, WITHOUT sending an invoice. Surfaces a bad/missing KSeF token — which the
     /// static /health check can't catch. GET /api/test-ksef-auth?nip={nip}
