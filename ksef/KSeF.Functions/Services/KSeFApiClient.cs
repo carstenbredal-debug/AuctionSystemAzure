@@ -63,6 +63,72 @@ public class KSeFApiClient
     /// </summary>
     public async Task<KSeFSessionResponse> InitSessionAsync(string nip)
     {
+        var (symmetricCertB64, symmetricPublicKeyId) = await AcquireAccessTokenAsync(nip);
+
+        // Step 7: Open interactive session
+        _aesKey = RandomNumberGenerator.GetBytes(32);
+        _aesIv = RandomNumberGenerator.GetBytes(16);
+
+        var symCertDer = Convert.FromBase64String(symmetricCertB64);
+        var symX509 = new X509Certificate2(symCertDer);
+        var symRsa = symX509.GetRSAPublicKey()
+            ?? throw new Exception("Symmetric certificate does not have an RSA public key");
+        var encryptedKey = symRsa.Encrypt(_aesKey, RSAEncryptionPadding.OaepSHA256);
+
+        var sessionBody = new
+        {
+            formCode = new
+            {
+                // FA(3) is mandatory from 2026-02-01. Must match the schema emitted by InvoiceXmlBuilder.
+                systemCode = "FA (3)",
+                schemaVersion = "1-0E",
+                value = "FA"
+            },
+            encryption = new
+            {
+                encryptedSymmetricKey = Convert.ToBase64String(encryptedKey),
+                initializationVector = Convert.ToBase64String(_aesIv),
+                publicKeyId = symmetricPublicKeyId
+            }
+        };
+        var sessionJson = JsonSerializer.Serialize(sessionBody, _jsonOpts);
+        var sessionReq = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/sessions/online")
+        {
+            Content = new StringContent(sessionJson, Encoding.UTF8, "application/json")
+        };
+        sessionReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
+
+        var sessionResp = await _http.SendAsync(sessionReq);
+        var sessionRespBody = await sessionResp.Content.ReadAsStringAsync();
+
+        if (!sessionResp.IsSuccessStatusCode)
+        {
+            _logger.LogError("KSeF session open failed: {Status} {Body}", sessionResp.StatusCode, sessionRespBody);
+            throw KSeFException.FromResponse("KSeF session open failed", sessionResp.StatusCode, sessionRespBody);
+        }
+
+        using var sessionDoc = JsonDocument.Parse(sessionRespBody);
+        _sessionReferenceNumber = sessionDoc.RootElement
+            .GetProperty("referenceNumber").GetString()!;
+
+        _logger.LogInformation("KSeF session opened: {Ref}", _sessionReferenceNumber);
+
+        return new KSeFSessionResponse
+        {
+            SessionToken = _accessToken!,
+            SessionReferenceNumber = _sessionReferenceNumber,
+            Timestamp = DateTime.UtcNow
+        };
+    }
+
+    /// <summary>
+    /// KSeF v2 authentication only (challenge -> encrypted token -> access token), WITHOUT opening
+    /// an online session — cheaper for read-only API calls and does not consume the per-NIP
+    /// session-open budget. Sets _accessToken; returns the symmetric-encryption certificate for
+    /// callers that go on to open a session.
+    /// </summary>
+    private async Task<(string SymmetricCertB64, string SymmetricPublicKeyId)> AcquireAccessTokenAsync(string nip)
+    {
         _logger.LogInformation("KSeF v2 auth: starting for NIP {NIP} against {BaseUrl}", nip, BaseUrl);
 
         if (string.IsNullOrEmpty(TokenFor(nip)))
@@ -212,60 +278,64 @@ public class KSeFApiClient
 
         _logger.LogInformation("KSeF access token obtained with permissions");
 
-        // Step 7: Open interactive session
-        _aesKey = RandomNumberGenerator.GetBytes(32);
-        _aesIv = RandomNumberGenerator.GetBytes(16);
+        return (symmetricCertB64!, symmetricPublicKeyId!);
+    }
 
-        var symCertDer = Convert.FromBase64String(symmetricCertB64);
-        var symX509 = new X509Certificate2(symCertDer);
-        var symRsa = symX509.GetRSAPublicKey()
-            ?? throw new Exception("Symmetric certificate does not have an RSA public key");
-        var encryptedKey = symRsa.Encrypt(_aesKey, RSAEncryptionPadding.OaepSHA256);
+    /// <summary>
+    /// Query KSeF for an invoice's metadata by seller NIP + invoice number (exact match) within an
+    /// issue-date window. Auth-only — no online session is opened. Returns null when KSeF has no
+    /// such invoice.
+    /// </summary>
+    public async Task<KSeFInvoiceMetadata?> QueryInvoiceByNumberAsync(
+        string nip, string invoiceNumber, DateTime issueDateFrom, DateTime issueDateTo)
+    {
+        await AcquireAccessTokenAsync(nip);
 
-        var sessionBody = new
+        var body = new
         {
-            formCode = new
+            subjectType = "Subject1",
+            dateRange = new
             {
-                // FA(3) is mandatory from 2026-02-01. Must match the schema emitted by InvoiceXmlBuilder.
-                systemCode = "FA (3)",
-                schemaVersion = "1-0E",
-                value = "FA"
+                dateType = "Issue",
+                from = issueDateFrom.ToString("yyyy-MM-dd") + "T00:00:00Z",
+                to = issueDateTo.ToString("yyyy-MM-dd") + "T23:59:59Z"
             },
-            encryption = new
+            invoiceNumber
+        };
+        var json = JsonSerializer.Serialize(body, _jsonOpts);
+        var req = new HttpRequestMessage(HttpMethod.Post,
+            $"{BaseUrl}/invoices/query/metadata?pageOffset=0&pageSize=10")
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json")
+        };
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
+
+        var resp = await _http.SendAsync(req);
+        var respBody = await resp.Content.ReadAsStringAsync();
+        if (!resp.IsSuccessStatusCode)
+            throw new Exception($"KSeF metadata query failed: {resp.StatusCode} - {TruncateForLog(respBody)}");
+
+        using var doc = JsonDocument.Parse(respBody);
+        if (!doc.RootElement.TryGetProperty("invoices", out var invoices))
+            return null;
+
+        foreach (var inv in invoices.EnumerateArray())
+        {
+            var number = inv.GetProperty("invoiceNumber").GetString();
+            if (!string.Equals(number, invoiceNumber, StringComparison.Ordinal))
+                continue;
+            return new KSeFInvoiceMetadata
             {
-                encryptedSymmetricKey = Convert.ToBase64String(encryptedKey),
-                initializationVector = Convert.ToBase64String(_aesIv),
-                publicKeyId = symmetricPublicKeyId
-            }
-        };
-        var sessionJson = JsonSerializer.Serialize(sessionBody, _jsonOpts);
-        var sessionReq = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/sessions/online")
-        {
-            Content = new StringContent(sessionJson, Encoding.UTF8, "application/json")
-        };
-        sessionReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
-
-        var sessionResp = await _http.SendAsync(sessionReq);
-        var sessionRespBody = await sessionResp.Content.ReadAsStringAsync();
-
-        if (!sessionResp.IsSuccessStatusCode)
-        {
-            _logger.LogError("KSeF session open failed: {Status} {Body}", sessionResp.StatusCode, sessionRespBody);
-            throw KSeFException.FromResponse("KSeF session open failed", sessionResp.StatusCode, sessionRespBody);
+                KsefNumber = inv.GetProperty("ksefNumber").GetString()!,
+                InvoiceNumber = number!,
+                InvoiceHash = inv.TryGetProperty("invoiceHash", out var h) ? h.GetString() : null,
+                IssueDate = inv.TryGetProperty("issueDate", out var idt) ? idt.GetString() : null,
+                InvoicingDate = inv.TryGetProperty("invoicingDate", out var ivd) ? ivd.GetString() : null,
+                AcquisitionDate = inv.TryGetProperty("acquisitionDate", out var acq) ? acq.GetString() : null,
+                InvoiceType = inv.TryGetProperty("invoiceType", out var it) ? it.GetString() : null
+            };
         }
-
-        using var sessionDoc = JsonDocument.Parse(sessionRespBody);
-        _sessionReferenceNumber = sessionDoc.RootElement
-            .GetProperty("referenceNumber").GetString()!;
-
-        _logger.LogInformation("KSeF session opened: {Ref}", _sessionReferenceNumber);
-
-        return new KSeFSessionResponse
-        {
-            SessionToken = _accessToken,
-            SessionReferenceNumber = _sessionReferenceNumber,
-            Timestamp = DateTime.UtcNow
-        };
+        return null;
     }
 
     /// <summary>

@@ -80,6 +80,37 @@ public class StatusResult
 }
 
 /// <summary>
+/// Invoice metadata returned by the KSeF /invoices/query/metadata endpoint.
+/// </summary>
+public class KSeFInvoiceMetadata
+{
+    public string KsefNumber { get; set; } = "";
+    public string InvoiceNumber { get; set; } = "";
+    /// <summary>SHA-256 of the stored invoice XML, Base64 — needed for the QR verification URL.</summary>
+    public string? InvoiceHash { get; set; }
+    public string? IssueDate { get; set; }
+    public string? InvoicingDate { get; set; }
+    public string? AcquisitionDate { get; set; }
+    public string? InvoiceType { get; set; }
+}
+
+/// <summary>
+/// Result of looking an invoice up directly in KSeF by seller NIP + invoice number.
+/// </summary>
+public class LookupResult
+{
+    public bool Success { get; set; }
+    /// <summary>True = the invoice IS registered in KSeF; false with Success=true = KSeF has no such invoice.</summary>
+    public bool Found { get; set; }
+    public string? Error { get; set; }
+    public string? KSeFReferenceNumber { get; set; }
+    public string? QRVerificationUrl { get; set; }
+    public string? AcquisitionTimestamp { get; set; }
+    public string? InvoicingDate { get; set; }
+    public string? IssueDate { get; set; }
+}
+
+/// <summary>
 /// A classified KSeF API failure. Carries enough to decide retry vs terminal vs duplicate
 /// at the call site instead of substring-matching a generic Exception.message.
 /// </summary>

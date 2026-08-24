@@ -15,6 +15,69 @@ codeunit 50201 "KPHG KSeF Management"
         SalesInvHeader.Modify(true);
     end;
 
+    // Repair action: re-queue a document that carries a terminal status WITHOUT a KSeF number
+    // (e.g. marked Accepted by an out-of-band write while the submission never actually happened).
+    // Guarded so an invoice that IS registered in KSeF (has a number) can never be re-sent, and an
+    // in-flight submission (Processing/Sent) is never raced.
+    procedure ResetKSeFStatus(var SalesInvHeader: Record "Sales Invoice Header")
+    begin
+        if not SalesInvHeader."KPHG KSeF Required" then
+            Error('KSeF is not required for invoice %1.', SalesInvHeader."No.");
+
+        if SalesInvHeader."KPHG KSeF Number" <> '' then
+            Error('Invoice %1 is registered in KSeF as %2 and cannot be reset.',
+                SalesInvHeader."No.", SalesInvHeader."KPHG KSeF Number");
+
+        if SalesInvHeader."KPHG KSeF Status" = SalesInvHeader."KPHG KSeF Status"::Sent then
+            Error('Invoice %1 has a submission in flight (status %2) — use Check KSeF Status instead of resetting.',
+                SalesInvHeader."No.", SalesInvHeader."KPHG KSeF Status");
+
+        // A real in-flight submission lives ~2 minutes; a Processing record untouched for 30+ minutes
+        // is stranded (BC never received the response) and safe to re-queue.
+        if (SalesInvHeader."KPHG KSeF Status" = SalesInvHeader."KPHG KSeF Status"::Processing) and
+           (CurrentDateTime() - SalesInvHeader.SystemModifiedAt < StaleProcessingThreshold())
+        then
+            Error('Invoice %1 was submitted less than 30 minutes ago and may still be in flight — wait before resetting.',
+                SalesInvHeader."No.");
+
+        SalesInvHeader."KPHG KSeF Status" := SalesInvHeader."KPHG KSeF Status"::Ready;
+        SalesInvHeader."KPHG KSeF Acceptance DT" := 0DT;
+        SalesInvHeader."KPHG KSeF Error Message" := '';
+        SalesInvHeader."KPHG KSeF Send Attempts" := 0;
+        SalesInvHeader.Modify(true);
+    end;
+
+    procedure ResetCrMemoKSeFStatus(var SalesCrMemoHeader: Record "Sales Cr.Memo Header")
+    begin
+        if not SalesCrMemoHeader."KPHG KSeF Required" then
+            Error('KSeF is not required for credit memo %1.', SalesCrMemoHeader."No.");
+
+        if SalesCrMemoHeader."KPHG KSeF Number" <> '' then
+            Error('Credit memo %1 is registered in KSeF as %2 and cannot be reset.',
+                SalesCrMemoHeader."No.", SalesCrMemoHeader."KPHG KSeF Number");
+
+        if SalesCrMemoHeader."KPHG KSeF Status" = SalesCrMemoHeader."KPHG KSeF Status"::Sent then
+            Error('Credit memo %1 has a submission in flight (status %2) — use Check KSeF Status instead of resetting.',
+                SalesCrMemoHeader."No.", SalesCrMemoHeader."KPHG KSeF Status");
+
+        if (SalesCrMemoHeader."KPHG KSeF Status" = SalesCrMemoHeader."KPHG KSeF Status"::Processing) and
+           (CurrentDateTime() - SalesCrMemoHeader.SystemModifiedAt < StaleProcessingThreshold())
+        then
+            Error('Credit memo %1 was submitted less than 30 minutes ago and may still be in flight — wait before resetting.',
+                SalesCrMemoHeader."No.");
+
+        SalesCrMemoHeader."KPHG KSeF Status" := SalesCrMemoHeader."KPHG KSeF Status"::Ready;
+        SalesCrMemoHeader."KPHG KSeF Acceptance DT" := 0DT;
+        SalesCrMemoHeader."KPHG KSeF Error Message" := '';
+        SalesCrMemoHeader."KPHG KSeF Send Attempts" := 0;
+        SalesCrMemoHeader.Modify(true);
+    end;
+
+    local procedure StaleProcessingThreshold(): Duration
+    begin
+        exit(30 * 60 * 1000); // 30 minutes
+    end;
+
     procedure SendToKSeF(var SalesInvHeader: Record "Sales Invoice Header")
     var
         Setup: Record "KPHG KSeF Setup";
@@ -456,13 +519,175 @@ codeunit 50201 "KPHG KSeF Management"
         end;
     end;
 
+    // Repair action: recover KSeF registration data (number, QR reference, acceptance date) for a
+    // document whose submit response was lost, by querying KSeF directly by invoice number via the
+    // Azure Function lookup endpoint. Needs no stored element/session references. Returns true when
+    // the document was found in KSeF (fields updated), false when KSeF has no such document.
+    procedure FetchFromKSeF(var SalesInvHeader: Record "Sales Invoice Header"): Boolean
+    var
+        Setup: Record "KPHG KSeF Setup";
+        Client: HttpClient;
+        ResponseMessage: HttpResponseMessage;
+        ResponseText: Text;
+        TextValue: Text;
+        JsonResponse: JsonObject;
+        Url: Text;
+        AcceptanceDT: DateTime;
+    begin
+        if SalesInvHeader."KPHG KSeF Number" <> '' then
+            exit(true);
+
+        Setup.GetSetup();
+        if Setup."Azure Function URL" = '' then
+            Error('Azure Function URL is not configured. Please set up KSeF integration in the KSeF Setup page.');
+
+        Url := Setup."Azure Function URL" + '/invoice/lookup'
+            + '?nip=' + Setup."Company NIP"
+            + '&invoiceNumber=' + SalesInvHeader."No."
+            + '&issueDate=' + Format(SalesInvHeader."Posting Date", 0, 9);
+
+        Client.DefaultRequestHeaders().Add('x-functions-key', Setup."Azure Function Key");
+        if not Client.Get(Url, ResponseMessage) then
+            Error('Failed to connect to Azure Function.');
+
+        ResponseMessage.Content().ReadAs(ResponseText);
+        JsonResponse.ReadFrom(ResponseText);
+
+        if not TryGetJsonText(JsonResponse, 'success', TextValue) then
+            TextValue := '';
+        if TextValue <> 'true' then begin
+            if TryGetJsonText(JsonResponse, 'error', TextValue) then
+                Error('KSeF lookup failed for %1: %2', SalesInvHeader."No.", FormatErrorMessage(TextValue));
+            Error('KSeF lookup failed for %1 (no detail returned).', SalesInvHeader."No.");
+        end;
+
+        if not TryGetJsonText(JsonResponse, 'found', TextValue) then
+            TextValue := '';
+        if TextValue <> 'true' then
+            exit(false);
+
+        if TryGetJsonText(JsonResponse, 'kSeFReferenceNumber', TextValue) then
+            SalesInvHeader."KPHG KSeF Number" := CopyStr(TextValue, 1, 100);
+        if TryGetJsonText(JsonResponse, 'qrVerificationUrl', TextValue) then
+            SalesInvHeader."KPHG KSeF QR Reference" := CopyStr(TextValue, 1, 250);
+
+        SalesInvHeader."KPHG KSeF Status" := SalesInvHeader."KPHG KSeF Status"::Accepted;
+        AcceptanceDT := 0DT;
+        if TryGetJsonText(JsonResponse, 'acquisitionTimestamp', TextValue) then
+            if not Evaluate(AcceptanceDT, TextValue, 9) then
+                AcceptanceDT := 0DT;
+        if AcceptanceDT = 0DT then
+            AcceptanceDT := CurrentDateTime();
+        SalesInvHeader."KPHG KSeF Acceptance DT" := AcceptanceDT;
+        if SalesInvHeader."KPHG KSeF Submission DT" = 0DT then
+            SalesInvHeader."KPHG KSeF Submission DT" := AcceptanceDT;
+        SalesInvHeader."KPHG KSeF Error Message" := '';
+        SalesInvHeader.Modify(true);
+        exit(true);
+    end;
+
+    procedure FetchCrMemoFromKSeF(var SalesCrMemoHeader: Record "Sales Cr.Memo Header"): Boolean
+    var
+        Setup: Record "KPHG KSeF Setup";
+        Client: HttpClient;
+        ResponseMessage: HttpResponseMessage;
+        ResponseText: Text;
+        TextValue: Text;
+        JsonResponse: JsonObject;
+        Url: Text;
+        AcceptanceDT: DateTime;
+    begin
+        if SalesCrMemoHeader."KPHG KSeF Number" <> '' then
+            exit(true);
+
+        Setup.GetSetup();
+        if Setup."Azure Function URL" = '' then
+            Error('Azure Function URL is not configured. Please set up KSeF integration in the KSeF Setup page.');
+
+        Url := Setup."Azure Function URL" + '/invoice/lookup'
+            + '?nip=' + Setup."Company NIP"
+            + '&invoiceNumber=' + SalesCrMemoHeader."No."
+            + '&issueDate=' + Format(SalesCrMemoHeader."Posting Date", 0, 9);
+
+        Client.DefaultRequestHeaders().Add('x-functions-key', Setup."Azure Function Key");
+        if not Client.Get(Url, ResponseMessage) then
+            Error('Failed to connect to Azure Function.');
+
+        ResponseMessage.Content().ReadAs(ResponseText);
+        JsonResponse.ReadFrom(ResponseText);
+
+        if not TryGetJsonText(JsonResponse, 'success', TextValue) then
+            TextValue := '';
+        if TextValue <> 'true' then begin
+            if TryGetJsonText(JsonResponse, 'error', TextValue) then
+                Error('KSeF lookup failed for %1: %2', SalesCrMemoHeader."No.", FormatErrorMessage(TextValue));
+            Error('KSeF lookup failed for %1 (no detail returned).', SalesCrMemoHeader."No.");
+        end;
+
+        if not TryGetJsonText(JsonResponse, 'found', TextValue) then
+            TextValue := '';
+        if TextValue <> 'true' then
+            exit(false);
+
+        if TryGetJsonText(JsonResponse, 'kSeFReferenceNumber', TextValue) then
+            SalesCrMemoHeader."KPHG KSeF Number" := CopyStr(TextValue, 1, 100);
+        if TryGetJsonText(JsonResponse, 'qrVerificationUrl', TextValue) then
+            SalesCrMemoHeader."KPHG KSeF QR Reference" := CopyStr(TextValue, 1, 250);
+
+        SalesCrMemoHeader."KPHG KSeF Status" := SalesCrMemoHeader."KPHG KSeF Status"::Accepted;
+        AcceptanceDT := 0DT;
+        if TryGetJsonText(JsonResponse, 'acquisitionTimestamp', TextValue) then
+            if not Evaluate(AcceptanceDT, TextValue, 9) then
+                AcceptanceDT := 0DT;
+        if AcceptanceDT = 0DT then
+            AcceptanceDT := CurrentDateTime();
+        SalesCrMemoHeader."KPHG KSeF Acceptance DT" := AcceptanceDT;
+        if SalesCrMemoHeader."KPHG KSeF Submission DT" = 0DT then
+            SalesCrMemoHeader."KPHG KSeF Submission DT" := AcceptanceDT;
+        SalesCrMemoHeader."KPHG KSeF Error Message" := '';
+        SalesCrMemoHeader.Modify(true);
+        exit(true);
+    end;
+
+    // Repair action: record a KSeF number obtained outside the normal flow (verified in the KSeF
+    // portal / recovered from the function logs) for a document whose submission succeeded but whose
+    // response BC never received. No submission is performed.
     procedure MarkAccepted(var SalesInvHeader: Record "Sales Invoice Header"; KSeFNumber: Code[100])
     begin
+        if KSeFNumber = '' then
+            Error('A KSeF number must be specified.');
+
+        if not SalesInvHeader."KPHG KSeF Required" then
+            Error('KSeF is not required for invoice %1.', SalesInvHeader."No.");
+
+        if SalesInvHeader."KPHG KSeF Number" <> '' then
+            Error('Invoice %1 already has KSeF number %2.',
+                SalesInvHeader."No.", SalesInvHeader."KPHG KSeF Number");
+
         SalesInvHeader."KPHG KSeF Number" := KSeFNumber;
         SalesInvHeader."KPHG KSeF Status" := SalesInvHeader."KPHG KSeF Status"::Accepted;
         SalesInvHeader."KPHG KSeF Acceptance DT" := CurrentDateTime();
         SalesInvHeader."KPHG KSeF Error Message" := '';
         SalesInvHeader.Modify(true);
+    end;
+
+    procedure MarkCrMemoAccepted(var SalesCrMemoHeader: Record "Sales Cr.Memo Header"; KSeFNumber: Code[100])
+    begin
+        if KSeFNumber = '' then
+            Error('A KSeF number must be specified.');
+
+        if not SalesCrMemoHeader."KPHG KSeF Required" then
+            Error('KSeF is not required for credit memo %1.', SalesCrMemoHeader."No.");
+
+        if SalesCrMemoHeader."KPHG KSeF Number" <> '' then
+            Error('Credit memo %1 already has KSeF number %2.',
+                SalesCrMemoHeader."No.", SalesCrMemoHeader."KPHG KSeF Number");
+
+        SalesCrMemoHeader."KPHG KSeF Number" := KSeFNumber;
+        SalesCrMemoHeader."KPHG KSeF Status" := SalesCrMemoHeader."KPHG KSeF Status"::Accepted;
+        SalesCrMemoHeader."KPHG KSeF Acceptance DT" := CurrentDateTime();
+        SalesCrMemoHeader."KPHG KSeF Error Message" := '';
+        SalesCrMemoHeader.Modify(true);
     end;
 
     procedure MarkRejected(var SalesInvHeader: Record "Sales Invoice Header"; ErrorMessage: Text[250])
