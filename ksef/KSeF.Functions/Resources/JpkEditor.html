@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JPK_V7M Editor</title>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--ink:#1c2430;--mut:#68758a;--line:#dfe4ec;--acc:#0b62c4;--ok:#1d7a3e;--warn:#a66a00;--err:#b3261e;--hl:#fff8e6}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 "Segoe UI",system-ui,sans-serif}
+header{background:#12283f;color:#fff;padding:14px 22px;display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+header h1{font-size:18px;margin:0}
+header .sub{color:#9fb4cc;font-size:12px}
+main{max-width:1180px;margin:0 auto;padding:18px 22px 80px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px 18px;margin-bottom:16px}
+.card h2{margin:0 0 4px;font-size:15px}
+.card .hint{color:var(--mut);font-size:12px;margin:0 0 12px}
+#drop{border:2px dashed var(--line);border-radius:8px;padding:34px;text-align:center;color:var(--mut);cursor:pointer}
+#drop.on{border-color:var(--acc);color:var(--acc)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:8px 22px}
+.frow{display:flex;align-items:center;gap:8px;padding:3px 0}
+.frow label{flex:1;min-width:0;font-size:13px;cursor:help}
+.frow label .pid{color:var(--mut);font-weight:600;margin-right:6px;font-size:12px}
+.frow input[type=number],.frow input[type=text]{width:120px;padding:5px 8px;border:1px solid var(--line);border-radius:5px;font:inherit;text-align:right}
+.frow input[type=text]{text-align:left;width:220px}
+.frow input:focus{outline:2px solid #bcd6f2;border-color:var(--acc)}
+.frow.calc input{background:#eef4fb}
+.frow .sug{font-size:11px;color:var(--warn);white-space:nowrap}
+.frow .sug button{font-size:11px;padding:1px 7px;margin-left:4px}
+input[type=checkbox],input[type=radio]{width:15px;height:15px;accent-color:var(--acc)}
+button{font:inherit;padding:7px 16px;border-radius:6px;border:1px solid var(--line);background:#fff;cursor:pointer}
+button.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+button:disabled{opacity:.45;cursor:default}
+.chips{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 2px}
+.chip{background:#eef2f8;border-radius:6px;padding:8px 14px;min-width:130px}
+.chip b{display:block;font-size:16px}
+.chip span{font-size:11px;color:var(--mut)}
+.refund{border-left:4px solid var(--acc)}
+.refund .opt{display:flex;gap:9px;align-items:flex-start;padding:7px 4px;border-radius:6px}
+.refund .opt:hover{background:#f2f7fd}
+.refund .opt div b{font-size:13px}
+.refund .opt div p{margin:1px 0 0;font-size:12px;color:var(--mut)}
+#checks li{margin:4px 0;font-size:13px}
+#checks .ok{color:var(--ok)} #checks .warn{color:var(--warn)} #checks .err{color:var(--err)}
+#bar{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);padding:10px 22px;display:flex;gap:10px;align-items:center}
+#bar .spacer{flex:1}
+#valout{font-size:13px}
+.hidden{display:none}
+.badge{display:inline-block;background:#e5efe8;color:var(--ok);border-radius:4px;padding:1px 8px;font-size:12px;margin-left:8px}
+.badge.err{background:#f9e5e4;color:var(--err)}
+textarea{width:100%;min-height:70px;font:inherit;border:1px solid var(--line);border-radius:6px;padding:8px}
+.subblock{margin:8px 0 0 26px;padding:8px 12px;border-left:3px solid var(--line)}
+</style>
+</head>
+<body>
+<header>
+  <h1>JPK_V7M Editor</h1>
+  <div class="sub">JPK_V7M (3) &middot; VAT-7 (23) — load the XML produced by Business Central, adjust the declaration (e.g. request a VAT refund), validate and download the final file.</div>
+</header>
+<main>
+
+<div class="card" id="loadCard">
+  <h2>1 &middot; Load JPK XML</h2>
+  <p class="hint">The registers (Ewidencja) are never modified — only the Deklaracja part is editable.</p>
+  <div id="drop">Drop the JPK_V7M XML here, or click to choose a file</div>
+  <input type="file" id="file" accept=".xml,text/xml" class="hidden">
+</div>
+
+<div id="editor" class="hidden">
+
+<div class="card">
+  <h2>File <span id="fname" class="badge"></span></h2>
+  <div class="chips">
+    <div class="chip"><b id="cNip">—</b><span>NIP</span></div>
+    <div class="chip"><b id="cPeriod">—</b><span>Period</span></div>
+    <div class="chip"><b id="cP38">—</b><span>Output VAT (P_38)</span></div>
+    <div class="chip"><b id="cP48">—</b><span>Input VAT (P_48)</span></div>
+    <div class="chip"><b id="cExcess">—</b><span>Excess input VAT</span></div>
+  </div>
+  <div class="frow" style="max-width:420px">
+    <label><span class="pid">CelZlozenia</span>Purpose of submission</label>
+    <select id="cel" style="padding:5px 8px;border:1px solid var(--line);border-radius:5px;font:inherit">
+      <option value="1">1 — złożenie (original filing)</option>
+      <option value="2">2 — korekta (correction)</option>
+    </select>
+  </div>
+</div>
+
+<div class="card">
+  <h2>2 &middot; Output VAT — sales (C)</h2>
+  <p class="hint">Whole złoty. Hover a label for the official description. Blue fields are totals computed by the ministry formula.</p>
+  <div class="grid" id="gSales"></div>
+</div>
+
+<div class="card">
+  <h2>3 &middot; Input VAT — purchases (D)</h2>
+  <div class="grid" id="gInput"></div>
+</div>
+
+<div class="card">
+  <h2>4 &middot; Settlement (E)</h2>
+  <div class="grid" id="gSettle"></div>
+</div>
+
+<div class="card refund">
+  <h2>5 &middot; Refund request — wniosek o zwrot podatku naliczonego</h2>
+  <p class="hint">Request payout of the excess input VAT to your bank account. Whatever is not refunded is carried forward to the next period (P_62).</p>
+  <div class="frow" style="gap:10px"><input type="checkbox" id="wantRefund"><label for="wantRefund" style="cursor:pointer"><b>Request a refund (fills P_54 and one deadline option)</b></label></div>
+  <div id="refundBody" class="hidden">
+    <div class="frow" style="max-width:480px;margin-top:6px">
+      <label><span class="pid">P_54</span>Amount to refund</label>
+      <input type="number" id="P_54" step="1" min="0">
+      <button id="fullExcess" type="button">Use full excess</button>
+    </div>
+    <div id="deadlines" style="margin-top:8px">
+      <div class="opt"><input type="radio" name="dl" value="P_540" id="dl540"><div><b>15 days</b> — to the settlement account<p>Art. 87 ust. 6d — "podatnik bezgotówkowy" (cashless taxpayer programme conditions must be met).</p></div></div>
+      <div class="opt"><input type="radio" name="dl" value="P_55" id="dl55"><div><b>25 days</b> — to the VAT account (rachunek VAT)<p>Art. 87 ust. 6a — no extra conditions, but the money lands on the restricted VAT account.</p></div></div>
+      <div class="opt"><input type="radio" name="dl" value="P_56" id="dl56"><div><b>25 days</b> — to the settlement account<p>Art. 87 ust. 6 — all purchase invoices paid via bank, amounts limits apply.</p></div></div>
+      <div class="opt"><input type="radio" name="dl" value="P_560" id="dl560"><div><b>40 days</b> — to the settlement account<p>Art. 87 ust. 5b — sales invoiced through KSeF (structured invoices).</p></div></div>
+      <div class="opt"><input type="radio" name="dl" value="P_58" id="dl58"><div><b>180 days</b> — to the settlement account<p>Art. 87 ust. 5a — no taxed sales in the period (refund on request).</p></div></div>
+    </div>
+    <div class="frow" style="gap:10px;margin-top:10px"><input type="checkbox" id="wantP59"><label for="wantP59" style="cursor:pointer">Credit (part of) the refund against future tax liabilities — zaliczenie na poczet przyszłych zobowiązań (P_59)</label></div>
+    <div class="subblock hidden" id="p59Body">
+      <div class="frow" style="max-width:440px"><label><span class="pid">P_60</span>Amount credited to future liabilities</label><input type="number" id="P_60" step="1" min="0"></div>
+      <div class="frow" style="max-width:640px"><label><span class="pid">P_61</span>Type of future liability</label><input type="text" id="P_61" maxlength="240" placeholder="e.g. CIT-8 za 2026 r."></div>
+    </div>
+  </div>
+  <div class="frow" style="max-width:480px;margin-top:10px">
+    <label><span class="pid">P_62</span>Carried forward to the next period</label>
+    <input type="number" id="P_62" step="1" min="0" class="hl">
+    <span class="sug" id="sugP62"></span>
+  </div>
+</div>
+
+<div class="card">
+  <h2>6 &middot; Additional information (F/G)</h2>
+  <div class="grid" id="gExtra"></div>
+  <div style="margin-top:10px">
+    <div class="frow" style="max-width:560px"><label><span class="pid">P_68</span>Bad-debt relief — correction of the tax base (art. 89a ust. 1, negative)</label><input type="number" id="P_68" step="1"></div>
+    <div class="frow" style="max-width:560px"><label><span class="pid">P_69</span>Bad-debt relief — correction of output VAT (art. 89a ust. 1, negative)</label><input type="number" id="P_69" step="1"></div>
+  </div>
+  <div id="ordzuWrap" class="hidden" style="margin-top:10px">
+    <label style="font-size:13px"><span class="pid">P_ORDZU</span>Reason for the correction (uzasadnienie przyczyn korekty)</label>
+    <textarea id="P_ORDZU" maxlength="3500"></textarea>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Consistency checks</h2>
+  <ul id="checks" style="margin:6px 0;padding-left:20px"></ul>
+</div>
+
+</div><!-- /editor -->
+
+</main>
+
+<div id="bar" class="hidden">
+  <button id="btnValidate" class="pri">Validate against XSD</button>
+  <button id="btnDownload">Download final XML</button>
+  <span id="valout"></span>
+  <span class="spacer"></span>
+  <button id="btnReset">Load another file</button>
+</div>
+
+<script>
+"use strict";
+// ===== field metadata (order = XSD sequence order of PozycjeSzczegolowe) =====
+// kind: amt (integer, may be negative), amt+ (non-negative), chk (TWybor1), txt
+// req: always emitted (minOccurs=1 in the schema's main sequence)
+const F=[
+ ["P_10","sales","amt+",0,"Domestic supply — exempt (base)"],
+ ["P_11","sales","amt",1,"Supply outside Poland (base)"],
+ ["P_12","sales","amt+",0,"— of which services art. 100 ust. 1 pkt 4 (base)"],
+ ["P_13","sales","amt",1,"Domestic supply — 0% (base)"],
+ ["P_14","sales","amt+",0,"— of which art. 129 (Tax Free) (base)"],
+ ["P_15","sales","amt",1,"Domestic supply — 5% (base)"],
+ ["P_16","sales","amt",1,"Domestic supply — 5% (VAT)"],
+ ["P_17","sales","amt",1,"Domestic supply — 7%/8% (base)"],
+ ["P_18","sales","amt",1,"Domestic supply — 7%/8% (VAT)"],
+ ["P_19","sales","amt",1,"Domestic supply — 22%/23% (base)"],
+ ["P_20","sales","amt",1,"Domestic supply — 22%/23% (VAT)"],
+ ["P_21","sales","amt+",0,"Intra-EU supply of goods — WDT (base)"],
+ ["P_22","sales","amt+",0,"Export of goods (base)"],
+ ["P_23","sales","amt",1,"Intra-EU acquisition — WNT (base)"],
+ ["P_24","sales","amt",1,"Intra-EU acquisition — WNT (VAT)"],
+ ["P_25","sales","amt",1,"Import of goods art. 33a (base)"],
+ ["P_26","sales","amt",1,"Import of goods art. 33a (VAT)"],
+ ["P_27","sales","amt",1,"Import of services (base)"],
+ ["P_28","sales","amt",1,"Import of services (VAT)"],
+ ["P_29","sales","amt",1,"Import of services art. 28b (base)"],
+ ["P_30","sales","amt",1,"Import of services art. 28b (VAT)"],
+ ["P_31","sales","amt",1,"Reverse charge — buyer is taxpayer art. 17 (base)"],
+ ["P_32","sales","amt",1,"Reverse charge — buyer is taxpayer art. 17 (VAT)"],
+ ["P_33","sales","amt+",0,"Output VAT on closing inventory art. 14 ust. 5"],
+ ["P_34","sales","amt+",0,"Repayment of cash-register relief art. 111 ust. 6"],
+ ["P_35","sales","amt+",0,"(−) VAT on intra-EU acquisition of transport means"],
+ ["P_36","sales","amt+",0,"(−) VAT art. 103 ust. 5aa (fuels)"],
+ ["P_360","sales","amt+",0,"(−) VAT on unreturned deposits (system kaucyjny)"],
+ ["P_37","sales","calc",0,"TOTAL tax base"],
+ ["P_38","sales","calc",1,"TOTAL output VAT"],
+ ["P_39","input","amt+",0,"Excess input VAT carried from previous period"],
+ ["P_40","input","amt",1,"Purchases — fixed assets (net)"],
+ ["P_41","input","amt",1,"Purchases — fixed assets (input VAT)"],
+ ["P_42","input","amt",1,"Purchases — other (net)"],
+ ["P_43","input","amt",1,"Purchases — other (input VAT)"],
+ ["P_44","input","amt",0,"Input VAT correction — fixed assets"],
+ ["P_45","input","amt",0,"Input VAT correction — other"],
+ ["P_46","input","amt",0,"Bad-debt correction art. 89b ust. 1 (negative)"],
+ ["P_47","input","amt+",0,"Bad-debt correction art. 89b ust. 4"],
+ ["P_48","input","calc",0,"TOTAL input VAT deductible"],
+ ["P_49","settle","amt+",0,"Cash-register relief deducted this period"],
+ ["P_50","settle","amt+",0,"Tax covered by collection waiver (zaniechanie poboru)"],
+ ["P_51","settle","calc",1,"Tax payable to the tax office"],
+ ["P_52","settle","amt+",0,"Cash-register relief refundable (excess of relief)"],
+ ["P_53","settle","calc",0,"Excess of input VAT over output VAT"],
+ ["P_63","extra","chk",0,"Art. 119 — tour-operator margin scheme"],
+ ["P_64","extra","chk",0,"Art. 120 ust. 4/5 — second-hand/margin scheme"],
+ ["P_65","extra","chk",0,"Art. 122 — investment gold"],
+ ["P_66","extra","chk",0,"Art. 136 — triangular transaction (2nd in chain)"],
+ ["P_660","extra","chk",0,"Art. 109b ust. 4 — facilitated e-commerce (DAC7-like)"],
+ ["P_67","extra","chk",0,"Art. 108d — MPP early-payment reduction"]
+];
+const ORDER=["P_10","P_11","P_12","P_13","P_14","P_15","P_16","P_17","P_18","P_19","P_20","P_21","P_22","P_23","P_24","P_25","P_26","P_27","P_28","P_29","P_30","P_31","P_32","P_33","P_34","P_35","P_36","P_360","P_37","P_38","P_39","P_40","P_41","P_42","P_43","P_44","P_45","P_46","P_47","P_48","P_49","P_50","P_51","P_52","P_53","P_54","P_540","P_55","P_56","P_560","P_58","P_59","P_60","P_61","P_62","P_63","P_64","P_65","P_66","P_660","P_67","P_68","P_69","P_ORDZU"];
+const DL=["P_540","P_55","P_56","P_560","P_58"];
+
+let doc=null, fileName="";
+const $=id=>document.getElementById(id);
+const num=id=>{const el=$(id);if(!el)return 0;const v=parseFloat(el.value);return isNaN(v)?0:v};
+const fmt=v=>new Intl.NumberFormat("pl-PL").format(v)+" zł";
+
+// ===== render form =====
+function buildForm(){
+  const groups={sales:$("gSales"),input:$("gInput"),settle:$("gSettle"),extra:$("gExtra")};
+  for(const[id,grp,kind,req,label]of F){
+    const row=document.createElement("div");row.className="frow"+(kind==="calc"?" calc":"");
+    if(kind==="chk"){
+      row.innerHTML=`<input type="checkbox" id="${id}"><label for="${id}" style="cursor:pointer"><span class="pid">${id}</span>${label}</label>`;
+    }else{
+      row.innerHTML=`<label title="${id}"><span class="pid">${id}</span>${label}</label><input type="number" id="${id}" step="1"${kind==="amt+"?' min="0"':''}><span class="sug" id="sug${id}"></span>`;
+    }
+    groups[grp].appendChild(row);
+  }
+}
+
+// ===== parsing =====
+function findAll(root,name){return Array.from(root.getElementsByTagNameNS("*",name))}
+function findOne(root,name){const l=findAll(root,name);return l.length?l[0]:null}
+function textOf(root,name){const e=findOne(root,name);return e?e.textContent.trim():""}
+
+function loadXml(text,name){
+  const p=new DOMParser(),d=p.parseFromString(text,"application/xml");
+  if(findOne(d,"parsererror")){alert("This file is not valid XML.");return}
+  const dekl=findOne(d,"Deklaracja");
+  if(!dekl||!findOne(d,"PozycjeSzczegolowe")){alert("No Deklaracja/PozycjeSzczegolowe found — is this a JPK_V7M file?");return}
+  doc=d;fileName=name;
+  $("fname").textContent=name;
+  $("cNip").textContent=textOf(d,"NIP")||"—";
+  $("cPeriod").textContent=(textOf(d,"Miesiac")||"?")+" / "+(textOf(d,"Rok")||"?");
+  const cel=textOf(d,"CelZlozenia");if(cel)$("cel").value=cel;
+  const pz=findOne(d,"PozycjeSzczegolowe");
+  for(const nm of ORDER){
+    const el=$(nm.replace(/^P_ORDZU$/,"P_ORDZU"));
+    const xv=textOf(pz,nm);
+    if(nm==="P_ORDZU"){$("P_ORDZU").value=xv;continue}
+    if(!el){ // radios / refund handled below
+      continue}
+    if(el.type==="checkbox")el.checked=xv==="1";
+    else el.value=xv;
+  }
+  // refund state from file
+  const p54=textOf(pz,"P_54");
+  $("wantRefund").checked=p54!=="";
+  $("refundBody").classList.toggle("hidden",p54==="");
+  $("P_54").value=p54;
+  for(const dl of DL){const r=document.querySelector(`input[name=dl][value=${dl}]`);r.checked=textOf(pz,dl)==="1"}
+  const p59=textOf(pz,"P_59")==="1";
+  $("wantP59").checked=p59;$("p59Body").classList.toggle("hidden",!p59);
+  $("P_60").value=textOf(pz,"P_60");$("P_61").value=textOf(pz,"P_61");
+  $("loadCard").classList.add("hidden");
+  $("editor").classList.remove("hidden");$("bar").classList.remove("hidden");
+  onCel();recalc();
+}
+
+// ===== arithmetic (ministry formulas from the XSD) =====
+function computed(){
+  const s=ids=>ids.reduce((t,i)=>t+num(i),0);
+  const P37=s(["P_10","P_11","P_13","P_15","P_17","P_19","P_21","P_22","P_23","P_25","P_27","P_29","P_31"]);
+  const P38=s(["P_16","P_18","P_20","P_24","P_26","P_28","P_30","P_32","P_33","P_34"])-num("P_35")-num("P_36")-num("P_360");
+  const P48=s(["P_39","P_41","P_43","P_44","P_45","P_46","P_47"]);
+  const P51=Math.max(0,P38-P48-num("P_49")-num("P_50"));
+  // Excess of input over output (plus refundable cash-register relief P_52); zero when tax is payable.
+  const P53=P51>0?0:Math.max(0,P48+num("P_52")-P38);
+  return{P37,P38,P48,P51,P53};
+}
+function sug(id,want){
+  const el=$("sug"+id);if(!el)return;
+  const cur=num(id);
+  if(cur===want){el.textContent=""}
+  else{el.innerHTML=`= ${fmt(want)} <button type="button" onclick="fix('${id}',${want})">fix</button>`}
+}
+window.fix=(id,v)=>{$(id).value=v;recalc()};
+function recalc(){
+  const c=computed();
+  sug("P_37",c.P37);sug("P_38",c.P38);sug("P_48",c.P48);sug("P_51",c.P51);sug("P_53",c.P53);
+  $("cP38").textContent=fmt(num("P_38"));$("cP48").textContent=fmt(num("P_48"));
+  const excess=num("P_53");
+  $("cExcess").textContent=fmt(excess);
+  // carry-forward suggestion: P_62 = P_53 - P_54
+  const want62=Math.max(0,excess-(($("wantRefund").checked)?num("P_54"):0));
+  const s62=$("sugP62");
+  if(num("P_62")!==want62)s62.innerHTML=`= ${fmt(want62)} <button type="button" onclick="fix('P_62',${want62})">fix</button>`;else s62.textContent="";
+  runChecks(c);
+}
+function runChecks(c){
+  const ul=$("checks");ul.innerHTML="";
+  const li=(cls,txt)=>{const l=document.createElement("li");l.className=cls;l.textContent=txt;ul.appendChild(l)};
+  const okOr=(cond,ok,err,warn)=>cond?li("ok","✓ "+ok):li(warn?"warn":"err",(warn?"⚠ ":"✗ ")+err);
+  okOr(num("P_37")===c.P37,"P_37 equals the sum of the base boxes",`P_37 (${fmt(num("P_37"))}) ≠ computed ${fmt(c.P37)}`);
+  okOr(num("P_38")===c.P38,"P_38 equals the sum of the output-VAT boxes",`P_38 (${fmt(num("P_38"))}) ≠ computed ${fmt(c.P38)}`);
+  okOr(num("P_48")===c.P48,"P_48 equals the sum of the input-VAT boxes",`P_48 (${fmt(num("P_48"))}) ≠ computed ${fmt(c.P48)}`);
+  okOr(num("P_51")===c.P51,"P_51 (tax payable) matches the formula",`P_51 (${fmt(num("P_51"))}) ≠ computed ${fmt(c.P51)}`);
+  okOr(num("P_53")===c.P53,"P_53 (excess input VAT) matches the formula",`P_53 (${fmt(num("P_53"))}) ≠ computed ${fmt(c.P53)}`);
+  const p53=num("P_53"),p54=$("wantRefund").checked?num("P_54"):0,p62=num("P_62");
+  if(p53>0)okOr(p54+p62===p53,"P_54 + P_62 equals the excess (P_53)",`P_54 (${fmt(p54)}) + P_62 (${fmt(p62)}) ≠ P_53 (${fmt(p53)})`);
+  if(p53>0&&p54===0&&p62===0)li("warn","⚠ Excess input VAT is neither refunded (P_54) nor carried forward (P_62)");
+  if($("wantRefund").checked){
+    const dl=document.querySelector("input[name=dl]:checked");
+    okOr(!!dl,"A refund deadline option is selected","Refund requested but no deadline option (P_540/P_55/P_56/P_560/P_58) selected");
+    okOr(num("P_54")>0,"P_54 refund amount is positive","Refund requested but P_54 is 0");
+    if(num("P_54")>p53)li("err",`✗ P_54 (${fmt(num("P_54"))}) exceeds the excess P_53 (${fmt(p53)})`);
+  }
+  if($("wantP59").checked){
+    okOr(num("P_60")>0,"P_60 credited amount is set","P_59 checked but P_60 amount is 0");
+    okOr($("P_61").value.trim()!=="","P_61 liability type is set","P_59 checked but P_61 (type of liability) is empty");
+    if(num("P_60")>num("P_54"))li("err","✗ P_60 exceeds the refund amount P_54");
+  }
+  const p68=num("P_68"),p69=num("P_69");
+  if((p68!==0)!==(p69!==0))li("warn","⚠ P_68 and P_69 (bad-debt relief) should be filled together");
+  if(num("P_51")>0&&p53>0)li("err","✗ P_51 and P_53 are both positive — only one of them can be");
+  if($("cel").value==="2"&&$("P_ORDZU").value.trim()==="")li("warn","⚠ Correction (CelZlozenia=2) without a reason in P_ORDZU");
+}
+
+// ===== serialization =====
+function serialize(){
+  const pz=findOne(doc,"PozycjeSzczegolowe");
+  const ns=pz.namespaceURI,pref=pz.prefix?pz.prefix+":":"";
+  const mk=(name,val)=>{const e=doc.createElementNS(ns,pref+name);e.textContent=val;return e};
+  // wipe existing P_* children
+  for(const el of Array.from(pz.children))pz.removeChild(el);
+  const wantRefund=$("wantRefund").checked,wantP59=$("wantP59").checked;
+  for(const nm of ORDER){
+    if(nm==="P_54"){if(wantRefund)pz.appendChild(mk(nm,String(Math.round(num("P_54")))));continue}
+    if(DL.includes(nm)){const r=document.querySelector(`input[name=dl]:checked`);if(wantRefund&&r&&r.value===nm)pz.appendChild(mk(nm,"1"));continue}
+    if(nm==="P_59"){if(wantRefund&&wantP59)pz.appendChild(mk(nm,"1"));continue}
+    if(nm==="P_60"){if(wantRefund&&wantP59)pz.appendChild(mk(nm,String(Math.round(num("P_60")))));continue}
+    if(nm==="P_61"){if(wantRefund&&wantP59)pz.appendChild(mk(nm,$("P_61").value.trim()));continue}
+    if(nm==="P_ORDZU"){const v=$("P_ORDZU").value.trim();if(v)pz.appendChild(mk(nm,v));continue}
+    if(nm==="P_68"||nm==="P_69"){const p68=Math.round(num("P_68")),p69=Math.round(num("P_69"));if(p68!==0||p69!==0){if(nm==="P_68")pz.appendChild(mk("P_68",String(p68)));else pz.appendChild(mk("P_69",String(p69)))}continue}
+    const meta=F.find(f=>f[0]===nm);if(!meta)continue;
+    const[,,kind,req]=meta;
+    if(kind==="chk"){if($(nm).checked)pz.appendChild(mk(nm,"1"));continue}
+    const v=Math.round(num(nm));
+    if(req||v!==0)pz.appendChild(mk(nm,String(v)));
+  }
+  // CelZlozenia
+  const cel=findOne(doc,"CelZlozenia");if(cel)cel.textContent=$("cel").value;
+  let out=new XMLSerializer().serializeToString(doc);
+  if(!out.startsWith("<?xml"))out='<?xml version="1.0" encoding="UTF-8"?>\n'+out;
+  return out;
+}
+
+// ===== actions =====
+$("btnDownload").onclick=()=>{
+  const xml=serialize();
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([xml],{type:"application/xml"}));
+  a.download=fileName.replace(/\.xml$/i,"")+"_final.xml";
+  a.click();URL.revokeObjectURL(a.href);
+};
+$("btnValidate").onclick=async()=>{
+  const out=$("valout");out.textContent="Validating…";
+  try{
+    const code=new URLSearchParams(location.search).get("code");
+    const url=location.pathname.replace(/editor.*$/,"v7m/validate")+(code?`?code=${encodeURIComponent(code)}`:"");
+    const res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/xml"},body:serialize()});
+    const j=await res.json();
+    if(j.schemaValid)out.innerHTML='<span class="badge">XSD valid ✓</span>';
+    else out.innerHTML='<span class="badge err">XSD errors: '+ (j.errors||[]).slice(0,3).map(e=>String(e).replace(/</g,"&lt;")).join(" · ")+'</span>';
+  }catch(e){out.innerHTML='<span class="badge err">Validation call failed — open this page via the function URL with a valid key.</span>'}
+};
+$("btnReset").onclick=()=>location.reload();
+$("wantRefund").onchange=e=>{$("refundBody").classList.toggle("hidden",!e.target.checked);recalc()};
+$("wantP59").onchange=e=>{$("p59Body").classList.toggle("hidden",!e.target.checked);recalc()};
+$("fullExcess").onclick=()=>{$("P_54").value=num("P_53");$("P_62").value=0;recalc()};
+function onCel(){$("ordzuWrap").classList.toggle("hidden",$("cel").value!=="2");}
+$("cel").onchange=()=>{onCel();recalc()};
+document.addEventListener("input",e=>{if(e.target.matches("input,textarea,select"))recalc()});
+
+// ===== file loading =====
+const drop=$("drop"),file=$("file");
+drop.onclick=()=>file.click();
+drop.ondragover=e=>{e.preventDefault();drop.classList.add("on")};
+drop.ondragleave=()=>drop.classList.remove("on");
+drop.ondrop=e=>{e.preventDefault();drop.classList.remove("on");if(e.dataTransfer.files[0])read(e.dataTransfer.files[0])};
+file.onchange=()=>{if(file.files[0])read(file.files[0])};
+function read(f){const r=new FileReader();r.onload=()=>loadXml(r.result,f.name);r.readAsText(f,"utf-8")}
+
+buildForm();
+</script>
+</body>
+</html>
