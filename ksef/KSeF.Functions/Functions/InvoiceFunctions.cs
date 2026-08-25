@@ -93,7 +93,8 @@ public class InvoiceFunctions
 
     // Namespace-agnostic FA(2)/FA(3) rendering: query by local element name so both schema
     // generations display. Unknown/missing elements render blank, never throw.
-    private static string RenderInvoiceHtml(string ksefNumber, string xml)
+    // Internal: also used by PurchaseFunctions' ?show= mode (same-key access from the purchases page).
+    internal static string RenderInvoiceHtml(string ksefNumber, string xml)
     {
         var doc = System.Xml.Linq.XDocument.Parse(xml);
         string E(string name) => System.Net.WebUtility.HtmlEncode(name);
