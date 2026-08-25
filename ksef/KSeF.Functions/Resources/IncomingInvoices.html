@@ -31,8 +31,8 @@ th,td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:left;white-
 td.r,th.r{text-align:right}
 th{background:#f0f3f8;font-size:12px;cursor:pointer;user-select:none;position:sticky;top:0}
 tbody tr:hover{background:#f5f9fe}
-td.name{max-width:320px;overflow:hidden;text-overflow:ellipsis}
-td .ksef{font-size:11px;color:var(--mut)}
+td.name{max-width:240px;overflow:hidden;text-overflow:ellipsis}
+td.ksef{font-size:11px;color:var(--mut);max-width:150px;overflow:hidden;text-overflow:ellipsis}
 a{color:var(--acc)}
 .hidden{display:none}
 #search{width:280px}
@@ -68,9 +68,9 @@ a{color:var(--acc)}
   <div class="wrap">
   <table>
     <thead><tr>
-      <th data-k="date">Date</th><th data-k="number">Invoice No.</th><th data-k="party">Seller</th>
+      <th data-k="date">Date</th><th data-k="number">Invoice No.</th><th></th><th data-k="party">Seller</th>
       <th data-k="pnip">NIP</th><th class="r" data-k="net">Net</th><th class="r" data-k="vat">VAT</th>
-      <th class="r" data-k="gross">Gross</th><th data-k="cur">Curr.</th><th>KSeF number</th><th></th>
+      <th class="r" data-k="gross">Gross</th><th data-k="cur">Curr.</th><th>KSeF number</th>
     </tr></thead>
     <tbody id="rows"></tbody>
   </table>
@@ -149,12 +149,13 @@ function render(){
   // view + XML via the purchases function itself — the page's function key is guaranteed to open it.
   const qBase=location.pathname.replace(/\/view.*$/,"");
   $("rows").innerHTML=rows.map(r=>`<tr>
-    <td>${r.date}</td><td>${esc(r.number)}</td><td class="name" title="${esc(r.party)}">${esc(r.party)}</td>
-    <td>${esc(r.pnip)}</td><td class="r">${fmt(r.net)}</td><td class="r">${fmt(r.vat)}</td>
-    <td class="r"><b>${fmt(r.gross)}</b></td><td>${esc(r.cur)}</td>
-    <td class="ksef">${esc(r.ksef)}</td>
+    <td>${r.date}</td><td>${esc(r.number)}</td>
     <td><a target="_blank" href="${qBase}?nip=${nip}&show=${encodeURIComponent(r.ksef)}${code?`&code=${encodeURIComponent(code)}`:""}">view</a>
         &nbsp;<a href="${qBase}?nip=${nip}&xml=${encodeURIComponent(r.ksef)}${code?`&code=${encodeURIComponent(code)}`:""}">xml</a></td>
+    <td class="name" title="${esc(r.party)}">${esc(r.party)}</td>
+    <td>${esc(r.pnip)}</td><td class="r">${fmt(r.net)}</td><td class="r">${fmt(r.vat)}</td>
+    <td class="r"><b>${fmt(r.gross)}</b></td><td>${esc(r.cur)}</td>
+    <td class="ksef" title="${esc(r.ksef)}">${esc(r.ksef)}</td>
   </tr>`).join("");
   // totals per currency
   const tot={};
