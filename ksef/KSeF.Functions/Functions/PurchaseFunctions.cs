@@ -40,6 +40,7 @@ public class PurchaseFunctions
     {
         var resp = req.CreateResponse(HttpStatusCode.OK);
         resp.Headers.Add("Content-Type", "text/html; charset=utf-8");
+        resp.Headers.Add("Cache-Control", "no-cache");
         await resp.WriteStringAsync(Page.Value);
         return resp;
     }
