@@ -52,15 +52,27 @@ public class InvoiceFunctions
 
         try
         {
-            var session = await _ksef.InitSessionAsync(nip);
+            // Cached access token first (cheap — browsing a list of invoices must not do one full
+            // auth handshake per view); fall back to the original per-view session on failure.
             string xml;
             try
             {
-                xml = await _ksef.GetInvoiceXmlByKsefNumberAsync(ksefNumber, session.SessionToken);
+                await _ksef.EnsureQueryTokenAsync(nip!);
+                xml = await _ksef.GetInvoiceXmlByKsefNumberAsync(ksefNumber);
             }
-            finally
+            catch (Exception tokenEx)
             {
-                await _ksef.TerminateSessionAsync(session.SessionToken);
+                _logger.LogWarning(tokenEx, "Token-based invoice fetch failed for {KsefNumber}; falling back to session", ksefNumber);
+                _ksef.InvalidateQueryToken(nip!);
+                var session = await _ksef.InitSessionAsync(nip);
+                try
+                {
+                    xml = await _ksef.GetInvoiceXmlByKsefNumberAsync(ksefNumber, session.SessionToken);
+                }
+                finally
+                {
+                    await _ksef.TerminateSessionAsync(session.SessionToken);
+                }
             }
 
             var html = RenderInvoiceHtml(ksefNumber, xml);
@@ -172,6 +184,58 @@ public class InvoiceFunctions
     /// Body: InvoiceData JSON
     /// Returns: SubmitResult with element reference number
     /// </summary>
+    /// <summary>
+    /// Download the original FA(3) XML of an invoice — the legally binding artifact in KSeF.
+    /// GET /api/invoice/xml/{ksefNumber}?nip={nip}
+    /// </summary>
+    [Function("DownloadInvoiceXml")]
+    public async Task<HttpResponseData> DownloadInvoiceXml(
+        [HttpTrigger(AuthorizationLevel.Function, "get", Route = "invoice/xml/{ksefNumber}")] HttpRequestData req,
+        string ksefNumber)
+    {
+        var nip = req.Query["nip"];
+        if (string.IsNullOrEmpty(nip))
+            return await CreateResponse(req, HttpStatusCode.BadRequest,
+                new StatusResult { Success = false, Error = "Missing 'nip' query parameter" });
+
+        try
+        {
+            string xml;
+            try
+            {
+                await _ksef.EnsureQueryTokenAsync(nip!);
+                xml = await _ksef.GetInvoiceXmlByKsefNumberAsync(ksefNumber);
+            }
+            catch (Exception tokenEx)
+            {
+                _logger.LogWarning(tokenEx, "Token-based XML fetch failed for {KsefNumber}; falling back to session", ksefNumber);
+                _ksef.InvalidateQueryToken(nip!);
+                var session = await _ksef.InitSessionAsync(nip);
+                try
+                {
+                    xml = await _ksef.GetInvoiceXmlByKsefNumberAsync(ksefNumber, session.SessionToken);
+                }
+                finally
+                {
+                    await _ksef.TerminateSessionAsync(session.SessionToken);
+                }
+            }
+
+            var resp = req.CreateResponse(HttpStatusCode.OK);
+            resp.Headers.Add("Content-Type", "application/xml; charset=utf-8");
+            resp.Headers.Add("Content-Disposition",
+                $"attachment; filename=\"{ksefNumber.Replace("\"", "")}.xml\"");
+            await resp.WriteStringAsync(xml);
+            return resp;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "DownloadInvoiceXml failed for {KsefNumber}", ksefNumber);
+            return await CreateResponse(req, HttpStatusCode.InternalServerError,
+                new StatusResult { Success = false, Error = ex.Message });
+        }
+    }
+
     [Function("SubmitInvoice")]
     public async Task<HttpResponseData> SubmitInvoice(
         [HttpTrigger(AuthorizationLevel.Function, "post", Route = "invoice/submit")] HttpRequestData req)
