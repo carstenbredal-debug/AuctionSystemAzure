@@ -52,6 +52,55 @@ public class PurchaseFunctions
         if (string.IsNullOrEmpty(nip))
             return await Json(req, HttpStatusCode.BadRequest, "{\"success\":false,\"error\":\"Missing 'nip' query parameter\"}");
 
+        // XML download mode: ?xml={ksefNumber} — served from THIS function so the page's own
+        // function key authorizes it (per-function keys don't open other functions' routes).
+        var ksefNumber = req.Query["xml"];
+        if (!string.IsNullOrEmpty(ksefNumber))
+        {
+            try
+            {
+                await _ksef.EnsureQueryTokenAsync(nip!);
+                var xml = await _ksef.GetInvoiceXmlByKsefNumberAsync(ksefNumber);
+                var fileResp = req.CreateResponse(HttpStatusCode.OK);
+                fileResp.Headers.Add("Content-Type", "application/xml; charset=utf-8");
+                fileResp.Headers.Add("Content-Disposition",
+                    $"attachment; filename=\"{ksefNumber.Replace("\"", "")}.xml\"");
+                await fileResp.WriteStringAsync(xml);
+                return fileResp;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Purchases XML download failed for {KsefNumber}", ksefNumber);
+                _ksef.InvalidateQueryToken(nip!);
+                return await Json(req, HttpStatusCode.InternalServerError,
+                    System.Text.Json.JsonSerializer.Serialize(new { success = false, error = ex.Message }));
+            }
+        }
+
+        // Rendered-view mode: ?show={ksefNumber} — HTML invoice view via this function's key.
+        var showNumber = req.Query["show"];
+        if (!string.IsNullOrEmpty(showNumber))
+        {
+            try
+            {
+                await _ksef.EnsureQueryTokenAsync(nip!);
+                var xml = await _ksef.GetInvoiceXmlByKsefNumberAsync(showNumber);
+                var htmlResp = req.CreateResponse(HttpStatusCode.OK);
+                htmlResp.Headers.Add("Content-Type", "text/html; charset=utf-8");
+                await htmlResp.WriteStringAsync(InvoiceFunctions.RenderInvoiceHtml(showNumber, xml));
+                return htmlResp;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Purchases invoice view failed for {KsefNumber}", showNumber);
+                _ksef.InvalidateQueryToken(nip!);
+                var errResp = req.CreateResponse(HttpStatusCode.InternalServerError);
+                errResp.Headers.Add("Content-Type", "text/html; charset=utf-8");
+                await errResp.WriteStringAsync($"<html><body><h2>Could not fetch invoice</h2><p>{WebUtility.HtmlEncode(ex.Message)}</p></body></html>");
+                return errResp;
+            }
+        }
+
         if (!DateTime.TryParse(req.Query["from"], out var from) ||
             !DateTime.TryParse(req.Query["to"], out var to))
             return await Json(req, HttpStatusCode.BadRequest, "{\"success\":false,\"error\":\"Missing or invalid 'from'/'to' date (yyyy-MM-dd)\"}");

@@ -129,7 +129,8 @@ async function fetchPage(reset){
     const j=await res.json();
     if(!j.success)throw new Error(j.error||"query failed");
     all=all.concat(j.invoices.map(mapInv));
-    pageOffset+=j.invoices.length?100:0;
+    // KSeF pageOffset is a PAGE INDEX (offset*pageSize = first item) — advance by one page.
+    pageOffset+=j.invoices.length?1:0;
     $("btnMore").classList.toggle("hidden",!j.hasMore);
     setStatus(`${all.length} invoice(s)${j.hasMore?" — more available":""}.`);
     render();
@@ -145,15 +146,15 @@ function render(){
   rows.sort((a,b)=>{const x=a[sortK],y=b[sortK];return(typeof x==="number"?x-y:String(x).localeCompare(String(y)))*sortDir});
   const code=new URLSearchParams(location.search).get("code");
   const nip=$("nip").value.trim();
-  const viewBase=location.pathname.replace(/\/purchases\/view.*$/,"/invoice/view/");
-  const xmlBase=location.pathname.replace(/\/purchases\/view.*$/,"/invoice/xml/");
+  // view + XML via the purchases function itself — the page's function key is guaranteed to open it.
+  const qBase=location.pathname.replace(/\/view.*$/,"");
   $("rows").innerHTML=rows.map(r=>`<tr>
     <td>${r.date}</td><td>${esc(r.number)}</td><td class="name" title="${esc(r.party)}">${esc(r.party)}</td>
     <td>${esc(r.pnip)}</td><td class="r">${fmt(r.net)}</td><td class="r">${fmt(r.vat)}</td>
     <td class="r"><b>${fmt(r.gross)}</b></td><td>${esc(r.cur)}</td>
     <td class="ksef">${esc(r.ksef)}</td>
-    <td><a target="_blank" href="${viewBase}${encodeURIComponent(r.ksef)}?nip=${nip}${code?`&code=${encodeURIComponent(code)}`:""}">view</a>
-        &nbsp;<a href="${xmlBase}${encodeURIComponent(r.ksef)}?nip=${nip}${code?`&code=${encodeURIComponent(code)}`:""}">xml</a></td>
+    <td><a target="_blank" href="${qBase}?nip=${nip}&show=${encodeURIComponent(r.ksef)}${code?`&code=${encodeURIComponent(code)}`:""}">view</a>
+        &nbsp;<a href="${qBase}?nip=${nip}&xml=${encodeURIComponent(r.ksef)}${code?`&code=${encodeURIComponent(code)}`:""}">xml</a></td>
   </tr>`).join("");
   // totals per currency
   const tot={};
