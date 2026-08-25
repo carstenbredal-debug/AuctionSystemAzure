@@ -19,6 +19,7 @@
   <ItemGroup>
     <EmbeddedResource Include="Resources\JpkVisualizer.html" />
     <EmbeddedResource Include="Resources\JpkEditor.html" />
+    <EmbeddedResource Include="Resources\IncomingInvoices.html" />
     <EmbeddedResource Include="Schemas\schemat.xsd" />
     <EmbeddedResource Include="Schemas\KodyKrajow_v13-0E.xsd" />
     <EmbeddedResource Include="Schemas\KodyUrzedowSkarbowych_v8-0E.xsd" />

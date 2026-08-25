@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KSeF Incoming Invoices</title>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--ink:#1c2430;--mut:#68758a;--line:#dfe4ec;--acc:#0b62c4;--err:#b3261e}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 "Segoe UI",system-ui,sans-serif}
+header{background:#12283f;color:#fff;padding:14px 22px;display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+header h1{font-size:18px;margin:0}
+header .sub{color:#9fb4cc;font-size:12px}
+main{max-width:1280px;margin:0 auto;padding:18px 22px 60px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px 18px;margin-bottom:16px}
+.controls{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end}
+.controls .f{display:flex;flex-direction:column;gap:3px}
+.controls label{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px}
+.controls input,.controls select{padding:7px 9px;border:1px solid var(--line);border-radius:6px;font:inherit}
+button{font:inherit;padding:8px 18px;border-radius:6px;border:1px solid var(--line);background:#fff;cursor:pointer}
+button.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+button:disabled{opacity:.5;cursor:default}
+#status{font-size:13px;color:var(--mut);margin-left:6px}
+#status.err{color:var(--err)}
+.chips{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.chip{background:#eef2f8;border-radius:6px;padding:8px 14px;min-width:120px}
+.chip b{display:block;font-size:16px}
+.chip span{font-size:11px;color:var(--mut)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+td.r,th.r{text-align:right}
+th{background:#f0f3f8;font-size:12px;cursor:pointer;user-select:none;position:sticky;top:0}
+tbody tr:hover{background:#f5f9fe}
+td.name{max-width:320px;overflow:hidden;text-overflow:ellipsis}
+td .ksef{font-size:11px;color:var(--mut)}
+a{color:var(--acc)}
+.hidden{display:none}
+#search{width:280px}
+.wrap{overflow-x:auto}
+</style>
+</head>
+<body>
+<header>
+  <h1>KSeF Incoming Invoices</h1>
+  <div class="sub">Purchase invoices registered in KSeF where the company is the buyer — queried live from KSeF.</div>
+</header>
+<main>
+
+<div class="card">
+  <div class="controls">
+    <div class="f"><label>Company NIP</label><input id="nip" placeholder="e.g. 5253073718" size="12"></div>
+    <div class="f"><label>From</label><input type="date" id="from"></div>
+    <div class="f"><label>To</label><input type="date" id="to"></div>
+    <div class="f"><label>Date type</label><select id="dateType"><option value="Issue">Issue date (data wystawienia)</option><option value="Invoicing">KSeF receipt date (data przyjęcia)</option></select></div>
+    <div class="f"><label>Direction</label><select id="subjectType"><option value="Subject2">Incoming — we are the buyer</option><option value="Subject1">Outgoing — we are the seller</option></select></div>
+    <button class="pri" id="btnFetch">Fetch</button>
+    <span id="status"></span>
+  </div>
+</div>
+
+<div class="card hidden" id="results">
+  <div class="chips" id="chips"></div>
+  <div class="controls" style="margin-bottom:10px">
+    <input id="search" placeholder="Filter by seller, number, NIP…">
+    <button id="btnCsv">Export CSV</button>
+    <button id="btnMore" class="hidden">Load more</button>
+  </div>
+  <div class="wrap">
+  <table>
+    <thead><tr>
+      <th data-k="date">Date</th><th data-k="number">Invoice No.</th><th data-k="party">Seller</th>
+      <th data-k="pnip">NIP</th><th class="r" data-k="net">Net</th><th class="r" data-k="vat">VAT</th>
+      <th class="r" data-k="gross">Gross</th><th data-k="cur">Curr.</th><th>KSeF number</th><th></th>
+    </tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  </div>
+</div>
+
+</main>
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+let all=[],pageOffset=0,sortK="date",sortDir=-1;
+
+// ---- defensive field probing: KSeF metadata schema may evolve ----
+function probe(o,...paths){
+  for(const p of paths){
+    let cur=o,ok=true;
+    for(const seg of p.split(".")){
+      if(cur&&typeof cur==="object"&&seg in cur)cur=cur[seg];else{ok=false;break}
+    }
+    if(ok&&cur!=null&&cur!=="")return cur;
+  }
+  return "";
+}
+function mapInv(o){
+  const other=probe(o,"seller","subject1")||{},buyer=probe(o,"buyer","subject2")||{};
+  const dir=$("subjectType").value;
+  const party=dir==="Subject2"?(typeof other==="object"?other:{}):(typeof buyer==="object"?buyer:{});
+  return{
+    ksef:probe(o,"ksefNumber"),
+    number:probe(o,"invoiceNumber"),
+    date:String(probe(o,"issueDate","invoicingDate","acquisitionTimestamp")).substring(0,10),
+    party:probe(party,"name","fullName")||probe(o,"sellerName","subject1Name","buyerName"),
+    pnip:probe(party,"nip","identifier","identifier.value")||probe(o,"sellerNip","subject1Nip"),
+    net:parseFloat(probe(o,"netAmount","net","totalNetAmount"))||0,
+    vat:parseFloat(probe(o,"vatAmount","vat","totalVatAmount"))||0,
+    gross:parseFloat(probe(o,"grossAmount","gross","totalGrossAmount"))||0,
+    cur:probe(o,"currency","currencyCode")||"PLN",
+    raw:o
+  };
+}
+const fmt=v=>new Intl.NumberFormat("pl-PL",{minimumFractionDigits:2,maximumFractionDigits:2}).format(v);
+
+async function fetchPage(reset){
+  const nip=$("nip").value.trim();
+  if(!/^\d{10}$/.test(nip)){setStatus("Enter a 10-digit NIP.",true);return}
+  localStorage.setItem("ksefNip",nip);
+  if(reset){all=[];pageOffset=0}
+  setStatus("Querying KSeF…");$("btnFetch").disabled=true;
+  try{
+    const code=new URLSearchParams(location.search).get("code");
+    const base=location.pathname.replace(/\/view.*$/,"");
+    const url=`${base}?nip=${nip}&from=${$("from").value}&to=${$("to").value}`+
+      `&dateType=${$("dateType").value}&subjectType=${$("subjectType").value}&pageOffset=${pageOffset}`+
+      (code?`&code=${encodeURIComponent(code)}`:"");
+    const res=await fetch(url);
+    const j=await res.json();
+    if(!j.success)throw new Error(j.error||"query failed");
+    all=all.concat(j.invoices.map(mapInv));
+    pageOffset+=j.invoices.length?100:0;
+    $("btnMore").classList.toggle("hidden",!j.hasMore);
+    setStatus(`${all.length} invoice(s)${j.hasMore?" — more available":""}.`);
+    render();
+  }catch(e){setStatus("Error: "+e.message,true)}
+  finally{$("btnFetch").disabled=false}
+}
+function setStatus(t,err){const s=$("status");s.textContent=t;s.className=err?"err":""}
+
+function render(){
+  $("results").classList.remove("hidden");
+  const q=$("search").value.trim().toLowerCase();
+  let rows=all.filter(r=>!q||[r.party,r.number,r.pnip,r.ksef].join(" ").toLowerCase().includes(q));
+  rows.sort((a,b)=>{const x=a[sortK],y=b[sortK];return(typeof x==="number"?x-y:String(x).localeCompare(String(y)))*sortDir});
+  const code=new URLSearchParams(location.search).get("code");
+  const nip=$("nip").value.trim();
+  const viewBase=location.pathname.replace(/\/purchases\/view.*$/,"/invoice/view/");
+  $("rows").innerHTML=rows.map(r=>`<tr>
+    <td>${r.date}</td><td>${esc(r.number)}</td><td class="name" title="${esc(r.party)}">${esc(r.party)}</td>
+    <td>${esc(r.pnip)}</td><td class="r">${fmt(r.net)}</td><td class="r">${fmt(r.vat)}</td>
+    <td class="r"><b>${fmt(r.gross)}</b></td><td>${esc(r.cur)}</td>
+    <td class="ksef">${esc(r.ksef)}</td>
+    <td><a target="_blank" href="${viewBase}${encodeURIComponent(r.ksef)}?nip=${nip}${code?`&code=${encodeURIComponent(code)}`:""}">view</a></td>
+  </tr>`).join("");
+  // totals per currency
+  const tot={};
+  for(const r of rows){(tot[r.cur]??={n:0,net:0,vat:0,gross:0});const t=tot[r.cur];t.n++;t.net+=r.net;t.vat+=r.vat;t.gross+=r.gross}
+  $("chips").innerHTML=Object.entries(tot).map(([c,t])=>
+    `<div class="chip"><b>${fmt(t.gross)} ${c}</b><span>${t.n} inv. · net ${fmt(t.net)} · VAT ${fmt(t.vat)}</span></div>`).join("")
+    ||'<div class="chip"><b>0</b><span>no invoices</span></div>';
+}
+const esc=s=>String(s??"").replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
+
+$("btnCsv").onclick=()=>{
+  const head="Date;Invoice No;Seller;NIP;Net;VAT;Gross;Currency;KSeF Number\n";
+  const csv=head+all.map(r=>[r.date,r.number,r.party,r.pnip,r.net,r.vat,r.gross,r.cur,r.ksef]
+    .map(v=>`"${String(v).replace(/"/g,'""')}"`).join(";")).join("\n");
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"}));
+  a.download=`ksef_incoming_${$("from").value}_${$("to").value}.csv`;a.click();URL.revokeObjectURL(a.href);
+};
+$("btnFetch").onclick=()=>fetchPage(true);
+$("btnMore").onclick=()=>fetchPage(false);
+$("search").oninput=render;
+document.querySelectorAll("th[data-k]").forEach(th=>th.onclick=()=>{
+  const k=th.dataset.k;sortDir=sortK===k?-sortDir:1;sortK=k;render();
+});
+
+// defaults: current month-to-date, NIP from URL or last session
+const now=new Date(),p0=n=>String(n).padStart(2,"0");
+$("from").value=`${now.getFullYear()}-${p0(now.getMonth()+1)}-01`;
+$("to").value=`${now.getFullYear()}-${p0(now.getMonth()+1)}-${p0(now.getDate())}`;
+$("nip").value=new URLSearchParams(location.search).get("nip")||localStorage.getItem("ksefNip")||"";
+</script>
+</body>
+</html>

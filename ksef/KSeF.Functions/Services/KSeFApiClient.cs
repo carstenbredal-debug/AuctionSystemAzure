@@ -291,8 +291,11 @@ public class KSeFApiClient
     // endpoints to ~20 requests/window. Static: the typed HttpClient makes this class per-invocation.
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string Token, DateTime Expiry)> _queryTokenCache = new();
 
-    public async Task<KSeFInvoiceMetadata?> QueryInvoiceByNumberAsync(
-        string nip, string invoiceNumber, DateTime issueDateFrom, DateTime issueDateTo)
+    /// <summary>
+    /// Puts a valid query access token for the NIP into _accessToken — from the cache when fresh,
+    /// otherwise via a full auth handshake (cached for 10 minutes afterwards).
+    /// </summary>
+    public async Task EnsureQueryTokenAsync(string nip)
     {
         if (_queryTokenCache.TryGetValue(nip, out var cached) && cached.Expiry > DateTime.UtcNow)
         {
@@ -304,6 +307,68 @@ public class KSeFApiClient
             await AcquireAccessTokenAsync(nip);
             _queryTokenCache[nip] = (_accessToken!, DateTime.UtcNow.AddMinutes(10));
         }
+    }
+
+    public void InvalidateQueryToken(string nip) => _queryTokenCache.TryRemove(nip, out _);
+
+    /// <summary>
+    /// Metadata query for a page of invoices where the company acts as the given subject
+    /// (Subject1 = seller/outgoing, Subject2 = buyer/incoming). Returns KSeF's raw "invoices"
+    /// JSON array (schema passed through untouched) plus a has-more flag.
+    /// </summary>
+    public async Task<(string InvoicesJson, bool HasMore)> QueryInvoicesMetadataRawAsync(
+        string nip, string subjectType, string dateType, DateTime from, DateTime to,
+        int pageOffset = 0, int pageSize = 100)
+    {
+        await EnsureQueryTokenAsync(nip);
+
+        var body = new
+        {
+            subjectType,
+            dateRange = new
+            {
+                dateType,
+                from = from.ToString("yyyy-MM-dd") + "T00:00:00Z",
+                to = to.ToString("yyyy-MM-dd") + "T23:59:59Z"
+            }
+        };
+        var json = JsonSerializer.Serialize(body, _jsonOpts);
+
+        HttpRequestMessage Build()
+        {
+            var r = new HttpRequestMessage(HttpMethod.Post,
+                $"{BaseUrl}/invoices/query/metadata?pageOffset={pageOffset}&pageSize={pageSize}")
+            {
+                Content = new StringContent(json, Encoding.UTF8, "application/json")
+            };
+            r.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
+            return r;
+        }
+
+        var resp = await _http.SendAsync(Build());
+        if (resp.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            InvalidateQueryToken(nip);
+            await EnsureQueryTokenAsync(nip);
+            resp = await _http.SendAsync(Build());
+        }
+        var respBody = await resp.Content.ReadAsStringAsync();
+        if (!resp.IsSuccessStatusCode)
+            throw new Exception($"KSeF metadata query failed: {resp.StatusCode} - {TruncateForLog(respBody)}");
+
+        using var doc = JsonDocument.Parse(respBody);
+        if (!doc.RootElement.TryGetProperty("invoices", out var invoices))
+            return ("[]", false);
+        var count = invoices.GetArrayLength();
+        var hasMore = doc.RootElement.TryGetProperty("hasMore", out var hm) && hm.ValueKind == JsonValueKind.True
+                      || count >= pageSize;
+        return (invoices.GetRawText(), hasMore);
+    }
+
+    public async Task<KSeFInvoiceMetadata?> QueryInvoiceByNumberAsync(
+        string nip, string invoiceNumber, DateTime issueDateFrom, DateTime issueDateTo)
+    {
+        await EnsureQueryTokenAsync(nip);
 
         var body = new
         {

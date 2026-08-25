@@ -52,15 +52,27 @@ public class InvoiceFunctions
 
         try
         {
-            var session = await _ksef.InitSessionAsync(nip);
+            // Cached access token first (cheap — browsing a list of invoices must not do one full
+            // auth handshake per view); fall back to the original per-view session on failure.
             string xml;
             try
             {
-                xml = await _ksef.GetInvoiceXmlByKsefNumberAsync(ksefNumber, session.SessionToken);
+                await _ksef.EnsureQueryTokenAsync(nip!);
+                xml = await _ksef.GetInvoiceXmlByKsefNumberAsync(ksefNumber);
             }
-            finally
+            catch (Exception tokenEx)
             {
-                await _ksef.TerminateSessionAsync(session.SessionToken);
+                _logger.LogWarning(tokenEx, "Token-based invoice fetch failed for {KsefNumber}; falling back to session", ksefNumber);
+                _ksef.InvalidateQueryToken(nip!);
+                var session = await _ksef.InitSessionAsync(nip);
+                try
+                {
+                    xml = await _ksef.GetInvoiceXmlByKsefNumberAsync(ksefNumber, session.SessionToken);
+                }
+                finally
+                {
+                    await _ksef.TerminateSessionAsync(session.SessionToken);
+                }
             }
 
             var html = RenderInvoiceHtml(ksefNumber, xml);
