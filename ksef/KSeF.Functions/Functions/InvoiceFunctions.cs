@@ -263,10 +263,19 @@ public class InvoiceFunctions
             sb.Append("</div></div>");
         }
 
-        // Official verification link — the ministry page confirming this invoice is in KSeF
+        // Official verification QR + link — the ministry page confirming this invoice is in KSeF.
+        // The QR is part of the standard wizualizacja, so it prints with the document.
         var xmlHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(xml))).ToLowerInvariant();
-        sb.Append("<p class='noprint meta'>Zweryfikuj w KSeF: <a target='_blank' href='https://ksef.mf.gov.pl/web/verify/")
-          .Append(Uri.EscapeDataString(ksefNumber)).Append("/").Append(xmlHash).Append("'>ksef.mf.gov.pl/web/verify/…</a></p>");
+        var verifyUrl = $"https://ksef.mf.gov.pl/web/verify/{Uri.EscapeDataString(ksefNumber)}/{xmlHash}";
+        string qrSvg;
+        using (var qrGen = new QRCoder.QRCodeGenerator())
+        using (var qrData = qrGen.CreateQrCode(verifyUrl, QRCoder.QRCodeGenerator.ECCLevel.Q))
+            qrSvg = new QRCoder.SvgQRCode(qrData).GetGraphic(3, "#1c2430", "#ffffff", sizingMode: QRCoder.SvgQRCode.SizingMode.ViewBoxAttribute);
+        sb.Append("<div style='display:flex;gap:16px;align-items:center;margin-top:20px'>");
+        sb.Append("<div style='width:118px;height:118px'>").Append(qrSvg).Append("</div>");
+        sb.Append("<div style='font-size:12px;color:#68758a'><strong>KOD QR — weryfikacja w KSeF</strong><br/>")
+          .Append(E(ksefNumber)).Append("<br/><a target='_blank' href='").Append(verifyUrl)
+          .Append("'>ksef.mf.gov.pl/web/verify/…</a></div></div>");
 
         sb.Append("<details><summary>Raw XML (the legally binding document)</summary><pre>")
           .Append(System.Net.WebUtility.HtmlEncode(doc.ToString()))
