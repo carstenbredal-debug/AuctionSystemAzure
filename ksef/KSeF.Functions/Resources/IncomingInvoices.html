@@ -150,8 +150,9 @@ function render(){
   const qBase=location.pathname.replace(/\/view.*$/,"");
   $("rows").innerHTML=rows.map(r=>`<tr>
     <td>${r.date}</td><td>${esc(r.number)}</td>
-    <td><a target="_blank" href="${qBase}?nip=${nip}&show=${encodeURIComponent(r.ksef)}${code?`&code=${encodeURIComponent(code)}`:""}">view</a>
-        &nbsp;<a href="${qBase}?nip=${nip}&xml=${encodeURIComponent(r.ksef)}${code?`&code=${encodeURIComponent(code)}`:""}">xml</a></td>
+    <td><a href="${qBase}?nip=${nip}&pdf=${encodeURIComponent(r.ksef)}${code?`&code=${encodeURIComponent(code)}`:""}"><b>pdf</b></a>
+        &nbsp;<a href="${qBase}?nip=${nip}&xml=${encodeURIComponent(r.ksef)}${code?`&code=${encodeURIComponent(code)}`:""}">xml</a>
+        &nbsp;<a target="_blank" href="${qBase}?nip=${nip}&show=${encodeURIComponent(r.ksef)}${code?`&code=${encodeURIComponent(code)}`:""}">view</a></td>
     <td class="name" title="${esc(r.party)}">${esc(r.party)}</td>
     <td>${esc(r.pnip)}</td><td class="r">${fmt(r.net)}</td><td class="r">${fmt(r.vat)}</td>
     <td class="r"><b>${fmt(r.gross)}</b></td><td>${esc(r.cur)}</td>
