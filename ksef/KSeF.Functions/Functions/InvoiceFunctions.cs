@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
@@ -126,53 +127,148 @@ public class InvoiceFunctions
         }
 
         var rodzaj = fa?.Elements().FirstOrDefault(e => e.Name.LocalName == "RodzajFaktury")?.Value ?? "";
-        var docKind = rodzaj switch { "KOR" => "Credit note / correction (KOR)", "VAT" => "Invoice (VAT)", _ => rodzaj };
+        var docKind = rodzaj switch
+        {
+            "VAT" => "Faktura VAT",
+            "KOR" => "Faktura korygująca",
+            "ZAL" => "Faktura zaliczkowa",
+            "ROZ" => "Faktura rozliczeniowa",
+            "UPR" => "Faktura uproszczona",
+            "KOR_ZAL" => "Korekta faktury zaliczkowej",
+            "KOR_ROZ" => "Korekta faktury rozliczeniowej",
+            _ => rodzaj
+        };
         var currency = fa?.Elements().FirstOrDefault(e => e.Name.LocalName == "KodWaluty")?.Value ?? "";
+        string Money(string v) => decimal.TryParse(v, System.Globalization.NumberStyles.Any,
+            CultureInfo.InvariantCulture, out var d) ? d.ToString("N2", new CultureInfo("pl-PL")) : E(v);
 
         var sb = new StringBuilder();
-        sb.Append("<html><head><meta charset='utf-8'/><title>").Append(E(ksefNumber)).Append("</title><style>");
-        sb.Append("body{font-family:Segoe UI,Arial,sans-serif;margin:24px;color:#222}h2{margin-bottom:2px}");
-        sb.Append(".meta{color:#666;margin-bottom:16px}.grid{display:flex;gap:40px;margin-bottom:16px}");
-        sb.Append("table{border-collapse:collapse;width:100%;margin-bottom:16px}th,td{border:1px solid #ccc;padding:6px 10px;font-size:14px;text-align:left}");
-        sb.Append("th{background:#f2f2f2}td.num,th.num{text-align:right}details{margin-top:24px}pre{background:#f7f7f7;padding:12px;overflow:auto;font-size:12px}");
+        sb.Append("<html><head><meta charset='utf-8'/><title>").Append(Val(fa, "P_2")).Append(" · ").Append(E(ksefNumber)).Append("</title><style>");
+        sb.Append("body{font-family:Segoe UI,Arial,sans-serif;margin:28px auto;max-width:860px;color:#1c2430}");
+        sb.Append("h1{font-size:21px;margin:0}h4{margin:0 0 6px;color:#68758a;text-transform:uppercase;font-size:11px;letter-spacing:.5px}");
+        sb.Append(".meta{color:#68758a;font-size:12px;margin:4px 0 18px}.grid{display:flex;gap:36px;margin-bottom:18px}.grid>div{flex:1;border:1px solid #dfe4ec;border-radius:8px;padding:12px 14px;font-size:13px;line-height:1.5}");
+        sb.Append("table{border-collapse:collapse;width:100%;margin-bottom:16px;font-size:13px}th,td{border:1px solid #dfe4ec;padding:6px 9px;text-align:left}");
+        sb.Append("th{background:#f0f3f8;font-size:12px}td.num,th.num{text-align:right}");
+        sb.Append(".total{font-size:18px;text-align:right;margin:6px 0 16px}.total b{font-size:22px}");
+        sb.Append(".tag{display:inline-block;background:#eef2f8;border-radius:4px;padding:2px 9px;font-size:12px;margin:0 6px 6px 0}");
+        sb.Append("details{margin-top:24px}pre{background:#f7f7f7;padding:12px;overflow:auto;font-size:11px}");
+        sb.Append(".bar{display:flex;justify-content:space-between;align-items:flex-start;gap:20px}");
+        sb.Append("button{font:inherit;padding:7px 16px;border-radius:6px;border:1px solid #dfe4ec;background:#fff;cursor:pointer}");
+        sb.Append("@media print{button,details,.noprint{display:none!important}body{margin:0;max-width:none}}");
         sb.Append("</style></head><body>");
 
-        sb.Append("<h2>").Append(E(docKind)).Append(" — ").Append(Val(fa, "P_2")).Append("</h2>");
-        sb.Append("<div class='meta'>KSeF number: <strong>").Append(E(ksefNumber)).Append("</strong>");
-        sb.Append(" · Issue date: ").Append(Val(fa, "P_1"));
-        if (!string.IsNullOrEmpty(currency)) sb.Append(" · Currency: ").Append(E(currency));
-        sb.Append("</div>");
+        sb.Append("<div class='bar'><div><h1>").Append(E(docKind)).Append(" ").Append(Val(fa, "P_2")).Append("</h1>");
+        sb.Append("<div class='meta'>KSeF: <strong>").Append(E(ksefNumber)).Append("</strong>");
+        sb.Append(" · Data wystawienia (P_1): ").Append(Val(fa, "P_1"));
+        var p6 = Val(fa, "P_6");
+        if (p6 != "") sb.Append(" · Data sprzedaży/dostawy (P_6): ").Append(p6);
+        var p1m = Val(fa, "P_1M");
+        if (p1m != "") sb.Append(" · Miejsce: ").Append(p1m);
+        if (currency != "") sb.Append(" · Waluta: ").Append(E(currency));
+        sb.Append("</div></div><button onclick='window.print()'>Print / Save as PDF</button></div>");
 
-        sb.Append("<div class='grid'><div><h4>Seller (Podmiot1)</h4>").Append(PartyBlock(podmiot1)).Append("</div>");
-        sb.Append("<div><h4>Buyer (Podmiot2)</h4>").Append(PartyBlock(podmiot2)).Append("</div></div>");
+        sb.Append("<div class='grid'><div><h4>Sprzedawca (Podmiot1)</h4>").Append(PartyBlock(podmiot1)).Append("</div>");
+        sb.Append("<div><h4>Nabywca (Podmiot2)</h4>").Append(PartyBlock(podmiot2)).Append("</div>");
+        var podmiot3 = root.Elements().FirstOrDefault(e => e.Name.LocalName == "Podmiot3");
+        if (podmiot3 != null)
+            sb.Append("<div><h4>Podmiot3</h4>").Append(PartyBlock(podmiot3)).Append("</div>");
+        sb.Append("</div>");
 
         // Correction reference (KOR only)
         var korekta = fa?.Descendants().FirstOrDefault(e => e.Name.LocalName == "DaneFaKorygowanej");
         if (korekta != null)
         {
-            sb.Append("<p><strong>Corrects:</strong> ").Append(Val(korekta, "NrFaKorygowanej"))
-              .Append(" of ").Append(Val(korekta, "DataWystFaKorygowanej"));
+            sb.Append("<p><strong>Koryguje fakturę:</strong> ").Append(Val(korekta, "NrFaKorygowanej"))
+              .Append(" z ").Append(Val(korekta, "DataWystFaKorygowanej"));
             var origKsef = korekta.Elements().FirstOrDefault(e => e.Name.LocalName == "NrKSeFFaKorygowanej")?.Value;
             if (!string.IsNullOrEmpty(origKsef)) sb.Append(" (KSeF ").Append(E(origKsef)).Append(")");
             sb.Append("</p>");
+            var przyczyna = fa?.Elements().FirstOrDefault(e => e.Name.LocalName == "PrzyczynaKorekty")?.Value;
+            if (!string.IsNullOrEmpty(przyczyna)) sb.Append("<p>Przyczyna korekty: ").Append(E(przyczyna)).Append("</p>");
         }
 
-        sb.Append("<table><tr><th>#</th><th>Description</th><th class='num'>Qty</th><th>Unit</th><th class='num'>Unit price</th><th class='num'>Net</th><th>VAT</th></tr>");
+        // Annotations
+        var adnotacje = fa?.Elements().FirstOrDefault(e => e.Name.LocalName == "Adnotacje");
+        if (adnotacje != null)
+        {
+            var tags = new List<string>();
+            if (Val(adnotacje, "P_16") == "1") tags.Add("Metoda kasowa");
+            if (Val(adnotacje, "P_17") == "1") tags.Add("Samofakturowanie");
+            if (Val(adnotacje, "P_18") == "1") tags.Add("Odwrotne obciążenie");
+            if (Val(adnotacje, "P_18A") == "1") tags.Add("Mechanizm podzielonej płatności (MPP)");
+            foreach (var t in tags) sb.Append("<span class='tag'>").Append(E(t)).Append("</span>");
+            if (tags.Count > 0) sb.Append("<br/><br/>");
+        }
+
+        // Line items — net, gross and VAT rate per row
+        sb.Append("<table><tr><th>#</th><th>Nazwa towaru / usługi</th><th class='num'>Ilość</th><th>Jm</th><th class='num'>Cena netto</th><th class='num'>Wartość netto</th><th class='num'>Wartość brutto</th><th>VAT</th></tr>");
         foreach (var w in fa?.Elements().Where(e => e.Name.LocalName == "FaWiersz") ?? Enumerable.Empty<System.Xml.Linq.XElement>())
         {
-            string WV(string n) => System.Net.WebUtility.HtmlEncode(w.Elements().FirstOrDefault(e => e.Name.LocalName == n)?.Value ?? "");
-            sb.Append("<tr><td>").Append(WV("NrWierszaFa")).Append("</td><td>").Append(WV("P_7"))
-              .Append("</td><td class='num'>").Append(WV("P_8B")).Append("</td><td>").Append(WV("P_8A"))
-              .Append("</td><td class='num'>").Append(WV("P_9A")).Append("</td><td class='num'>").Append(WV("P_11"))
-              .Append("</td><td>").Append(WV("P_12")).Append("</td></tr>");
+            string WVr(string n) => w.Elements().FirstOrDefault(e => e.Name.LocalName == n)?.Value ?? "";
+            sb.Append("<tr><td>").Append(E(WVr("NrWierszaFa"))).Append("</td><td>").Append(E(WVr("P_7")))
+              .Append("</td><td class='num'>").Append(E(WVr("P_8B"))).Append("</td><td>").Append(E(WVr("P_8A")))
+              .Append("</td><td class='num'>").Append(Money(WVr("P_9A"))).Append("</td><td class='num'>").Append(Money(WVr("P_11")))
+              .Append("</td><td class='num'>").Append(Money(WVr("P_11A"))).Append("</td><td>").Append(E(WVr("P_12"))).Append("</td></tr>");
         }
         sb.Append("</table>");
 
-        sb.Append("<h3>Total due: ").Append(Val(fa, "P_15"));
-        if (!string.IsNullOrEmpty(currency)) sb.Append(" ").Append(E(currency));
-        sb.Append("</h3>");
+        // VAT summary per rate — generic over the P_13_x / P_14_x pairs present in the document
+        var rateLabels = new Dictionary<string, string>
+        {
+            ["1"] = "23% / 22%", ["2"] = "8% / 7%", ["3"] = "5%", ["4"] = "ryczałt taxi",
+            ["5"] = "procedura szczególna", ["6_1"] = "0% krajowe", ["6_2"] = "0% WDT", ["6_3"] = "0% eksport",
+            ["7"] = "zwolnione (zw)", ["8"] = "nie podlega (np)", ["9"] = "np art. 100 ust. 1 pkt 4",
+            ["10"] = "WDT nowe środki transportu", ["11"] = "procedura marży"
+        };
+        var vatRows = new List<(string Label, string Net, string Vat)>();
+        foreach (var el in fa?.Elements() ?? Enumerable.Empty<System.Xml.Linq.XElement>())
+        {
+            var n = el.Name.LocalName;
+            if (!n.StartsWith("P_13_")) continue;
+            var suffix = n.Substring(5);
+            var vat = fa!.Elements().FirstOrDefault(e => e.Name.LocalName == "P_14_" + suffix)?.Value ?? "";
+            vatRows.Add((rateLabels.TryGetValue(suffix, out var l) ? l : n, el.Value, vat));
+        }
+        if (vatRows.Count > 0)
+        {
+            sb.Append("<table style='max-width:460px'><tr><th>Stawka VAT</th><th class='num'>Netto</th><th class='num'>VAT</th></tr>");
+            foreach (var (label, net, vat) in vatRows)
+                sb.Append("<tr><td>").Append(E(label)).Append("</td><td class='num'>").Append(Money(net))
+                  .Append("</td><td class='num'>").Append(Money(vat)).Append("</td></tr>");
+            sb.Append("</table>");
+        }
 
-        sb.Append("<details><summary>Raw XML</summary><pre>")
+        sb.Append("<div class='total'>Do zapłaty (P_15): <b>").Append(Money(Val(fa, "P_15")));
+        if (currency != "") sb.Append(" ").Append(E(currency));
+        sb.Append("</b></div>");
+
+        // Payment details
+        var platnosc = fa?.Elements().FirstOrDefault(e => e.Name.LocalName == "Platnosc");
+        if (platnosc != null)
+        {
+            var forma = Val(platnosc, "FormaPlatnosci") switch
+            {
+                "1" => "gotówka", "2" => "karta", "3" => "bon", "4" => "czek",
+                "5" => "kredyt", "6" => "przelew", "7" => "mobilna", var o => o
+            };
+            sb.Append("<div class='grid'><div><h4>Płatność</h4>");
+            if (forma != "") sb.Append("Forma: ").Append(E(forma)).Append("<br/>");
+            var termin = platnosc.Descendants().FirstOrDefault(e => e.Name.LocalName == "Termin")?.Value;
+            if (!string.IsNullOrEmpty(termin)) sb.Append("Termin płatności: ").Append(E(termin)).Append("<br/>");
+            if (Val(platnosc, "Zaplacono") == "1") sb.Append("<strong>Zapłacono</strong> ").Append(Val(platnosc, "DataZaplaty")).Append("<br/>");
+            var rb = platnosc.Descendants().FirstOrDefault(e => e.Name.LocalName == "NrRB")?.Value;
+            if (!string.IsNullOrEmpty(rb)) sb.Append("Rachunek: ").Append(E(rb)).Append("<br/>");
+            var bank = platnosc.Descendants().FirstOrDefault(e => e.Name.LocalName == "NazwaBanku")?.Value;
+            if (!string.IsNullOrEmpty(bank)) sb.Append("Bank: ").Append(E(bank)).Append("<br/>");
+            sb.Append("</div></div>");
+        }
+
+        // Official verification link — the ministry page confirming this invoice is in KSeF
+        var xmlHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(xml))).ToLowerInvariant();
+        sb.Append("<p class='noprint meta'>Zweryfikuj w KSeF: <a target='_blank' href='https://ksef.mf.gov.pl/web/verify/")
+          .Append(Uri.EscapeDataString(ksefNumber)).Append("/").Append(xmlHash).Append("'>ksef.mf.gov.pl/web/verify/…</a></p>");
+
+        sb.Append("<details><summary>Raw XML (the legally binding document)</summary><pre>")
           .Append(System.Net.WebUtility.HtmlEncode(doc.ToString()))
           .Append("</pre></details>");
         sb.Append("</body></html>");
