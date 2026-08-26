@@ -78,6 +78,31 @@ public class PurchaseFunctions
             }
         }
 
+        // Direct PDF mode: ?pdf={ksefNumber} — the invoice as a downloadable PDF wizualizacja.
+        var pdfNumber = req.Query["pdf"];
+        if (!string.IsNullOrEmpty(pdfNumber))
+        {
+            try
+            {
+                await _ksef.EnsureQueryTokenAsync(nip!);
+                var xml = await _ksef.GetInvoiceXmlByKsefNumberAsync(pdfNumber);
+                var pdf = KSeFInvoicePdfService.Render(pdfNumber, xml);
+                var pdfResp = req.CreateResponse(HttpStatusCode.OK);
+                pdfResp.Headers.Add("Content-Type", "application/pdf");
+                pdfResp.Headers.Add("Content-Disposition",
+                    $"attachment; filename=\"{pdfNumber.Replace("\"", "")}.pdf\"");
+                await pdfResp.WriteBytesAsync(pdf);
+                return pdfResp;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Purchases PDF download failed for {KsefNumber}", pdfNumber);
+                _ksef.InvalidateQueryToken(nip!);
+                return await Json(req, HttpStatusCode.InternalServerError,
+                    System.Text.Json.JsonSerializer.Serialize(new { success = false, error = ex.Message }));
+            }
+        }
+
         // Rendered-view mode: ?show={ksefNumber} — HTML invoice view via this function's key.
         var showNumber = req.Query["show"];
         if (!string.IsNullOrEmpty(showNumber))
